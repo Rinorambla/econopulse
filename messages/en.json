@@ -1,0 +1,285 @@
+{
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "ai_portfolio": "AI Portfolio",
+    "ai_pulse": "AI Pulse",
+    "pricing": "Pricing",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "hero": {
+    "title": "EconoPulse",
+    "subtitle": "Advanced Financial Analysis Platform",
+    "description": "Discover the power of AI-driven financial insights with real-time market analysis, dynamic portfolio generation, and comprehensive economic intelligence.",
+    "cta_primary": "Start Free Trial",
+    "cta_secondary": "Learn More"
+  },
+  "features": {
+    "title": "Powerful Features",
+    "subtitle": "Everything you need for professional financial analysis",
+    "dashboard": {
+      "title": "Real-Time Dashboard",
+      "description": "Advanced heatmap visualization with ETF performance, trends, and options sentiment analysis"
+    },
+    "ai_portfolio": {
+      "title": "AI Portfolio Builder",
+      "description": "Dynamic portfolio generation powered by machine learning and economic cycle analysis"
+    },
+    "market_analysis": {
+      "title": "Market Intelligence", 
+      "description": "Comprehensive analysis of market flows, volatility, and economic indicators"
+    }
+  },
+  "pricing": {
+    "title": "Choose Your Plan",
+    "subtitle": "Flexible pricing for every type of investor",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "save_20": "Save 20%",
+    "most_popular": "Most Popular",
+    "pro": {
+      "name": "EconoPulse Pro",
+      "price": "€9.99",
+      "price_yearly": "€8.33",
+      "period": "per month",
+      "period_yearly": "per month, billed yearly",
+      "features": [
+        "Real-time market dashboard",
+        "Basic portfolio insights",
+        "Email support",
+        "Mobile access",
+        "Market alerts"
+      ]
+    },
+    "premium": {
+      "name": "EconoPulse Premium AI",
+      "price": "€29.99",
+      "price_yearly": "€25.00",
+      "period": "per month",
+      "period_yearly": "per month, billed yearly",
+      "features": [
+        "Everything in Pro",
+        "AI Portfolio Builder",
+        "Advanced market analysis",
+        "Priority support",
+        "Custom alerts",
+        "Economic quadrant analysis",
+        "Options flow analysis"
+      ]
+    },
+    "corporate": {
+      "name": "EconoPulse Corporate",
+      "price": "€99.99",
+      "price_yearly": "€83.33",
+      "period": "per month",
+      "period_yearly": "per month, billed yearly", 
+      "features": [
+        "Everything in Premium",
+        "Multi-user access (up to 10 users)",
+        "API access",
+        "Custom integrations",
+        "Dedicated support",
+        "White-label options",
+        "Custom reporting"
+      ]
+    }
+  },
+  "dashboard": {
+    "title": "Market Dashboard",
+    "subtitle": "Real-time financial market analysis",
+    "last_updated": "Last updated",
+    "columns": {
+      "ticker": "Ticker/Name",
+      "performance": "Daily Performance",
+      "trend": "Trend",
+      "demand_supply": "Demand/Supply",
+      "options_sentiment": "Options Sentiment",
+      "gamma_risk": "Gamma Risk Bias",
+      "unusual_atm": "ATM Unusual Flows",
+      "unusual_otm": "OTM Unusual Flows",
+      "otm_skew": "OTM Skew 1M",
+      "intraday_flow": "Intraday Flow",
+      "put_call_ratio": "Put/Call Ratio"
+    }
+  },
+  "ai_portfolio": {
+    "title": "AI Portfolio Builder",
+    "subtitle": "Let AI create your personalized investment portfolio",
+    "preferences": "Portfolio Preferences",
+    "risk_tolerance": "Risk Tolerance",
+    "time_horizon": "Investment Time Horizon",
+    "investment_goals": "Investment Goals",
+    "generate": "Generate AI Portfolio",
+    "generating": "Generating Portfolio...",
+    "generated_portfolio": "Generated Portfolio",
+    "asset_allocation": "Asset Allocation",
+    "portfolio_analysis": "Portfolio Analysis",
+    "sample_portfolios": "Sample AI-Generated Portfolios",
+    "select_portfolio": "Generate a portfolio to see AI recommendations",
+    "risk_options": {
+      "conservative": "Conservative (Low Risk)",
+      "moderate": "Moderate (Medium Risk)",
+      "aggressive": "Aggressive (High Risk)"
+    },
+    "horizon_options": {
+      "short": "Short Term (1-2 years)",
+      "medium": "Medium Term (3-5 years)", 
+      "long": "Long Term (5+ years)"
+    },
+    "goal_options": {
+      "growth": "Capital Growth",
+      "income": "Regular Income",
+      "balanced": "Balanced Growth & Income",
+      "preservation": "Capital Preservation"
+    }
+  },
+  "ai-pulse": {
+    "title": "AI Pulse",
+    "subtitle": "Advanced AI-Powered Portfolio Builder & Economic Analysis",
+    "loading": "Loading AI Pulse Analysis...",
+    "loading_subtitle": "Gathering market intelligence...",
+    "refresh_data": "Refresh Data",
+    "refreshing": "Refreshing...",
+    "last_updated": "Last updated",
+    "economic_quadrant": "Economic Quadrant Analysis",
+    "current_state": "Current State",
+    "projected_state": "Projected",
+    "economic_matrix": "Economic Quadrant Matrix",
+    "portfolio_builder": "AI Portfolio Builder",
+    "asset_allocation": "Asset Allocation",
+    "sector_weights": "Sector Weights",
+    "portfolio_analysis": "Portfolio Analysis",
+    "expected_return": "Expected Return",
+    "risk_level": "Risk Level",
+    "volatility": "Volatility",
+    "sharpe_ratio": "Sharpe Ratio",
+    "quadrant_position": "Quadrant Position",
+    "economic_indicators": "Economic Indicators",
+    "market_sentiment": "Market Sentiment",
+    "market_performance": "Market Performance",
+    "gdp_growth": "GDP Growth",
+    "inflation_rate": "Inflation Rate",
+    "unemployment": "Unemployment",
+    "interest_rates": "Interest Rates",
+    "fear_greed_index": "Fear & Greed Index",
+    "vix_volatility": "VIX Volatility",
+    "market_momentum": "Market Momentum",
+    "greed": "Greed",
+    "fear": "Fear",
+    "performance": "performance",
+    "allocation": "allocation",
+    "return": "return",
+    "risk": "Risk",
+    "growth": "Growth",
+    "inflation": "Inflation",
+    "best_performers": "Best Performers",
+    "worst_performers": "Worst Performers",
+    "current_cycle": "Current Economic Cycle",
+    "projected_cycle": "Projected (3 months)",
+    "volatility_index": "Volatility Index",
+    "sector_rotation": "Sector Rotation"
+  },
+  "auth": {
+    "sign_in": "Sign In",
+    "sign_up": "Sign Up",
+    "sign_in_title": "Sign in to your account",
+    "sign_up_title": "Create your account",
+    "email": "Email address",
+    "password": "Password",
+    "confirm_password": "Confirm Password",
+    "full_name": "Full Name",
+    "forgot_password": "Forgot password?",
+    "no_account": "Don't have an account?",
+    "have_account": "Already have an account?",
+    "continue_with": "Or continue with",
+    "google": "Google",
+    "github": "GitHub",
+    "terms_privacy": "By signing in, you agree to our Terms of Service and Privacy Policy"
+  },
+  "subscription": {
+    "subscribe_to": "Subscribe to",
+    "whats_included": "What's included:",
+    "start_free_trial": "Start Free Trial",
+    "contact_sales": "Contact Sales",
+    "active_subscription": "Active Subscription",
+    "renews_on": "Renews on",
+    "cancel_subscription": "Cancel Subscription",
+    "subscription_cancelled": "Subscription Cancelled",
+    "access_until": "Access until",
+    "money_back_guarantee": "30-day money-back guarantee",
+    "cancel_anytime": "Cancel anytime within 30 days for a full refund",
+    "back_to_pricing": "← Back to Pricing Plans"
+  },
+  "footer": {
+    "company": "EconoPulse",
+    "tagline": "Advanced Financial Analysis Platform",
+    "description": "Stay ahead of market trends with AI-powered financial analysis tools and real-time market intelligence.",
+    "product": "Product",
+    "company_section": "Company",
+    "support": "Support",
+    "legal": "Legal",
+    "social": "Follow Us",
+    "newsletter": {
+      "title": "Stay Updated",
+      "description": "Get the latest market insights and platform updates delivered to your inbox.",
+      "placeholder": "Enter your email address",
+      "subscribe": "Subscribe",
+      "success": "Thank you for subscribing!",
+      "error": "Please enter a valid email address"
+    },
+    "contact_info": {
+      "email": "econopulse.info@econopulse.ai",
+      "phone": "+1 (555) 123-4567",
+      "address": "123 Financial District, New York, NY 10004"
+    },
+    "links": {
+      "features": "Features",
+      "pricing": "Pricing", 
+      "api": "API",
+      "documentation": "Documentation",
+      "status": "System Status",
+      "about": "About Us",
+      "careers": "Careers",
+      "blog": "Blog",
+      "news": "News",
+      "press": "Press Kit",
+      "investors": "Investors",
+      "help": "Help Center",
+      "contact": "Contact",
+      "community": "Community",
+      "webinars": "Webinars",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "security": "Security",
+      "compliance": "Compliance",
+      "cookies": "Cookie Policy"
+    },
+    "sections": {
+      "documentation": "Documentation",
+      "system_status": "System Status", 
+      "company": "Company",
+      "support": "Support"
+    }
+  },
+  "legal": {
+    "risk_disclaimer": "Risk Disclaimer",
+    "risk_warning": "Investment Warning: The value of investments can go down as well as up. Past performance is not a guide to future performance. EconoPulse provides analysis tools and is not responsible for investment decisions.",
+    "not_financial_advice": "This platform provides educational and analytical tools only. Not financial advice.",
+    "copyright": "© 2025 EconoPulse. All rights reserved."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view_all": "View All",
+    "learn_more": "Learn More",
+    "get_started": "Get Started",
+    "coming_soon": "Coming Soon"
+  }
+}

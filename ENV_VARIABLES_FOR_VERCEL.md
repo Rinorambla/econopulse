@@ -27,6 +27,13 @@ OPENAI_API_KEY=sk-your-openai-api-key
 MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
 ```
 
+## Supabase (per auth e database)
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
 ## Email (opzionale) 
 ```
 RESEND_API_KEY=re_your_resend_key

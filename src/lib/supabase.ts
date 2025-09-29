@@ -17,7 +17,8 @@ export const supabase = SUPABASE_ENABLED
     })
   : (new Proxy({} as any, {
       get() {
-        throw new Error('Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+        // Return mock functions instead of throwing during build
+        return () => Promise.resolve({ data: null, error: new Error('Supabase not configured') });
       }
     }))
 

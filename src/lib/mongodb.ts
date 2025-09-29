@@ -21,7 +21,8 @@ async function connectDB() {
   // Se non c'è URI, restituisce null per usare fallback
   if (!MONGODB_URI) {
     console.warn('🔄 MongoDB URI mancante, l\'app userà storage in-memory');
-    throw new Error('MongoDB URI not configured');
+    // Return null instead of throwing during build
+    return null;
   }
 
   if (cached.conn) {

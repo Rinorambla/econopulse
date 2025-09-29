@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { fredService } from '@/lib/fred';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize OpenAI client only when needed to avoid build-time errors
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 interface EconomicAnalysis {
   currentCycle: string;
@@ -20,6 +26,43 @@ interface EconomicAnalysis {
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if OpenAI API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      // Return fallback data when OpenAI is not configured
+      const fallbackAnalysis: EconomicAnalysis = {
+        currentCycle: "Expansion",
+        direction: "neutral",
+        confidence: 65,
+        timeframe: "3-6 months",
+        keyFactors: [
+          "Economic data analysis pending OpenAI configuration",
+          "Federal Reserve policy stance",
+          "Inflation trends monitoring",
+          "Employment market dynamics"
+        ],
+        risks: [
+          "Market volatility",
+          "Policy uncertainty"
+        ],
+        opportunities: [
+          "Technological advancement",
+          "Infrastructure development"
+        ],
+        summary: "Economic analysis requires OpenAI API configuration. Please contact administrator to enable AI-powered insights.",
+        recommendation: "Monitor key economic indicators for trend changes."
+      };
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          analysis: fallbackAnalysis,
+          dataSource: "Fallback",
+          fallback: true,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
     // Get current economic data
     const economicData = await fredService.getEconomicSnapshot();
     const quadrantData = await fredService.getEconomicQuadrant();
@@ -72,6 +115,7 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
 
     try {
       // Get AI analysis
+      const openai = getOpenAIClient();
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [

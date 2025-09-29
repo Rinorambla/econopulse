@@ -39,6 +39,44 @@ export async function GET(req: NextRequest) {
     const raw = await getTiingoNews(symbols, Math.max(limit, 60))
     const now = Date.now()
     const keywords = /(analyst|analysts|strategist|strategy|price target|upgrade|downgrade|initiat|outperform|underperform|overweight|underweight|rating|maintains|reiterate|estimate|outlook|commentary)/i
+    
+    // If no data from API (e.g., missing API key), return demo data
+    if (!raw || raw.length === 0) {
+      const demoData = [
+        {
+          title: "Apple (AAPL) Upgraded to Outperform by Analyst",
+          source: "Demo Financial News",
+          url: "#",
+          publishedDate: new Date().toISOString(),
+          tickers: ["AAPL"],
+          tags: ["upgrade", "technology"],
+          snippet: "Demo analyst upgrade for Apple with price target raised to $200",
+          sentiment: "bullish",
+          action: "upgrade",
+          priceTarget: 200
+        },
+        {
+          title: "Tesla (TSLA) Price Target Maintained at $180",
+          source: "Demo Analysis",
+          url: "#",
+          publishedDate: new Date(Date.now() - 3600000).toISOString(),
+          tickers: ["TSLA"],
+          tags: ["maintain", "automotive"],
+          snippet: "Demo analyst maintains rating with $180 price target",
+          sentiment: "neutral",
+          action: "reiterate",
+          priceTarget: 180
+        }
+      ];
+      
+      return NextResponse.json({ 
+        ok: true, 
+        count: demoData.length, 
+        data: demoData,
+        message: "Demo analyst data - configure TIINGO_API_KEY for real-time news"
+      });
+    }
+    
     const items = (raw || [])
       .filter((n: any) => {
         const text = `${n.title || ''} ${n.description || ''}`

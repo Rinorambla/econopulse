@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { TiingoService } from '@/lib/tiingo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,8 +56,9 @@ const INTRADAY_SYMBOLS = [
 ];
 
 // Lazy initialization of TiingoService to handle missing API key gracefully
-function getTiingoService(): TiingoService | null {
+async function getTiingoService(): Promise<any | null> {
   try {
+    const { TiingoService } = await import('@/lib/tiingo');
     return new TiingoService();
   } catch (error) {
     console.warn('TiingoService initialization failed:', error);
@@ -471,7 +471,7 @@ export async function GET() {
     console.log('🤖 AI Signals API called');
     
     // Check if Tiingo service is available
-    const tiingoService = getTiingoService();
+    const tiingoService = await getTiingoService();
     if (!tiingoService) {
       console.warn('⚠️ TIINGO_API_KEY not configured - returning fallback AI signals');
       return NextResponse.json({

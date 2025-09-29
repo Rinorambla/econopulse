@@ -56,7 +56,15 @@ const INTRADAY_SYMBOLS = [
   'GLD', 'SLV', 'TLT', 'VIX', 'USO', 'EEM', 'FXI', 'EWJ'
 ];
 
-const tiingoService = new TiingoService();
+// Lazy initialization of TiingoService to handle missing API key gracefully
+function getTiingoService(): TiingoService | null {
+  try {
+    return new TiingoService();
+  } catch (error) {
+    console.warn('TiingoService initialization failed:', error);
+    return null;
+  }
+}
 
 // Mappa dei nomi completi dei simboli
 function getSymbolName(symbol: string): string {
@@ -328,9 +336,158 @@ let cachedSignals: AISignal[] = [];
 let lastUpdate = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minuti per dati reali
 
+// Fallback AI signals when TIINGO_API_KEY is not available
+function getFallbackAISignals(): AISignal[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      symbol: 'SPY',
+      name: 'SPDR S&P 500 ETF',
+      price: 432.15,
+      change: 2.35,
+      changePercent: 0.55,
+      signal: 'LONG' as const,
+      confidence: 78,
+      timeframe: 'INTRADAY' as const,
+      indicators: {
+        rsi: 38.2,
+        macd: {
+          macd: 0.15,
+          signal: -0.10,
+          histogram: 0.25
+        },
+        sma20: 430.50,
+        sma50: 428.90,
+        ema12: 431.80,
+        ema26: 429.60,
+        bollinger: {
+          upper: 435.20,
+          middle: 431.15,
+          lower: 427.10
+        },
+        stochastic: {
+          k: 42.5,
+          d: 38.7
+        }
+      },
+      aiReasoning: 'LONG: RSI oversold at 38.2, MACD recovering (0.25), price near Bollinger middle, EMA alignment improving, volume 1.2x, positive intraday momentum',
+      entryPrice: 432.15,
+      stopLoss: 428.50,
+      target1: 435.80,
+      target2: 438.20,
+      riskReward: 1.8,
+      lastUpdated: now,
+      volume: 85420000,
+      avgVolume: 71200000,
+      volumeRatio: 1.2
+    },
+    {
+      symbol: 'QQQ',
+      name: 'Invesco QQQ Trust',
+      price: 368.92,
+      change: -1.85,
+      changePercent: -0.50,
+      signal: 'SHORT' as const,
+      confidence: 72,
+      timeframe: 'INTRADAY' as const,
+      indicators: {
+        rsi: 62.8,
+        macd: {
+          macd: -0.08,
+          signal: 0.12,
+          histogram: -0.20
+        },
+        sma20: 370.15,
+        sma50: 372.30,
+        ema12: 369.45,
+        ema26: 371.20,
+        bollinger: {
+          upper: 374.50,
+          middle: 370.25,
+          lower: 366.00
+        },
+        stochastic: {
+          k: 65.3,
+          d: 68.1
+        }
+      },
+      aiReasoning: 'SHORT: RSI overbought at 62.8, MACD weakening (-0.20), price near Bollinger middle, EMA turning bearish, volume 1.3x, negative intraday momentum',
+      entryPrice: 368.92,
+      stopLoss: 372.10,
+      target1: 366.50,
+      target2: 364.20,
+      riskReward: 1.5,
+      lastUpdated: now,
+      volume: 52300000,
+      avgVolume: 40200000,
+      volumeRatio: 1.3
+    },
+    {
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      price: 178.45,
+      change: 1.12,
+      changePercent: 0.63,
+      signal: 'LONG' as const,
+      timeframe: 'INTRADAY' as const,
+      confidence: 81,
+      indicators: {
+        rsi: 45.5,
+        macd: {
+          macd: 0.25,
+          signal: 0.15,
+          histogram: 0.10
+        },
+        sma20: 177.80,
+        sma50: 176.20,
+        ema12: 178.10,
+        ema26: 177.35,
+        bollinger: {
+          upper: 180.50,
+          middle: 178.25,
+          lower: 176.00
+        },
+        stochastic: {
+          k: 58.2,
+          d: 55.8
+        }
+      },
+      aiReasoning: 'Breakout LONG: RSI healthy at 45.5, MACD bullish crossover, price above SMA20>SMA50, positive momentum with high volume 1.4x confirming breakout',
+      entryPrice: 178.45,
+      stopLoss: 176.90,
+      target1: 180.20,
+      target2: 181.80,
+      riskReward: 2.0,
+      lastUpdated: now,
+      volume: 68500000,
+      avgVolume: 49000000,
+      volumeRatio: 1.4
+    }
+  ];
+}
+
 export async function GET() {
   try {
     console.log('🤖 AI Signals API called');
+    
+    // Check if Tiingo service is available
+    const tiingoService = getTiingoService();
+    if (!tiingoService) {
+      console.warn('⚠️ TIINGO_API_KEY not configured - returning fallback AI signals');
+      return NextResponse.json({
+        success: true,
+        signals: getFallbackAISignals(),
+        count: 3,
+        lastUpdated: new Date().toISOString(),
+        nextUpdate: new Date(Date.now() + CACHE_DURATION).toISOString(),
+        longSignals: 2,
+        shortSignals: 1,
+        avgConfidence: 75,
+        message: "Demo AI signals - configure TIINGO_API_KEY for real-time data",
+        dataSource: "Fallback Demo Data",
+        analysisType: "Technical indicators: RSI, MACD, Bollinger Bands, EMA, SMA with volume confirmation"
+      });
+    }
     
     const now = Date.now();
     if (now - lastUpdate < CACHE_DURATION && cachedSignals.length > 0) {

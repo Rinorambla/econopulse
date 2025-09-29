@@ -41,12 +41,17 @@ const FearGreedIndex = () => {
       } catch (error) {
         console.error('Error fetching real market data:', error);
         // Fallback to simulated data
+        // Deterministic fallback (no randomness) using time-based hash window
+        const now = Date.now();
+        const cycle = Math.sin(Math.floor(now / 60000) / 5); // slow varying
+        const fg = Math.round(50 + cycle * 15);
+        const trend: 'up' | 'down' | 'neutral' = fg > 60 ? 'up' : fg < 40 ? 'down' : 'neutral';
         const fallbackData: MarketData = {
-          fearGreedIndex: Math.round(45 + Math.sin(Date.now() / 10000) * 20),
-          trend: Math.random() > 0.5 ? 'up' : 'down',
-          volatility: Math.round(15 + Math.random() * 15),
-          aiPrediction: 'AI Analysis: Using backup data feed. Market analysis based on cached indicators.',
-          sentiment: 'Neutral',
+          fearGreedIndex: fg,
+          trend,
+          volatility: 0,
+          aiPrediction: 'Fallback neutral composite displayed (live feed unavailable).',
+          sentiment: getSentiment(fg),
           lastUpdated: new Date().toISOString()
         };
         setData(fallbackData);

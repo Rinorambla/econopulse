@@ -4,6 +4,7 @@
     "dashboard": "Dashboard",
     "ai_portfolio": "AI Portfolio",
     "ai_pulse": "AI Pulse",
+    "blog": "Blog",
     "pricing": "Pricing",
     "login": "Login",
     "logout": "Logout"
@@ -211,14 +212,37 @@
     "cancel_anytime": "Cancel anytime within 30 days for a full refund",
     "back_to_pricing": "← Back to Pricing Plans"
   },
+  
+  "legal": {
+    "risk_disclaimer": "Risk Disclaimer",
+    "risk_warning": "Investment Warning: The value of investments can go down as well as up. Past performance is not a guide to future performance. EconoPulse provides analysis tools and is not responsible for investment decisions.",
+    "not_financial_advice": "This platform provides educational and analytical tools only. Not financial advice.",
+    "copyright": "© 2025 EconoPulse. All rights reserved."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view_all": "View All",
+    "learn_more": "Learn More",
+    "get_started": "Get Started",
+    "coming_soon": "Coming Soon"
+  },
   "footer": {
     "company": "EconoPulse",
     "tagline": "Advanced Financial Analysis Platform",
-    "description": "Stay ahead of market trends with AI-powered financial analysis tools and real-time market intelligence.",
+    "description": "Advanced financial intelligence platform powered by AI and real-time data. Make smarter investment decisions with our comprehensive market analysis tools.",
     "product": "Product",
+    "account": "My Account",
     "company_section": "Company",
+    "services_section": "Services",
     "support": "Support",
-    "legal": "Legal",
+    "legal_section": "Legal",
     "social": "Follow Us",
     "newsletter": {
       "title": "Stay Updated",
@@ -230,12 +254,35 @@
     },
     "contact_info": {
       "email": "econopulse.info@econopulse.ai",
-      "phone": "+1 (555) 123-4567",
-      "address": "123 Financial District, New York, NY 10004"
+      "phone": "+3553519509674",
+      "address": "Viale Tassoni 1, Sassuolo (MO)"
     },
+    "market_analysis": "Market Analysis",
+    "dashboard": "Dashboard",
+    "ai_portfolio": "AI Portfolio",
+    "ai_pulse": "AI Pulse",
+    "market_dna": "Market DNA",
+    "visual_ai": "Visual AI",
+    "portfolio_tracker": "Portfolio Tracker",
+    "alerts": "Smart Alerts",
+  "about": "About",
+  "help": "Help",
+  "work_with_us": "Work with us",
+    "blog": "Blog",
+    "pricing": "Pricing",
+    "contact": "Contact",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "disclaimer": "Disclaimer",
+    "cookies": "Cookie Policy",
+    "latest_news": "Latest News",
+    "all_rights_reserved": "All rights reserved.",
+    "financial_disclaimer": "This platform is for informational purposes only and does not constitute financial advice.",
+    "cookie_settings": "Cookie Settings",
     "links": {
       "features": "Features",
-      "pricing": "Pricing", 
+      "pricing": "Pricing",
+      "upgrade": "Upgrade Plan", 
       "api": "API",
       "documentation": "Documentation",
       "status": "System Status",
@@ -261,25 +308,5 @@
       "company": "Company",
       "support": "Support"
     }
-  },
-  "legal": {
-    "risk_disclaimer": "Risk Disclaimer",
-    "risk_warning": "Investment Warning: The value of investments can go down as well as up. Past performance is not a guide to future performance. EconoPulse provides analysis tools and is not responsible for investment decisions.",
-    "not_financial_advice": "This platform provides educational and analytical tools only. Not financial advice.",
-    "copyright": "© 2025 EconoPulse. All rights reserved."
-  },
-  "common": {
-    "loading": "Loading...",
-    "error": "Error occurred",
-    "retry": "Retry",
-    "save": "Save",
-    "cancel": "Cancel",
-    "confirm": "Confirm",
-    "delete": "Delete",
-    "edit": "Edit",
-    "view_all": "View All",
-    "learn_more": "Learn More",
-    "get_started": "Get Started",
-    "coming_soon": "Coming Soon"
   }
 }

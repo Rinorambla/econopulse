@@ -12,8 +12,8 @@ export async function GET() {
     // Get economic data from FRED
     const economicData = await fredService.getEconomicSnapshot().catch(() => null);
     
-    // Calculate Fear & Greed Index
-    let fearGreedIndex = 50; // Base neutral
+  // Calculate Fear & Greed Index
+  let fearGreedIndex = 50; // Base neutral (deterministic start)
     
     // Market data influence (70% weight)
     if (marketData && marketData.length > 0) {
@@ -21,11 +21,17 @@ export async function GET() {
       const vixData = marketData.find(stock => stock.symbol === 'VIX');
       
       if (spyData) {
-        fearGreedIndex += spyData.changePercent * 6; // SPY performance
+        // Handle both data structures with type casting
+        const hasData = 'data' in spyData && spyData.data;
+        const changePercent = hasData ? (spyData as any).data.changePercent : (spyData as any).changePercent;
+        fearGreedIndex += changePercent * 6; // SPY performance
       }
       
       if (vixData) {
-        fearGreedIndex -= vixData.changePercent * 2; // VIX inverse
+        // Handle both data structures with type casting
+        const hasData = 'data' in vixData && vixData.data;
+        const changePercent = hasData ? (vixData as any).data.changePercent : (vixData as any).changePercent;
+        fearGreedIndex -= changePercent * 2; // VIX inverse
       }
     }
     
@@ -49,8 +55,26 @@ export async function GET() {
     else if (fearGreedIndex >= 25) sentiment = 'Fear';
     else sentiment = 'Extreme Fear';
     
-    // Determine trend
+    // Determine trend deterministically from index bands
     const trend = fearGreedIndex > 60 ? 'up' : fearGreedIndex < 40 ? 'down' : 'neutral';
+
+    // Derive volatility from VIX (no random). If VIX not available, fallback to SPY abs change * 4 (rough intraday proxy)
+    let derivedVolatility = 0;
+    if (marketData && marketData.length) {
+      const vix = marketData.find(s => s.symbol === 'VIX');
+      if (vix) {
+        const d: any = 'data' in vix ? (vix as any).data : vix;
+        derivedVolatility = Math.round(d?.last ?? d?.close ?? 0);
+      } else {
+        const spy = marketData.find(s => s.symbol === 'SPY');
+        if (spy) {
+          const d: any = 'data' in spy ? (spy as any).data : spy;
+          if (typeof d?.changePercent === 'number') {
+            derivedVolatility = Math.round(Math.abs(d.changePercent) * 4);
+          }
+        }
+      }
+    }
     
     console.log(`✅ Fear & Greed Index: ${Math.round(fearGreedIndex)} (${sentiment})`);
     
@@ -58,12 +82,19 @@ export async function GET() {
       fearGreedIndex: Math.round(fearGreedIndex),
       sentiment,
       trend,
-      volatility: Math.round(15 + Math.random() * 20),
-      aiPrediction: `AI Analysis: Market showing ${sentiment.toLowerCase()} conditions. ${marketData ? 'Real-time data suggests' : 'Economic indicators show'} ${trend === 'up' ? 'bullish' : trend === 'down' ? 'bearish' : 'neutral'} sentiment.`,
+      volatility: derivedVolatility,
+      aiPrediction: `AI Analysis: Market showing ${sentiment.toLowerCase()} conditions. ${marketData ? 'Real-time composite indicates' : 'Economic indicators imply'} ${trend === 'up' ? 'bullish' : trend === 'down' ? 'bearish' : 'neutral'} posture.`,
       lastUpdated: new Date().toISOString(),
+      meta: {
+        methodology_version: '1.0.0',
+        components: {
+          prices: 'Tiingo bulk quotes',
+          macro: 'FRED snapshot'
+        }
+      },
       sources: {
-        economic: economicData ? 'FRED API' : 'Simulated',
-        market: marketData && marketData.length > 0 ? 'Tiingo API' : 'Simulated'
+        economic: economicData ? 'FRED API' : 'Unavailable',
+        market: marketData && marketData.length > 0 ? 'Tiingo API' : 'Unavailable'
       }
     });
     
@@ -74,8 +105,8 @@ export async function GET() {
       fearGreedIndex: 50,
       sentiment: 'Neutral',
       trend: 'neutral',
-      volatility: 25,
-      aiPrediction: 'Market analysis temporarily unavailable',
+      volatility: 0,
+      aiPrediction: 'Baseline neutral reading shown (data fetch error).',
       lastUpdated: new Date().toISOString(),
       sources: {
         economic: 'Error',

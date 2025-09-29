@@ -1,16 +1,45 @@
+"use client";
+
 import React, { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { NavigationLink } from './Navigation';
-import NewsWidget from './NewsWidget';
+// Removed unused NavigationLink and NewsWidget
+import { useAuth } from '@/hooks/useAuth';
+import { hasAccess, planRank } from '@/lib/plan-access';
+import { useRouter } from 'next/navigation';
+import Logo from './Logo';
 
 const Footer = () => {
   const t = useTranslations();
   const locale = useLocale();
+  const router = useRouter();
+  const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [error, setError] = useState('');
 
   const currentYear = new Date().getFullYear();
+
+  // Handle protected links
+  const handleProtectedLink = (e: React.MouseEvent, href: string, requiredPlan?: string) => {
+    if (!user) {
+      e.preventDefault();
+      // Redirect to login with return URL
+      router.push(`/${locale}/login?redirect=${encodeURIComponent(href)}`);
+      return;
+    }
+    
+    // Check subscription level if required
+    const userPlan = user.user_metadata?.subscription_plan || 'pro';
+    if (requiredPlan && userPlan !== requiredPlan) {
+      e.preventDefault();
+      // Redirect to pricing/upgrade page
+      router.push(`/${locale}/pricing?plan=${requiredPlan}`);
+      return;
+    }
+    
+    // Allow navigation
+    router.push(`/${locale}${href}`);
+  };
 
   const handleNewsletterSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,433 +51,246 @@ const Footer = () => {
     }
 
     try {
-      // Here you would integrate with your newsletter service (e.g., Mailchimp, ConvertKit)
-      // For now, we'll just simulate success
-      setSubscribed(true);
-      setEmail('');
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (response.ok) {
+        setSubscribed(true);
+        setEmail('');
+      } else {
+        setError(t('footer.newsletter.error'));
+      }
     } catch (error) {
       setError(t('footer.newsletter.error'));
     }
   };
 
+  type FooterLink = {
+    key: string;
+    href: string;
+    requiresPlan?: string;
+  };
+
+  const linkSections = [
+    {
+      title: 'footer.services_section',
+      links: [
+        { key: 'dashboard', href: '/dashboard', requiresPlan: 'pro' },
+        { key: 'ai_portfolio', href: '/ai-portfolio', requiresPlan: 'premium' },
+        { key: 'ai_pulse', href: '/ai-pulse', requiresPlan: 'premium' },
+        { key: 'visual_ai', href: '/visual-ai', requiresPlan: 'premium' },
+        { key: 'market_dna', href: '/market-dna', requiresPlan: 'premium' }
+      ] as FooterLink[]
+    },
+    {
+      title: 'footer.company_section',
+      links: [
+        { key: 'about', href: '/about' },
+        { key: 'blog', href: '/blog' },
+        { key: 'pricing', href: '/pricing' },
+  { key: 'help', href: '/help' },
+        { key: 'work_with_us', href: '/work-with-us' }
+      ] as FooterLink[]
+    },
+    {
+      title: 'footer.legal_section',
+      links: [
+        { key: 'privacy', href: '/privacy' },
+        { key: 'terms', href: '/terms' },
+        { key: 'disclaimer', href: '/disclaimer' },
+        { key: 'cookies', href: '/cookies' }
+      ] as FooterLink[]
+    }
+  ];
+
+  const userPlan = (user?.user_metadata?.subscription_plan || 'pro').toLowerCase();
+  // Removed upsell CTA per user request
+  const showUpgradeCta = false;
+
   return (
-    <footer className="bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8">
-          {/* Company Info & Newsletter */}
-          <div className="lg:col-span-2">
-            <h3 className="text-xl font-bold text-blue-400 mb-4">
-              {t('footer.company')}
-            </h3>
-            <p className="text-gray-400 mb-4">
-              {t('footer.tagline')}
-            </p>
-            <p className="text-gray-400 mb-6 text-sm">
+  <footer className="bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 text-white mt-20">
+      <div className="max-w-7xl mx-auto px-6 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
+          {/* Company Info */}
+          <div className="lg:col-span-2 space-y-6">
+            <Logo size={40} showText={true} className="text-white" />
+            
+            <p className="text-white/80 text-lg leading-relaxed max-w-md">
               {t('footer.description')}
             </p>
 
-            {/* Newsletter Signup */}
-            <div className="mb-6">
-              <h4 className="font-semibold text-lg mb-3">
+            {/* Contact Info intentionally removed: shown only on Contact page per request */}
+
+            {/* Newsletter Subscription */}
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-white">
                 {t('footer.newsletter.title')}
               </h4>
-              <p className="text-gray-400 text-sm mb-4">
-                {t('footer.newsletter.description')}
-              </p>
               
-              {subscribed ? (
-                <div className="bg-green-900/20 border border-green-600/30 rounded-lg p-4">
-                  <p className="text-green-400 text-sm">
-                    {t('footer.newsletter.success')}
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleNewsletterSubscribe} className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={t('footer.newsletter.placeholder')}
-                    className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
-                  >
-                    {t('footer.newsletter.subscribe')}
-                  </button>
+              {!subscribed ? (
+                <form onSubmit={handleNewsletterSubscribe} className="space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t('footer.newsletter.placeholder')}
+                      className="flex-1 px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105"
+                    >
+                      {t('footer.newsletter.subscribe')}
+                    </button>
+                  </div>
+                  {error && (
+                    <p className="text-red-400 text-sm">{error}</p>
+                  )}
                 </form>
+              ) : (
+                <div className="flex items-center space-x-2 text-green-400">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>{t('footer.newsletter.success')}</span>
+                </div>
               )}
-              {error && (
-                <p className="text-red-400 text-sm mt-2">{error}</p>
-              )}
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          {linkSections.map((section, index) => (
+            <div key={index}>
+        <h4 className="font-semibold text-lg mb-6 text-white">
+                {t(section.title)}
+              </h4>
+              <ul className="space-y-4">
+                {section.links.map((link) => (
+                  <li key={link.key}>
+                    <a
+                      href={`/${locale}${link.href}`}
+                      onClick={(e) => handleProtectedLink(e, link.href, link.requiresPlan)}
+                      className="text-white/90 hover:text-white transition-colors duration-200 flex items-center space-x-2 group"
+                    >
+                      <span>{t(`footer.${link.key}`)}</span>
+                      {link.requiresPlan && (
+                        <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-2 py-1 rounded-full font-medium group-hover:scale-110 transition-transform duration-200">
+                          {link.requiresPlan.toUpperCase()}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {/* Upsell CTA removed */}
+
+          
+        </div>
+
+        {/* Bottom Section */}
+        <div className="border-t border-slate-700 mt-16 pt-8">
+      <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <div className="text-center md:text-left">
+        <p className="text-white/70">
+                © {currentYear} EconoPulse.ai. {t('footer.all_rights_reserved')}
+              </p>
+        <p className="text-sm text-white/60 mt-1">
+                {t('footer.financial_disclaimer')}
+              </p>
             </div>
 
-            {/* Contact Info */}
-            <div className="mb-6">
-              <h4 className="font-semibold text-lg mb-3">Contact</h4>
-              <div className="space-y-2 text-sm text-gray-400">
-                <p>
-                  <span className="font-medium">Email:</span>{' '}
-                  <a 
-                    href={`mailto:${t('footer.contact_info.email')}`}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    {t('footer.contact_info.email')}
-                  </a>
-                </p>
-                <p>
-                  <span className="font-medium">Phone:</span> {t('footer.contact_info.phone')}
-                </p>
-                <p>
-                  <span className="font-medium">Address:</span> {t('footer.contact_info.address')}
-                </p>
-              </div>
-            </div>
-            
-            {/* Social Icons */}
+            {/* Social Links */}
             <div className="flex space-x-4">
-              {/* X (Twitter) */}
-              <a 
-                href="https://x.com/econopulse" 
-                target="_blank" 
+              <a
+                href="https://www.instagram.com/econopulse_?igsh=MWprd3VpN2hxNm9pZA%3D%3D&utm_source=qr"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
-                aria-label="X (Twitter)"
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors duration-200 ring-1 ring-inset ring-slate-700/60"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                 </svg>
               </a>
-              
-              {/* Instagram */}
-              <a 
-                href="https://instagram.com/econopulse" 
-                target="_blank" 
+              <a
+                href="https://youtube.com/@rinorambla1365?si=H6C1KT82zA7Q1_A8"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-pink-400 transition-colors"
-                aria-label="Instagram"
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors duration-200 ring-1 ring-inset ring-slate-700/60"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.621 5.367 11.988 11.988 11.988s11.987-5.367 11.987-11.988C24.004 5.367 18.637.001 12.017.001zM8.449 16.988c-1.297 0-2.448-.49-3.323-1.297C4.228 14.794 3.738 13.643 3.738 12.346s.49-2.448 1.388-3.323c.875-.907 2.026-1.388 3.323-1.388s2.448.481 3.323 1.388c.907.875 1.388 2.026 1.388 3.323s-.481 2.448-1.388 3.345c-.875.807-2.026 1.297-3.323 1.297zm8.1-.098c-.098.098-.196.196-.327.294-.131.098-.294.196-.458.294-.196.098-.392.163-.621.229-.229.065-.49.098-.752.098s-.523-.033-.752-.098c-.229-.065-.425-.131-.621-.229-.163-.098-.327-.196-.458-.294-.131-.098-.229-.196-.327-.294-.098-.098-.196-.196-.294-.327-.098-.131-.196-.294-.294-.458-.098-.196-.163-.392-.229-.621-.065-.229-.098-.49-.098-.752s.033-.523.098-.752c.065-.229.131-.425.229-.621.098-.163.196-.327.294-.458.098-.131.196-.229.294-.327.098-.098.196-.196.327-.294.131-.098.294-.196.458-.294.196-.098.392-.163.621-.229.229-.065.49-.098.752-.098s.523.033.752.098c.229.065.425.131.621.229.163.098.327.196.458.294.131.098.229.196.327.294.098.098.196.196.294.327.098.131.196.294.294.458.098.196.163.392.229.621.065.229.098.49.098.752s-.033.523-.098.752c-.065.229-.131.425-.229.621-.098.163-.196.327-.294.458-.098.131-.196.229-.294.327zm4.114-4.642c0 1.297-.49 2.448-1.297 3.323-.807.907-1.958 1.388-3.255 1.388s-2.448-.481-3.255-1.388c-.807-.875-1.297-2.026-1.297-3.323s.49-2.448 1.297-3.323c.807-.875 1.958-1.297 3.255-1.297s2.448.422 3.255 1.297c.807.875 1.297 2.026 1.297 3.323z"/>
-                </svg>
-              </a>
-              
-              {/* YouTube */}
-              <a 
-                href="https://youtube.com/@econopulse" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-red-400 transition-colors"
-                aria-label="YouTube"
-              >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
               </a>
-              
-              {/* Telegram */}
-              <a 
-                href="https://t.me/econopulse" 
-                target="_blank" 
+              <a
+                href="https://x.com/rinorambla?s=21"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-blue-400 transition-colors"
-                aria-label="Telegram"
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors duration-200 ring-1 ring-inset ring-slate-700/60"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </a>
+              <a
+                href="https://t.me/econopulsee"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors duration-200 ring-1 ring-inset ring-slate-700/60"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
                 </svg>
               </a>
             </div>
           </div>
-
-          {/* Latest News */}
-          <div>
-            <h4 className="font-semibold text-lg mb-4">Latest News</h4>
-            <NewsWidget />
-          </div>
-
-          {/* Product Links */}
-          <div>
-            <h4 className="font-semibold text-lg mb-4">
-              {t('footer.product')}
-            </h4>
-            <ul className="space-y-2">
-              <li>
-                <NavigationLink 
-                  href="/dashboard" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('nav.dashboard')}
-                </NavigationLink>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/ai-portfolio" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('nav.ai_portfolio')}
-                </NavigationLink>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/ai-pulse" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('nav.ai_pulse')}
-                </NavigationLink>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/market-dna" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Market DNA
-                </NavigationLink>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/pricing" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.pricing')}
-                </NavigationLink>
-              </li>
-              <li>
-                <a 
-                  href="/api/docs" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.api')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/docs" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.documentation')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/status" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.status')}
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Company Links */}
-          <div>
-            <h4 className="font-semibold text-lg mb-4">
-              {t('footer.company_section')}
-            </h4>
-            <ul className="space-y-2">
-              <li>
-                <a 
-                  href="/about" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.about')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/careers" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.careers')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/blog" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.blog')}
-                </a>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/news" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  News
-                </NavigationLink>
-              </li>
-              <li>
-                <a 
-                  href="/press" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.press')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/investors" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.investors')}
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Support Links */}
-          <div>
-            <h4 className="font-semibold text-lg mb-4">
-              {t('footer.support')}
-            </h4>
-            <ul className="space-y-2">
-              <li>
-                <a 
-                  href="/help" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.help')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href={`mailto:${t('footer.contact_info.email')}`}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.contact')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/community" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.community')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/webinars" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.webinars')}
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Legal Links */}
-          <div>
-            <h4 className="font-semibold text-lg mb-4">
-              {t('footer.legal')}
-            </h4>
-            <ul className="space-y-2">
-              <li>
-                <NavigationLink 
-                  href="/privacy" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.privacy')}
-                </NavigationLink>
-              </li>
-              <li>
-                <NavigationLink 
-                  href="/terms" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.terms')}
-                </NavigationLink>
-              </li>
-              <li>
-                <a 
-                  href="/security" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.security')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/compliance" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.compliance')}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="/cookies" 
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {t('footer.links.cookies')}
-                </a>
-              </li>
-            </ul>
-          </div>
         </div>
 
-        {/* Risk Disclaimer */}
-        <div className="border-t border-gray-800 mt-8 pt-8">
-          <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4 mb-6">
-            <h5 className="font-semibold text-yellow-400 mb-2">
-              {t('legal.risk_disclaimer')}
-            </h5>
-            <p className="text-sm text-gray-300">
-              {t('legal.risk_warning')}
-            </p>
-            <p className="text-sm text-gray-400 mt-2">
-              {t('legal.not_financial_advice')}
-            </p>
-          </div>
-
-          {/* Copyright */}
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">
-              {t('legal.copyright')}
-            </p>
-            <div className="flex items-center space-x-4 mt-4 md:mt-0">
-              <span className="text-gray-400 text-sm">{t('footer.social')}</span>
-              <div className="flex space-x-2">
-                <a 
-                  href="https://x.com/econopulse" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <span className="sr-only">X</span>
-                  X
-                </a>
-                <span className="text-gray-600">•</span>
-                <a 
-                  href="https://instagram.com/econopulse" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-pink-400 transition-colors"
-                >
-                  Instagram
-                </a>
-                <span className="text-gray-600">•</span>
-                <a 
-                  href="https://youtube.com/@econopulse" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-red-400 transition-colors"
-                >
-                  YouTube
-                </a>
-                <span className="text-gray-600">•</span>
-                <a 
-                  href="https://t.me/econopulse" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-blue-400 transition-colors"
-                >
-                  Telegram
-                </a>
-              </div>
-            </div>
+        {/* Cookie/Privacy Quick Links Bar */}
+        <div className="border-t border-slate-600 mt-8 pt-4">
+          <div className="flex flex-wrap justify-center items-center gap-4 text-sm">
+            <a
+              href={`/${locale}/privacy`}
+              onClick={(e) => handleProtectedLink(e, '/privacy')}
+              className="text-white/70 hover:text-white transition-colors duration-200"
+            >
+              {t('footer.privacy')}
+            </a>
+            <span className="text-white/40">•</span>
+            <a
+              href={`/${locale}/cookies`}
+              onClick={(e) => handleProtectedLink(e, '/cookies')}
+              className="text-white/70 hover:text-white transition-colors duration-200"
+            >
+              {t('footer.cookies')}
+            </a>
+            <span className="text-white/40">•</span>
+            <a
+              href={`/${locale}/terms`}
+              onClick={(e) => handleProtectedLink(e, '/terms')}
+              className="text-white/70 hover:text-white transition-colors duration-200"
+            >
+              {t('footer.terms')}
+            </a>
+            <span className="text-white/40">•</span>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && (window as any).resetCookieConsent) {
+                  (window as any).resetCookieConsent();
+                }
+              }}
+              className="text-white/70 hover:text-white transition-colors duration-200 underline cursor-pointer"
+            >
+              {t('footer.cookie_settings')}
+            </button>
           </div>
         </div>
       </div>

@@ -85,7 +85,8 @@ export async function GET() {
         };
       }
 
-      const currentPrice = currentData.price;
+      const hasData = 'data' in currentData && currentData.data;
+      const currentPrice = hasData ? (currentData as any).data.price : (currentData as any).price;
       
       // Calculate multi-period performance
       const weeklyPrice = getHistoricalPrice(historicalData, 7);
@@ -93,7 +94,7 @@ export async function GET() {
       const quarterlyPrice = getHistoricalPrice(historicalData, 90);
       const yearlyPrice = getHistoricalPrice(historicalData, 365);
 
-      const daily = currentData.changePercent;
+      const daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
       const weekly = calculatePerformance(currentPrice, weeklyPrice);
       const monthly = calculatePerformance(currentPrice, monthlyPrice);
       const quarterly = calculatePerformance(currentPrice, quarterlyPrice);
@@ -115,9 +116,9 @@ export async function GET() {
         monthly: Number(monthly.toFixed(2)),
         quarterly: Number(quarterly.toFixed(2)),
         yearly: Number(yearly.toFixed(2)),
-        marketCap: Math.floor(Math.random() * 500 + 100) * 1e9, // Simulated market cap
-        volume: currentData.volume,
-        topStocks: [currentData.symbol, 'STOCK2', 'STOCK3'] // Include current symbol and simulated others
+        marketCap: 0, // Unknown from this endpoint; avoid synthetic values
+        volume: hasData ? (currentData as any).data.volume : (currentData as any).volume,
+        topStocks: [currentData.symbol] // Only include real symbol if needed
       };
     });
 

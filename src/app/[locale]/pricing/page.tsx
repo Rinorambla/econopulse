@@ -1,75 +1,64 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeftIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import { getStripe } from '@/lib/stripe';
+import { useAuth } from '@/hooks/useAuth';
 import Footer from '@/components/Footer';
+import { normalizePlan } from '@/lib/plan-access';
 
-const plans = [
-  {
-    id: 'pro',
-    name: 'EconoPulse Pro',
-    description: 'Perfect for individual investors',
-    monthlyPrice: 9.99, // €9.99 from Stripe - price_1RjN7THBOxZDD1iJQ9UoiQvY
-    yearlyPrice: 99.99, // €99.99 from Stripe - price_1RjNIVHBOxZDD1iJ7nyJ1T41
-    priceId: 'price_1RjN7THBOxZDD1iJQ9UoiQvY', // Monthly price ID
-    yearlyPriceId: 'price_1RjNIVHBOxZDD1iJ7nyJ1T41', // Yearly price ID
-    features: [
-      'Real-time market dashboard',
-      'Basic portfolio insights',
-      'Email support',
-      'Mobile access',
-      'Market alerts'
-    ],
-    popular: false
-  },
-  {
-    id: 'premium',
-    name: 'EconoPulse Premium AI',
-    description: 'AI-powered insights and analysis',
-    monthlyPrice: 29.99, // €29.99 from Stripe - price_1RjNDXHBOxZDD1iJG9RV0EMm
-    yearlyPrice: 299.99, // €299.99 from Stripe - price_1RjNKuHBOxZDD1iJQ5hrI9fm
-    priceId: 'price_1RjNDXHBOxZDD1iJG9RV0EMm', // Monthly price ID
-    yearlyPriceId: 'price_1RjNKuHBOxZDD1iJQ5hrI9fm', // Yearly price ID
-    features: [
-      'Everything in Pro',
-      'AI Portfolio Builder',
-      'Advanced market analysis',
-      'Priority support',
-      'Custom alerts',
-      'Economic quadrant analysis',
-      'Options flow analysis'
-    ],
-    popular: true
-  },
-  {
-    id: 'corporate',
-    name: 'EconoPulse Corporate',
-    description: 'Enterprise-grade solutions',
-    monthlyPrice: 99.99, // €99.99 from Stripe - price_1RjNFcHBOxZDD1iJGhA0xRGL
-    yearlyPrice: 999.99, // €999.99 from Stripe - price_1RjNMfHBOxZDD1iJUoaOP2dJ
-    priceId: 'price_1RjNFcHBOxZDD1iJGhA0xRGL', // Monthly price ID
-    yearlyPriceId: 'price_1RjNMfHBOxZDD1iJUoaOP2dJ', // Yearly price ID
-    features: [
-      'Everything in Premium',
-      'Multi-user access (up to 10 users)',
-      'API access',
-      'Custom integrations',
-      'Dedicated support',
-      'White-label options',
-      'Custom reporting'
-    ],
-    popular: false
-  }
-];
+interface LoadedPlan {
+  id: string;
+  name: string;
+  priceMonthly: number | null;
+  priceYearly: number | null;
+  priceId: string | null;
+  yearlyPriceId: string | null;
+  features: string[];
+  popular?: boolean;
+  currency?: string | null;
+}
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+  const [plans, setPlans] = useState<LoadedPlan[]>([]);
+  const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { user, plan: userPlan, session } = useAuth();
 
-  const handleSubscribe = async (plan: typeof plans[0]) => {
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setFetching(true);
+        const res = await fetch('/api/stripe/plans');
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error || 'Impossibile caricare i piani');
+        const loaded: LoadedPlan[] = Object.entries(json.plans).map(([id, p]: any) => ({
+          id,
+          name: p.name,
+          priceMonthly: p.price ?? null,
+          priceYearly: p.yearlyPrice ?? null,
+          priceId: p.monthly,
+          yearlyPriceId: p.yearly,
+          features: p.features || [],
+          popular: id === 'premium',
+          currency: p.currency || 'usd'
+        }));
+        if (active) setPlans(loaded);
+      } catch (e: any) {
+        if (active) setFetchError(e.message || 'Errore caricamento piani');
+      } finally {
+        if (active) setFetching(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const handleSubscribe = async (plan: LoadedPlan) => {
     setLoading(plan.id);
     
     try {
@@ -79,15 +68,22 @@ export default function PricingPage() {
         isYearly
       });
 
-      const response = await fetch('/api/create-checkout-session', {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add authorization header if user is logged in
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           priceId: isYearly ? plan.yearlyPriceId : plan.priceId,
-          successUrl: `${window.location.origin}/en/success`,
-          cancelUrl: `${window.location.origin}/en/pricing`,
+          plan: plan.id,
+          billingCycle: isYearly ? 'yearly' : 'monthly'
         }),
       });
 
@@ -99,19 +95,19 @@ export default function PricingPage() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const { sessionId, url } = await response.json();
-      console.log('🔍 Session data:', { sessionId, url });
-
-      if (url) {
-        console.log('✅ Redirecting to Stripe hosted checkout');
-        window.location.href = url;
-      } else if (sessionId) {
-        console.log('✅ Using Stripe.js redirect');
-        const stripe = await getStripe();
-        await stripe?.redirectToCheckout({ sessionId });
-      } else {
-        throw new Error('No sessionId or url returned from API');
+      const payload = await response.json();
+      console.log('🔍 Session data:', payload);
+      if (payload.url) {
+        window.location.href = payload.url;
+        return;
       }
+      if (payload.sessionId) {
+        const stripe = await getStripe();
+        await stripe?.redirectToCheckout({ sessionId: payload.sessionId });
+        return;
+      }
+      console.error('Unexpected checkout response payload', payload);
+      throw new Error('Checkout response non valida');
     } catch (error) {
       console.error('Checkout error:', error);
       alert('Something went wrong. Please try again.');
@@ -120,8 +116,53 @@ export default function PricingPage() {
     }
   };
 
+  if (fetching) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)] text-gray-300">Caricamento piani...</div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] text-gray-300 p-6">
+        <p className="mb-4">Errore nel caricamento dei piani: {fetchError}</p>
+        <button onClick={() => location.reload()} className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm">Riprova</button>
+      </div>
+    );
+  }
+
+  // Normalize user plan each render (cheap) to avoid stale memo impacting hook order changes
+  const normalizedUserPlan = normalizePlan(userPlan as any);
+
+  function formatPrice(amount: number | null | undefined, currency: string | null | undefined) {
+    if (amount == null) return '—';
+    if (amount === 0) return 'Free';
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: (currency || 'usd').toUpperCase() }).format(amount);
+    } catch {
+      // Fallback if unsupported currency code
+      return `${(currency || 'USD').toUpperCase()} ${amount}`;
+    }
+  }
+
+  function planButtonLabel(plan: LoadedPlan): string {
+    if (normalizedUserPlan === plan.id) return 'Current Plan';
+    // If user has higher plan don't offer downgrade
+    const order = ['pro','premium','corporate'];
+    if (order.indexOf(normalizedUserPlan) > order.indexOf(plan.id)) return 'Downgrade Not Available';
+    return 'Subscribe';
+  }
+
+  function isButtonDisabled(plan: LoadedPlan): boolean {
+    if (normalizedUserPlan === plan.id) return true;
+    const order = ['pro','premium','corporate'];
+    // disable if would be a downgrade
+    if (order.indexOf(normalizedUserPlan) > order.indexOf(plan.id)) return true;
+    return false;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+  <div className="min-h-screen bg-[var(--background)] text-white">
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -143,7 +184,7 @@ export default function PricingPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>
           <p className="text-xl text-gray-400 mb-8">
-            Start with a free trial, upgrade when you're ready
+            Only pay for what you really need. Start free, upgrade anytime.
           </p>
           
           <div className="flex items-center justify-center space-x-4">
@@ -158,15 +199,27 @@ export default function PricingPage() {
                 }`}
               />
             </button>
-            <span className={`${isYearly ? 'text-white' : 'text-gray-400'}`}>
-              Yearly <span className="text-green-400 text-sm">(Save 17%)</span>
-            </span>
+            <span className={`${isYearly ? 'text-white' : 'text-gray-400'}`}>Yearly</span>
           </div>
+          <p className="mt-4 text-xs text-gray-500">Yearly billing shows the effective monthly price. Discount varies per plan.</p>
         </div>
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {plans.map((plan) => (
+          {plans.map((plan) => {
+            const currency = plan.currency || 'usd';
+            const monthlyEffective = plan.priceMonthly;
+            const yearlyTotal = plan.priceYearly;
+            let discount: number | null = null;
+            if (plan.priceMonthly && plan.priceYearly && plan.priceMonthly > 0) {
+              const raw = 1 - plan.priceYearly / (plan.priceMonthly * 12);
+              discount = raw > 0.001 ? Math.round(raw * 100) : null;
+            }
+            const btnDisabled = isButtonDisabled(plan);
+            const btnLabel = planButtonLabel(plan);
+            const isCurrent = btnLabel === 'Current Plan';
+            const isDowngrade = btnLabel === 'Downgrade Not Available';
+            return (
             <div
               key={plan.id}
               className={`relative rounded-2xl p-8 ${
@@ -185,36 +238,50 @@ export default function PricingPage() {
 
               <div className="text-center">
                 <h3 className="text-2xl font-bold">{plan.name}</h3>
-                <p className="text-gray-300 mt-2">{plan.description}</p>
+                {normalizedUserPlan && (
+                  <p className="text-xs text-gray-300 mt-1">{isCurrent ? 'This is your current plan' : ''}</p>
+                )}
+                {/* Diagnostics removed per revert request */}
                 
                 <div className="mt-6">
-                  <span className="text-4xl font-bold">
-                    €{isYearly ? Math.floor(plan.yearlyPrice / 12) : plan.monthlyPrice}
-                  </span>
-                  <span className="text-gray-400">/month</span>
-                  {isYearly && (
-                    <p className="text-sm text-green-400 mt-1">
-                      Billed yearly (€{plan.yearlyPrice})
-                    </p>
+                  {isYearly && yearlyTotal !== null && yearlyTotal !== undefined ? (
+                    <>
+                      <span className="text-4xl font-bold">{formatPrice(yearlyTotal, currency)}</span>
+                      <span className="text-gray-400">/year</span>
+                      {monthlyEffective && monthlyEffective > 0 && (
+                        <p className="text-sm text-green-400 mt-1">
+                          Effective {formatPrice((yearlyTotal/12), currency)}/mo {discount ? `• Save ${discount}%` : ''}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-bold">{formatPrice(monthlyEffective, currency)}</span>
+                      {monthlyEffective !== null && monthlyEffective !== 0 && <span className="text-gray-400">/month</span>}
+                    </>
                   )}
                 </div>
 
-                <button
-                  onClick={() => handleSubscribe(plan)}
-                  disabled={loading === plan.id}
-                  className={`w-full mt-8 py-3 px-6 rounded-lg font-semibold transition-colors ${
-                    plan.popular
-                      ? 'bg-white text-blue-700 hover:bg-gray-100'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {loading === plan.id ? 'Processing...' : 'Start Free Trial'}
-                </button>
+                <div className="mt-8">
+                  <button
+                    onClick={() => handleSubscribe(plan)}
+                    disabled={loading === plan.id || btnDisabled || isDowngrade || isCurrent}
+                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
+                      btnDisabled || isDowngrade || isCurrent
+                        ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                        : plan.popular
+                          ? 'bg-white text-blue-700 hover:bg-gray-100'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {loading === plan.id ? 'Processing...' : btnLabel}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-8">
                 <ul className="space-y-4">
-                  {plan.features.map((feature, index) => (
+                  {(plan.features || []).map((feature, index) => (
                     <li key={index} className="flex items-center">
                       <CheckIcon className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
                       <span className="text-gray-300">{feature}</span>
@@ -223,7 +290,8 @@ export default function PricingPage() {
                 </ul>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* FAQ Section */}

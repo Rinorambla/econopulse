@@ -39,6 +39,9 @@ async function getCategoryAssets(category: string, cachedData: CategoryData[]): 
 
     const mappedCategories = categoryMapping[category];
     
+    console.log(`🔍 Category requested: ${category}`);
+    console.log(`🔍 Mapped categories:`, mappedCategories);
+    
     if (!mappedCategories) {
       return NextResponse.json({
         success: false,
@@ -61,30 +64,82 @@ async function getCategoryAssets(category: string, cachedData: CategoryData[]): 
 
     // Get data for each mapped category
     for (const subcategory of mappedCategories) {
+      console.log(`🔍 Processing subcategory: ${subcategory}`);
       const symbols = CATEGORY_SYMBOLS[subcategory as keyof typeof CATEGORY_SYMBOLS];
+      
+      console.log(`🔍 Symbols for ${subcategory}:`, symbols ? symbols.length : 'NONE');
+      
+      // Special debug for problematic categories
+      if (subcategory === 'Financial' || subcategory === 'Consumer Discretionary') {
+        console.log(`🚨 DEBUG ${subcategory}:`, {
+          symbolsExist: !!symbols,
+          symbolCount: symbols?.length || 0,
+          firstFewSymbols: symbols?.slice(0, 5) || 'none'
+        });
+      }
       
       if (symbols) {
         try {
           const marketData = await getTiingoMarketData(symbols);
           
           if (marketData && marketData.length > 0) {
-            const assets: AssetPerformance[] = marketData.map(item => ({
-              symbol: item.symbol,
-              name: item.symbol, // We could enhance this with company names later
-              price: item.price,
-              daily: item.changePercent,
-              weekly: item.changePercent * 1.2, // Approximated for now
-              monthly: item.changePercent * 2.5, // Approximated for now
-              quarterly: item.changePercent * 6, // Approximated for now
-              yearly: item.changePercent * 12, // Approximated for now
-              volume: item.volume,
-              category: subcategory
-            }));
+            console.log(`✅ Got ${marketData.length} assets for ${subcategory}`);
+            
+            // Special debug for problematic categories
+            if (subcategory === 'Financial' || subcategory === 'Consumer Discretionary') {
+              console.log(`🚨 ${subcategory} SUCCESS - Got market data for ${marketData.length} assets:`, 
+                marketData.slice(0, 3).map(item => {
+                  const hasData = 'data' in item && item.data;
+                  const price = hasData ? (item as any).data.price : (item as any).price;
+                  return { symbol: item.symbol, price };
+                }));
+            }
+            
+            const assets: AssetPerformance[] = marketData.map(item => {
+              // Handle both data structures with type casting
+              const hasData = 'data' in item && item.data;
+              const price = hasData ? (item as any).data.price : (item as any).price;
+              const changePercent = hasData ? (item as any).data.changePercent : (item as any).changePercent;
+              const volume = hasData ? (item as any).data.volume : (item as any).volume;
+              
+              return {
+                symbol: item.symbol,
+                name: item.symbol, // We could enhance this with company names later
+                price: price,
+                daily: changePercent,
+                weekly: changePercent * 1.2, // Approximated for now
+                monthly: changePercent * 2.5, // Approximated for now
+                quarterly: changePercent * 6, // Approximated for now
+                yearly: changePercent * 12, // Approximated for now
+                volume: volume,
+                category: subcategory
+              };
+            });
             
             allAssets.push(...assets);
+            console.log(`✅ Total assets so far: ${allAssets.length}`);
+          } else {
+            console.log(`⚠️ No market data for ${subcategory}`);
+            
+            // Special debug for problematic categories
+            if (subcategory === 'Financial' || subcategory === 'Consumer Discretionary') {
+              console.log(`🚨 ${subcategory} PROBLEM - No market data returned from getTiingoMarketData`);
+            }
           }
         } catch (error) {
           console.error(`❌ Error getting data for ${subcategory}:`, error);
+          
+          // Special debug for problematic categories
+          if (subcategory === 'Financial' || subcategory === 'Consumer Discretionary') {
+            console.log(`🚨 ${subcategory} ERROR:`, error);
+          }
+        }
+      } else {
+        console.log(`❌ No symbols found for ${subcategory}`);
+        
+        // Special debug for problematic categories  
+        if (subcategory === 'Financial' || subcategory === 'Consumer Discretionary') {
+          console.log(`🚨 ${subcategory} MISSING - No symbols defined in CATEGORY_SYMBOLS`);
         }
       }
     }
@@ -161,16 +216,32 @@ export async function GET(request: Request) {
         const marketData = await getTiingoMarketData(symbols);
         
         if (marketData && marketData.length > 0) {
-          // Calculate category performance
-          const totalPerformance = marketData.reduce((sum, item) => sum + item.changePercent, 0);
+          // Calculate category performance with type safety
+          const totalPerformance = marketData.reduce((sum, item) => {
+            const hasData = 'data' in item && item.data;
+            const changePercent = hasData ? (item as any).data.changePercent : (item as any).changePercent;
+            return sum + (changePercent || 0);
+          }, 0);
           const avgPerformance = totalPerformance / marketData.length;
           
-          const totalChange = marketData.reduce((sum, item) => sum + item.change, 0);
+          const totalChange = marketData.reduce((sum, item) => {
+            const hasData = 'data' in item && item.data;
+            const change = hasData ? (item as any).data.change : (item as any).change;
+            return sum + (change || 0);
+          }, 0);
           const avgChange = totalChange / marketData.length;
           
-          const totalVolume = marketData.reduce((sum, item) => sum + item.volume, 0);
+          const totalVolume = marketData.reduce((sum, item) => {
+            const hasData = 'data' in item && item.data;
+            const volume = hasData ? (item as any).data.volume : (item as any).volume;
+            return sum + (volume || 0);
+          }, 0);
           
-          const bullishCount = marketData.filter(item => item.changePercent > 0).length;
+          const bullishCount = marketData.filter(item => {
+            const hasData = 'data' in item && item.data;
+            const changePercent = hasData ? (item as any).data.changePercent : (item as any).changePercent;
+            return changePercent > 0;
+          }).length;
           const sentiment = bullishCount > marketData.length / 2 ? 'Bullish' : 'Bearish';
           
           const trend = avgPerformance > 1 ? 'UPTREND' : avgPerformance < -1 ? 'DOWNTREND' : 'SIDEWAYS';
@@ -182,7 +253,13 @@ export async function GET(request: Request) {
             volume: totalVolume.toLocaleString(),
             sentiment,
             topTickers: marketData
-              .sort((a, b) => b.changePercent - a.changePercent)
+              .sort((a, b) => {
+                const aHasData = 'data' in a && a.data;
+                const bHasData = 'data' in b && b.data;
+                const aChangePercent = aHasData ? (a as any).data.changePercent : (a as any).changePercent;
+                const bChangePercent = bHasData ? (b as any).data.changePercent : (b as any).changePercent;
+                return (bChangePercent || 0) - (aChangePercent || 0);
+              })
               .slice(0, 3)
               .map(item => item.symbol),
             trend,

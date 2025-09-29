@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 // Popular ETF symbols and their details
 const POPULAR_ETFS = {
@@ -39,18 +40,32 @@ const POPULAR_COMPARISONS = [
   ['JEPI', 'QYLD']
 ];
 
-async function fetchETFData(symbols: string[]) {
-  const TIINGO_TOKEN = process.env.TIINGO_API_KEY || 'demo';
-  
+type ETFQuote = {
+  symbol: string;
+  name: string;
+  category: string;
+  price: number;
+  change: number;
+  volume: number;
+  high: number;
+  low: number;
+  open: number;
+  expense: number;
+  timestamp: string;
+};
+
+async function fetchETFData(symbols: string[], token: string): Promise<ETFQuote[]> {
   try {
-    console.log(`🔍 Fetching REAL ETF data for ${symbols.length} symbols from Tiingo...`);
+    console.log(`Fetching ETF data for ${symbols.length} symbols from Tiingo...`);
     
-    const promises = symbols.map(async (symbol) => {
+    const promises = symbols.map(async (symbol): Promise<ETFQuote | null> => {
       try {
-        console.log(`🔍 Fetching REAL quote for ${symbol} from Tiingo...`);
-        
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 1);
+
         const response = await fetch(
-          `https://api.tiingo.com/tiingo/daily/${symbol}/prices?startDate=2025-08-15&endDate=2025-08-15&token=${TIINGO_TOKEN}`,
+          `https://api.tiingo.com/tiingo/daily/${symbol}/prices?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&token=${token}`,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -64,22 +79,21 @@ async function fetchETFData(symbols: string[]) {
           return null;
         }
 
-        const data = await response.json();
-        console.log(`📊 Tiingo REAL response for ${symbol}:`, JSON.stringify(data, null, 2));
+  const data = await response.json();
         
         if (!data || data.length === 0) {
           console.warn(`⚠️ No data returned for ${symbol}`);
           return null;
         }
 
-        const latestData = data[0];
+  const latestData = data[0];
         const etfInfo = POPULAR_ETFS[symbol as keyof typeof POPULAR_ETFS];
         
         // Calculate performance metrics
         const dailyChange = ((latestData.adjClose - latestData.adjOpen) / latestData.adjOpen) * 100;
         const volume = latestData.adjVolume;
 
-        return {
+  return {
           symbol,
           name: etfInfo?.name || symbol,
           category: etfInfo?.category || 'ETF',
@@ -98,8 +112,8 @@ async function fetchETFData(symbols: string[]) {
       }
     });
 
-    const results = await Promise.all(promises);
-    return results.filter(Boolean);
+  const results = await Promise.all(promises);
+  return results.filter(Boolean) as ETFQuote[];
     
   } catch (error) {
     console.error('Error fetching ETF data from Tiingo:', error);
@@ -109,6 +123,12 @@ async function fetchETFData(symbols: string[]) {
 
 export async function GET(request: NextRequest) {
   try {
+    const ip = getClientIp(request as unknown as Request);
+    const rl = rateLimit(`etf:${ip}`, 60, 60_000); // 60 req/min per IP
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
+    }
+
     const { searchParams } = new URL(request.url);
     const symbols = searchParams.get('symbols')?.split(',') || [];
     const comparison = searchParams.get('comparison');
@@ -129,31 +149,29 @@ export async function GET(request: NextRequest) {
       etfsToFetch = Object.keys(POPULAR_ETFS);
     }
 
-    console.log(`🔍 Fetching data for ETFs: ${etfsToFetch.join(', ')}`);
+    console.log(`Fetching data for ETFs: ${etfsToFetch.join(', ')}`);
+
+    const token = process.env.TIINGO_API_KEY;
+    if (!token) {
+      return NextResponse.json({ error: 'TIINGO_API_KEY not configured' }, { status: 500 });
+    }
 
     // Fetch real-time data
-    const etfData = await fetchETFData(etfsToFetch);
+    const etfData = await fetchETFData(etfsToFetch, token);
 
     // Calculate additional metrics
-    const processedData = etfData.map(etf => {
-      if (!etf) return null;
-
-      const volatility = Math.abs(etf.change) + Math.random() * 2; // Simplified volatility
+    const processedData = etfData.map((etf) => {
+      const volatility = etf.open > 0 ? ((etf.high - etf.low) / etf.open) * 100 : 0;
       const trend = etf.change > 0 ? 'up' : etf.change < 0 ? 'down' : 'flat';
-      const momentum = etf.change > 1 ? 'strong' : etf.change > 0.5 ? 'moderate' : etf.change > -0.5 ? 'neutral' : etf.change > -1 ? 'weak' : 'very_weak';
+      const momentum = Math.abs(etf.change) >= 1 ? 'strong' : Math.abs(etf.change) >= 0.5 ? 'moderate' : 'neutral';
 
       return {
         ...etf,
         volatility,
         trend,
-        momentum,
-        marketCap: etf.volume * etf.price / 1000000, // Simplified market cap estimation
-        ytdReturn: etf.change * 30 + (Math.random() - 0.5) * 20, // Mock YTD return
-        peRatio: 15 + Math.random() * 20, // Mock P/E ratio
-        dividend: etf.category === 'Income' ? (2 + Math.random() * 4) : Math.random() * 2,
-        beta: 0.8 + Math.random() * 0.8 // Mock beta
+        momentum
       };
-    }).filter(Boolean);
+    });
 
     const response = {
       etfs: processedData,
@@ -162,46 +180,13 @@ export async function GET(request: NextRequest) {
       totalCount: processedData.length
     };
 
-    console.log(`✅ Retrieved REAL ETF data for ${processedData.length} ETFs`);
+  console.log(`Retrieved ETF data for ${processedData.length} ETFs`);
 
-    return NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
-      }
-    });
+  return NextResponse.json(response, { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600', ...rateLimitHeaders(rl) } });
 
   } catch (error) {
     console.error('ETF Comparison API error:', error);
     
-    // Return fallback data in case of error
-    const fallbackData = Object.entries(POPULAR_ETFS).slice(0, 6).map(([symbol, info]) => ({
-      symbol,
-      name: info.name,
-      category: info.category,
-      price: 100 + Math.random() * 400,
-      change: (Math.random() - 0.5) * 4,
-      volume: Math.floor(Math.random() * 50000000) + 10000000,
-      high: 0,
-      low: 0,
-      open: 0,
-      expense: info.expense,
-      volatility: Math.random() * 5,
-      trend: 'flat',
-      momentum: 'neutral',
-      marketCap: Math.random() * 1000,
-      ytdReturn: (Math.random() - 0.5) * 40,
-      peRatio: 15 + Math.random() * 20,
-      dividend: Math.random() * 3,
-      beta: 0.8 + Math.random() * 0.8,
-      timestamp: new Date().toISOString()
-    }));
-
-    return NextResponse.json({
-      etfs: fallbackData,
-      comparisons: POPULAR_COMPARISONS,
-      timestamp: new Date().toISOString(),
-      totalCount: fallbackData.length,
-      error: 'Using fallback data due to API issues'
-    });
+  return NextResponse.json({ error: 'ETF data unavailable right now' }, { status: 502 });
   }
 }

@@ -1,17 +1,21 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { supabase, SUPABASE_ENABLED } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  plan: string | null;
+  refreshingPlan: boolean;
+  refreshPlan: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string; needsConfirmation?: boolean }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
+  requestReauth: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,8 +24,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<string | null>(null);
+  const [refreshingPlan, setRefreshingPlan] = useState(false);
+
+  // Fetch plan details for the current authenticated user
+  const fetchPlan = useCallback(async () => {
+    try {
+      setRefreshingPlan(true);
+      const res = await fetch('/api/me', { cache: 'no-store' });
+      if (!res.ok) throw new Error('me failed');
+      const json = await res.json();
+      if (json?.authenticated) {
+        setPlan(json.plan || 'free');
+      } else {
+        setPlan('free');
+      }
+    } catch (e) {
+      console.warn('Fetch plan error', e);
+      setPlan('free');
+    } finally {
+      setRefreshingPlan(false);
+    }
+  }, []);
+
+  const refreshPlan = useCallback(async () => {
+    if (!user) return;
+    await fetchPlan();
+  }, [user, fetchPlan]);
 
   useEffect(() => {
+    if (!SUPABASE_ENABLED) {
+      // No Supabase in this environment: treat as logged-out without errors
+      setUser(null)
+      setSession(null)
+      setLoading(false)
+      return
+    }
     // Get initial session
     const getInitialSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -34,23 +72,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     };
 
-    getInitialSession();
+  getInitialSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event: string, session: Session | null) => {
         console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        if (session?.user) {
+          // Lazy fetch plan after auth state change
+          fetchPlan();
+        } else {
+          setPlan(null);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
+  return () => subscription.unsubscribe();
+  }, [fetchPlan]);
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' }
       // Use Supabase client directly for immediate auth state update
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -70,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
+      if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' }
       // Use Supabase client directly for immediate auth state update
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -114,8 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOut = async () => {
+  const signOut = async (): Promise<void> => {
     try {
+      if (!SUPABASE_ENABLED) return;
       await supabase.auth.signOut();
       // The auth state change listener will handle updating the state
     } catch (error) {
@@ -125,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' }
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -142,14 +190,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const requestReauth = async (email: string) => {
+    try {
+      const response = await fetch('/api/auth/reauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to send reauthentication email' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
   const value = {
     user,
     session,
     loading,
+    plan,
+    refreshingPlan,
+    refreshPlan,
     signIn,
     signUp,
     signInWithGoogle,
     signOut,
+    requestReauth,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

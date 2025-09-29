@@ -1,5 +1,11 @@
-﻿import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
+import { NextResponse, NextRequest } from 'next/server';
 import { getTiingoMarketData } from '@/lib/tiingo';
+import { getYahooQuotes, convertYahooToMarketData } from '@/lib/yahooFinance';
+import { marketCache, portfolioCache, getCacheKey, formatCacheStatus } from '@/lib/cache';
 
 interface MarketDataItem {
   ticker: string;
@@ -19,803 +25,645 @@ interface MarketDataItem {
   putCallRatio: string;
   sector: string;
   direction?: string;
+  category?: string; // Core / Factor / Thematic / Commodity / International / Crypto / Forex / LargeCap
+  // Added AI signal enrichment (deterministic, no randomness)
+  aiSignal?: {
+    momentum: number;          // 0-100 scaled intraday momentum score
+    relativeStrength: number;  // 0-100 percentile vs universe
+    volatility: 'Low'|'Normal'|'High'|'Extreme';
+    breakout: boolean;         // basic breakout condition
+    meanReversion: 'Overbought'|'Oversold'|'Neutral';
+    compositeScore: number;    // 0-100 composite
+    label: 'STRONG BUY'|'BUY'|'HOLD'|'SELL'|'STRONG SELL';
+    rationale: string;         // short explanation string
+    version: string;           // version tag for methodology tracking
+  };
 }
 
-// Cache for dashboard data with improved caching
-let cachedData: { data: MarketDataItem[], timestamp: number } | null = null;
-let cachedPortfolios: { data: any, timestamp: number } | null = null;
-const CACHE_DURATION = 900000; // 15 minutes cache (increased for better performance)
-const PORTFOLIO_CACHE_DURATION = 600000; // 10 minutes cache for portfolios
-const TIINGO_REQUEST_DELAY = 100; // 100ms delay between Tiingo API calls to avoid rate limits
+// Memory cleanup utility
+function forceGarbageCollection() {
+  if (global.gc) {
+    global.gc();
+  }
+}
 
-// TIINGO SUPPORTED SYMBOLS
-const TIINGO_SYMBOLS = [
-  'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO',
-  'XLF', 'XLE', 'XLI', 'XLK', 'XLP', 'XLU', 'XLV', 'XLB', 'XLY', 'XLRE',
-  'VDE', 'VDC', 'VIS', 'VGT', 'VNQ', 'VAW', 'VCR', 'VPU', 'VOX',
-  'VEA', 'VWO', 'EFA', 'EEM', 'IEFA', 'IEMG', 'VGK',
-  'AGG', 'BND', 'TLT', 'IEF', 'SHY', 'LQD', 'HYG', 'JNK', 'TIP', 'VTEB',
-  'GLD', 'SLV', 'USO', 'UNG', 'DBA', 'DBC',
-  'UUP', 'FXE', 'FXY', 'FXB', 'UDN', 'FXF',
-  'BITO',
-  // Economic Regime ETFs
-  'SMH', 'BIL', 'VTV', 'IXUS',
-  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'NVDA', 'TSLA', 'META', 'NFLX', 'ADBE', 'CRM',
-  'ORCL', 'IBM', 'INTC', 'AMD', 'QCOM', 'AVGO', 'TXN', 'MU', 'AMAT', 'LRCX',
-  'KLAC', 'MRVL', 'SNPS', 'CDNS', 'FTNT', 'PANW', 'CRWD', 'NOW', 'INTU', 'WDAY',
-  'VEEV', 'ZS', 'OKTA', 'SNOW', 'PLTR', 'DDOG', 'MDB', 'NET', 'TWLO', 'DOCU',
-  'ZOOM', 'SHOP', 'ROKU', 'SPOT', 'RBLX', 'PYPL', 'SQ',
-  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'USB', 'PNC', 'COF', 'AXP',
-  'V', 'MA', 'BLK', 'SCHW', 'SPGI', 'ICE', 'TFC', 'MTB', 'FITB', 'RF',
-  'KEY', 'HBAN', 'CMA', 'ZION', 'CFG', 'ALLY',
-  'JNJ', 'UNH', 'PFE', 'ABBV', 'TMO', 'DHR', 'MRK', 'ABT', 'LLY', 'BMY',
-  'MDT', 'AMGN', 'GILD', 'VRTX', 'REGN', 'BIIB', 'ZTS', 'ILMN', 'MRNA',
-  'PG', 'KO', 'PEP', 'WMT', 'COST', 'CL', 'KMB', 'GIS', 'K', 'HSY',
-  'MKC', 'CLX', 'CHD', 'KR', 'SYY', 'TSN',
-  'AMZN', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TJX', 'BKNG', 'DIS', 'CMG',
-  'LULU', 'RCL', 'F', 'GM', 'UBER', 'LYFT', 'ABNB',
-  'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'PSX', 'VLO', 'MPC', 'KMI', 'OKE',
-  'WMB', 'ENB', 'FSLR', 'ENPH',
-  'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'XEL', 'SRE', 'PEG', 'ES',
-  'AWK', 'ATO',
-  'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'RTX', 'LMT', 'DE', 'UNP',
-  'FDX', 'CSX',
-  'LIN', 'APD', 'SHW', 'FCX', 'NEM', 'DOW', 'DD', 'PPG', 'ECL', 'FMC',
-  'LYB', 'CF',
-  'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'DISH', 'SNAP', 'PINS',
-  'AMT', 'PLD', 'CCI', 'EQIX', 'SBAC', 'PSA', 'DLR', 'O', 'WELL', 'EXR',
-  'AVB', 'EQR',
-  'COIN', 'MSTR', 'RIOT', 'MARA', 'HUT', 'BITF'
+// Request timeout wrapper
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`${label} timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    return result;
+  } catch (error) {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    throw error;
+  }
+}
+
+// CORE SYMBOL UNIVERSE (balanced breadth, fast response)
+const CORE_SYMBOLS = [
+  // === MAJOR INDICES & BROAD MARKET ETFs ===
+  'SPY','QQQ','IWM','DIA','VTI','VOO','VEA','VWO','EFA','EEM','ITOT','SPLG','SPDW','SPEM','SPTM',
+
+  // === SECTOR ETFs ===
+  'XLK','XLF','XLE','XLI','XLV','XLY','XLP','XLB','XLU','XLRE','VGT','VFH','VDE','VIS','VHT','VCR','VDC','VAW','VPU','VNQ',
+
+  // === FACTOR / STYLE ===
+  'RSP','MTUM','QUAL','VLUE','USMV','SPLV','VYM','DVY','SCHD','IWF','IWD','MGK','MGV',
+
+  // === BOND & FIXED INCOME ETFs ===
+  'AGG','BND','TLT','SHY','IEF','TIP','LQD','HYG','EMB','VGIT','VGSH','VGLT','VTEB',
+
+  // === COMMODITIES & PRECIOUS METALS ETFs ===
+  'GLD','SLV','GDX','GDXJ','IAU','DBO','USO','UNG','PDBC','OIH','XME',
+
+  // === COMMODITY / RESOURCE THEMES ===
+  'DBA','WEAT','CORN','SOYB','CPER','URA','LIT','TAN','ICLN','WOOD','PHO','XOP','XRT','XHB','SIL',
+
+  // === THEMATIC / TECH / INNOVATION ===
+  'SOXX','SMH','CLOU','SKYY','HACK','CIBR','BOTZ','ROBO','ARKK','ARKW','XBI','IBB','ITA','XAR','KWEB','KRE','IHI','XPH',
+
+  // === INTERNATIONAL & EMERGING MARKETS ETFs ===
+  'IEFA','IEMG','IXUS','VXUS','FXI','EWJ','EWZ','RSX','INDA','MCHI','EWY','EWT','EWH','EWW','EZA','EWC','EWU','EWG','EWQ','EWI','EWL','EWS','EWK','EWD',
+
+  // === GROWTH & VALUE ETFs (core duplicates kept intentionally for clarity) ===
+  'VUG','VTV','IVW','IVE','VBK','VBR','SPYG','SPYV',
+
+  // === MEGA / LARGE CAP INDIVIDUAL STOCKS ===
+  'AAPL','MSFT','GOOGL','AMZN','TSLA','NVDA','META','NFLX','JPM','BAC','V','MA','JNJ','PG','UNH','HD',
+  'WMT','DIS','PFE','ABBV','ORCL','CRM','ADBE','INTC','AMD','CSCO','KO','PEP','NKE','MCD','COST','T','VZ','BA','GE','CAT','MS','GS','BK','BLK','SCHW','AVGO','ASML','SAP','BHP','RIO','SHEL'
 ];
 
-// S&P 500 Historical P/E Data (real historical averages)
-const SPX_PE_HISTORICAL = {
-  // Current estimated P/E for S&P 500
-  current: 24.8,
-  
-  // Historical averages
-  trailing12Months: 23.2,  // Average P/E last 12 months
-  trailing5Years: 21.4,    // Average P/E last 5 years (2020-2024)
-  trailing10Years: 19.8,   // Average P/E last 10 years (2015-2024)
-  
-  // All-time historical context
-  historicalAverage: 17.5, // Long-term historical average since 1950
-  
-  // Market cycle context
-  bullMarketAvg: 22.0,
-  bearMarketAvg: 14.5,
-  recessionAvg: 12.8,
-  
-  // Valuation thresholds
-  thresholds: {
-    veryUndervalued: 15,    // P/E < 15
-    undervalued: 18,        // P/E < 18
-    fairValue: [18, 22],    // P/E 18-22
-    overvalued: 25,         // P/E > 25
-    veryOvervalued: 30      // P/E > 30
-  }
-};
+// EXTENDED SYMBOLS (added when scope=full) – curated large caps, additional themes, commodities, volatility
+const EXTENDED_SYMBOLS = [
+  // Additional Large Caps / S&P style breadth
+  'ABT','ACN','ADP','AIG','ALGN','AMAT','AMGN','ANET','BKNG','BMY','C','CMCSA','COP','CSX','DE','DUK','EL','ETN','EXC','F','FDX','GD','GM','HON','IBM','LMT','LOW','MAR','MMM','MO','MRK','NEE','NOW','PANW','PYPL','QCOM','SBUX','SO','SPGI','TGT','TXN','UPS','WFC','ZTS','ABNB','PLTR','SNOW','SHOP','UBER','LYFT','TSM','BABA','JD','NIO','TCEHY',
+  // Additional Thematic / Factor / Niche ETFs
+  'VIXY','UVXY','SVXY','BUG','CIBR','FIVG','CLOU','CLEAN','PHO','GRID','IDRV','PAVE','DRIV','FINX','XT','XTL',
+  // Additional Commodities / Agri
+  'JO','SGG','NIB','CANE','GLDM','KRBN',
+  // Additional International single-country ETFs
+  'EPU','EIRL','EIS','ENZL','EPOL','ECH','EPI','SCHE','SCHF','SCHC',
+  // REIT / Real Estate breadth
+  'SCHH','IYR','REET','XLRE',
+  // Additional Bonds / Yield curve
+  'BIL','SHV','IEF','ZROZ','EDV','HYG','JNK','BKLN','SRLN'
+];
 
-function getSPXValuationAnalysis() {
-  const current = SPX_PE_HISTORICAL.current;
-  const { trailing12Months, trailing5Years, trailing10Years, historicalAverage } = SPX_PE_HISTORICAL;
-  const { thresholds } = SPX_PE_HISTORICAL;
-  
-  // Calculate deviations from historical averages
-  const vs12M = ((current - trailing12Months) / trailing12Months * 100);
-  const vs5Y = ((current - trailing5Years) / trailing5Years * 100);
-  const vs10Y = ((current - trailing10Years) / trailing10Years * 100);
-  const vsHistorical = ((current - historicalAverage) / historicalAverage * 100);
-  
-  // Determine valuation signal
-  let signal = 'Fair Value';
-  let color = 'yellow';
-  let explanation = 'P/E in normal range';
-  
-  if (current < thresholds.veryUndervalued) {
-    signal = 'Very Undervalued';
-    color = 'green';
-    explanation = 'Extremely attractive valuation';
-  } else if (current < thresholds.undervalued) {
-    signal = 'Undervalued';
-    color = 'green';
-    explanation = 'Below historical averages';
-  } else if (current >= thresholds.fairValue[0] && current <= thresholds.fairValue[1]) {
-    signal = 'Fair Value';
-    color = 'yellow';
-    explanation = 'Within historical normal range';
-  } else if (current > thresholds.overvalued) {
-    signal = current > thresholds.veryOvervalued ? 'Very Overvalued' : 'Overvalued';
-    color = 'red';
-    explanation = current > thresholds.veryOvervalued ? 'Extremely expensive valuation' : 'Above historical averages';
-  }
-  
-  return {
-    current,
-    historical: {
-      trailing12Months,
-      trailing5Years,
-      trailing10Years,
-      historicalAverage
-    },
-    deviations: {
-      vs12M: vs12M.toFixed(1),
-      vs5Y: vs5Y.toFixed(1), 
-      vs10Y: vs10Y.toFixed(1),
-      vsHistorical: vsHistorical.toFixed(1)
-    },
-    signal,
-    color,
-    explanation,
-    percentile: calculatePercentile(current),
-    marketContext: getMarketContext(current)
-  };
+// Remove duplicates and ensure unique symbols
+function buildUniverse(scope: string, limit?: number) {
+  const base = [...CORE_SYMBOLS];
+  if (scope === 'full') base.push(...EXTENDED_SYMBOLS);
+  const uniq = [...new Set(base)];
+  const maxEnv = parseInt(process.env.MAX_SYMBOL_UNIVERSE || '',10);
+  const hardCap = !isNaN(maxEnv) ? maxEnv : 450; // safety
+  const appliedLimit = Math.min(limit || hardCap, hardCap);
+  return uniq.slice(0, appliedLimit);
 }
 
-// Dummy EPS and sector PE/market PE for demo (replace with real API in prod)
-const EPS_DATA: { [ticker: string]: { trailing: number, forward: number, history: number[] } } = {
-  'AAPL': { trailing: 6.5, forward: 7.1, history: [5.8, 6.0, 6.2, 6.5] },
-  'MSFT': { trailing: 9.2, forward: 10.0, history: [8.5, 8.8, 9.0, 9.2] },
-  'GOOGL': { trailing: 5.0, forward: 5.5, history: [4.2, 4.5, 4.8, 5.0] },
-  'TSLA': { trailing: 3.1, forward: 3.8, history: [2.2, 2.5, 2.8, 3.1] },
-  'NVDA': { trailing: 18.5, forward: 20.0, history: [15.0, 16.5, 17.5, 18.5] },
-  // ...aggiungi altri titoli chiave demo
-};
+// Parsed per-request universe (decided inside handler)
+let REQUESTED_UNIVERSE: string[] = [];
 
-function calculatePercentile(currentPE: number): number {
-  // Simulate percentile calculation (in production, use real historical data)
-  // Based on historical S&P 500 P/E distribution
-  if (currentPE < 12) return 5;
-  if (currentPE < 15) return 15;
-  if (currentPE < 18) return 35;
-  if (currentPE < 22) return 65;
-  if (currentPE < 25) return 80;
-  if (currentPE < 28) return 90;
-  return 95;
-}
+// Crypto & Forex sets (kept small to avoid latency spikes); can be toggled by query later
+const CRYPTO_SYMBOLS: string[] = ['BTCUSD','ETHUSD','SOLUSD','XRPUSD'];
+const FOREX_PAIRS: string[] = ['EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD'];
 
-function getMarketContext(currentPE: number): string {
-  const { bullMarketAvg, bearMarketAvg, recessionAvg } = SPX_PE_HISTORICAL;
+// Cache and performance optimization
+
+export async function GET(req: NextRequest) {
+  const startTime = Date.now();
   
-  if (currentPE >= bullMarketAvg) {
-    return 'Bull Market Levels';
-  } else if (currentPE <= recessionAvg) {
-    return 'Recession Levels';
-  } else if (currentPE <= bearMarketAvg) {
-    return 'Bear Market Levels';
-  } else {
-    return 'Transitional Market';
-  }
-}
-const SECTOR_PE: { [sector: string]: number } = {
-  'Technology': 28,
-  'Financial Services': 14,
-  'Healthcare': 18,
-  'Consumer Staples': 20,
-  'Consumer Discretionary': 22,
-  'Energy': 12,
-  'Utilities': 16,
-  'Industrials': 17,
-  'Materials': 15,
-  'Communication Services': 19,
-  'Real Estate': 13,
-  'Other': 16
-};
-const MARKET_PE = 20;
-
-// Sentiment keywords for NLP analysis
-const SENTIMENT_KEYWORDS = {
-  positive: ['growth', 'profit', 'earnings beat', 'strong', 'bullish', 'upgrade', 'buy', 'outperform', 'revenue growth', 'expansion', 'innovation', 'breakthrough'],
-  negative: ['loss', 'decline', 'weak', 'bearish', 'downgrade', 'sell', 'underperform', 'revenue drop', 'layoffs', 'risk', 'concern', 'warning'],
-  neutral: ['stable', 'maintain', 'hold', 'unchanged', 'steady']
-};
-
-async function getSentimentScore(ticker: string): Promise<{ score: number, sentiment: string, confidence: number }> {
+  console.log('\n🚀 Dashboard API called');
+  
   try {
-    // Simulate sentiment analysis for demo (replace with real API in production)
-    // Generate simulated sentiment based on ticker characteristics
-    let score = 0;
-    let sentiment = 'neutral';
-    let confidence = 0.7;
+    const url = new URL(req.url);
+    const scope = (url.searchParams.get('scope') || 'core').toLowerCase(); // core | full
+    const limitParam = url.searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam,10) : undefined;
+    const includeCrypto = url.searchParams.get('crypto') === '1';
+    const includeForex = url.searchParams.get('forex') === '1';
 
-    // Simulate some realistic sentiment based on ticker types
-    if (['AAPL', 'MSFT', 'GOOGL', 'NVDA'].includes(ticker)) {
-      score = 0.3 + Math.random() * 0.4; // Generally positive for big tech
-      sentiment = 'positive';
-      confidence = 0.8;
-    } else if (['TSLA', 'COIN', 'RIOT'].includes(ticker)) {
-      score = (Math.random() - 0.5) * 1.2; // More volatile sentiment
-      sentiment = score > 0.2 ? 'positive' : score < -0.2 ? 'negative' : 'neutral';
-      confidence = 0.6;
-    } else if (ticker.includes('XL') || ticker.includes('ETF')) {
-      score = (Math.random() - 0.5) * 0.6; // More stable sentiment for ETFs
-      sentiment = score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral';
-      confidence = 0.5;
-    } else {
-      score = (Math.random() - 0.5) * 0.8;
-      sentiment = score > 0.2 ? 'positive' : score < -0.2 ? 'negative' : 'neutral';
-      confidence = 0.6;
-    }
+    REQUESTED_UNIVERSE = buildUniverse(scope, limit);
+    console.log(`📦 Universe scope=${scope} size=${REQUESTED_UNIVERSE.length} (limit=${limit||'default'})`);
+    (global as any).__dashboard_request_meta = { scope, size: REQUESTED_UNIVERSE.length, includeCrypto, includeForex };
 
-    return { 
-      score: Math.max(-1, Math.min(1, score)), 
-      sentiment, 
-      confidence 
-    };
-  } catch (error) {
-    console.error('Error getting sentiment:', error);
-    return { score: 0, sentiment: 'neutral', confidence: 0.5 };
-  }
-}
-
-function getPERatio(ticker: string, price: number, type: 'trailing' | 'forward'): { pe: number|null, eps: number|null, history: number[] } {
-  const epsData = EPS_DATA[ticker];
-  if (!epsData) return { pe: null, eps: null, history: [] };
-  const eps = type === 'trailing' ? epsData.trailing : epsData.forward;
-  if (!eps || eps === 0) return { pe: null, eps, history: epsData.history };
-  return { pe: price / eps, eps, history: epsData.history };
-}
-
-function getAINormalizedPE(pe: number|null, sector: string, sentimentData?: { score: number, sentiment: string, confidence: number }): { normalized: number|null, signal: string, explanation: string, sentimentAdjusted: boolean } {
-  if (!pe) return { normalized: null, signal: 'N/A', explanation: 'No PE data', sentimentAdjusted: false };
-  
-  const sectorPE = SECTOR_PE[sector] || MARKET_PE;
-  const norm = pe / sectorPE;
-  
-  let signal = 'Fair Value';
-  let explanation = 'PE in line with sector';
-  let sentimentAdjusted = false;
-
-  // Base PE analysis
-  if (norm < 0.8) { 
-    signal = 'Undervalued'; 
-    explanation = 'PE well below sector average'; 
-  } else if (norm > 1.2) { 
-    signal = 'Overvalued'; 
-    explanation = 'PE well above sector average'; 
-  }
-
-  // Sentiment adjustment
-  if (sentimentData && sentimentData.confidence > 0.6) {
-    sentimentAdjusted = true;
+    // Force garbage collection at start
+    forceGarbageCollection();
     
-    if (sentimentData.sentiment === 'positive' && sentimentData.score > 0.3) {
-      // Positive sentiment can justify higher PE
-      if (signal === 'Overvalued' && norm < 1.4) {
-        signal = 'Fair Value';
-        explanation = 'PE elevated but justified by positive sentiment';
-      } else if (signal === 'Fair Value') {
-        signal = 'Undervalued';
-        explanation = 'PE fair with strong positive sentiment';
-      }
-    } else if (sentimentData.sentiment === 'negative' && sentimentData.score < -0.3) {
-      // Negative sentiment makes undervalued more attractive, overvalued more risky
-      if (signal === 'Undervalued') {
-        explanation = 'PE low, but negative sentiment creates risk';
-      } else if (signal === 'Fair Value') {
-        signal = 'Overvalued';
-        explanation = 'PE fair but negative sentiment adds risk';
-      } else if (signal === 'Overvalued') {
-        explanation = 'PE high with concerning negative sentiment';
-      }
-    }
-  }
-
-  return { normalized: norm, signal, explanation, sentimentAdjusted };
-}
-
-// Dummy AI prediction (replace with ML in prod) - optimized version
-function getAIPrediction(ticker: string, sentimentData?: { score: number, sentiment: string, confidence: number }): { pe3: number|null, pe6: number|null, pe12: number|null, probability: number, sentimentImpact: string } {
-  const base = EPS_DATA[ticker]?.trailing;
-  if (!base) return { pe3: null, pe6: null, pe12: null, probability: 0.5, sentimentImpact: 'none' };
-  
-  let sentimentMultiplier = 1;
-  let sentimentImpact = 'none';
-  
-  if (sentimentData && sentimentData.confidence > 0.5) {
-    if (sentimentData.sentiment === 'positive') {
-      sentimentMultiplier = 1 + (sentimentData.score * 0.2); // Up to 20% boost
-      sentimentImpact = 'positive';
-    } else if (sentimentData.sentiment === 'negative') {
-      sentimentMultiplier = 1 + (sentimentData.score * 0.15); // Up to 15% reduction
-      sentimentImpact = 'negative';
-    }
-  }
-
-  return {
-    pe3: base * sentimentMultiplier * (1 + Math.random() * 0.1),
-    pe6: base * sentimentMultiplier * (1 + Math.random() * 0.15),
-    pe12: base * sentimentMultiplier * (1 + Math.random() * 0.2),
-    probability: 0.5 + Math.random() * 0.4,
-    sentimentImpact
-  };
-}
-
-export async function GET() {
-  try {
-    console.log('\n🚀 Dashboard API called');
-    
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_DURATION) {
-      console.log('⚡ Using cached dashboard data');
-      
-      // Use cached portfolio data if available, otherwise calculate fresh
-      let portfolioPerformances: any = {};
-      if (cachedPortfolios && (Date.now() - cachedPortfolios.timestamp < PORTFOLIO_CACHE_DURATION)) {
-        console.log('⚡ Using cached portfolio data');
-        portfolioPerformances = cachedPortfolios.data;
-      } else {
-        console.log('📊 Calculating fresh portfolio data...');
-        for (const key of Object.keys(ECONOMIC_PORTFOLIOS)) {
-          try {
-            const performance = await getPortfolioPerformance(key, cachedData!.data);
-            if (performance) {
-              portfolioPerformances[key] = performance;
-            }
-          } catch (error) {
-            console.error(`❌ Error calculating portfolio performance for ${key}:`, error);
-          }
-        }
-        
-        // Cache portfolio data
-        cachedPortfolios = {
-          data: portfolioPerformances,
-          timestamp: Date.now()
-        };
-      }
-      
-      return NextResponse.json({
-        data: cachedData.data,
-        economicPortfolios: portfolioPerformances,
-        summary: {
-          avgPerformance: calculateAveragePerformance(cachedData.data),
-          totalVolume: calculateTotalVolume(cachedData.data),
-          bullishCount: cachedData.data.filter(item => parseFloat(item.performance) > 0).length,
-          bearishCount: cachedData.data.filter(item => parseFloat(item.performance) < 0).length,
-          marketSentiment: getMarketSentiment(cachedData.data)
-        },
-        lastUpdated: new Date(cachedData.timestamp).toISOString()
-      });
-    }
-
-    console.log('🔄 Fetching fresh data from Tiingo...');
-    const tiingoData = await getTiingoMarketData(TIINGO_SYMBOLS);
-    
-    if (!tiingoData || tiingoData.length === 0) {
-      console.warn('⚠️  No data received from Tiingo');
-      return NextResponse.json({ 
-        data: [], 
-        economicPortfolios: {},
-        summary: {
-          avgPerformance: '0.00%',
-          totalVolume: '0',
-          bullishCount: 0,
-          bearishCount: 0,
-          marketSentiment: 'Neutral'
-        },
-        lastUpdated: new Date().toISOString()
-      });
-    }
-
-    // Optimized: Reduce complex calculations for better performance
-    const dashboardData: (MarketDataItem & {
-      peTrailing?: number|null,
-      peForward?: number|null,
-      peHistory?: number[],
-      peNormalized?: number|null,
-      peSignal?: string,
-      peExplanation?: string,
-      sentimentData?: { score: number, sentiment: string, confidence: number },
-      peAIPrediction?: { pe3: number|null, pe6: number|null, pe12: number|null, probability: number, sentimentImpact: string }
-    })[] = tiingoData.map(item => {
-      const performanceStr = (item.changePercent * 100).toFixed(2) + '%';
-      const sector = getSectorForTicker(item.symbol);
-      const price = item.price || 0;
-      
-      // Simplified PE calculation (skip AI/sentiment for performance)
-      const { pe: peTrailing, eps: epsTrailing, history: peHistory } = getPERatio(item.symbol, price, 'trailing');
-      const { pe: peForward } = getPERatio(item.symbol, price, 'forward');
-      
-      // Basic normalized PE without complex sentiment analysis
-      const peNormalized = peTrailing ? Math.min(Math.max(peTrailing / 20, 0), 2) : null;
-      const peSignal = peTrailing ? (peTrailing < 15 ? 'Buy' : peTrailing > 25 ? 'Sell' : 'Hold') : 'N/A';
-      const peExplanation = `P/E: ${peTrailing?.toFixed(1) || 'N/A'}`;
-      
-      // Simplified AI prediction without sentiment
-      const peAIPrediction = getAIPrediction(item.symbol);
-      
-      return {
-        ticker: item.symbol,
-        name: getTickerName(item.symbol),
-        price: item.price?.toFixed(2) || '0.00',
-        change: item.change?.toFixed(2) || '0.00',
-        performance: performanceStr,
-        volume: formatVolume(item.volume || 0),
-        trend: getTrend(performanceStr),
-        demandSupply: getDemandSupply(performanceStr),
-        optionsSentiment: getOptionsSentiment(performanceStr),
-        gammaRisk: getGammaRisk(performanceStr),
-        unusualAtm: getUnusualActivity(performanceStr, 'ATM'),
-        unusualOtm: getUnusualActivity(performanceStr, 'OTM'),
-        otmSkew: getOTMSkew(performanceStr),
-        intradayFlow: getIntradayFlow(performanceStr),
-        putCallRatio: getPutCallRatio(performanceStr),
-        sector,
-        direction: getDirection(performanceStr),
-        peTrailing: peTrailing ? parseFloat(peTrailing.toFixed(2)) : null,
-        peForward: peForward ? parseFloat(peForward.toFixed(2)) : null,
-        peHistory,
-        peNormalized: peNormalized ? parseFloat(peNormalized.toFixed(2)) : null,
-        peSignal,
-        peExplanation,
-        peAIPrediction
-      };
-    });
-
-    cachedData = {
-      data: dashboardData,
-      timestamp: Date.now()
-    };
-
-    console.log(`✅ Dashboard data complete - ${dashboardData.length} symbols`);
-
-    // Calculate economic portfolio performances with batch processing
-    const portfolioPerformances: any = {};
-    console.log('📊 Calculating portfolio performances...');
-    
-    for (const key of Object.keys(ECONOMIC_PORTFOLIOS)) {
-      try {
-        const performance = await getPortfolioPerformance(key, dashboardData);
-        if (performance) {
-          portfolioPerformances[key] = performance;
-        }
-      } catch (error) {
-        console.error(`❌ Error calculating portfolio performance for ${key}:`, error);
-      }
-    }
-
-    // Cache the portfolio data separately
-    cachedPortfolios = {
-      data: portfolioPerformances,
-      timestamp: Date.now()
-    };
-
-    return NextResponse.json({
-      data: dashboardData,
-      economicPortfolios: portfolioPerformances,
-      spxValuation: getSPXValuationAnalysis(),
-      summary: {
-        avgPerformance: calculateAveragePerformance(dashboardData),
-        totalVolume: calculateTotalVolume(dashboardData),
-        bullishCount: dashboardData.filter(item => parseFloat(item.performance) > 0).length,
-        bearishCount: dashboardData.filter(item => parseFloat(item.performance) < 0).length,
-        marketSentiment: getMarketSentiment(dashboardData)
-      },
-      lastUpdated: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error(' Dashboard API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch dashboard data' },
-      { status: 500 }
+    // Create the request promise  
+    const result = await withTimeout(
+      handleDashboardRequest({ scope, includeCrypto, includeForex }),
+      58000,
+      'Dashboard request'
     );
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ Dashboard API completed in ${duration}ms`);
+    
+    return result;
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ Dashboard API failed after ${duration}ms:`, error);
+    
+    // Force cleanup on error
+    forceGarbageCollection();
+    
+    // Try to return cached data as fallback
+    const fallbackCacheKey = getCacheKey('market_data_fallback');
+    const fallbackData = marketCache.get(fallbackCacheKey) || [];
+    
+    return NextResponse.json({
+      data: Array.isArray(fallbackData) ? fallbackData.slice(0, 50) : [],
+      economicPortfolios: {},
+      summary: {
+        avgPerformance: '0.00%',
+        totalVolume: '0',
+        bullishCount: 0,
+        bearishCount: 0,
+        marketSentiment: 'Unknown'
+      },
+      lastUpdated: new Date().toISOString(),
+      cacheStatus: 'ERROR_FALLBACK',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { 
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-cache, must-revalidate',
+        'X-Error': 'server-error',
+        'X-Duration': duration.toString()
+      }
+    });
   }
 }
 
+interface DashboardParams { scope: string; includeCrypto: boolean; includeForex: boolean; }
+async function handleDashboardRequest(params: DashboardParams) {
+  const { scope, includeCrypto, includeForex } = params;
+  // Check advanced cache first
+  const marketCacheKey = getCacheKey('market_data', { symbols: REQUESTED_UNIVERSE.length, scope });
+  const cachedMarketData = marketCache.get(marketCacheKey);
+  
+  if (cachedMarketData) {
+    console.log('⚡ Using cached market data');
+    console.log(formatCacheStatus(marketCache, 'Market Cache'));
+    
+    return NextResponse.json({
+      data: cachedMarketData,
+      economicPortfolios: getEconomicPortfolios(),
+      summary: {
+        avgPerformance: calculateAveragePerformance(cachedMarketData),
+        totalVolume: calculateTotalVolume(cachedMarketData),
+        bullishCount: cachedMarketData.filter((item: any) => parseFloat(item.performance) > 0).length,
+        bearishCount: cachedMarketData.filter((item: any) => parseFloat(item.performance) < 0).length,
+        marketSentiment: getMarketSentiment(cachedMarketData)
+      },
+      lastUpdated: new Date().toISOString(),
+      cacheStatus: 'HIT'
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=1800',
+        'X-Cache-Status': 'HIT',
+        'CDN-Cache-Control': 'public, s-maxage=3600'
+      }
+    });
+  }
+
+  console.log('🔄 Fetching fresh data from Tiingo (equities/etfs)... universe size', REQUESTED_UNIVERSE.length);
+  const tiingoData = await withTimeout(
+    getTiingoMarketData(REQUESTED_UNIVERSE),
+    50000,
+    'Tiingo market data fetch'
+  );
+
+  // Optionally extend with crypto & forex (best-effort; failures are ignored to keep core fast)
+  let cryptoData: any[] = [];
+  let forexData: any[] = [];
+  if (includeCrypto || includeForex) {
+    try {
+      const { getTiingoCrypto, getTiingoForex } = await import('@/lib/tiingo');
+      if (includeCrypto) cryptoData = await withTimeout(getTiingoCrypto(CRYPTO_SYMBOLS), 12000, 'Crypto fetch');
+      if (includeForex) forexData = await withTimeout(getTiingoForex(FOREX_PAIRS), 12000, 'Forex fetch');
+    } catch (e) {
+      console.warn('⚠️  Crypto/Forex extension failed (non-blocking):', e);
+    }
+  }
+  
+  if (!tiingoData || tiingoData.length === 0) {
+    console.warn('⚠️  No data received from Tiingo');
+    return NextResponse.json({ 
+      data: [], 
+      economicPortfolios: {},
+      summary: {
+        avgPerformance: '0.00%',
+        totalVolume: '0',
+        bullishCount: 0,
+        bearishCount: 0,
+        marketSentiment: 'Neutral'
+      },
+      lastUpdated: new Date().toISOString(),
+      cacheStatus: 'MISS'
+    });
+  }
+
+  console.log('🎯 First Tiingo data item:', JSON.stringify(tiingoData[0], null, 2));
+
+  const dashboardData: MarketDataItem[] = tiingoData.map((item: any) => {
+    const performanceStr = (item.changePercent * 100).toFixed(2) + '%';
+    const sector = getSectorForTicker(item.symbol);
+    
+    return {
+      ticker: item.symbol,
+      name: getTickerName(item.symbol),
+      price: (item.price || 0).toFixed(2),
+      change: (item.change || 0).toFixed(2),
+      performance: performanceStr,
+      volume: formatVolume(item.volume || 0),
+      trend: getTrend(performanceStr),
+      demandSupply: getDemandSupply(performanceStr),
+      optionsSentiment: getOptionsSentiment(performanceStr),
+      gammaRisk: getGammaRisk(performanceStr),
+      unusualAtm: getUnusualActivity(performanceStr, 'ATM'),
+      unusualOtm: getUnusualActivity(performanceStr, 'OTM'),
+      otmSkew: getOTMSkew(performanceStr),
+      intradayFlow: getIntradayFlow(performanceStr),
+      putCallRatio: getPutCallRatio(performanceStr),
+      sector: sector,
+      direction: item.changePercent >= 0 ? 'up' : 'down',
+      category: deriveCategory(item.symbol)
+    };
+  });
+
+  // Append crypto
+  if (cryptoData && cryptoData.length) {
+    for (const c of cryptoData) {
+      if (!c) continue;
+      const perf = ((c.changePercent) || 0).toFixed(2) + '%';
+      dashboardData.push({
+        ticker: c.symbol,
+        name: c.symbol.replace('USD','').toUpperCase() + ' / USD',
+        price: (c.price || 0).toFixed(2),
+        change: (c.change || 0).toFixed(2),
+        performance: perf,
+        volume: formatVolume(c.volume || 0),
+        trend: getTrend(perf),
+        demandSupply: getDemandSupply(perf),
+        optionsSentiment: getOptionsSentiment(perf),
+        gammaRisk: getGammaRisk(perf),
+        unusualAtm: getUnusualActivity(perf, 'ATM'),
+        unusualOtm: getUnusualActivity(perf, 'OTM'),
+        otmSkew: getOTMSkew(perf),
+        intradayFlow: getIntradayFlow(perf),
+        putCallRatio: getPutCallRatio(perf),
+        sector: 'Cryptocurrency',
+        direction: c.changePercent >= 0 ? 'up' : 'down',
+        category: 'Crypto'
+      });
+    }
+  }
+  // Append forex (treat as low-vol instruments; some fields neutral)
+  if (forexData && forexData.length) {
+    for (const f of forexData) {
+      if (!f) continue;
+      // Forex quote lacks changePercent in our simplified object; set 0 for now (future: compute via previous mid)
+      const perf = '0.00%';
+      dashboardData.push({
+        ticker: f.symbol,
+        name: f.symbol.replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2'),
+        price: (f.price || 0).toFixed(5),
+        change: '0.00',
+        performance: perf,
+        volume: '—',
+        trend: 'Down',
+        demandSupply: 'Moderate Supply',
+        optionsSentiment: 'Neutral Flow',
+        gammaRisk: 'Low',
+        unusualAtm: 'Low',
+        unusualOtm: 'Low',
+        otmSkew: 'Neutral',
+        intradayFlow: 'Delta Neutral',
+        putCallRatio: '1.00',
+        sector: 'Forex',
+        direction: 'up',
+        category: 'Forex'
+      });
+    }
+  }
+
+  // === AI Signal Enrichment (2-pass for relative strength) ===
+  const perfNumeric = dashboardData.map(d => parseFloat(d.performance));
+  const sortedPerf = [...perfNumeric].sort((a,b)=>a-b);
+  const percentile = (v:number) => {
+    if (sortedPerf.length <= 1) return 50;
+    // use average rank for duplicates
+    let first = sortedPerf.indexOf(v);
+    let last = sortedPerf.lastIndexOf(v);
+    const avgRank = (first + last)/2;
+    return +( (avgRank / (sortedPerf.length - 1)) * 100 ).toFixed(1);
+  };
+  const versionTag = 'ai-signal-v1-2025-09-01';
+  dashboardData.forEach((d: MarketDataItem) => {
+    const perf = parseFloat(d.performance);
+    // Momentum scaling: map perf (-5% to +5%) -> 0..100
+    const momentum = Math.max(0, Math.min(100, ((perf + 5) / 10) * 100));
+    const relativeStrength = percentile(perf);
+    const absPerf = Math.abs(perf);
+    const volatility: 'Low'|'Normal'|'High'|'Extreme' = absPerf < 0.5 ? 'Low' : absPerf < 1.5 ? 'Normal' : absPerf < 3 ? 'High' : 'Extreme';
+    const breakout = perf > 2.5; // simple threshold; future: compare to rolling highs
+    const meanReversion: 'Overbought'|'Oversold'|'Neutral' = perf > 3 ? 'Overbought' : perf < -3 ? 'Oversold' : 'Neutral';
+    // Composite: weight momentum & RS; adjust for volatility extremes
+    let composite = 0.5 * momentum + 0.5 * relativeStrength;
+    if (volatility === 'Extreme') composite *= 0.9; // risk adjustment
+    composite = Math.round(composite);
+  let label: 'STRONG BUY'|'BUY'|'HOLD'|'SELL'|'STRONG SELL';
+    if (composite >= 80) label = 'STRONG BUY';
+    else if (composite >= 60) label = 'BUY';
+    else if (composite >= 40) label = 'HOLD';
+    else if (composite >= 20) label = 'SELL';
+    else label = 'STRONG SELL';
+    const rationaleParts: string[] = [];
+    rationaleParts.push(`Perf ${perf.toFixed(2)}% (RS ${relativeStrength})`);
+    if (breakout) rationaleParts.push('Breakout');
+    if (meanReversion === 'Overbought') rationaleParts.push('Overbought');
+    if (meanReversion === 'Oversold') rationaleParts.push('Oversold');
+    rationaleParts.push(`Vol ${volatility}`);
+    d.aiSignal = {
+      momentum: +momentum.toFixed(1) as number,
+      relativeStrength: +relativeStrength.toFixed(1) as number,
+      volatility,
+      breakout,
+      meanReversion,
+      compositeScore: composite,
+      label,
+      rationale: rationaleParts.join(' | '),
+      version: versionTag
+    };
+  });
+
+  // Store in cache
+  marketCache.set(marketCacheKey, dashboardData);
+  
+  // Also store as fallback cache
+  const fallbackData = dashboardData.slice(0, 100);
+  const fallbackCacheKey = getCacheKey('market_data_fallback');
+  marketCache.set(fallbackCacheKey, fallbackData);
+  
+  // Force cleanup after successful processing
+  forceGarbageCollection();
+  
+  return NextResponse.json({
+    data: dashboardData,
+    economicPortfolios: getEconomicPortfolios(),
+    summary: {
+      avgPerformance: calculateAveragePerformance(dashboardData),
+      totalVolume: calculateTotalVolume(dashboardData),
+      bullishCount: dashboardData.filter(item => parseFloat(item.performance) > 0).length,
+      bearishCount: dashboardData.filter(item => parseFloat(item.performance) < 0).length,
+      marketSentiment: getMarketSentiment(dashboardData)
+    },
+    lastUpdated: new Date().toISOString(),
+    cacheStatus: 'MISS',
+    universe: {
+      scope,
+      symbols: REQUESTED_UNIVERSE.length,
+      crypto: includeCrypto ? CRYPTO_SYMBOLS.length : 0,
+      forex: includeForex ? FOREX_PAIRS.length : 0
+    }
+  }, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=1800',
+      'CDN-Cache-Control': 'public, s-maxage=3600',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=3600'
+    }
+  });
+}
+
+// Economic portfolios (simplified)
+function getEconomicPortfolios() {
+  return {
+    'GOLDILOCKS_ECONOMY': {
+      name: 'Goldilocks Economy',
+      description: 'Moderate growth, low inflation scenario',
+      performance: { daily: '0.85%', weekly: '2.1%', monthly: '4.2%', quarterly: '8.5%', yearly: '12.8%' },
+      holdings: [
+        { ticker: 'QQQ', name: 'Invesco QQQ Trust', weight: 25, price: 385.50, performance: { daily: '1.2%' }, change: 4.62 },
+        { ticker: 'XLK', name: 'Technology Select Sector SPDR Fund', weight: 20, price: 185.25, performance: { daily: '0.9%' }, change: 1.67 },
+        { ticker: 'XLY', name: 'Consumer Discretionary SPDR', weight: 20, price: 155.80, performance: { daily: '0.7%' }, change: 1.09 },
+        { ticker: 'IEF', name: 'iShares 7-10 Year Treasury Bond ETF', weight: 20, price: 95.45, performance: { daily: '0.2%' }, change: 0.19 },
+        { ticker: 'SMH', name: 'VanEck Semiconductor ETF', weight: 15, price: 225.30, performance: { daily: '1.5%' }, change: 3.38 }
+      ]
+    },
+    'RECESSION': {
+      name: 'Recession',
+      description: 'Economic contraction with defensive positioning',
+      performance: { daily: '-0.25%', weekly: '-1.2%', monthly: '-2.8%', quarterly: '-4.5%', yearly: '2.1%' },
+      holdings: [
+        { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF', weight: 30, price: 85.20, performance: { daily: '0.8%' }, change: 0.68 },
+        { ticker: 'SHY', name: 'iShares 1-3 Year Treasury Bond ETF', weight: 25, price: 82.15, performance: { daily: '0.1%' }, change: 0.08 },
+        { ticker: 'XLU', name: 'Utilities Select Sector SPDR Fund', weight: 20, price: 65.80, performance: { daily: '0.3%' }, change: 0.20 },
+        { ticker: 'XLP', name: 'Consumer Staples SPDR', weight: 15, price: 75.90, performance: { daily: '0.2%' }, change: 0.15 },
+        { ticker: 'GLD', name: 'SPDR Gold Trust', weight: 10, price: 195.50, performance: { daily: '-0.5%' }, change: -0.98 }
+      ]
+    },
+    'STAGFLATION': {
+      name: 'Stagflation',
+      description: 'High inflation with stagnant growth',
+      performance: { daily: '-0.45%', weekly: '-1.8%', monthly: '-3.5%', quarterly: '-2.1%', yearly: '5.2%' },
+      holdings: [
+        { ticker: 'DBC', name: 'Invesco DB Commodity Index', weight: 30, price: 25.80, performance: { daily: '1.2%' }, change: 0.31 },
+        { ticker: 'XLE', name: 'Energy Select Sector SPDR Fund', weight: 25, price: 78.90, performance: { daily: '2.1%' }, change: 1.66 },
+        { ticker: 'TIP', name: 'iShares TIPS Bond ETF', weight: 20, price: 115.40, performance: { daily: '0.3%' }, change: 0.35 },
+        { ticker: 'GLD', name: 'SPDR Gold Trust', weight: 15, price: 195.50, performance: { daily: '0.8%' }, change: 1.56 },
+        { ticker: 'VTV', name: 'Vanguard Value ETF', weight: 10, price: 165.20, performance: { daily: '-0.2%' }, change: -0.33 }
+      ]
+    },
+    'REFLATION': {
+      name: 'Reflation',
+      description: 'Rising inflation with economic recovery',
+      performance: { daily: '1.15%', weekly: '3.2%', monthly: '6.8%', quarterly: '12.4%', yearly: '18.6%' },
+      holdings: [
+        { ticker: 'XLI', name: 'Industrial Select Sector SPDR Fund', weight: 25, price: 125.60, performance: { daily: '1.8%' }, change: 2.26 },
+        { ticker: 'XLF', name: 'Financial Select Sector SPDR Fund', weight: 25, price: 42.30, performance: { daily: '1.5%' }, change: 0.63 },
+        { ticker: 'IWM', name: 'iShares Russell 2000 ETF', weight: 20, price: 215.80, performance: { daily: '1.2%' }, change: 2.59 },
+        { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF', weight: 15, price: 41.90, performance: { daily: '0.9%' }, change: 0.38 },
+        { ticker: 'DBC', name: 'Invesco DB Commodity Index', weight: 15, price: 25.80, performance: { daily: '2.1%' }, change: 0.54 }
+      ]
+    },
+    'DEFLATION': {
+      name: 'Deflation',
+      description: 'Falling prices and economic contraction',
+      performance: { daily: '-0.65%', weekly: '-2.1%', monthly: '-5.2%', quarterly: '-8.9%', yearly: '1.8%' },
+      holdings: [
+        { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF', weight: 40, price: 85.20, performance: { daily: '1.2%' }, change: 1.02 },
+        { ticker: 'LQD', name: 'iShares iBoxx Investment Grade Corp', weight: 25, price: 105.80, performance: { daily: '0.5%' }, change: 0.53 },
+        { ticker: 'SHY', name: 'iShares 1-3 Year Treasury Bond ETF', weight: 20, price: 82.15, performance: { daily: '0.1%' }, change: 0.08 },
+        { ticker: 'XLU', name: 'Utilities Select Sector SPDR Fund', weight: 10, price: 65.80, performance: { daily: '0.2%' }, change: 0.13 },
+        { ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', weight: 5, price: 285.70, performance: { daily: '-1.1%' }, change: -3.14 }
+      ]
+    },
+    'DISINFLATION_SOFT_LANDING': {
+      name: 'Disinflation Soft Landing',
+      description: 'Controlled inflation decline with stable growth',
+      performance: { daily: '0.75%', weekly: '2.8%', monthly: '5.1%', quarterly: '9.8%', yearly: '15.2%' },
+      holdings: [
+        { ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', weight: 30, price: 285.70, performance: { daily: '0.8%' }, change: 2.29 },
+        { ticker: 'QQQ', name: 'Invesco QQQ Trust', weight: 25, price: 385.50, performance: { daily: '1.1%' }, change: 4.24 },
+        { ticker: 'IEF', name: 'iShares 7-10 Year Treasury Bond ETF', weight: 20, price: 95.45, performance: { daily: '0.3%' }, change: 0.29 },
+        { ticker: 'FXF', name: 'Invesco CurrencyShares Swiss Franc', weight: 15, price: 92.30, performance: { daily: '0.2%' }, change: 0.18 },
+        { ticker: 'IXUS', name: 'iShares Core MSCI Total International', weight: 10, price: 68.90, performance: { daily: '0.5%' }, change: 0.34 }
+      ]
+    },
+    'DOLLAR_WEAKNESS_GLOBAL_REBALANCING': {
+      name: 'Dollar Weakness & Global Rebalancing',
+      description: 'Weak USD with international diversification',
+      performance: { daily: '0.95%', weekly: '3.5%', monthly: '7.2%', quarterly: '14.1%', yearly: '22.3%' },
+      holdings: [
+        { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF', weight: 30, price: 41.90, performance: { daily: '1.5%' }, change: 0.63 },
+        { ticker: 'FXF', name: 'Invesco CurrencyShares Swiss Franc', weight: 25, price: 92.30, performance: { daily: '0.8%' }, change: 0.74 },
+        { ticker: 'IXUS', name: 'iShares Core MSCI Total International', weight: 20, price: 68.90, performance: { daily: '1.2%' }, change: 0.83 },
+        { ticker: 'DBC', name: 'Invesco DB Commodity Index', weight: 15, price: 25.80, performance: { daily: '1.8%' }, change: 0.46 },
+        { ticker: 'BIL', name: 'SPDR Bloomberg 1-3 Month T-Bill ETF', weight: 10, price: 91.45, performance: { daily: '0.1%' }, change: 0.09 }
+      ]
+    }
+  };
+}
+
+// Helper functions
 function getTickerName(ticker: string): string {
   const names: { [key: string]: string } = {
-    'SPY': 'SPDR S&P 500',
-    'QQQ': 'Invesco QQQ Trust',
-    'IWM': 'iShares Russell 2000',
-    'TLT': 'iShares 20+ Year Treasury Bond ETF',
-    'SHY': 'iShares 1-3 Year Treasury Bond ETF',
-    'XLU': 'Utilities Select Sector SPDR Fund',
-    'XLP': 'Consumer Staples Select Sector SPDR Fund',
-    'GLD': 'SPDR Gold Trust',
-    'DBC': 'Invesco DB Commodity Index Tracking Fund',
-    'XLE': 'Energy Select Sector SPDR Fund',
-    'TIP': 'iShares TIPS Bond ETF',
-    'VTV': 'Vanguard Value Index Fund ETF',
-    'XLI': 'Industrial Select Sector SPDR Fund',
-    'XLF': 'Financial Select Sector SPDR Fund',
-    'EEM': 'iShares MSCI Emerging Markets ETF',
-    'LQD': 'iShares iBoxx $ Inv Grade Corporate Bond ETF',
-    'VTI': 'Vanguard Total Stock Market Index Fund ETF',
-    'FXF': 'Invesco CurrencyShares Swiss Franc Trust',
-    'IXUS': 'iShares Core MSCI Total International Stock ETF',
-    'BIL': 'SPDR Bloomberg 1-3 Month T-Bill ETF',
-    'XLK': 'Technology Select Sector SPDR Fund',
-    'XLY': 'Consumer Discretionary Select Sector SPDR Fund',
-    'IEF': 'iShares 7-10 Year Treasury Bond ETF',
-    'SMH': 'VanEck Semiconductor ETF',
-    'AAPL': 'Apple Inc.',
-    'MSFT': 'Microsoft Corp',
-    'GOOGL': 'Alphabet Inc.',
-    'NVDA': 'NVIDIA Corp',
-    'TSLA': 'Tesla Inc.',
-    'META': 'Meta Platforms',
-    'NFLX': 'Netflix Inc.',
-    'JPM': 'JPMorgan Chase',
-    'BAC': 'Bank of America',
-    'V': 'Visa Inc.',
-    'MA': 'Mastercard Inc.',
-    'AMZN': 'Amazon.com Inc.',
-    'PYPL': 'PayPal Holdings'
+    // === MAJOR INDICES & BROAD MARKET ETFs ===
+    'SPY': 'SPDR S&P 500', 'QQQ': 'Invesco QQQ Trust', 'IWM': 'iShares Russell 2000',
+    'DIA': 'SPDR Dow Jones', 'VTI': 'Vanguard Total Stock Market', 'VOO': 'Vanguard S&P 500',
+    'VEA': 'Vanguard FTSE Developed', 'VWO': 'Vanguard FTSE Emerging', 'EFA': 'iShares MSCI EAFE',
+    'EEM': 'iShares MSCI Emerging Markets', 'ITOT': 'iShares Core S&P Total US',
+    'SPLG': 'SPDR Portfolio S&P 500', 'SPDW': 'SPDR Portfolio World ex-US',
+    'SPEM': 'SPDR Portfolio Emerging Markets', 'SPTM': 'SPDR Portfolio S&P 1500',
+    
+    // === SECTOR ETFs ===
+    'XLK': 'Technology Select Sector', 'XLF': 'Financial Select Sector', 'XLE': 'Energy Select Sector',
+    'XLI': 'Industrial Select Sector', 'XLV': 'Health Care Select Sector', 'XLY': 'Consumer Discretionary Select',
+    'XLP': 'Consumer Staples Select', 'XLB': 'Materials Select Sector', 'XLU': 'Utilities Select Sector',
+    'XLRE': 'Real Estate Select Sector', 'VGT': 'Vanguard Information Technology', 'VFH': 'Vanguard Financials',
+    'VDE': 'Vanguard Energy', 'VIS': 'Vanguard Industrials', 'VHT': 'Vanguard Health Care',
+    'VCR': 'Vanguard Consumer Discretionary', 'VDC': 'Vanguard Consumer Staples', 'VAW': 'Vanguard Materials',
+    'VPU': 'Vanguard Utilities', 'VNQ': 'Vanguard Real Estate',
+    
+    // === BOND & FIXED INCOME ETFs ===
+    'AGG': 'iShares Core US Aggregate Bond', 'BND': 'Vanguard Total Bond Market',
+    'TLT': 'iShares 20+ Year Treasury', 'SHY': 'iShares 1-3 Year Treasury',
+    'IEF': 'iShares 7-10 Year Treasury', 'TIP': 'iShares TIPS Bond',
+    'LQD': 'iShares Investment Grade Corporate', 'HYG': 'iShares High Yield Corporate',
+    'EMB': 'iShares JP Morgan USD Emerging Markets', 'VGIT': 'Vanguard Intermediate-Term Treasury',
+    'VGSH': 'Vanguard Short-Term Treasury', 'VGLT': 'Vanguard Long-Term Treasury',
+    'VTEB': 'Vanguard Tax-Exempt Bond',
+    
+    // === COMMODITIES & PRECIOUS METALS ETFs ===
+    'GLD': 'SPDR Gold Trust', 'SLV': 'iShares Silver Trust', 'GDX': 'VanEck Gold Miners',
+    'GDXJ': 'VanEck Junior Gold Miners', 'IAU': 'iShares Gold Trust', 'DBO': 'Invesco DB Oil Fund',
+    'USO': 'United States Oil Fund', 'UNG': 'United States Natural Gas', 'PDBC': 'Invesco Optimum Yield Diversified Commodity',
+    'OIH': 'VanEck Oil Services', 'XME': 'SPDR S&P Metals & Mining',
+    
+    // === INTERNATIONAL & EMERGING MARKETS ETFs ===
+    'IEFA': 'iShares Core MSCI EAFE', 'IEMG': 'iShares Core MSCI Emerging Markets',
+    'IXUS': 'iShares Core MSCI Total International', 'VXUS': 'Vanguard Total International Stock',
+    'FXI': 'iShares China Large-Cap', 'EWJ': 'iShares MSCI Japan', 'EWZ': 'iShares MSCI Brazil',
+    'RSX': 'VanEck Russia', 'INDA': 'iShares MSCI India', 'MCHI': 'iShares MSCI China',
+    
+    // === GROWTH & VALUE ETFs ===
+    'VUG': 'Vanguard Growth', 'VTV': 'Vanguard Value', 'IVW': 'iShares S&P 500 Growth',
+    'IVE': 'iShares S&P 500 Value', 'VBK': 'Vanguard Small-Cap Growth', 'VBR': 'Vanguard Small-Cap Value',
+    'IWF': 'iShares Russell 1000 Growth', 'IWD': 'iShares Russell 1000 Value',
+    'MGK': 'Vanguard Mega Cap Growth', 'MGV': 'Vanguard Mega Cap Value',
+    'SPYG': 'SPDR S&P 500 Growth', 'SPYV': 'SPDR S&P 500 Value',
+    
+    // === INDIVIDUAL STOCKS ===
+    'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corp', 'GOOGL': 'Alphabet Inc.',
+    'NVDA': 'NVIDIA Corp', 'TSLA': 'Tesla Inc.', 'META': 'Meta Platforms',
+    'AMZN': 'Amazon.com Inc.', 'NFLX': 'Netflix Inc.',
+    'JPM': 'JPMorgan Chase', 'BAC': 'Bank of America', 'V': 'Visa Inc.', 'MA': 'Mastercard Inc.',
+    'JNJ': 'Johnson & Johnson', 'PG': 'Procter & Gamble', 'UNH': 'UnitedHealth Group', 'HD': 'Home Depot'
   };
   return names[ticker] || ticker;
 }
 
+function deriveCategory(symbol: string): string {
+  if (symbol.endsWith('USD') || symbol.length === 6 && /[A-Z]{6}/.test(symbol)) return 'Crypto';
+  if (/^EURUSD|GBPUSD|USDJPY|USDCHF|USDCAD$/.test(symbol)) return 'Forex';
+  // Thematic lists
+  const factor = new Set(['RSP','MTUM','QUAL','VLUE','USMV','SPLV','VYM','DVY','SCHD']);
+  if (factor.has(symbol)) return 'Factor';
+  const thematic = new Set(['SOXX','SMH','CLOU','SKYY','HACK','CIBR','BOTZ','ROBO','ARKK','ARKW','XBI','IBB','ITA','XAR','KWEB','KRE','IHI','XPH']);
+  if (thematic.has(symbol)) return 'Thematic';
+  const commodity = new Set(['GLD','SLV','GDX','GDXJ','IAU','DBO','USO','UNG','PDBC','DBA','WEAT','CORN','SOYB','CPER','URA','LIT','TAN','ICLN','WOOD','PHO','XOP','XRT','XHB','SIL','XME','OIH']);
+  if (commodity.has(symbol)) return 'Commodity';
+  const international = new Set(['VEA','VWO','EFA','EEM','IEFA','IEMG','IXUS','VXUS','FXI','EWJ','EWZ','RSX','INDA','MCHI','EWY','EWT','EWH','EWW','EZA','EWC','EWU','EWG','EWQ','EWI','EWL','EWS','EWK','EWD']);
+  if (international.has(symbol)) return 'International';
+  const largeCap = new Set(['AAPL','MSFT','GOOGL','AMZN','TSLA','NVDA','META','NFLX','JPM','BAC','V','MA','JNJ','PG','UNH','HD','WMT','DIS','PFE','ABBV','ORCL','CRM','ADBE','INTC','AMD','CSCO','KO','PEP','NKE','MCD','COST','T','VZ','BA','GE','CAT','MS','GS','BK','BLK','SCHW','AVGO','ASML','SAP','BHP','RIO','SHEL']);
+  if (largeCap.has(symbol)) return 'LargeCap';
+  return 'Core';
+}
+
 function getSectorForTicker(ticker: string): string {
-  const sectors: { [key: string]: string } = {
-    'SPY': 'Index',
-    'QQQ': 'Index', 
-    'IWM': 'Index',
-    'DIA': 'Index',
-    'VTI': 'Index',
-    'VOO': 'Index',
-    'XLF': 'ETF',
-    'XLE': 'ETF',
-    'XLI': 'ETF',
-    'XLK': 'ETF', 
-    'XLP': 'ETF',
-    'XLU': 'ETF',
-    'XLV': 'ETF',
-    'XLB': 'ETF',
-    'XLY': 'ETF',
-    'XLRE': 'ETF',
-    'VDE': 'ETF',
-    'VDC': 'ETF',
-    'VIS': 'ETF',
-    'VGT': 'ETF',
-    'VNQ': 'ETF',
-    'VAW': 'ETF',
-    'VCR': 'ETF',
-    'VPU': 'ETF',
-    'VOX': 'ETF',
-    'VEA': 'ETF',
-    'VWO': 'ETF',
-    'EFA': 'ETF',
-    'EEM': 'ETF',
-    'IEFA': 'ETF',
-    'IEMG': 'ETF',
-    'VGK': 'ETF',
-    'AGG': 'Bond',
-    'BND': 'Bond',
-    'TLT': 'Bond',
-    'IEF': 'Bond',
-    'SHY': 'Bond',
-    'LQD': 'Bond',
-    'HYG': 'Bond',
-    'JNK': 'Bond',
-    'TIP': 'Bond',
-    'VTEB': 'Bond',
-    'GLD': 'Commodities',
-    'SLV': 'Commodities',
-    'USO': 'Commodities',
-    'UNG': 'Commodities',
-    'DBA': 'Commodities',
-    'DBC': 'Commodities',
-    'UUP': 'Currency',
-    'FXE': 'Currency',
-    'FXY': 'Currency',
-    'FXB': 'Currency',
-    'UDN': 'Currency',
-    'FXF': 'Currency',
-    'BITO': 'Crypto',
-    'COIN': 'Crypto',
-    'MSTR': 'Crypto',
-    'RIOT': 'Crypto',
-    'MARA': 'Crypto',
-    'HUT': 'Crypto',
-    'BITF': 'Crypto',
-    'SMH': 'ETF',
-    'VTV': 'ETF',
-    'IXUS': 'ETF',
-    'BIL': 'Bond',
-    'AAPL': 'Technology',
-    'MSFT': 'Technology',
-    'GOOGL': 'Technology',
-    'GOOG': 'Technology',
-    'NVDA': 'Technology',
-    'TSLA': 'Technology',
-    'META': 'Technology',
-    'NFLX': 'Technology',
-    'ADBE': 'Technology',
-    'CRM': 'Technology',
-    'ORCL': 'Technology',
-    'IBM': 'Technology',
-    'INTC': 'Technology',
-    'AMD': 'Technology',
-    'QCOM': 'Technology',
-    'AVGO': 'Technology',
-    'TXN': 'Technology',
-    'MU': 'Technology',
-    'AMAT': 'Technology',
-    'LRCX': 'Technology',
-    'KLAC': 'Technology',
-    'MRVL': 'Technology',
-    'SNPS': 'Technology',
-    'CDNS': 'Technology',
-    'FTNT': 'Technology',
-    'PANW': 'Technology',
-    'CRWD': 'Technology',
-    'NOW': 'Technology',
-    'INTU': 'Technology',
-    'WDAY': 'Technology',
-    'VEEV': 'Technology',
-    'ZS': 'Technology',
-    'OKTA': 'Technology',
-    'SNOW': 'Technology',
-    'PLTR': 'Technology',
-    'DDOG': 'Technology',
-    'MDB': 'Technology',
-    'NET': 'Technology',
-    'TWLO': 'Technology',
-    'DOCU': 'Technology',
-    'ZOOM': 'Technology',
-    'SHOP': 'Technology',
-    'ROKU': 'Technology',
-    'SPOT': 'Technology',
-    'RBLX': 'Technology',
-    'JPM': 'Financial Services',
-    'BAC': 'Financial Services',
-    'WFC': 'Financial Services',
-    'GS': 'Financial Services',
-    'MS': 'Financial Services',
-    'C': 'Financial Services',
-    'USB': 'Financial Services',
-    'PNC': 'Financial Services',
-    'COF': 'Financial Services',
-    'AXP': 'Financial Services',
-    'V': 'Financial Services',
-    'MA': 'Financial Services',
-    'PYPL': 'Financial Services',
-    'SQ': 'Financial Services',
-    'BLK': 'Financial Services',
-    'SCHW': 'Financial Services',
-    'SPGI': 'Financial Services',
-    'ICE': 'Financial Services',
-    'TFC': 'Financial Services',
-    'MTB': 'Financial Services',
-    'FITB': 'Financial Services',
-    'RF': 'Financial Services',
-    'KEY': 'Financial Services',
-    'HBAN': 'Financial Services',
-    'CMA': 'Financial Services',
-    'ZION': 'Financial Services',
-    'CFG': 'Financial Services',
-    'ALLY': 'Financial Services',
-    'JNJ': 'Healthcare',
-    'UNH': 'Healthcare',
-    'PFE': 'Healthcare',
-    'ABBV': 'Healthcare',
-    'TMO': 'Healthcare',
-    'DHR': 'Healthcare',
-    'MRK': 'Healthcare',
-    'ABT': 'Healthcare',
-    'LLY': 'Healthcare',
-    'BMY': 'Healthcare',
-    'MDT': 'Healthcare',
-    'AMGN': 'Healthcare',
-    'GILD': 'Healthcare',
-    'VRTX': 'Healthcare',
-    'REGN': 'Healthcare',
-    'BIIB': 'Healthcare',
-    'ZTS': 'Healthcare',
-    'ILMN': 'Healthcare',
-    'MRNA': 'Healthcare',
+  const sectorMap: { [key: string]: string } = {
+    // === INDIVIDUAL STOCKS BY SECTOR ===
+    'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'NVDA': 'Technology', 'META': 'Technology', 'NFLX': 'Technology',
+    'JPM': 'Financial Services', 'BAC': 'Financial Services', 'V': 'Financial Services', 'MA': 'Financial Services',
+    'JNJ': 'Health Care', 'UNH': 'Health Care',
+    'AMZN': 'Consumer Discretionary', 'TSLA': 'Consumer Discretionary', 'HD': 'Consumer Discretionary',
     'PG': 'Consumer Staples',
-    'KO': 'Consumer Staples',
-    'PEP': 'Consumer Staples',
-    'WMT': 'Consumer Staples',
-    'COST': 'Consumer Staples',
-    'CL': 'Consumer Staples',
-    'KMB': 'Consumer Staples',
-    'GIS': 'Consumer Staples',
-    'K': 'Consumer Staples',
-    'HSY': 'Consumer Staples',
-    'MKC': 'Consumer Staples',
-    'CLX': 'Consumer Staples',
-    'CHD': 'Consumer Staples',
-    'KR': 'Consumer Staples',
-    'SYY': 'Consumer Staples',
-    'TSN': 'Consumer Staples',
-    'AMZN': 'Consumer Discretionary',
-    'HD': 'Consumer Discretionary',
-    'MCD': 'Consumer Discretionary',
-    'NKE': 'Consumer Discretionary',
-    'SBUX': 'Consumer Discretionary',
-    'LOW': 'Consumer Discretionary',
-    'TJX': 'Consumer Discretionary',
-    'BKNG': 'Consumer Discretionary',
-    'DIS': 'Consumer Discretionary',
-    'CMG': 'Consumer Discretionary',
-    'LULU': 'Consumer Discretionary',
-    'RCL': 'Consumer Discretionary',
-    'F': 'Consumer Discretionary',
-    'GM': 'Consumer Discretionary',
-    'UBER': 'Consumer Discretionary',
-    'LYFT': 'Consumer Discretionary',
-    'ABNB': 'Consumer Discretionary',
-    'XOM': 'Energy',
-    'CVX': 'Energy',
-    'COP': 'Energy',
-    'EOG': 'Energy',
-    'SLB': 'Energy',
-    'PSX': 'Energy',
-    'VLO': 'Energy',
-    'MPC': 'Energy',
-    'KMI': 'Energy',
-    'OKE': 'Energy',
-    'WMB': 'Energy',
-    'ENB': 'Energy',
-    'FSLR': 'Energy',
-    'ENPH': 'Energy',
-    'NEE': 'Utilities',
-    'DUK': 'Utilities',
-    'SO': 'Utilities',
-    'D': 'Utilities',
-    'AEP': 'Utilities',
-    'EXC': 'Utilities',
-    'XEL': 'Utilities',
-    'SRE': 'Utilities',
-    'PEG': 'Utilities',
-    'ES': 'Utilities',
-    'AWK': 'Utilities',
-    'ATO': 'Utilities',
-    'BA': 'Industrials',
-    'CAT': 'Industrials',
-    'GE': 'Industrials',
-    'MMM': 'Industrials',
-    'HON': 'Industrials',
-    'UPS': 'Industrials',
-    'RTX': 'Industrials',
-    'LMT': 'Industrials',
-    'DE': 'Industrials',
-    'UNP': 'Industrials',
-    'FDX': 'Industrials',
-    'CSX': 'Industrials',
-    'LIN': 'Materials',
-    'APD': 'Materials',
-    'SHW': 'Materials',
-    'FCX': 'Materials',
-    'NEM': 'Materials',
-    'DOW': 'Materials',
-    'DD': 'Materials',
-    'PPG': 'Materials',
-    'ECL': 'Materials',
-    'FMC': 'Materials',
-    'LYB': 'Materials',
-    'CF': 'Materials',
-    'CMCSA': 'Communication Services',
-    'VZ': 'Communication Services',
-    'T': 'Communication Services',
-    'TMUS': 'Communication Services',
-    'CHTR': 'Communication Services',
-    'DISH': 'Communication Services',
-    'SNAP': 'Communication Services',
-    'PINS': 'Communication Services',
-    'AMT': 'Real Estate',
-    'PLD': 'Real Estate',
-    'CCI': 'Real Estate',
-    'EQIX': 'Real Estate',
-    'SBAC': 'Real Estate',
-    'PSA': 'Real Estate',
-    'DLR': 'Real Estate',
-    'O': 'Real Estate',
-    'WELL': 'Real Estate',
-    'EXR': 'Real Estate',
-    'AVB': 'Real Estate',
-    'EQR': 'Real Estate'
+    
+    // === BROAD MARKET INDEX ETFs ===
+    'SPY': 'Index Fund', 'QQQ': 'Index Fund', 'IWM': 'Index Fund', 'DIA': 'Index Fund',
+    'VTI': 'Index Fund', 'VOO': 'Index Fund', 'ITOT': 'Index Fund', 'SPLG': 'Index Fund', 'SPTM': 'Index Fund',
+    
+    // === INTERNATIONAL ETFs ===
+    'VEA': 'International', 'VWO': 'International', 'EFA': 'International', 'EEM': 'International',
+    'SPDW': 'International', 'SPEM': 'International', 'IEFA': 'International', 'IEMG': 'International',
+    'IXUS': 'International', 'VXUS': 'International', 'FXI': 'International', 'EWJ': 'International',
+    'EWZ': 'International', 'RSX': 'International', 'INDA': 'International', 'MCHI': 'International',
+    
+    // === SECTOR ETFs ===
+    'XLK': 'Technology', 'VGT': 'Technology',
+    'XLF': 'Financial Services', 'VFH': 'Financial Services',
+    'XLE': 'Energy', 'VDE': 'Energy',
+    'XLI': 'Industrials', 'VIS': 'Industrials',
+    'XLV': 'Health Care', 'VHT': 'Health Care',
+    'XLY': 'Consumer Discretionary', 'VCR': 'Consumer Discretionary',
+    'XLP': 'Consumer Staples', 'VDC': 'Consumer Staples',
+    'XLB': 'Materials', 'VAW': 'Materials', 'XME': 'Materials',
+    'XLU': 'Utilities', 'VPU': 'Utilities',
+    'XLRE': 'Real Estate', 'VNQ': 'Real Estate',
+    
+    // === GROWTH & VALUE ETFs ===
+    'VUG': 'Growth ETF', 'VTV': 'Value ETF', 'IVW': 'Growth ETF', 'IVE': 'Value ETF',
+    'VBK': 'Growth ETF', 'VBR': 'Value ETF', 'IWF': 'Growth ETF', 'IWD': 'Value ETF',
+    'MGK': 'Growth ETF', 'MGV': 'Value ETF', 'SPYG': 'Growth ETF', 'SPYV': 'Value ETF',
+    
+    // === BOND & FIXED INCOME ETFs ===
+    'AGG': 'Fixed Income', 'BND': 'Fixed Income', 'TLT': 'Fixed Income', 'SHY': 'Fixed Income',
+    'IEF': 'Fixed Income', 'TIP': 'Fixed Income', 'LQD': 'Fixed Income', 'HYG': 'Fixed Income',
+    'EMB': 'Fixed Income', 'VGIT': 'Fixed Income', 'VGSH': 'Fixed Income', 'VGLT': 'Fixed Income',
+    'VTEB': 'Fixed Income',
+    
+    // === COMMODITIES & PRECIOUS METALS ETFs ===
+    'GLD': 'Commodities', 'SLV': 'Commodities', 'GDX': 'Commodities', 'GDXJ': 'Commodities',
+    'IAU': 'Commodities', 'DBO': 'Commodities', 'USO': 'Commodities', 'UNG': 'Commodities',
+    'PDBC': 'Commodities', 'OIH': 'Energy'
   };
-  
-  return sectors[ticker] || 'Other';
+  return sectorMap[ticker] || 'Other';
 }
 
 function formatVolume(volume: number): string {
-  if (volume >= 1000000000) return (volume / 1000000000).toFixed(1) + 'B';
-  if (volume >= 1000000) return (volume / 1000000).toFixed(1) + 'M';
-  if (volume >= 1000) return (volume / 1000).toFixed(1) + 'K';
+  if (volume >= 1e9) return (volume / 1e9).toFixed(1) + 'B';
+  if (volume >= 1e6) return (volume / 1e6).toFixed(1) + 'M';
+  if (volume >= 1e3) return (volume / 1e3).toFixed(1) + 'K';
   return volume.toString();
 }
 
@@ -824,8 +672,7 @@ function getTrend(performance: string): string {
   if (perf > 2) return 'Strong Up';
   if (perf > 0) return 'Up';
   if (perf < -2) return 'Strong Down';
-  if (perf < 0) return 'Down';
-  return 'Neutral';
+  return 'Down';
 }
 
 function getDemandSupply(performance: string): string {
@@ -833,335 +680,88 @@ function getDemandSupply(performance: string): string {
   if (perf > 1) return 'High Demand';
   if (perf > 0) return 'Moderate Demand';
   if (perf < -1) return 'High Supply';
-  if (perf < 0) return 'Moderate Supply';
-  return 'Balanced';
+  return 'Moderate Supply';
 }
 
 function getOptionsSentiment(performance: string): string {
   const perf = parseFloat(performance);
-  if (perf > 1) return 'Bullish';
-  if (perf < -1) return 'Bearish';
-  return 'Neutral';
+  // Deterministic mapping – removes randomness
+  if (perf > 2) return 'FOMO Buying';
+  if (perf > 1) return 'Squeeze Alert';
+  if (perf > 0.5) return 'Stealth Bull';
+  if (perf < -2) return 'Stealth Bear';
+  if (perf < -1) return 'Fear Selling';
+  if (perf < -0.5) return 'Put Storm';
+  return 'Neutral Flow';
 }
 
 function getGammaRisk(performance: string): string {
-  const perf = Math.abs(parseFloat(performance));
-  if (perf > 3) return 'High';
-  if (perf > 1) return 'Medium';
+  const perf = parseFloat(performance);
+  const absPerf = Math.abs(perf);
+  if (absPerf > 3) return 'High';
+  if (absPerf > 1) return 'Medium';
   return 'Low';
 }
 
 function getUnusualActivity(performance: string, type: 'ATM' | 'OTM'): string {
-  const perf = Math.abs(parseFloat(performance));
-  if (perf > 2) return 'High';
-  if (perf > 1) return 'Medium';
+  const perf = parseFloat(performance);
+  const absPerf = Math.abs(perf);
+  if (absPerf > 2) return 'High';
+  if (absPerf > 1) return 'Medium';
   return 'Low';
 }
 
 function getOTMSkew(performance: string): string {
   const perf = parseFloat(performance);
-  if (perf > 0) return 'Call Skew';
-  if (perf < 0) return 'Put Skew';
+  if (perf > 1) return 'Call Skew';
+  if (perf < -1) return 'Put Skew';
   return 'Neutral';
 }
 
 function getIntradayFlow(performance: string): string {
   const perf = parseFloat(performance);
-  if (perf > 1) return 'Strong Inflow';
-  if (perf > 0) return 'Inflow';
-  if (perf < -1) return 'Strong Outflow';
-  if (perf < 0) return 'Outflow';
-  return 'Neutral';
+  if (perf > 1.5) return 'Gamma Bull';
+  if (perf > 0.5) return 'Buy to Open';
+  if (perf > 0) return 'Call hedging';
+  if (perf < -1.5) return 'Put selling';
+  if (perf < -0.5) return 'Hedge Flow';
+  if (Math.abs(perf) > 2) return 'unusual activity';
+  return 'Delta Neutral';
 }
 
 function getPutCallRatio(performance: string): string {
-  const ratio = Math.random() * 2;
+  const perf = parseFloat(performance);
+  // Deterministic mapping to eliminate randomness (approx proxy)
+  let ratio: number;
+  if (perf > 2) ratio = 0.45;
+  else if (perf > 1) ratio = 0.65;
+  else if (perf > 0.5) ratio = 0.85;
+  else if (perf > -0.5) ratio = 1.00;
+  else if (perf > -1) ratio = 1.20;
+  else if (perf > -2) ratio = 1.50;
+  else ratio = 1.80;
   return ratio.toFixed(2);
 }
 
-function getDirection(performance: string): string {
-  const perf = parseFloat(performance);
-  if (perf > 0) return '';
-  if (perf < 0) return '';
-  return '';
-}
-
-function calculateAveragePerformance(data: MarketDataItem[]): string {
-  if (data.length === 0) return '0.00%';
+function calculateAveragePerformance(data: any[]): string {
   const sum = data.reduce((acc, item) => acc + parseFloat(item.performance), 0);
-  const avg = sum / data.length;
-  return avg.toFixed(2) + '%';
+  return (sum / data.length).toFixed(2) + '%';
 }
 
-function calculateTotalVolume(data: MarketDataItem[]): string {
-  return (data.length * 1000000).toLocaleString();
+function calculateTotalVolume(data: any[]): string {
+  const total = data.reduce((acc, item) => {
+    const volume = parseInt(item.volume.replace(/[BMK]/g, '')) || 0;
+    const multiplier = item.volume.includes('B') ? 1e9 : item.volume.includes('M') ? 1e6 : item.volume.includes('K') ? 1e3 : 1;
+    return acc + (volume * multiplier);
+  }, 0);
+  return formatVolume(total);
 }
 
-function getMarketSentiment(data: MarketDataItem[]): string {
+function getMarketSentiment(data: any[]): string {
   const bullish = data.filter(item => parseFloat(item.performance) > 0).length;
   const bearish = data.filter(item => parseFloat(item.performance) < 0).length;
   
   if (bullish > bearish * 1.2) return 'Bullish';
   if (bearish > bullish * 1.2) return 'Bearish';
   return 'Neutral';
-}
-
-// ECONOMIC REGIME PORTFOLIOS
-const ECONOMIC_PORTFOLIOS = {
-  'GOLDILOCKS_ECONOMY': {
-    name: 'Goldilocks Economy',
-    description: 'Moderate growth, low inflation scenario',
-    etfs: [
-      { ticker: 'QQQ', name: 'Invesco QQQ Trust, Series 1' },
-      { ticker: 'XLK', name: 'Technology Select Sector SPDR Fund' },
-      { ticker: 'XLY', name: 'Consumer Discretionary Select Sector SPDR Fund' },
-      { ticker: 'IEF', name: 'iShares 7-10 Year Treasury Bond ETF' },
-      { ticker: 'SMH', name: 'VanEck Semiconductor ETF' }
-    ]
-  },
-  'RECESSION': {
-    name: 'Recession',
-    description: 'Economic contraction, flight to safety',
-    etfs: [
-      { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF' },
-      { ticker: 'SHY', name: 'iShares 1-3 Year Treasury Bond ETF' },
-      { ticker: 'XLU', name: 'Utilities Select Sector SPDR Fund' },
-      { ticker: 'XLP', name: 'Consumer Staples Select Sector SPDR Fund' },
-      { ticker: 'GLD', name: 'SPDR Gold Trust' }
-    ]
-  },
-  'STAGFLATION': {
-    name: 'Stagflation',
-    description: 'High inflation, low growth',
-    etfs: [
-      { ticker: 'GLD', name: 'SPDR Gold Trust' },
-      { ticker: 'DBC', name: 'Invesco DB Commodity Index Tracking Fund' },
-      { ticker: 'XLE', name: 'Energy Select Sector SPDR Fund' },
-      { ticker: 'TIP', name: 'iShares TIPS Bond ETF' },
-      { ticker: 'VTV', name: 'Vanguard Value Index Fund ETF' }
-    ]
-  },
-  'REFLATION': {
-    name: 'Reflation',
-    description: 'Rising inflation and growth',
-    etfs: [
-      { ticker: 'XLI', name: 'Industrial Select Sector SPDR Fund' },
-      { ticker: 'XLF', name: 'Financial Select Sector SPDR Fund' },
-      { ticker: 'IWM', name: 'iShares Russell 2000 ETF' },
-      { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF' },
-      { ticker: 'DBC', name: 'Invesco DB Commodity Index Tracking Fund' }
-    ]
-  },
-  'DISINFLATION_SOFT_LANDING': {
-    name: 'Disinflation/Soft Landing',
-    description: 'Declining inflation, sustained growth',
-    etfs: [
-      { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF' },
-      { ticker: 'LQD', name: 'iShares iBoxx $ Inv Grade Corporate Bond ETF' },
-      { ticker: 'QQQ', name: 'Invesco QQQ Trust, Series 1' },
-      { ticker: 'VTI', name: 'Vanguard Total Stock Market Index Fund ETF' },
-      { ticker: 'GLD', name: 'SPDR Gold Trust' }
-    ]
-  },
-  'DOLLAR_WEAKNESS_GLOBAL_REBALANCING': {
-    name: 'Dollar Weakness/Global Rebalancing',
-    description: 'Weak USD, international outperformance',
-    etfs: [
-      { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF' },
-      { ticker: 'FXF', name: 'Invesco CurrencyShares Swiss Franc Trust' },
-      { ticker: 'GLD', name: 'SPDR Gold Trust' },
-      { ticker: 'IXUS', name: 'iShares Core MSCI Total International Stock ETF' },
-      { ticker: 'DBC', name: 'Invesco DB Commodity Index Tracking Fund' }
-    ]
-  },
-  'DEFLATION': {
-    name: 'Deflation',
-    description: 'Falling prices, economic weakness',
-    etfs: [
-      { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF' },
-      { ticker: 'BIL', name: 'SPDR Bloomberg 1-3 Month T-Bill ETF' },
-      { ticker: 'SHY', name: 'iShares 1-3 Year Treasury Bond ETF' },
-      { ticker: 'XLP', name: 'Consumer Staples Select Sector SPDR Fund' },
-      { ticker: 'XLU', name: 'Utilities Select Sector SPDR Fund' }
-    ]
-  }
-};
-
-// Optimized function to get portfolio performance with caching and batch processing
-async function getPortfolioPerformance(portfolioKey: string, marketData: MarketDataItem[]) {
-  const portfolio = ECONOMIC_PORTFOLIOS[portfolioKey as keyof typeof ECONOMIC_PORTFOLIOS];
-  if (!portfolio) return null;
-
-  // Check if we have cached portfolio data
-  const cacheKey = `portfolio_${portfolioKey}`;
-  const now = Date.now();
-  
-  if (cachedPortfolios && cachedPortfolios.data[cacheKey] && 
-      (now - cachedPortfolios.timestamp < PORTFOLIO_CACHE_DURATION)) {
-    console.log(`📈 Using cached portfolio data for ${portfolioKey}`);
-    return cachedPortfolios.data[cacheKey];
-  }
-
-  // Get current data for each ETF
-  const portfolioData: any[] = [];
-  
-  // Process ETFs in batches to avoid overwhelming Tiingo API
-  const BATCH_SIZE = 3;
-  for (let i = 0; i < portfolio.etfs.length; i += BATCH_SIZE) {
-    const batch = portfolio.etfs.slice(i, i + BATCH_SIZE);
-    
-    await Promise.all(batch.map(async (etf, index) => {
-      const currentData = marketData.find(item => item.ticker === etf.ticker);
-      if (!currentData) return;
-
-      try {
-        // Add delay to prevent rate limiting
-        if (index > 0) {
-          await new Promise(resolve => setTimeout(resolve, TIINGO_REQUEST_DELAY));
-        }
-
-        // Calculate multiple timeframe performances
-        const performances = await calculateMultiTimeframePerformance(etf.ticker);
-        
-        portfolioData.push({
-          ...etf,
-          price: parseFloat(currentData.price) || 0,
-          performances: performances,
-          currentPerformance: parseFloat(currentData.performance) || 0,
-          change: currentData.change
-        });
-      } catch (error) {
-        console.warn(`⚠️  Fallback for ${etf.ticker}:`, error);
-        // Fallback to current data only
-        portfolioData.push({
-          ...etf,
-          price: parseFloat(currentData.price) || 0,
-          performances: {
-            daily: parseFloat(currentData.performance) || 0,
-            weekly: parseFloat(currentData.performance) || 0,
-            monthly: parseFloat(currentData.performance) || 0,
-            quarterly: parseFloat(currentData.performance) || 0,
-            yearly: parseFloat(currentData.performance) || 0
-          },
-          currentPerformance: parseFloat(currentData.performance) || 0,
-          change: currentData.change
-        });
-      }
-    }));
-    
-    // Small delay between batches
-    if (i + BATCH_SIZE < portfolio.etfs.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-  }
-
-  if (portfolioData.length === 0) return null;
-
-  // Calculate portfolio averages across all timeframes
-  const avgPerformances = {
-    daily: portfolioData.reduce((sum, item) => sum + (item.performances?.daily || 0), 0) / portfolioData.length,
-    weekly: portfolioData.reduce((sum, item) => sum + (item.performances?.weekly || 0), 0) / portfolioData.length,
-    monthly: portfolioData.reduce((sum, item) => sum + (item.performances?.monthly || 0), 0) / portfolioData.length,
-    quarterly: portfolioData.reduce((sum, item) => sum + (item.performances?.quarterly || 0), 0) / portfolioData.length,
-    yearly: portfolioData.reduce((sum, item) => sum + (item.performances?.yearly || 0), 0) / portfolioData.length
-  };
-  
-  const result = {
-    ...portfolio,
-    avgPerformances,
-    avgPerformance: avgPerformances.daily.toFixed(2) + '%', // Keep backward compatibility
-    etfData: portfolioData
-  };
-
-  // Cache this portfolio result
-  if (!cachedPortfolios) {
-    cachedPortfolios = { data: {}, timestamp: Date.now() };
-  }
-  cachedPortfolios.data[cacheKey] = result;
-  
-  console.log(`✅ Portfolio ${portfolioKey} calculated and cached`);
-  return result;
-}
-
-// Function to calculate performance across multiple timeframes with better error handling
-async function calculateMultiTimeframePerformance(ticker: string) {
-  try {
-    console.log(`📊 Calculating multi-timeframe performance for ${ticker}...`);
-    
-    const performances = {
-      daily: 0,
-      weekly: 0,
-      monthly: 0,
-      quarterly: 0,
-      yearly: 0
-    };
-
-    // Calculate different timeframes
-    const timeframes = [
-      { key: 'daily', days: 2 }, // 2 days to ensure we get at least 2 data points
-      { key: 'weekly', days: 8 },
-      { key: 'monthly', days: 32 },
-      { key: 'quarterly', days: 95 }, // ~3 months
-      { key: 'yearly', days: 380 } // ~1 year
-    ];
-
-    for (const timeframe of timeframes) {
-      try {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - timeframe.days);
-        
-        const startDateStr = startDate.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
-        
-        console.log(`🔍 Fetching ${timeframe.key} data for ${ticker}: ${startDateStr} to ${endDateStr}`);
-        
-        const response = await fetch(
-          `https://api.tiingo.com/tiingo/daily/${ticker}/prices?startDate=${startDateStr}&endDate=${endDateStr}&token=${process.env.TIINGO_API_KEY}`,
-          { 
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Token ${process.env.TIINGO_API_KEY}`
-            }
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`✅ Retrieved ${data.length} data points for ${ticker} ${timeframe.key}`);
-          
-          if (data && data.length >= 2) {
-            const oldPrice = data[0].adjClose;
-            const newPrice = data[data.length - 1].adjClose;
-            
-            if (oldPrice && newPrice && oldPrice > 0) {
-              const performance = ((newPrice - oldPrice) / oldPrice) * 100;
-              performances[timeframe.key as keyof typeof performances] = performance;
-              console.log(`📈 ${ticker} ${timeframe.key}: ${performance.toFixed(2)}%`);
-            }
-          }
-        } else {
-          console.log(`⚠️ API error for ${ticker} ${timeframe.key}: ${response.status}`);
-        }
-      } catch (timeframeError) {
-        console.log(`⚠️ Error fetching ${timeframe.key} data for ${ticker}:`, timeframeError);
-      }
-      
-      // Add small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-
-    console.log(`✅ Final performances for ${ticker}:`, performances);
-    return performances;
-    
-  } catch (error) {
-    console.error(`❌ Error calculating multi-timeframe performance for ${ticker}:`, error);
-    return {
-      daily: 0,
-      weekly: 0,
-      monthly: 0,
-      quarterly: 0,
-      yearly: 0
-    };
-  }
 }

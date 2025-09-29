@@ -261,3 +261,5 @@ For support, email support@econopulse.com or join our Discord community.
 ---
 
 Built with ❤️ by the EconoPulse Team
+## 🧪 Experimental: Q-CTA Position Indicator
+

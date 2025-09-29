@@ -4,6 +4,7 @@
     "dashboard": "Dashboard",
     "ai_portfolio": "AI Portfolio",
     "ai_pulse": "AI Pulse",
+    "blog": "Blog",
     "pricing": "Prezzi",
     "login": "Accedi",
     "logout": "Esci"
@@ -211,14 +212,36 @@
     "cancel_anytime": "Cancella in qualsiasi momento entro 30 giorni per un rimborso completo",
     "back_to_pricing": "← Torna ai Piani di Prezzo"
   },
+  "legal": {
+    "risk_disclaimer": "Disclaimer sui Rischi",
+    "risk_warning": "Avviso di Investimento: Il valore degli investimenti può diminuire così come aumentare. Le performance passate non sono una guida per le performance future. EconoPulse fornisce strumenti di analisi e non è responsabile per le decisioni di investimento.",
+    "not_financial_advice": "Questa piattaforma fornisce solo strumenti educativi e analitici. Non è consulenza finanziaria.",
+    "copyright": "© 2025 EconoPulse. Tutti i diritti riservati."
+  },
+  "common": {
+    "loading": "Caricamento...",
+    "error": "Errore verificato",
+    "retry": "Riprova",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "view_all": "Visualizza Tutto",
+    "learn_more": "Scopri di Più",
+    "get_started": "Inizia",
+    "coming_soon": "Prossimamente"
+  },
   "footer": {
     "company": "EconoPulse",
     "tagline": "Piattaforma Avanzata di Analisi Finanziaria",
-    "description": "Stai sempre un passo avanti rispetto ai trend di mercato con strumenti di analisi finanziaria alimentati dall'AI e intelligence di mercato in tempo reale.",
+    "description": "Piattaforma avanzata di intelligence finanziaria alimentata da AI e dati in tempo reale. Prendi decisioni di investimento più intelligenti con i nostri strumenti di analisi di mercato completi.",
     "product": "Prodotto",
+    "account": "Il Mio Account",
     "company_section": "Azienda",
+    "services_section": "Servizi",
     "support": "Supporto",
-    "legal": "Legale",
+    "legal_section": "Legale",
     "social": "Seguici",
     "newsletter": {
       "title": "Rimani Aggiornato",
@@ -230,12 +253,35 @@
     },
     "contact_info": {
       "email": "econopulse.info@econopulse.ai",
-      "phone": "+1 (555) 123-4567",
-      "address": "123 Financial District, New York, NY 10004"
+      "phone": "+3553519509674",
+      "address": "Viale Tassoni 1, Sassuolo (MO)"
     },
+    "market_analysis": "Analisi di Mercato",
+    "dashboard": "Dashboard",
+    "ai_portfolio": "AI Portfolio",
+    "ai_pulse": "AI Pulse",
+    "market_dna": "Market DNA",
+    "visual_ai": "AI Visuale",
+    "portfolio_tracker": "Tracker Portfolio",
+    "alerts": "Avvisi Intelligenti",
+  "about": "Chi Siamo",
+  "help": "Assistenza",
+  "work_with_us": "Lavora con noi",
+    "blog": "Blog",
+    "pricing": "Prezzi",
+    "contact": "Contatti",
+    "privacy": "Privacy Policy",
+    "terms": "Termini di Servizio",
+    "disclaimer": "Disclaimer",
+    "cookies": "Cookie Policy",
+    "latest_news": "Ultime Notizie",
+    "all_rights_reserved": "Tutti i diritti riservati.",
+    "financial_disclaimer": "Questa piattaforma è solo a scopo informativo e non costituisce consulenza finanziaria.",
+    "cookie_settings": "Impostazioni Cookie",
     "links": {
       "features": "Funzionalità",
-      "pricing": "Prezzi", 
+      "pricing": "Prezzi",
+      "upgrade": "Aggiorna Piano", 
       "api": "API",
       "documentation": "Documentazione",
       "status": "Stato Sistema",
@@ -261,25 +307,5 @@
       "company": "Azienda",
       "support": "Supporto"
     }
-  },
-  "legal": {
-    "risk_disclaimer": "Disclaimer sui Rischi",
-    "risk_warning": "Avviso di Investimento: Il valore degli investimenti può diminuire così come aumentare. Le performance passate non sono una guida per le performance future. EconoPulse fornisce strumenti di analisi e non è responsabile per le decisioni di investimento.",
-    "not_financial_advice": "Questa piattaforma fornisce solo strumenti educativi e analitici. Non è consulenza finanziaria.",
-    "copyright": "© 2025 EconoPulse. Tutti i diritti riservati."
-  },
-  "common": {
-    "loading": "Caricamento...",
-    "error": "Errore verificato",
-    "retry": "Riprova",
-    "save": "Salva",
-    "cancel": "Annulla",
-    "confirm": "Conferma",
-    "delete": "Elimina",
-    "edit": "Modifica",
-    "view_all": "Visualizza Tutto",
-    "learn_more": "Scopri di Più",
-    "get_started": "Inizia",
-    "coming_soon": "Prossimamente"
   }
 }

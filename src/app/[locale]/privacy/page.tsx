@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { useTranslations } from 'next-intl';
-import { Navigation } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 
 export default function PrivacyPolicy() {
@@ -10,8 +9,6 @@ export default function PrivacyPolicy() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navigation />
-      
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="prose prose-lg max-w-none">
           <h1 className="text-4xl font-bold text-gray-900 mb-8">
@@ -128,9 +125,8 @@ export default function PrivacyPolicy() {
             </p>
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-700">
-                Email: privacy@econopulse.com<br />
-                Address: EconoPulse Privacy Office<br />
-                [Your Company Address]
+                Email: econopulse.info@econopulse.ai<br />
+                Phone: +3553519509674
               </p>
             </div>
           </section>

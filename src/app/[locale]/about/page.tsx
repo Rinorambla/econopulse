@@ -4,12 +4,10 @@ import Link from 'next/link';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function AboutPage() {
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         {/* Header */}
         <div className="bg-slate-800/50 backdrop-blur-sm border-b border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -86,18 +84,18 @@ export default function AboutPage() {
                 <div className="bg-slate-700/50 p-6 rounded-lg">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h5 className="font-medium text-white mb-2">General Inquiries</h5>
+                      <h5 className="font-medium text-white mb-2">Email</h5>
                       <p className="text-gray-300">
-                        <a href="mailto:info@econopulse.ai" className="text-blue-400 hover:text-blue-300">
-                          info@econopulse.ai
+                        <a href="mailto:econopulse.info@econopulse.ai" className="text-blue-400 hover:text-blue-300">
+                          econopulse.info@econopulse.ai
                         </a>
                       </p>
                     </div>
                     <div>
-                      <h5 className="font-medium text-white mb-2">Support</h5>
+                      <h5 className="font-medium text-white mb-2">Phone</h5>
                       <p className="text-gray-300">
-                        <a href="mailto:support@econopulse.ai" className="text-blue-400 hover:text-blue-300">
-                          support@econopulse.ai
+                        <a href="tel:+3553519509674" className="text-blue-400 hover:text-blue-300">
+                          +3553519509674
                         </a>
                       </p>
                     </div>
@@ -110,6 +108,5 @@ export default function AboutPage() {
 
         <Footer />
       </div>
-    </ProtectedRoute>
   );
 }

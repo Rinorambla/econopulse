@@ -1,22 +1,26 @@
-// Tiingo API Service for Financial Data - UNIFIED REAL DATA
+// Tiingo API Service for Financial Data - UNIFIED REAL DATA (server-only)
+import { env } from './env';
+
 export class TiingoService {
   private apiKey: string;
   private baseUrl = 'https://api.tiingo.com';
 
   constructor() {
-    // Using REAL Tiingo API key for live data
-    this.apiKey = process.env.TIINGO_API_KEY || '0ef36bebbaa57f70fcc6705254bab79ac599e485';
+    const key = env.TIINGO_API_KEY;
+    if (!key) {
+      throw new Error('TIINGO_API_KEY is not configured');
+    }
+    this.apiKey = key;
   }
 
   // Get current stock quote
   async getStockQuote(symbol: string) {
     try {
-      const url = `${this.baseUrl}/tiingo/daily/${symbol}/prices?token=${this.apiKey}`;
-      console.log(`🔍 Fetching REAL quote for ${symbol} from Tiingo...`);
+  const url = `${this.baseUrl}/tiingo/daily/${symbol}/prices?token=${this.apiKey}`;
       
       const response = await fetch(url, {
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(5000)
       });
 
       if (!response.ok) {
@@ -25,8 +29,7 @@ export class TiingoService {
         return null;
       }
 
-      const data = await response.json();
-      console.log(`📊 Tiingo REAL response for ${symbol}:`, JSON.stringify(data, null, 2));
+  const data = await response.json();
 
       if (data && data.length > 0) {
         const quote = data[0];
@@ -46,7 +49,7 @@ export class TiingoService {
 
       return null;
     } catch (error) {
-      console.warn(`❌ Error fetching REAL data for ${symbol} from Tiingo:`, error);
+  console.warn(`❌ Error fetching data for ${symbol} from Tiingo:`, error);
       return null;
     }
   }
@@ -62,7 +65,7 @@ export class TiingoService {
       
       const response = await fetch(url, {
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(6000)
       });
 
       if (!response.ok) {
@@ -79,7 +82,7 @@ export class TiingoService {
         open: item.open
       }));
     } catch (error) {
-      console.warn(`❌ Error fetching historical data for ${symbol}:`, error);
+  console.warn(`❌ Error fetching historical data for ${symbol}:`, error);
       return null;
     }
   }
@@ -119,7 +122,7 @@ export class TiingoService {
 
       return null;
     } catch (error) {
-      console.warn(`❌ Error fetching crypto data for ${symbol}:`, error);
+  console.warn(`❌ Error fetching crypto data for ${symbol}:`, error);
       return null;
     }
   }
@@ -154,7 +157,7 @@ export class TiingoService {
 
       return null;
     } catch (error) {
-      console.warn(`❌ Error fetching forex data for ${pair}:`, error);
+  console.warn(`❌ Error fetching forex data for ${pair}:`, error);
       return null;
     }
   }
@@ -163,6 +166,102 @@ export class TiingoService {
   async getETFQuote(symbol: string) {
     // ETFs are treated as regular stocks in Tiingo
     return this.getStockQuote(symbol);
+  }
+
+  // ULTRA-FAST BULK API METHOD - Enhanced for massive parallel processing
+  async getBulkQuotes(symbols: string[], batchSize: number = 12) {
+    try {
+  console.log(`Bulk processing ${symbols.length} symbols from Tiingo IEX...`);
+      
+      const results = [];
+      const startTime = Date.now();
+      
+      // Process in smaller batches with NO DELAYS for maximum speed
+      const batchPromises = [];
+      
+      for (let i = 0; i < symbols.length; i += batchSize) {
+        const batch = symbols.slice(i, i + batchSize);
+        const symbolsQuery = batch.join(',');
+        
+        // Create promise for each batch to run in parallel
+        const batchPromise = (async () => {
+          try {
+            const url = `${this.baseUrl}/iex?tickers=${symbolsQuery}&token=${this.apiKey}`;
+            console.log(`📊 Batch ${Math.floor(i/batchSize) + 1}: Processing ${batch.length} symbols in parallel...`);
+            
+            const response = await fetch(url, {
+              headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              },
+              signal: AbortSignal.timeout(10000) // Reduced timeout for speed
+            });
+            
+            if (response.ok) {
+              try {
+                const batchData = await response.json();
+                if (Array.isArray(batchData) && batchData.length > 0) {
+                  console.log(`✅ Batch ${Math.floor(i/batchSize) + 1}: Retrieved ${batchData.length} quotes in ${Date.now() - startTime}ms`);
+                  return batchData;
+                }
+              } catch (parseError) {
+                console.warn(`⚠️ Batch ${Math.floor(i/batchSize) + 1} JSON parse error:`, parseError);
+              }
+            } else {
+              console.warn(`⚠️ Batch ${Math.floor(i/batchSize) + 1} failed: ${response.status}`);
+              // Consume the response body
+              try {
+                await response.text();
+              } catch {}
+            }
+            
+            return [];
+          } catch (batchError) {
+            console.warn(`❌ Batch ${Math.floor(i/batchSize) + 1} error:`, batchError);
+            return [];
+          }
+        })();
+        
+        batchPromises.push(batchPromise);
+      }
+      
+      // Execute ALL batches in parallel for maximum speed - NO DELAYS
+  console.log(`Executing ${batchPromises.length} batches in parallel...`);
+      const parallelResults = await Promise.all(batchPromises);
+      
+      // Flatten results
+      for (const batchResult of parallelResults) {
+        if (batchResult && batchResult.length > 0) {
+          results.push(...batchResult);
+        }
+      }
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      const symbolsPerSecond = Math.round(symbols.length / (duration / 1000));
+      
+  console.log(`Bulk completed: ${results.length}/${symbols.length} symbols in ${duration}ms (${symbolsPerSecond} symbols/sec)`);
+      
+      // Debug: Log the first IEX response to see the structure
+  // Intentionally avoid logging full payloads in production
+      
+      return results.map(quote => ({
+        symbol: quote.ticker,
+        price: quote.last || quote.close || quote.tngoLast || quote.high || quote.open || 0,
+        change: (quote.tngoLast || quote.high || quote.open || 0) - (quote.prevClose || quote.open || 0),
+        changePercent: ((quote.tngoLast || quote.high || quote.open || 0) - (quote.prevClose || quote.open || 0)) / (quote.prevClose || quote.open || 1) * 100,
+        volume: quote.volume,
+        high: quote.high,
+        low: quote.low,
+        open: quote.open,
+        timestamp: quote.timestamp,
+        source: 'Tiingo IEX'
+      }));
+      
+    } catch (error) {
+  console.error('Ultra-fast bulk quote fetch error:', error);
+      return [];
+    }
   }
 
   // Get multiple stocks at once
@@ -178,7 +277,7 @@ export class TiingoService {
         }))
         .filter(item => item.data !== null);
     } catch (error) {
-      console.warn('❌ Error fetching multiple quotes:', error);
+  console.warn('Error fetching multiple quotes:', error);
       return [];
     }
   }
@@ -209,7 +308,7 @@ export class TiingoService {
         tickers: item.tickers || []
       }));
     } catch (error) {
-      console.warn('❌ Error fetching news:', error);
+  console.warn('Error fetching news:', error);
       return [];
     }
   }
@@ -220,25 +319,24 @@ export const tiingoService = new TiingoService();
 // Helper functions for easy use
 export async function getTiingoMarketData(symbols: string[] = ['SPY', 'QQQ', 'IWM', 'DIA']) {
   try {
-    console.log(`🔍 Fetching REAL market data for ${symbols.length} symbols from Tiingo...`);
+    console.log(`Fetching market data for ${symbols.length} symbols from Tiingo...`);
     
-    const marketData = await tiingoService.getMultipleQuotes(symbols);
+    // Use the new BULK API method for much better performance
+    const quotes = await tiingoService.getBulkQuotes(symbols, 10); // 10 symbols per batch (reduced from 15)
     
-    console.log(`✅ Retrieved REAL data for ${marketData.length} symbols from Tiingo`);
+    if (!quotes || quotes.length === 0) {
+  console.warn('No quotes returned from Tiingo bulk API, falling back to individual requests');
+      // Fallback to individual requests for critical symbols only
+      const criticalSymbols = symbols.slice(0, 50); // Limit to first 50 symbols as fallback
+      const results = await tiingoService.getMultipleQuotes(criticalSymbols);
+      return results.filter(quote => quote !== null);
+    }
     
-    return marketData.map(item => ({
-      symbol: item.symbol,
-      price: item.data?.price || 0,
-      change: item.data?.change || 0,
-      changePercent: item.data?.changePercent || 0,
-      volume: item.data?.volume || 0,
-      high: item.data?.high || 0,
-      low: item.data?.low || 0,
-      source: 'Tiingo',
-      timestamp: new Date().toISOString()
-    }));
+  console.log(`Retrieved data for ${quotes.length} symbols from Tiingo`);
+    return quotes;
+    
   } catch (error) {
-    console.error('❌ Error in getTiingoMarketData:', error);
+  console.error('Error in getTiingoMarketData:', error);
     return [];
   }
 }

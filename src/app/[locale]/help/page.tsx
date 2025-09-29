@@ -1,130 +1,123 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import { NavigationLink } from '@/components/Navigation';
+import React, { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { redirect } from '@/i18n/routing';
 import Footer from '@/components/Footer';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import { Link } from '@/i18n/routing';
 
 export default function HelpPage() {
-  const faqItems = [
-    {
-      question: "How do I get started with EconoPulse?",
-      answer: "Simply sign up for an account and choose your subscription plan. You'll have immediate access to our dashboard, AI portfolio tools, and market analysis features."
-    },
-    {
-      question: "What data sources does EconoPulse use?",
-      answer: "We integrate data from multiple premium sources including Tiingo, Yahoo Finance, and other financial data providers to ensure comprehensive market coverage."
-    },
-    {
-      question: "Is my data secure?",
-      answer: "Yes, we use industry-standard encryption and security protocols. Your personal and financial data is protected with bank-level security measures."
-    },
-    {
-      question: "Can I export my portfolio data?",
-      answer: "Yes, all portfolio data and analysis reports can be exported in various formats including CSV, PDF, and JSON."
-    },
-    {
-      question: "How accurate are the AI predictions?",
-      answer: "Our AI models are trained on historical data and provide probabilistic forecasts. While highly sophisticated, all investments carry risk and past performance doesn't guarantee future results."
-    }
-  ];
+  const locale = useLocale();
+  if (locale !== 'en') {
+    redirect({ href: '/help', locale: 'en' });
+  }
+
+  const t = useTranslations();
+  const email = 'econopulse.info@econopulse.ai';
+
+  const [query, setQuery] = useState('');
+  const faqs = useMemo(
+    () => [
+      {
+        q: 'How do I get started? ',
+        a: 'Create an account and choose a plan. You can access the dashboard and start exploring features immediately.'
+      },
+      {
+        q: 'What is the difference between Pro and Premium?',
+        a: 'Pro includes the real-time dashboard and core features. Premium adds AI Portfolio Builder and advanced market analysis.'
+      },
+      {
+        q: 'Do I need a credit card for the trial?',
+        a: 'Depending on the promotion, some trials may require a payment method. You can cancel anytime before renewal.'
+      },
+      {
+        q: 'How does the AI Portfolio Builder work?',
+        a: 'It analyzes market conditions and your preferences (risk, horizon, goals) to generate a suggested allocation.'
+      },
+      {
+        q: 'Where does the market data come from?',
+        a: 'We aggregate data from multiple sources including Yahoo Finance and other providers with short timeouts and batching.'
+      },
+      {
+        q: 'Can I cancel my subscription?',
+        a: 'Yes. You can manage or cancel your subscription from your account settings; access continues until the end of the billing period.'
+      },
+      {
+        q: 'Is this financial advice?',
+        a: 'No. The platform provides analytical tools and educational information. It is not financial advice.'
+      },
+      {
+        q: 'How do I change my plan?',
+        a: 'Visit the pricing page or your account settings to upgrade or downgrade your plan.'
+      },
+      {
+        q: 'Why is a page protected?',
+        a: 'Some sections require a specific plan. You may need to sign in or upgrade to access premium features.'
+      }
+    ],
+    []
+  );
+
+  const filteredFaqs = useMemo(() => {
+    const ql = query.trim().toLowerCase();
+    if (!ql) return faqs;
+    return faqs.filter(({ q, a }) => q.toLowerCase().includes(ql) || a.toLowerCase().includes(ql));
+  }, [faqs, query]);
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        {/* Header */}
-        <div className="bg-slate-800/50 backdrop-blur-sm border-b border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <NavigationLink href="/">
-                  <ArrowLeftIcon className="h-6 w-6 text-gray-400 hover:text-white" />
-                </NavigationLink>
-                <h1 className="text-2xl font-bold text-white">Help Center</h1>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-white">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Back to home */}
+        <div className="mb-6">
+          <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+            <span className="mr-2">←</span>
+            <span>Home</span>
+          </Link>
+        </div>
+        <div className="prose prose-lg max-w-none">
+          <h1 className="text-4xl font-bold text-gray-900 mb-6">Help</h1>
+          <p className="text-gray-700 mb-6">Search common questions and answers about the platform.</p>
         </div>
 
-        {/* Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg border border-gray-700 p-8">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold text-white mb-6">Help Center</h2>
-              
-              <div className="mb-8">
-                <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-blue-400 mb-3">Need immediate assistance?</h3>
-                  <p className="text-gray-300 mb-4">
-                    Our support team is here to help. Contact us for personalized assistance.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                    <a 
-                      href="mailto:support@econopulse.ai"
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Email Support
-                    </a>
-                    <a 
-                      href="/contact"
-                      className="border border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Contact Form
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              <h3 className="text-xl font-semibold text-blue-400 mb-6">Frequently Asked Questions</h3>
-              
-              <div className="space-y-4">
-                {faqItems.map((item, index) => (
-                  <div key={index} className="bg-slate-700/50 rounded-lg border border-gray-600">
-                    <button className="w-full text-left p-4 focus:outline-none">
-                      <h4 className="font-semibold text-white mb-2">{item.question}</h4>
-                      <p className="text-gray-300 text-sm">{item.answer}</p>
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-700/50 p-6 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3">📚 Documentation</h4>
-                  <p className="text-gray-300 text-sm mb-3">
-                    Comprehensive guides and API documentation
-                  </p>
-                  <a href="/docs" className="text-blue-400 hover:text-blue-300">
-                    View Documentation →
-                  </a>
-                </div>
-                <div className="bg-slate-700/50 p-6 rounded-lg">
-                  <h4 className="font-semibold text-white mb-3">🎓 Tutorials</h4>
-                  <p className="text-gray-300 text-sm mb-3">
-                    Step-by-step tutorials and video guides
-                  </p>
-                  <a href="/webinars" className="text-blue-400 hover:text-blue-300">
-                    Watch Tutorials →
-                  </a>
-                </div>
-              </div>
-
-              <div className="mt-8 p-6 bg-slate-700/30 rounded-lg">
-                <h4 className="font-semibold text-white mb-3">System Status</h4>
-                <p className="text-gray-300 text-sm mb-3">
-                  Check the current status of all EconoPulse services
-                </p>
-                <a href="/status" className="text-blue-400 hover:text-blue-300">
-                  View System Status →
-                </a>
-              </div>
-            </div>
-          </div>
+        {/* Search */}
+        <div className="mb-8">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search help topics..."
+            className="w-full max-w-2xl px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500 bg-white"
+            aria-label="Search help topics"
+            autoFocus
+          />
         </div>
 
-        <Footer />
-      </div>
-    </ProtectedRoute>
+        {/* FAQ List */}
+        <div className="space-y-4">
+          {filteredFaqs.length === 0 && (
+            <div className="text-gray-600">No results. Try a different keyword.</div>
+          )}
+          {filteredFaqs.map((item, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.q}</h3>
+              <p className="text-gray-700">{item.a}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Contact at bottom (email only) */}
+        <div className="prose prose-lg max-w-none mt-10">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Still need help?</h2>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <p className="text-sm uppercase tracking-wide text-gray-600">Email</p>
+            <a href={`mailto:${email}`} className="text-blue-600 hover:text-blue-700 break-all">
+              {email}
+            </a>
+          </div>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
   );
 }

@@ -68,7 +68,7 @@ Please provide:
 Be specific, data-driven, and focus on actionable insights. Consider both current conditions and forward-looking indicators.
 `;
 
-    let aiResponse: string;
+  let aiResponse: string = '';
 
     try {
       // Get AI analysis
@@ -91,45 +91,13 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
       aiResponse = completion.choices[0]?.message?.content || '';
     } catch (error: any) {
       console.error('OpenAI API error:', error?.status, error?.code);
-      
-      // Provide intelligent fallback based on actual economic data
-      const inflationRate = economicData.inflation?.value ? ((economicData.inflation.value - 300) / 3).toFixed(1) : 'N/A';
-      const unemploymentRate = economicData.unemployment?.value || 'N/A';
-      const gdpValue = economicData.gdp?.value || 'N/A';
-      
-      aiResponse = `**Current Economic Assessment** 📈
-
-**Phase**: Economic Monitoring
-**Confidence**: 70/100
-**Timeframe**: 3-6 months trend analysis
-
-**Key Economic Indicators**:
-• Unemployment Rate: ${unemploymentRate}%
-• GDP Growth: ${gdpValue}%
-• Inflation Rate: ${inflationRate}%
-
-**Main Factors**:
-• Employment levels show ${parseFloat(unemploymentRate) < 5 ? 'healthy' : 'elevated'} conditions
-• Economic activity ${parseFloat(gdpValue) > 2 ? 'expanding' : 'moderate'}
-• Price stability ${parseFloat(inflationRate) < 4 ? 'maintained' : 'pressured'}
-
-**Key Risks**:
-• Interest rate policy adjustments
-• Global economic uncertainties
-• Inflation trend monitoring required
-
-**Opportunities**:
-• Strategic sector positioning
-• Quality asset selection
-• Defensive positioning options
-
-**Summary**: Current economic fundamentals require continued monitoring with focus on employment trends and inflation dynamics. Market positioning should emphasize quality and flexibility.
-
-**Strategic Recommendation**: Maintain balanced approach with emphasis on quality investments and monitor Fed policy signals for tactical adjustments.`;
+      // Do not generate synthetic analysis. Return service unavailable.
+      return NextResponse.json({ success:false, realtime:false, error:'AI economic analysis unavailable' }, { status: 503 });
     }
 
     if (!aiResponse) {
-      throw new Error('No response from AI');
+      // No AI output -> do not synthesize
+      return NextResponse.json({ success:false, realtime:false, error:'No AI response' }, { status: 503 });
     }
 
     // Parse AI response into structured format
@@ -138,53 +106,22 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
     // Return comprehensive analysis
     return NextResponse.json({
       success: true,
+      realtime: true,
       data: {
         analysis,
         economicData: economicContext,
         quadrant: quadrantData.current,
         lastUpdated: new Date().toISOString(),
-        dataSource: 'FRED Economic Data + OpenAI GPT-4 Analysis'
+        dataSource: 'FRED + OpenAI',
+        aiSource: 'openai',
+        fallback: false
       }
     });
 
   } catch (error) {
     console.error('Error in AI economic analysis:', error);
-    
-    // Return fallback analysis
-    const fallbackAnalysis = {
-      currentCycle: 'Mixed Signals',
-      direction: 'neutral' as const,
-      confidence: 50,
-      timeframe: '3-6 months',
-      keyFactors: [
-        'Federal Reserve monetary policy',
-        'Inflation trends and consumer prices',
-        'Employment market conditions'
-      ],
-      risks: [
-        'Persistent inflation pressures',
-        'Geopolitical uncertainties',
-        'Financial market volatility'
-      ],
-      opportunities: [
-        'Technological innovation sectors',
-        'Infrastructure investments',
-        'Energy transition investments'
-      ],
-      summary: 'Economic conditions show mixed signals with both supportive and challenging factors present.',
-      recommendation: 'Maintain balanced approach with focus on defensive positioning and selective growth opportunities.'
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        analysis: fallbackAnalysis,
-        economicData: null,
-        quadrant: { cycle: 'Mixed', growth: 'Uncertain', inflation: 'Moderate', confidence: 50 },
-        lastUpdated: new Date().toISOString(),
-        dataSource: 'Fallback Analysis'
-      }
-    });
+    // Do not provide synthetic fallback
+    return NextResponse.json({ success:false, realtime:false, error:'AI analysis failed' }, { status: 503 });
   }
 }
 

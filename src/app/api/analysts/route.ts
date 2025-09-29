@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Financial Modeling Prep API for real analyst data
-const FMP_API_KEY = process.env.FMP_API_KEY || 'demo'; // Add your API key to .env.local
+const FMP_API_KEY = process.env.FMP_API_KEY || '';
+if (!FMP_API_KEY) {
+  console.warn('FMP_API_KEY not configured; analysts API may fail');
+}
 const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3';
 
 interface AnalystRecommendation {

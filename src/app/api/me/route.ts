@@ -17,17 +17,45 @@ export async function GET(req: Request) {
     // Fetch extended user data
     const { data, error } = await supabase
       .from('users')
-      .select('email, subscription_status, stripe_customer_id, subscription_id')
+      .select('email, subscription_status, stripe_customer_id, subscription_id, trial_end_date')
       .eq('id', userId)
       .single();
     if (error) {
       return NextResponse.json({ authenticated: true, email: session.user.email, plan: 'pro', warning: 'profile_missing', requiresSubscription: true });
     }
-    const plan = normalizePlan(data?.subscription_status || 'pro');
+
+    let currentSubscriptionStatus = data?.subscription_status || 'free';
+    
+    // Check if trial has expired
+    if (currentSubscriptionStatus === 'trial' && data?.trial_end_date) {
+      const trialEndDate = new Date(data.trial_end_date);
+      const now = new Date();
+      
+      if (now > trialEndDate) {
+        // Trial expired, update to free
+        currentSubscriptionStatus = 'free';
+        
+        // Update in database
+        await supabase
+          .from('users')
+          .update({ 
+            subscription_status: 'free',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+      }
+    }
+    
+    const plan = normalizePlan(currentSubscriptionStatus);
+    const requiresSubscription = currentSubscriptionStatus === 'free';
+    
     return NextResponse.json({
       authenticated: true,
       email: data?.email || session.user.email,
       plan,
+      subscription_status: currentSubscriptionStatus,
+      trial_end_date: data?.trial_end_date || null,
+      requiresSubscription,
       stripe_customer_id: data?.stripe_customer_id || null,
       subscription_id: data?.subscription_id || null
     });

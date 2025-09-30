@@ -186,6 +186,11 @@ export default function LoginPage() {
             >
               {isLogin ? 'Sign up' : 'Sign in'}
             </button>
+            {!isLogin && (
+              <div className="mt-2 text-xs text-green-400">
+                ✨ Get 14 days free trial with full access!
+              </div>
+            )}
           </p>
         </div>
 
@@ -259,9 +264,9 @@ export default function LoginPage() {
                 </label>
                 {isLogin && (
                   <div className="text-sm">
-                    <a href="#" className="font-semibold text-blue-400 hover:text-blue-300">
+                    <Link href="/en/forgot-password" className="font-semibold text-blue-400 hover:text-blue-300">
                       Forgot password?
-                    </a>
+                    </Link>
                   </div>
                 )}
               </div>

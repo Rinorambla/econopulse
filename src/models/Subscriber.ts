@@ -67,8 +67,8 @@ const SubscriberSchema: Schema<ISubscriber> = new Schema(
   }
 );
 
-// Indexes for better performance
-SubscriberSchema.index({ email: 1 });
+// Indexes for better performance  
+// Note: email already has unique: true which creates an index, so no need for separate index
 SubscriberSchema.index({ isActive: 1 });
 SubscriberSchema.index({ subscribedAt: -1 });
 

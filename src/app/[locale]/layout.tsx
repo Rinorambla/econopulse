@@ -4,6 +4,7 @@ import { getMessages } from 'next-intl/server';
 import { AuthProvider } from '@/hooks/useAuth';
 import CookieConsent from '@/components/CookieConsent';
 import { Navigation } from '@/components/Navigation';
+import { MissingServicesBanner } from '@/components/MissingServicesBanner';
 
 export default async function LocaleLayout({
   children,
@@ -32,6 +33,7 @@ export default async function LocaleLayout({
               <Navigation className="w-full" />
             </div>
           </header>
+          <MissingServicesBanner />
           {children}
         </div>
         <CookieConsent />

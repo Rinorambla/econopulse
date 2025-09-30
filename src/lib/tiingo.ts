@@ -125,7 +125,7 @@ export class TiingoService {
     return this.getStockQuote(symbol);
   }
 
-  async getBulkQuotes(symbols: string[], batchSize: number = 12) {
+  async getBulkQuotes(symbols: string[], batchSize: number = 12): Promise<any[]> {
     try {
       console.log(`Bulk processing ${symbols.length} symbols from Tiingo IEX...`);
       const results: any[] = [];
@@ -134,7 +134,7 @@ export class TiingoService {
       for (let i = 0; i < symbols.length; i += batchSize) {
         const batch = symbols.slice(i, i + batchSize);
         const symbolsQuery = batch.join(',');
-        const batchPromise = (async () => {
+        const batchPromise = (async (): Promise<any[]> => {
           try {
             const url = `${this.baseUrl}/iex?tickers=${symbolsQuery}&token=${this.apiKey}`;
             const response = await fetch(url, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000) });
@@ -178,7 +178,7 @@ export class TiingoService {
     }
   }
 
-  async getMultipleQuotes(symbols: string[]) {
+  async getMultipleQuotes(symbols: string[]): Promise<Array<{symbol: string; data: any}>> {
     try {
       const results = await Promise.allSettled(symbols.map(s => this.getStockQuote(s)));
       return results.map((r, i) => ({ symbol: symbols[i], data: r.status === 'fulfilled' ? r.value : null })).filter(r => r.data);
@@ -188,7 +188,7 @@ export class TiingoService {
     }
   }
 
-  async getNews(symbols: string[] = [], limit: number = 10) {
+  async getNews(symbols: string[] = [], limit: number = 10): Promise<any[]> {
     try {
       const symbolsParam = symbols.length > 0 ? `&tickers=${symbols.join(',')}` : '';
       const url = `${this.baseUrl}/tiingo/news?token=${this.apiKey}${symbolsParam}&limit=${limit}`;

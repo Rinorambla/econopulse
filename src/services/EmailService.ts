@@ -1,6 +1,24 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy singleton (avoid constructing Resend at module load when key missing)
+let _resend: Resend | null | undefined; // undefined = not attempted, null = unavailable
+
+function getResend(): Resend | null {
+  if (_resend !== undefined) return _resend; // already resolved (instance or null)
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn('📭 RESEND_API_KEY not configured – email sending disabled (using no-op).');
+    _resend = null;
+    return _resend;
+  }
+  try {
+    _resend = new Resend(key);
+  } catch (e) {
+    console.warn('📭 Failed to initialize Resend client – disabling email sending.', e);
+    _resend = null;
+  }
+  return _resend;
+}
 
 export interface WeeklyNewsletterData {
   marketSummary: {
@@ -26,8 +44,13 @@ export interface WeeklyNewsletterData {
 
 export class EmailService {
   static async sendWelcomeEmail(email: string): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (welcome) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
     try {
-      const { data, error } = await resend.emails.send({
+      const { data, error } = await client.emails.send({
         from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
         to: [email],
         subject: '🎉 Welcome to EconoPulse Newsletter!',
@@ -48,8 +71,13 @@ export class EmailService {
   }
 
   static async sendReauthEmail(email: string, confirmationUrl: string): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (reauth) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
     try {
-      const { data, error } = await resend.emails.send({
+      const { data, error } = await client.emails.send({
         from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
         to: [email],
         subject: '🔐 Reauthenticate your EconoPulse session',
@@ -70,11 +98,16 @@ export class EmailService {
   }
 
   static async sendWeeklyNewsletter(
-    email: string, 
+    email: string,
     data: WeeklyNewsletterData
   ): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (weekly) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
     try {
-      const { data: emailData, error } = await resend.emails.send({
+      const { data: emailData, error } = await client.emails.send({
         from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
         to: [email],
         subject: `📊 Weekly Market Pulse - ${new Date().toLocaleDateString('en-US', { 
@@ -99,23 +132,20 @@ export class EmailService {
   }
 
   static async sendBulkNewsletter(
-    emails: string[], 
+    emails: string[],
     data: WeeklyNewsletterData
-  ): Promise<{ success: number; failed: number }> {
+  ): Promise<{ success: number; failed: number; skipped?: number }> {
+    const client = getResend();
+    if (!client) {
+      console.warn('✉️ (bulk) Skipping all sends – Resend not configured');
+      return { success: 0, failed: 0, skipped: emails.length };
+    }
     const results = { success: 0, failed: 0 };
-    
     for (const email of emails) {
       const sent = await this.sendWeeklyNewsletter(email, data);
-      if (sent) {
-        results.success++;
-      } else {
-        results.failed++;
-      }
-      
-      // Rate limiting: wait 100ms between emails
-      await new Promise(resolve => setTimeout(resolve, 100));
+      if (sent) results.success++; else results.failed++;
+      await new Promise(resolve => setTimeout(resolve, 100)); // simple throttle
     }
-
     return results;
   }
 

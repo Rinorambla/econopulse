@@ -193,6 +193,15 @@ export default function LoginPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-md">
               <p className="text-red-200 text-sm">{error}</p>
+              {error.includes('Auth unavailable') && (
+                <div className="mt-2 p-2 bg-blue-900/30 border border-blue-400 rounded">
+                  <p className="text-blue-200 text-xs">
+                    🔧 <strong>Setup richiesto:</strong> Le variabili d'ambiente Supabase non sono configurate su Vercel.
+                    <br />
+                    📖 Segui la guida in <code>SUPABASE_SETUP.md</code> per configurare l'autenticazione (5 minuti).
+                  </p>
+                </div>
+              )}
             </div>
           )}
           

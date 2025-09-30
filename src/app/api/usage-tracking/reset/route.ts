@@ -93,7 +93,7 @@ async function generateMonthlyAnalytics(month: string) {
   const usersByPlan = { free: 0, starter: 0, professional: 0, institutional: 0 };
   const revenueByPlan = { starter: 0, professional: 0, institutional: 0 };
 
-  paidUsers?.forEach(user => {
+  paidUsers?.forEach((user: any) => {
     const tierPrices = {
       starter: { monthly: 14.99, yearly: 149.99 },
       professional: { monthly: 49.99, yearly: 499.99 },
@@ -121,7 +121,7 @@ async function generateMonthlyAnalytics(month: string) {
     .not('subscription_tier', 'is', null);
 
   if (!countError && allUsers) {
-    allUsers.forEach(user => {
+    allUsers.forEach((user: any) => {
       const tier = user.subscription_tier || 'free';
       if (tier in usersByPlan) {
         usersByPlan[tier as keyof typeof usersByPlan]++;

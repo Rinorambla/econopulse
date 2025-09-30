@@ -26,14 +26,27 @@ export async function GET(req: Request) {
 
     let currentSubscriptionStatus = data?.subscription_status || 'free';
     
+    console.log('🔍 User subscription check:', {
+      userId,
+      subscription_status: currentSubscriptionStatus,
+      trial_end_date: data?.trial_end_date
+    });
+    
     // Check if trial has expired
     if (currentSubscriptionStatus === 'trial' && data?.trial_end_date) {
       const trialEndDate = new Date(data.trial_end_date);
       const now = new Date();
       
+      console.log('⏰ Trial check:', {
+        trialEndDate: trialEndDate.toISOString(),
+        now: now.toISOString(),
+        isExpired: now > trialEndDate
+      });
+      
       if (now > trialEndDate) {
         // Trial expired, update to free
         currentSubscriptionStatus = 'free';
+        console.log('❌ Trial expired, updating to free');
         
         // Update in database
         await supabase
@@ -43,11 +56,19 @@ export async function GET(req: Request) {
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
+      } else {
+        console.log('✅ Trial still active');
       }
     }
     
     const plan = normalizePlan(currentSubscriptionStatus);
     const requiresSubscription = currentSubscriptionStatus === 'free';
+    
+    console.log('📊 Final plan mapping:', {
+      subscription_status: currentSubscriptionStatus,
+      normalized_plan: plan,
+      requiresSubscription
+    });
     
     return NextResponse.json({
       authenticated: true,

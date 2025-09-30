@@ -16,10 +16,19 @@ export function hasAccess(userTier: PlanTier | string | null | undefined, requir
 export function normalizePlan(raw: string | null | undefined): PlanTier {
   if (!raw) return 'pro'; // Default to pro when no subscription
   const v = raw.toLowerCase();
+  
+  // Debug logging for Vercel
+  console.log('🔍 normalizePlan input:', raw, 'lowercase:', v);
+  
   if (v.startsWith('corp')) return 'corporate';
   if (v.startsWith('prem')) return 'premium';
   if (v.startsWith('pro')) return 'pro';
-  if (v === 'trial') return 'premium'; // Trial users get premium access durante i 14 giorni
+  if (v === 'trial') {
+    console.log('✅ Trial detected - granting premium access');
+    return 'premium'; // Trial users get premium access durante i 14 giorni
+  }
+  
+  console.log('⚠️ Unknown plan, defaulting to pro:', v);
   return 'pro'; // Default fallback
 }
 

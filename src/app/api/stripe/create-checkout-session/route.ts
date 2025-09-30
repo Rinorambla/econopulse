@@ -4,12 +4,20 @@ import { SUBSCRIPTION_PLANS } from '@/lib/stripe';
 import { supabase } from '@/lib/supabase';
 import { normalizePlan } from '@/lib/plan-access';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-06-30.basil' });
+let stripe: Stripe | null = null;
+function getStripe() {
+  if (stripe) return stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null; // build-safe guard
+  stripe = new Stripe(key, { apiVersion: '2025-06-30.basil' });
+  return stripe;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
+    const client = getStripe();
+    if (!client) {
+      return NextResponse.json({ error: 'Stripe not configured', demo: true }, { status: 503 });
     }
 
     const { plan, priceId, billingCycle } = await req.json();
@@ -53,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     // If user doesn't yet have Stripe customer, create one
     if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
+      const customer = await client.customers.create({
         email: user.email || undefined,
         metadata: { supabase_user_id: user.id }
       });
@@ -67,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    const sessionRes = await stripe.checkout.sessions.create({
+  const sessionRes = await client.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: [{ price: priceId, quantity: 1 }],

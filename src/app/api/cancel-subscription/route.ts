@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+let stripe: Stripe | null = null;
+function getStripe() {
+  if (stripe) return stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null; // build-safe: no throw at import
+  stripe = new Stripe(key, { apiVersion: '2025-06-30.basil' });
+  return stripe;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { subscriptionId } = await request.json();
+    const client = getStripe();
+    if (!client) {
+      return NextResponse.json(
+        { error: 'Stripe not configured', demo: true },
+        { status: 503 }
+      );
+    }
 
+    const { subscriptionId } = await request.json();
     if (!subscriptionId) {
       return NextResponse.json(
         { error: 'Subscription ID is required' },
@@ -16,8 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cancel the subscription at the end of the current period
-    const subscription = await stripe.subscriptions.update(subscriptionId, {
+    const subscription = await client.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true,
     });
 

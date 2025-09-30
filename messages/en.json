@@ -90,6 +90,32 @@
     "title": "Market Dashboard",
     "subtitle": "Real-time financial market analysis",
     "last_updated": "Last updated",
+    "account": {
+      "title": "Account & Billing",
+      "description": "Manage your subscription, usage, and billing settings"
+    },
+    "usage": {
+      "articles": "Articles Read",
+      "ai_queries": "AI Queries",
+      "data_exports": "Data Exports", 
+      "reports": "Reports Generated",
+      "unlimited": "Unlimited",
+      "limit_warning": "Limit almost reached",
+      "high_usage": "High usage"
+    },
+    "billing": {
+      "manage": "Manage Billing",
+      "portal": "Open Billing Portal",
+      "current_plan": "Current Plan",
+      "trial_remaining": "days left in trial",
+      "upgrade": "Upgrade Plan"
+    },
+    "activity": {
+      "recent": "Recent Activity",
+      "account_created": "Account created successfully",
+      "welcome_message": "Welcome to EconoPulse!",
+      "trial_active": "Free trial active"
+    },
     "columns": {
       "ticker": "Ticker/Name",
       "performance": "Daily Performance",

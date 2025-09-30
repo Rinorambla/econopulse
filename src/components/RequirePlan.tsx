@@ -23,6 +23,12 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
     return <>{children}</>;
   }
 
+  // TEMPORARY: Allow all trial users full access
+  if (user && plan && plan.includes('trial')) {
+    console.log('🎯 TRIAL USER BYPASS - Full access granted');
+    return <>{children}</>;
+  }
+
   if (loading || refreshingPlan) {
     return (
       <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>

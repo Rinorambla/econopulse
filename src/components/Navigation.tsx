@@ -42,7 +42,7 @@ export function Navigation({ className }: NavigationProps) {
   };
   
   return (
-    <div className={`flex items-center gap-2 sm:gap-3 ${className||''}`}>
+  <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${className||''} w-full`}> 
       {/* Left: Logo */}
       <div className="shrink-0">
         <NavigationLink href="/" className="flex items-center">
@@ -51,48 +51,33 @@ export function Navigation({ className }: NavigationProps) {
       </div>
 
       {/* Center: Links */}
-  <nav className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3 mx-2 sm:mx-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <nav className="flex-1 min-w-0 flex items-center flex-wrap gap-1 xs:gap-2 sm:gap-3 mx-1 sm:mx-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Always show feature links; if user not logged in add a subtle lock indicator */}
-        <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">
-            {t('nav.dashboard')}
-            {!user && <span className="text-[10px] uppercase tracking-wide text-blue-300/70 bg-blue-900/40 px-1.5 py-0.5 rounded">log in</span>}
-          </span>
+  <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1">{t('nav.dashboard')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">
-            {t('nav.ai_portfolio')}
-            {!user && <span className="text-[10px] uppercase tracking-wide text-emerald-300/70 bg-emerald-900/40 px-1.5 py-0.5 rounded">log in</span>}
-          </span>
+  <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1">{t('nav.ai_portfolio')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">
-            {t('nav.ai_pulse')}
-            {!user && <span className="text-[10px] uppercase tracking-wide text-pink-300/70 bg-pink-900/40 px-1.5 py-0.5 rounded">log in</span>}
-          </span>
+  <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1">{t('nav.ai_pulse')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">
-            <span className="text-white">Visual AI</span>
-            {!user && <span className="text-[10px] uppercase tracking-wide text-violet-300/70 bg-violet-900/40 px-1.5 py-0.5 rounded">log in</span>}
-          </span>
+  <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Visual AI</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/market-dna" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-500/20 hover:to-orange-500/20 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">
-            <span className="text-white">Market DNA</span>
-            {!user && <span className="text-[10px] uppercase tracking-wide text-amber-300/70 bg-amber-900/40 px-1.5 py-0.5 rounded">log in</span>}
-          </span>
+  <NavigationLink href="/market-dna" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-500/20 hover:to-orange-500/20 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market DNA</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/blog" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+  <NavigationLink href="/blog" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
           <span className="relative z-10">{t('nav.blog')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+  <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
           <span className="relative z-10">{t('nav.pricing')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
@@ -115,7 +100,7 @@ export function Navigation({ className }: NavigationProps) {
             </button>
           </div>
       ) : (
-  <NavigationLink href="/login" className="group relative ml-auto shrink-0 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-105 active:scale-95">
+  <NavigationLink href="/login" className="group relative ml-auto shrink-0 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 sm:px-5 py-2 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-105 active:scale-95">
           <span className="relative z-10">{t('nav.login')}</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         </NavigationLink>

@@ -42,6 +42,16 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
 
   // Treat null plan as free (still loading or no subscription) - plan-access util handles unknown gracefully
   const currentPlan = normalizePlan(plan);
+  
+  // Debug logging for trial access issues
+  console.log('🔍 RequirePlan check:', {
+    user_id: user?.id,
+    raw_plan: plan,
+    normalized_plan: currentPlan,
+    required_plan: min,
+    has_access: hasAccess(currentPlan, min)
+  });
+  
   if (hasAccess(currentPlan, min)) {
     return <>{children}</>;
   }

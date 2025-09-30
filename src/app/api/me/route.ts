@@ -64,19 +64,24 @@ export async function GET(req: Request) {
     const plan = normalizePlan(currentSubscriptionStatus);
     const requiresSubscription = currentSubscriptionStatus === 'free';
     
+    // FORCE premium access for trial users
+    const finalPlan = currentSubscriptionStatus === 'trial' ? 'premium' : plan;
+    const finalRequiresSubscription = currentSubscriptionStatus === 'trial' ? false : requiresSubscription;
+    
     console.log('📊 Final plan mapping:', {
       subscription_status: currentSubscriptionStatus,
       normalized_plan: plan,
-      requiresSubscription
+      final_plan: finalPlan,
+      requiresSubscription: finalRequiresSubscription
     });
     
     return NextResponse.json({
       authenticated: true,
       email: data?.email || session.user.email,
-      plan,
+      plan: finalPlan,
       subscription_status: currentSubscriptionStatus,
       trial_end_date: data?.trial_end_date || null,
-      requiresSubscription,
+      requiresSubscription: finalRequiresSubscription,
       stripe_customer_id: data?.stripe_customer_id || null,
       subscription_id: data?.subscription_id || null
     });

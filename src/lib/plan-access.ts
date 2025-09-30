@@ -19,6 +19,7 @@ export function normalizePlan(raw: string | null | undefined): PlanTier {
   if (v.startsWith('corp')) return 'corporate';
   if (v.startsWith('prem')) return 'premium';
   if (v.startsWith('pro')) return 'pro';
+  if (v === 'trial') return 'premium'; // Trial users get premium access durante i 14 giorni
   return 'pro'; // Default fallback
 }
 

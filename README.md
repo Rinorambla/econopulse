@@ -135,21 +135,114 @@ Before running this application, make sure you have:
 6. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
-## 🚀 Deployment
+## 🚀 Quick Deployment to Vercel
 
-### Vercel (Recommended)
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add your environment variables in Vercel dashboard
-4. Deploy!
+### Prerequisites
+- GitHub repository with this code
+- Vercel account
+- Service API keys (see Environment Variables below)
 
-### Manual Deployment
-1. Build the application:
+### Deploy Steps
+1. **Connect to Vercel**
+   ```bash
+   # Push to GitHub if not already done
+   git push origin main
+   ```
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - Click "New Project" → Import from GitHub
+   - Select your `econopulse` repository
+
+2. **Configure Environment Variables**
+   - In Vercel: Project → Settings → Environment Variables
+   - Add for **Production** environment:
+
+   **Essential (Required for full functionality):**
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   TIINGO_API_KEY=your_tiingo_api_key
+   ```
+
+   **AI Features:**
+   ```
+   OPENAI_API_KEY=sk-proj-your-openai-key
+   ```
+
+   **Payments & Email:**
+   ```
+   STRIPE_SECRET_KEY=sk_live_or_test_key
+   STRIPE_WEBHOOK_SECRET=whsec_webhook_secret
+   RESEND_API_KEY=re_your_resend_key
+   ```
+
+   **Optional Services:**
+   ```
+   MONGODB_URI=mongodb+srv://user:pass@cluster/db
+   SUPABASE_SERVICE_ROLE_KEY=service_role_key
+   ```
+
+3. **Deploy & Verify**
+   - Click "Deploy" or "Redeploy" after adding variables
+   - Wait for build completion (~2-3 minutes)
+   - Visit your Vercel URL + `/en/api/status` to verify service connections
+   - Test login at `/en/login`
+
+4. **Custom Domain (Optional)**
+   - Project → Settings → Domains
+   - Add `econopulse.ai` and `www.econopulse.ai`
+   - Configure DNS according to Vercel instructions
+
+### Environment Setup Guide
+For detailed environment variable setup, see:
+- 📋 **[Complete Setup Guide](VERCEL_ENV_SETUP.md)** - Step-by-step Vercel configuration
+- 🔐 **[Supabase Setup](SUPABASE_SETUP.md)** - Authentication provider setup
+- 📄 **[.env.example](.env.example)** - All available environment variables
+
+### Troubleshooting
+| Issue | Solution |
+|-------|----------|
+| Pages appear empty | Add `TIINGO_API_KEY` for market data |
+| Can't login | Verify Supabase URL and anon key |
+| Missing navigation links | Ensure latest deploy includes navigation fixes |
+| API errors (503) | Check which provider is missing in `/api/status` |
+
+### Build Verification
+The project includes automatic fallbacks for missing services:
+- **Missing auth**: Shows login prompts with setup guidance
+- **Missing market data**: Shows demo/placeholder content
+- **Missing AI**: Disables AI-powered features gracefully
+
+## � Local Development
+
+### Installation
+## 🔧 Local Development
+
+### Installation
+1. **Clone and install**
+   ```bash
+   git clone https://github.com/Rinorambla/econopulse.git
+   cd econopulse
+   npm install
+   ```
+
+2. **Environment Setup**
+   ```bash
+   # Copy example environment file
+   cp .env.example .env.local
+   
+   # Edit .env.local with your API keys
+   # See VERCEL_ENV_SETUP.md for detailed setup guide
+   ```
+
+3. **Run development server**
+   ```bash
+   npm run dev
+   # Or specify port: npm run dev:3000
+   ```
+
+4. **Build for production**
    ```bash
    npm run build
-   ```
-2. Start the production server:
-   ```bash
    npm start
    ```
 

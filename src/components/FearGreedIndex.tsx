@@ -106,10 +106,7 @@ const FearGreedIndex = () => {
         <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-semibold animate-pulse flex items-center shadow-lg self-end">
           <BoltIcon className="h-3 w-3 mr-1" /> AI POWERED
         </div>
-        <div className="text-[10px] sm:text-sm text-blue-400 font-semibold leading-tight">🤖 AI Market Intelligence</div>
-        <div className="text-white text-[10px] sm:text-xs bg-blue-900/40 px-2 sm:px-3 py-2 rounded-md border border-blue-500/30 backdrop-blur-sm leading-snug line-clamp-4">
-          {data.aiPrediction}
-        </div>
+
         {data.lastUpdated && (
           <div className="text-[9px] sm:text-[11px] text-gray-500">Upd: {new Date(data.lastUpdated).toLocaleTimeString()}</div>
         )}

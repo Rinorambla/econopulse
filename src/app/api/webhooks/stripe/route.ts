@@ -4,20 +4,35 @@ import { supabase } from '@/lib/supabase';
 import { SUBSCRIPTION_PLANS } from '@/lib/stripe';
 import { normalizePlan } from '@/lib/plan-access';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+// Lazy init (build-safe). Do NOT force non-null ! at module scope.
+let stripe: Stripe | null = null;
+function getStripe(): Stripe | null {
+  if (stripe) return stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null; // guard so build doesn't throw
+  stripe = new Stripe(key, { apiVersion: '2025-06-30.basil' });
+  return stripe;
+}
 
-const endpointSecret = process.env.WEBHOOK_SECRET!;
+function getEndpointSecret(): string | null {
+  return process.env.WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET || null;
+}
 
 export async function POST(request: NextRequest) {
+  const stripeClient = getStripe();
+  const endpointSecret = getEndpointSecret();
+  
+  if (!stripeClient || !endpointSecret) {
+    return NextResponse.json({ error: 'Stripe webhook not configured', demo: true }, { status: 503 });
+  }
+
   const body = await request.text();
   const sig = request.headers.get('stripe-signature')!;
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    event = stripeClient.webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
@@ -28,7 +43,7 @@ export async function POST(request: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode === 'subscription') {
-          const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+          const subscription = await stripeClient.subscriptions.retrieve(session.subscription as string);
           const customerId = subscription.customer as string;
           const priceId = subscription.items.data[0].price.id;
           const tier = mapPriceToTier(priceId);

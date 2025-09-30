@@ -21,21 +21,21 @@ export default function HomePage() {
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
-            <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28">
+            <main className="mt-6 mx-auto max-w-7xl px-3 sm:mt-8 sm:px-6 md:mt-12 lg:mt-16 lg:px-8 xl:mt-20">
               <div className="sm:text-center lg:text-left">
-                <h1 className="text-4xl tracking-tight font-extrabold sm:text-5xl md:text-6xl">
+                <h1 className="text-3xl tracking-tight font-extrabold sm:text-4xl md:text-5xl lg:text-6xl">
                   <span className="block xl:inline ai-gradient-text ai-float ai-delay-100">Where Markets Meet</span>{' '}
                   <span className="block xl:inline ai-gradient-text ai-float ai-delay-300">Artificial Intelligence</span>
                 </h1>
-                <p className="mt-3 text-base text-white/80 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0 ai-fade-up ai-delay-400">
-                  Experience the future of financial analysis. Our AI doesn't just process data—it anticipates market movements, unveils hidden opportunities, and transforms complex economic patterns into crystal-clear investment strategies. Welcome to the next evolution of financial intelligence.
+                <p className="mt-3 text-sm text-white/80 sm:mt-4 sm:text-base md:text-lg sm:max-w-xl sm:mx-auto md:mt-5 lg:mx-0 lg:max-w-lg xl:max-w-xl ai-fade-up ai-delay-400">
+                  Experience the future of financial analysis. Our AI anticipates market movements and transforms complex patterns into clear investment strategies.
                 </p>
               </div>
             </main>
           </div>
         </div>
   <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
-          <div className="h-56 w-full bg-[var(--color-panel)] sm:h-72 md:h-96 lg:w-full lg:h-full border border-[var(--color-border)]">
+          <div className="h-48 w-full bg-[var(--color-panel)] sm:h-64 md:h-80 lg:w-full lg:h-full border border-[var(--color-border)]">
             {/* AI-Powered Fear & Greed Index */}
             <FearGreedIndex />
           </div>
@@ -43,19 +43,19 @@ export default function HomePage() {
       </div>
 
       {/* Features Section */}
-      <div id="features" className="py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div id="features" className="py-8 sm:py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="lg:text-center">
-            <h2 className="text-base text-blue-400 font-semibold tracking-wide uppercase">
+            <h2 className="text-sm sm:text-base text-blue-400 font-semibold tracking-wide uppercase">
               {t('features.title')}
             </h2>
-            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-white sm:text-4xl">
+            <p className="mt-2 text-2xl leading-7 font-extrabold tracking-tight text-white sm:text-3xl lg:text-4xl">
               {t('features.subtitle')}
             </p>
           </div>
 
-          <div className="mt-10">
-            <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-3 md:gap-x-8 md:gap-y-10">
+          <div className="mt-6 sm:mt-10">
+            <dl className="space-y-8 sm:space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-6 lg:gap-x-8 md:gap-y-8 lg:gap-y-10">
               <div className="relative">
                 <dt>
                   <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">

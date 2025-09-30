@@ -165,47 +165,47 @@ export default function PricingPage() {
   <div className="min-h-screen bg-[var(--background)] text-white">
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center space-x-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+          <div className="flex items-center space-x-3 sm:space-x-4">
             <NavigationLink href="/" className="text-blue-400 hover:text-blue-300">
-              <ArrowLeftIcon className="h-6 w-6" />
+              <ArrowLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
             </NavigationLink>
             <div>
-              <h1 className="text-2xl font-bold">Pricing Plans</h1>
-              <p className="text-gray-400">Choose the perfect plan for your needs</p>
+              <h1 className="text-xl sm:text-2xl font-bold">Pricing Plans</h1>
+              <p className="text-sm sm:text-base text-gray-400">Choose the perfect plan for your needs</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 sm:py-12">
         {/* Billing Toggle */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>
-          <p className="text-xl text-gray-400 mb-8">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">Simple, Transparent Pricing</h1>
+          <p className="text-base sm:text-lg lg:text-xl text-gray-400 mb-6 sm:mb-8 px-2">
             Only pay for what you really need. Start free, upgrade anytime.
           </p>
           
-          <div className="flex items-center justify-center space-x-4">
-            <span className={`${!isYearly ? 'text-white' : 'text-gray-400'}`}>Monthly</span>
+          <div className="flex items-center justify-center space-x-3 sm:space-x-4">
+            <span className={`text-sm sm:text-base ${!isYearly ? 'text-white' : 'text-gray-400'}`}>Monthly</span>
             <button
               onClick={() => setIsYearly(!isYearly)}
-              className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                  isYearly ? 'translate-x-6' : 'translate-x-1'
+                className={`inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition ${
+                  isYearly ? 'translate-x-5 sm:translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>
-            <span className={`${isYearly ? 'text-white' : 'text-gray-400'}`}>Yearly</span>
+            <span className={`text-sm sm:text-base ${isYearly ? 'text-white' : 'text-gray-400'}`}>Yearly</span>
           </div>
-          <p className="mt-4 text-xs text-gray-500">Yearly billing shows the effective monthly price. Discount varies per plan.</p>
+          <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-gray-500 px-2">Yearly billing shows the effective monthly price. Discount varies per plan.</p>
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {plans.map((plan) => {
             const currency = plan.currency || 'usd';
             const monthlyEffective = plan.priceMonthly;
@@ -222,22 +222,22 @@ export default function PricingPage() {
             return (
             <div
               key={plan.id}
-              className={`relative rounded-2xl p-8 ${
+              className={`relative rounded-xl sm:rounded-2xl p-6 sm:p-8 ${
                 plan.popular
                   ? 'bg-gradient-to-b from-blue-600 to-blue-700 ring-2 ring-blue-500'
                   : 'bg-slate-800 ring-1 ring-slate-700'
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-yellow-400 text-black text-sm font-bold px-4 py-1 rounded-full">
+                <div className="absolute -top-3 sm:-top-4 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-yellow-400 text-black text-xs sm:text-sm font-bold px-3 sm:px-4 py-1 rounded-full">
                     Most Popular
                   </span>
                 </div>
               )}
 
               <div className="text-center">
-                <h3 className="text-2xl font-bold">{plan.name}</h3>
+                <h3 className="text-xl sm:text-2xl font-bold">{plan.name}</h3>
                 {normalizedUserPlan && (
                   <p className="text-xs text-gray-300 mt-1">{isCurrent ? 'This is your current plan' : ''}</p>
                 )}

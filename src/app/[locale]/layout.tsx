@@ -29,7 +29,7 @@ export default async function LocaleLayout({
         <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
           {/* Global Top Navigation */}
           <header className="sticky top-0 z-40 bg-[var(--background)]/80 backdrop-blur border-b border-white/10">
-            <div className="w-full px-2 sm:px-4 py-2">
+            <div className="w-full px-2 sm:px-4 lg:px-6 py-2 sm:py-3">
               <Navigation className="w-full" />
             </div>
           </header>

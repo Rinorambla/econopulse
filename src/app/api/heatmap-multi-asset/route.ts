@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TiingoService } from '@/lib/tiingo'
+import { getTiingoMarketData, getTiingoCrypto } from '@/lib/tiingo'
 import { FredService } from '@/lib/fred'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
-// Initialize service instances
-const tiingo = new TiingoService()
+// Lazy services (FredService does not throw if key missing; Tiingo accessed via safe wrappers)
 const fred = new FredService()
 
 // COMPREHENSIVE Asset Categories Configuration - TUTTI I TICKER
@@ -167,28 +166,19 @@ const getColorFromPerformance = (performance: number): { bg: string, text: strin
   return { bg: '#990000', text: '#ffffff', border: '#770000' }
 }
 
-// Tiingo API function using TiingoService
+// Tiingo API fetch via safe wrapper (never throws if key missing)
 async function fetchFromTiingo(symbols: string[]): Promise<any[]> {
   try {
-    console.log(`🚀 Fetching ${symbols.length} symbols from Tiingo using getBulkQuotes...`);
-    
-    // Use the ultra-fast bulk method for maximum performance
-    const results = await tiingo.getBulkQuotes(symbols, 12);
-    
+    const results = await getTiingoMarketData(symbols)
     if (!results || results.length === 0) {
-      console.warn('⚠️ Bulk API failed, using fallback individual quotes...');
-      // Fallback to individual requests for critical symbols
-      const criticalSymbols = symbols.slice(0, 50);
-      const fallbackResults = await tiingo.getMultipleQuotes(criticalSymbols);
-      return fallbackResults.filter(item => item.data !== null).map(item => item.data);
+      console.warn('⚠️ Tiingo market data unavailable or empty; will rely on Yahoo fallback')
+      return []
     }
-    
-    console.log(`✅ Tiingo retrieved ${results.length} symbols successfully`);
-    return results;
-    
+    console.log(`✅ Tiingo wrapper returned ${results.length} symbols`)
+    return results
   } catch (error) {
-    console.warn('❌ TiingoService failed:', error);
-    return [];
+    console.warn('❌ Tiingo wrapper failed:', error)
+    return []
   }
 }
 
@@ -426,27 +416,15 @@ export async function GET(request: NextRequest) {
       } else if (cat === 'CRYPTO') {
         // Crypto: Try Tiingo's crypto API first, then Yahoo
         try {
-          const cryptoResults = []
-          for (const symbol of categoryConfig.symbols.slice(0, 20)) { // Limit for API quotas
-            try {
-              // Convert from Yahoo format (BTC-USD) to Tiingo format (BTCUSD)
-              const tiingoSymbol = symbol.replace('-USD', 'USD')
-              const cryptoData = await tiingo.getCryptoQuote(tiingoSymbol)
-              if (cryptoData) {
-                cryptoResults.push(cryptoData)
-              }
-              await delay(100) // Rate limiting
-            } catch (error) {
-              console.warn(`Tiingo crypto failed for ${symbol}:`, error)
+          // Adapt symbols (BTC-USD -> BTCUSD) and limit to first 20 for rate limits
+            const tiingoSymbols = categoryConfig.symbols.slice(0, 20).map((s: string) => s.replace('-USD', 'USD'))
+            const cryptoResults = await getTiingoCrypto(tiingoSymbols)
+            if (cryptoResults.length > 0) {
+              categoryData = cryptoResults
+              console.log(`✅ Tiingo Crypto: ${cryptoResults.length} assets for ${categoryConfig.name}`)
             }
-          }
-          
-          if (cryptoResults.length > 0) {
-            categoryData = cryptoResults
-            console.log(`✅ Tiingo Crypto: ${cryptoResults.length} assets for ${categoryConfig.name}`)
-          }
         } catch (error) {
-          console.warn(`Tiingo crypto API failed:`, error)
+          console.warn('Tiingo crypto wrapper failed:', error)
         }
         
         // Fallback to Yahoo Finance for crypto

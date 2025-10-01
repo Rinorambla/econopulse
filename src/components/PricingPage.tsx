@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { CheckIcon, StarIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import { supabase } from '@/lib/supabase';
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -20,9 +21,21 @@ export default function PricingPage() {
     console.log('User authenticated:', user.id);
     setLoading('premium');
     try {
+      // Get auth token for API call
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           tier: 'premium',
           billingCycle: billingCycle,
@@ -34,11 +47,20 @@ export default function PricingPage() {
       const data = await response.json();
       console.log('Checkout response:', data);
       
-      if (data.url) {
+      if (response.ok && data.url) {
         window.location.href = data.url;
-      } else {
-        throw new Error(data.error || 'Failed to create checkout session');
+        return;
       }
+
+      // Enhanced error surfacing
+      let message = data.error || 'Failed to create checkout session';
+      if (data.stripeError?.type === 'StripeAuthenticationError') {
+        message = 'Configurazione Stripe non valida (API key o Price IDs non corrispondono all\'ambiente LIVE).';
+        if (data.hint) message += `\nHint: ${data.hint}`;
+      } else if (data.stripeError?.type) {
+        message += `\nStripe: ${data.stripeError.type}${data.stripeError.code ? ' (' + data.stripeError.code + ')' : ''}`;
+      }
+      throw new Error(message);
     } catch (error: any) {
       console.error('Checkout error:', error);
       alert(`Failed to start checkout: ${error?.message || error}`);

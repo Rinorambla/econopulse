@@ -268,7 +268,7 @@ export default function PricingPage() {
                 <div className="text-3xl mb-2">💡</div>
                 <h3 className="font-semibold text-gray-900 mb-2">Professional Tools</h3>
                 <p className="text-sm text-gray-600">
-                  Bloomberg-quality insights at a fraction of the cost
+                  Institutional-grade insights for individual investors
                 </p>
               </div>
               
@@ -278,18 +278,6 @@ export default function PricingPage() {
                 <p className="text-sm text-gray-600">
                   Live market data and instant alerts when it matters
                 </p>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">
-              <div className="text-lg font-semibold text-gray-900 mb-2">
-                Compared to Bloomberg Terminal (€24,000/year)
-              </div>
-              <div className="text-3xl font-bold text-green-600 mb-2">
-                Save €23,640 per year
-              </div>
-              <div className="text-sm text-gray-600">
-                Get 80% of the functionality at 1.5% of the price
               </div>
             </div>
           </div>

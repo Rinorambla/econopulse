@@ -10,11 +10,14 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const createCheckoutSession = async () => {
-    if (!user) {
+    // Check authentication first
+    if (!user?.id) {
+      console.log('User not authenticated, redirecting to login');
       window.location.href = '/login?redirect=/pricing';
       return;
     }
 
+    console.log('User authenticated:', user.id);
     setLoading('premium');
     try {
       const response = await fetch('/api/stripe/checkout', {
@@ -29,14 +32,16 @@ export default function PricingPage() {
       });
 
       const data = await response.json();
+      console.log('Checkout response:', data);
+      
       if (data.url) {
         window.location.href = data.url;
       } else {
         throw new Error(data.error || 'Failed to create checkout session');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Checkout error:', error);
-      alert('Failed to start checkout. Please try again.');
+      alert(`Failed to start checkout: ${error?.message || error}`);
     } finally {
       setLoading(null);
     }

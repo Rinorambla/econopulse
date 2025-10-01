@@ -7,6 +7,7 @@ import { CheckIcon, StarIcon, SparklesIcon } from '@heroicons/react/24/solid';
 export default function PricingPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const createCheckoutSession = async () => {
     if (!user) {
@@ -21,7 +22,7 @@ export default function PricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tier: 'premium',
-          billingCycle: 'monthly',
+          billingCycle: billingCycle,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
           cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
         }),
@@ -57,6 +58,37 @@ export default function PricingPage() {
           <p className="text-lg text-gray-500">
             Professional market analysis accessible to everyone
           </p>
+        </div>
+
+        {/* Billing Toggle */}
+        <div className="flex justify-center mb-12">
+          <div className="bg-white rounded-lg p-1 shadow-sm border">
+            <div className="flex">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  billingCycle === 'monthly'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  billingCycle === 'yearly'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Yearly
+                <span className="ml-1 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+                  Save 17%
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Pricing Cards */}
@@ -155,11 +187,16 @@ export default function PricingPage() {
               
               <div className="mb-6">
                 <div className="text-5xl font-bold text-white mb-2">
-                  €29.99
+                  €{billingCycle === 'monthly' ? '29.99' : '299.99'}
                 </div>
                 <div className="text-sm text-blue-100">
-                  per month
+                  per {billingCycle === 'monthly' ? 'month' : 'year'}
                 </div>
+                {billingCycle === 'yearly' && (
+                  <div className="text-xs text-blue-200 mt-1">
+                    €25/month when billed annually
+                  </div>
+                )}
               </div>
 
               <p className="text-sm mb-8 text-blue-100">

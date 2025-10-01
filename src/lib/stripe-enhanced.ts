@@ -217,7 +217,8 @@ export class StripeSubscriptionManager {
           ...metadata,
         },
       },
-      automatic_tax: { enabled: true },
+      // Disable automatic tax for now to avoid customer address requirement
+      // automatic_tax: { enabled: true },
     };
     
     // Add trial period

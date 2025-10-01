@@ -29,8 +29,8 @@ export async function GET(_req: NextRequest) {
       apiReachable,
       priceSample,
       configuredPrices: {
-        premiumMonthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID || null,
-        premiumYearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID || null,
+        premiumMonthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID?.trim() || null,
+        premiumYearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID?.trim() || null,
       },
     });
   } catch (error: any) {

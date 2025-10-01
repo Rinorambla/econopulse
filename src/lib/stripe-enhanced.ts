@@ -16,8 +16,8 @@ const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
 // Product IDs in Stripe - Set these up in your Stripe Dashboard
 export const STRIPE_PRODUCTS = {
   premium: {
-    monthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID || 'price_premium_monthly',
-    yearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID || 'price_premium_yearly',
+    monthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID?.trim() || 'price_premium_monthly',
+    yearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID?.trim() || 'price_premium_yearly',
   },
 } as const;
 

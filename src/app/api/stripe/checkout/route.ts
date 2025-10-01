@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!['starter', 'professional', 'institutional'].includes(tier)) {
+    if (!['premium'].includes(tier)) {
       return NextResponse.json(
         { error: 'Invalid subscription tier' },
         { status: 400, headers: rateLimitHeaders(rateLimitResult) }
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already has a paid subscription
-    if (profile.subscription_tier && ['starter', 'professional', 'institutional'].includes(profile.subscription_tier)) {
+    if (profile.subscription_tier && ['premium'].includes(profile.subscription_tier)) {
       return NextResponse.json(
         { error: 'You already have an active subscription. Use the billing portal to make changes.' },
         { status: 400, headers: rateLimitHeaders(rateLimitResult) }

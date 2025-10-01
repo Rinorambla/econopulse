@@ -428,7 +428,7 @@ export default function DashboardPage() {
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
 
 	return (
-		<RequirePlan min="pro">
+		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
 				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1></div></div>
 						{/* Toolbar */}

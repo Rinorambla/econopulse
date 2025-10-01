@@ -1,10 +1,10 @@
-export type PlanTier = 'pro' | 'premium' | 'corporate';
+export type PlanTier = 'free' | 'premium';
 
 // Ordered list for comparison semantics (index = rank)
-const PLAN_ORDER: PlanTier[] = ['pro','premium','corporate'];
+const PLAN_ORDER: PlanTier[] = ['free', 'premium'];
 
 export function planRank(tier: PlanTier | string | null | undefined): number {
-  if (!tier) return 0;
+  if (!tier) return 0; // Default to free (rank 0)
   const idx = PLAN_ORDER.indexOf(tier as PlanTier);
   return idx >= 0 ? idx : 0;
 }
@@ -14,22 +14,20 @@ export function hasAccess(userTier: PlanTier | string | null | undefined, requir
 }
 
 export function normalizePlan(raw: string | null | undefined): PlanTier {
-  if (!raw) return 'pro'; // Default to pro when no subscription
+  if (!raw) return 'free'; // Default to free when no subscription
   const v = raw.toLowerCase();
   
   // Debug logging for Vercel
   console.log('🔍 normalizePlan input:', raw, 'lowercase:', v);
   
-  if (v.startsWith('corp')) return 'corporate';
-  if (v.startsWith('prem')) return 'premium';
-  if (v.startsWith('pro')) return 'pro';
+  if (v.startsWith('prem') || v.includes('premium')) return 'premium';
   if (v === 'trial') {
     console.log('✅ Trial detected - granting premium access');
-    return 'premium'; // Trial users get premium access durante i 14 giorni
+    return 'premium'; // Trial users get premium access during 14 days
   }
   
-  console.log('⚠️ Unknown plan, defaulting to pro:', v);
-  return 'pro'; // Default fallback
+  console.log('⚠️ Unknown plan, defaulting to free:', v);
+  return 'free'; // Default fallback
 }
 
 export function nextUpgrade(from: PlanTier): PlanTier | null {
@@ -39,7 +37,6 @@ export function nextUpgrade(from: PlanTier): PlanTier | null {
 }
 
 export const PLAN_LABEL: Record<PlanTier,string> = {
-  pro: 'Pro',
-  premium: 'Premium',
-  corporate: 'Corporate'
+  free: 'Free',
+  premium: 'Premium AI'
 };

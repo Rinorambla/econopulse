@@ -83,7 +83,7 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
         )}
       </p>
       <Link
-        href={`/en/subscribe/${min}`}
+        href="/pricing"
         className="inline-block rounded bg-amber-500 px-5 py-2 text-sm font-medium text-black shadow hover:bg-amber-400"
       >
         Upgrade to {min}

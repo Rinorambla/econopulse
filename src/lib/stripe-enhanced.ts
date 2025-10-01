@@ -15,21 +15,13 @@ const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
 
 // Product IDs in Stripe - Set these up in your Stripe Dashboard
 export const STRIPE_PRODUCTS = {
-  starter: {
-    monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || 'price_starter_monthly',
-    yearly: process.env.STRIPE_STARTER_YEARLY_PRICE_ID || 'price_starter_yearly',
-  },
-  professional: {
-    monthly: process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID || 'price_professional_monthly', 
-    yearly: process.env.STRIPE_PROFESSIONAL_YEARLY_PRICE_ID || 'price_professional_yearly',
-  },
-  institutional: {
-    monthly: process.env.STRIPE_INSTITUTIONAL_MONTHLY_PRICE_ID || 'price_institutional_monthly',
-    yearly: process.env.STRIPE_INSTITUTIONAL_YEARLY_PRICE_ID || 'price_institutional_yearly',
+  premium: {
+    monthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID || 'price_premium_monthly',
+    yearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID || 'price_premium_yearly',
   },
 } as const;
 
-export type SubscriptionTier = 'starter' | 'professional' | 'institutional';
+export type SubscriptionTier = 'premium';
 export type BillingCycle = 'monthly' | 'yearly';
 
 // Enhanced Customer Management
@@ -348,15 +340,11 @@ export class StripeSubscriptionManager {
 // Utility functions for price calculations
 export function calculateAnnualDiscount(tier: SubscriptionTier): number {
   const monthlyPrices = {
-    starter: 14.99,
-    professional: 49.99,
-    institutional: 199.99,
+    premium: 29.99,
   };
   
   const yearlyPrices = {
-    starter: 149.99,
-    professional: 499.99,
-    institutional: 1999.99,
+    premium: 299.99, // 10 months price = 2 months free
   };
   
   const monthlyTotal = monthlyPrices[tier] * 12;
@@ -367,9 +355,7 @@ export function calculateAnnualDiscount(tier: SubscriptionTier): number {
 
 export function getSubscriptionPrice(tier: SubscriptionTier, cycle: BillingCycle): number {
   const prices = {
-    starter: { monthly: 14.99, yearly: 149.99 },
-    professional: { monthly: 49.99, yearly: 499.99 },
-    institutional: { monthly: 199.99, yearly: 1999.99 },
+    premium: { monthly: 29.99, yearly: 299.99 },
   };
   
   return prices[tier][cycle];

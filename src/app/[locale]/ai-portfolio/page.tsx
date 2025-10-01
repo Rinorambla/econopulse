@@ -652,7 +652,7 @@ export default function AIPortfolioPage() {
   };
 
   return (
-  <RequirePlan min="pro">
+  <RequirePlan min="premium">
     <div className="min-h-screen bg-[var(--background)] text-white">
       {/* Navigation Header */}
       <div className="bg-slate-800 border-b border-slate-700">

@@ -10,10 +10,6 @@
     {
       "path": "/api/newsletter/cron",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/usage-tracking/reset",
-      "schedule": "0 0 1 * *"
     }
   ],
   "headers": [

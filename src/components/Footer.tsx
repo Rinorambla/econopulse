@@ -179,11 +179,6 @@ const Footer = () => {
                       className="text-white/90 hover:text-white transition-colors duration-200 flex items-center space-x-2 group"
                     >
                       <span>{t(`footer.${link.key}`)}</span>
-                      {link.requiresPlan && (
-                        <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-2 py-1 rounded-full font-medium group-hover:scale-110 transition-transform duration-200">
-                          {link.requiresPlan.toUpperCase()}
-                        </span>
-                      )}
                     </a>
                   </li>
                 ))}

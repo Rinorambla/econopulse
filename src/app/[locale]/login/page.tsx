@@ -127,8 +127,8 @@ export default function LoginPage() {
               setSuccess('Account created! Please check your email to confirm your account.');
             }
           } else {
-            setSuccess('Account created successfully! Redirecting...');
-            router.push('/en/dashboard');
+            setSuccess('Account created successfully! Redirecting to AI Pulse...');
+            router.push('/en/ai-pulse');
           }
         } else {
           setError(result.error || 'Failed to create account');

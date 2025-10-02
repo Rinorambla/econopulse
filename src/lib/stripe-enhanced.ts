@@ -198,6 +198,7 @@ export class StripeSubscriptionManager {
       customer: customerId,
       payment_method_types: ['card'],
       mode: 'subscription',
+      locale: 'en', // Force English locale
       line_items: [{
         price: priceId,
         quantity: 1,

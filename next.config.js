@@ -14,6 +14,33 @@ const nextConfig = {
     domains: ['localhost'],
     unoptimized: true
   },
+  // PWA configurations
+  headers: async () => {
+    return [
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json',
+          },
+        ],
+      },
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+    ];
+  },
   // Configurazioni per stabilità del server
   serverExternalPackages: ['mongodb', 'mongoose'],
   webpack: (config, { isServer, dev }) => {

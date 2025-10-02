@@ -6,6 +6,7 @@ import CookieConsent from '@/components/CookieConsent';
 import { Navigation } from '@/components/Navigation';
 import { MissingServicesBanner } from '@/components/MissingServicesBanner';
 import TrialBanner from '@/components/TrialBanner';
+import PWAInstaller from '@/components/PWAInstaller';
 
 export default async function LocaleLayout({
   children,
@@ -39,6 +40,7 @@ export default async function LocaleLayout({
           {children}
         </div>
         <CookieConsent />
+        <PWAInstaller />
       </AuthProvider>
     </NextIntlClientProvider>
   );

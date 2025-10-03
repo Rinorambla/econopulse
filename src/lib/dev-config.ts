@@ -1,11 +1,12 @@
 /**
  * Developer Configuration
- * Set DEVELOPER_MODE to true to bypass authentication
+ * Enable developer mode via NEXT_PUBLIC_DEV_MODE environment variable
+ * Only accessible when you set this in Vercel Dashboard
  */
 
 export const DEV_CONFIG = {
-  // Set to true to enable developer mode (bypass auth)
-  DEVELOPER_MODE: true,
+  // Check environment variable - only you can enable this on Vercel
+  DEVELOPER_MODE: process.env.NEXT_PUBLIC_DEV_MODE === 'true',
   
   // Mock user for developer mode
   DEV_USER: {

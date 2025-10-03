@@ -505,6 +505,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <h2 className="text-2xl font-bold">Global Macro Snapshot</h2>
                   </div>
                   <p className="text-sm text-gray-400">At-a-glance world economy status and cycle position</p>
+                  {/* Global Economic Cycle Matrix button */}
+                  <button 
+                    onClick={() => setShowCountryMatrix(s => !s)} 
+                    className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-lg"
+                  >
+                    <span>🌐</span>
+                    <span>Global Economic Cycle Matrix</span>
+                  </button>
                 </div>
                 {/* Stats badges removed per request */}
               </div>

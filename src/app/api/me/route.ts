@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { normalizePlan } from '@/lib/plan-access';
 
 // NOTE: This assumes RLS allows service key operations OR supabase client is service-role on server.
@@ -7,9 +7,54 @@ import { normalizePlan } from '@/lib/plan-access';
 
 export async function GET(req: Request) {
   try {
+    // Get auth token from Authorization header or cookies
+    const authHeader = req.headers.get('authorization');
+    const cookieHeader = req.headers.get('cookie');
+    
+    // Extract Supabase auth token from cookies
+    let accessToken: string | null = null;
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(';').map(c => c.trim());
+      const authCookie = cookies.find(c => c.startsWith('sb-') && c.includes('-auth-token'));
+      if (authCookie) {
+        try {
+          const [, value] = authCookie.split('=');
+          const decoded = JSON.parse(decodeURIComponent(value));
+          accessToken = decoded.access_token || decoded[0]?.access_token;
+        } catch (e) {
+          console.error('Error parsing auth cookie:', e);
+        }
+      }
+    }
+    
+    console.log('🔑 /api/me auth check:', {
+      hasAuthHeader: !!authHeader,
+      hasCookieHeader: !!cookieHeader,
+      hasAccessToken: !!accessToken
+    });
+    
+    // Create Supabase client
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+        }
+      }
+    );
+    
     // Extract auth token from cookies (Supabase JS client manages on server if configured)
     // Fallback: return minimal anon structure - now requires Pro minimum
     const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    
+    console.log('🔑 /api/me session check:', {
+      hasSession: !!session,
+      email: session?.user?.email,
+      userId: session?.user?.id,
+      error: sessionErr?.message
+    });
+    
     if (sessionErr || !session?.user) {
       return NextResponse.json({ authenticated: false, plan: 'pro', requiresSubscription: true });
     }

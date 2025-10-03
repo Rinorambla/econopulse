@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase, SUPABASE_ENABLED } from '@/lib/supabase';
+import { DEV_CONFIG } from '@/lib/dev-config';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -21,14 +22,23 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<string | null>(null);
+  // Developer mode: bypass authentication
+  const isDeveloperMode = DEV_CONFIG.DEVELOPER_MODE;
+  
+  const [user, setUser] = useState<User | null>(isDeveloperMode ? DEV_CONFIG.DEV_USER as any : null);
+  const [session, setSession] = useState<Session | null>(isDeveloperMode ? { user: DEV_CONFIG.DEV_USER } as any : null);
+  const [loading, setLoading] = useState(!isDeveloperMode);
+  const [plan, setPlan] = useState<string | null>(isDeveloperMode ? 'premium' : null);
   const [refreshingPlan, setRefreshingPlan] = useState(false);
 
   // Fetch plan details for the current authenticated user
   const fetchPlan = useCallback(async () => {
+    // Developer mode: always premium
+    if (isDeveloperMode) {
+      setPlan('premium');
+      return;
+    }
+    
     try {
       setRefreshingPlan(true);
       const res = await fetch('/api/me', { cache: 'no-store' });
@@ -45,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setRefreshingPlan(false);
     }
-  }, []);
+  }, [isDeveloperMode]);
 
   const refreshPlan = useCallback(async () => {
     if (!user) return;
@@ -53,6 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, fetchPlan]);
 
   useEffect(() => {
+    // Developer mode: skip auth completely
+    if (isDeveloperMode) {
+      console.log('🔧 DEVELOPER MODE: Authentication bypassed');
+      setLoading(false);
+      return;
+    }
+    
     if (!SUPABASE_ENABLED) {
       // No Supabase in this environment: treat as logged-out without errors
       setUser(null)

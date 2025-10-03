@@ -35,11 +35,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/me', { cache: 'no-store' });
       if (!res.ok) throw new Error('me failed');
       const json = await res.json();
+      console.log('📧 /api/me response:', json);
       if (json?.authenticated) {
         // Check if admin email - give premium automatically
         const userPlan = json.plan || 'free';
         const isAdmin = DEV_CONFIG.isAdminEmail(json.email);
+        console.log('🔍 Email check:', {
+          email: json.email,
+          isAdmin,
+          adminEmail: DEV_CONFIG.ADMIN_EMAIL,
+          finalPlan: isAdmin ? 'premium' : userPlan
+        });
         setPlan(isAdmin ? 'premium' : userPlan);
+        
+        if (isAdmin) {
+          console.log('👑 Admin access detected - premium granted!');
+        }
       } else {
         setPlan('free');
       }

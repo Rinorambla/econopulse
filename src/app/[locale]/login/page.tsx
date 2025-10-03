@@ -166,11 +166,6 @@ export default function LoginPage() {
             >
               {isLogin ? 'Sign up' : 'Sign in'}
             </button>
-            {!isLogin && (
-              <div className="mt-2 text-xs text-green-400">
-                ✨ Get 14 days free trial with full access!
-              </div>
-            )}
           </p>
         </div>
 

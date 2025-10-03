@@ -165,8 +165,9 @@ export default function TermsOfService() {
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-700">
                 Email: legal@econopulse.com<br />
-                Address: EconoPulse Legal Department<br />
-                [Your Company Address]
+                EconoPulse Legal Department<br />
+                Via Giuseppe Mazzini 15<br />
+                20123 Milano, Italy
               </p>
             </div>
           </section>

@@ -164,10 +164,10 @@ export default function TermsOfService() {
             </p>
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-700">
-                Email: legal@econopulse.com<br />
-                EconoPulse Legal Department<br />
-                Via Giuseppe Mazzini 15<br />
-                20123 Milano, Italy
+                Email: econopulse.info@econopulse.ai<br />
+                EconoPulse<br />
+                Via Tassoni 1<br />
+                41049 Sassuolo (MO), Italy
               </p>
             </div>
           </section>

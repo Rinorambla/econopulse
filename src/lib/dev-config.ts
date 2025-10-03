@@ -1,19 +1,16 @@
 /**
  * Developer Configuration
- * Enable developer mode via NEXT_PUBLIC_DEV_MODE environment variable
- * Only accessible when you set this in Vercel Dashboard
+ * Admin email with automatic premium access
+ * Change ADMIN_EMAIL to your personal email
  */
 
 export const DEV_CONFIG = {
-  // Check environment variable - only you can enable this on Vercel
-  DEVELOPER_MODE: process.env.NEXT_PUBLIC_DEV_MODE === 'true',
+  // Set your admin email here - this email gets automatic premium access
+  ADMIN_EMAIL: 'admin@econopulse.ai',
   
-  // Mock user for developer mode
-  DEV_USER: {
-    id: 'dev-user-001',
-    email: 'dev@econopulse.ai',
-    full_name: 'Developer',
-    subscription_tier: 'premium',
-    subscription_status: 'active',
+  // Admin user gets premium automatically after login
+  isAdminEmail: (email: string | undefined) => {
+    if (!email) return false;
+    return email.toLowerCase() === DEV_CONFIG.ADMIN_EMAIL.toLowerCase();
   }
 };

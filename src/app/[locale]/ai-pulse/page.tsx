@@ -505,14 +505,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <h2 className="text-2xl font-bold">Global Macro Snapshot</h2>
                   </div>
                   <p className="text-sm text-gray-400">At-a-glance world economy status and cycle position</p>
-                  {/* Global Economic Cycle Matrix button */}
-                  <button 
-                    onClick={() => setShowCountryMatrix(s => !s)} 
-                    className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-lg"
-                  >
-                    <span>🌐</span>
-                    <span>Global Economic Cycle Matrix</span>
-                  </button>
                 </div>
                 {/* Stats badges removed per request */}
               </div>
@@ -532,9 +524,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           <span className="text-xs text-gray-400">G {g.toFixed(1)}% • CPI {cpi.toFixed(1)}%</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button onClick={()=> setShowCountryMatrix(s=>!s)} className="text-[11px] text-blue-300 hover:text-blue-200 underline">
-                            {showCountryMatrix? 'Hide matrix' : 'Open country matrix'}
-                          </button>
                           {selectedCountry && (
                             <button onClick={()=> setSelectedCountry(null)} className="text-[11px] text-gray-300 hover:text-white underline">Clear highlight ({selectedCountry})</button>
                           )}
@@ -622,6 +611,47 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   );
                 })()}
               </div>
+              
+              {/* Global Economic Cycle Matrix - Always visible */}
+              {countryCycleMatrix.length>0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">Global Economic Cycle Matrix <span className="text-[10px] uppercase tracking-wide text-gray-400">Heuristic</span></h3>
+                  <div className="overflow-auto rounded-lg border border-white/10">
+                    <table className="w-full text-xs min-w-[860px]">
+                      <thead className="bg-white/5">
+                        <tr className="border-b border-white/10 text-[11px] text-gray-400 uppercase tracking-wide">
+                          <th className="text-left py-2 px-2">Country</th>
+                          <th className="text-left py-2 px-2">Stage</th>
+                          <th className="text-right py-2 px-2">GDP%</th>
+                          <th className="text-right py-2 px-2">Infl%</th>
+                          <th className="text-right py-2 px-2">Unemp%</th>
+                          <th className="text-right py-2 px-2">Rate%</th>
+                          <th className="text-left py-2 px-2">3M Outlook</th>
+                          <th className="text-left py-2 px-2">Risk</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {countryCycleMatrix.map(row => {
+                          const active = selectedCountry === row.code;
+                          return (
+                          <tr key={row.code} onClick={()=> setSelectedCountry(active? null : row.code)} className={`hover:bg-white/5 transition-colors cursor-pointer ${active? 'bg-amber-500/10 ring-1 ring-amber-400/40' : ''}`}>
+                            <td className="py-2 px-2 font-medium flex items-center gap-2"><span className="text-base leading-none">{getCountryFlag(row.code)}</span>{row.country}</td>
+                            <td className="py-2 px-2"><span className={`px-2 py-1 rounded-md border text-[11px] font-medium ${stageColor(row.stage)}`}>{row.stage}</span></td>
+                            <td className={`py-2 px-2 text-right font-mono ${row.growth>=0? 'text-green-300':'text-red-300'}`}>{row.growth.toFixed(1)}</td>
+                            <td className={`py-2 px-2 text-right font-mono ${row.inflation>4? 'text-red-300':row.inflation>3? 'text-yellow-300':'text-emerald-300'}`}>{row.inflation.toFixed(1)}</td>
+                            <td className={`py-2 px-2 text-right font-mono ${row.unemployment>7? 'text-red-300':row.unemployment>5.5? 'text-yellow-300':'text-emerald-300'}`}>{row.unemployment.toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-gray-300">{Number.isFinite(row.rate) ? row.rate.toFixed(2) : '—'}</td>
+                            <td className="py-2 px-2 text-gray-300 max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title={row.next}>{row.next}</td>
+                            <td className={`py-2 px-2 font-semibold ${riskColor(row.risk)}`}>{row.risk}</td>
+                          </tr>
+                        );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-[10px] text-gray-400 leading-snug">Stages & Outlook computed via deterministic macro thresholds (GDP, CPI, Unemployment, Policy Rate). No AI randomness. Forward 3M outlook is heuristic guidance, not a prediction.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -773,49 +803,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             </div>
           )}
 
-          {countryData && (
-            <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
-              {showCountryMatrix && countryCycleMatrix.length>0 && (
-                <div className="mb-2">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">Global Economic Cycle Matrix <span className="text-[10px] uppercase tracking-wide text-gray-400">Heuristic</span></h3>
-                  <div className="overflow-auto rounded-lg border border-white/10">
-                    <table className="w-full text-xs min-w-[860px]">
-                      <thead className="bg-white/5">
-                        <tr className="border-b border-white/10 text-[11px] text-gray-400 uppercase tracking-wide">
-                          <th className="text-left py-2 px-2">Country</th>
-                          <th className="text-left py-2 px-2">Stage</th>
-                          <th className="text-right py-2 px-2">GDP%</th>
-                          <th className="text-right py-2 px-2">Infl%</th>
-                          <th className="text-right py-2 px-2">Unemp%</th>
-                          <th className="text-right py-2 px-2">Rate%</th>
-                          <th className="text-left py-2 px-2">3M Outlook</th>
-                          <th className="text-left py-2 px-2">Risk</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {countryCycleMatrix.map(row => {
-                          const active = selectedCountry === row.code;
-                          return (
-                          <tr key={row.code} onClick={()=> setSelectedCountry(active? null : row.code)} className={`hover:bg-white/5 transition-colors cursor-pointer ${active? 'bg-amber-500/10 ring-1 ring-amber-400/40' : ''}`}>
-                            <td className="py-2 px-2 font-medium flex items-center gap-2"><span className="text-base leading-none">{getCountryFlag(row.code)}</span>{row.country}</td>
-                            <td className="py-2 px-2"><span className={`px-2 py-1 rounded-md border text-[11px] font-medium ${stageColor(row.stage)}`}>{row.stage}</span></td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.growth>=0? 'text-green-300':'text-red-300'}`}>{row.growth.toFixed(1)}</td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.inflation>4? 'text-red-300':row.inflation>3? 'text-yellow-300':'text-emerald-300'}`}>{row.inflation.toFixed(1)}</td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.unemployment>7? 'text-red-300':row.unemployment>5.5? 'text-yellow-300':'text-emerald-300'}`}>{row.unemployment.toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right font-mono text-gray-300">{Number.isFinite(row.rate) ? row.rate.toFixed(2) : '—'}</td>
-                            <td className="py-2 px-2 text-gray-300 max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title={row.next}>{row.next}</td>
-                            <td className={`py-2 px-2 font-semibold ${riskColor(row.risk)}`}>{row.risk}</td>
-                          </tr>
-                        );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-2 text-[10px] text-gray-400 leading-snug">Stages & Outlook computed via deterministic macro thresholds (GDP, CPI, Unemployment, Policy Rate). No AI randomness. Forward 3M outlook is heuristic guidance, not a prediction.</p>
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* Sector Performance Analysis moved up right after Economic Cycle/Matrix */}
           <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">

@@ -33,61 +33,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshingPlan(true);
       
       // Try API first
+      // Attempt to include bearer token explicitly
+      let accessToken: string | undefined;
+      if (!session) {
+        const current = await supabase.auth.getSession();
+        accessToken = current.data.session?.access_token;
+      } else {
+        accessToken = session.access_token as any;
+      }
       const res = await fetch('/api/me', { 
         cache: 'no-store',
-        credentials: 'include'
+        credentials: 'include',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
       });
       
-      if (!res.ok) throw new Error('me failed');
+      if (!res.ok) throw new Error('API call failed');
       const json = await res.json();
-      console.log('📧 /api/me response:', json);
       
       if (json?.authenticated) {
-        // Server authenticated successfully
-        const finalPlan = json.plan || 'free';
-        setPlan(finalPlan);
-        
-        if (json.isAdmin) {
-          console.log('👑 Admin access granted by server!');
-        }
-        
-        console.log('✅ Plan set to:', finalPlan);
-      } else {
-        // API couldn't authenticate, but we have user session locally
-        // Check if admin email on client-side as fallback
-        if (user?.email) {
-          const adminEmail = 'econopulse.info@econopulse.ai';
-          const isAdmin = user.email.toLowerCase().trim() === adminEmail.toLowerCase();
-          
-          console.log('🔐 Client-side admin check:', {
-            userEmail: user.email,
-            adminEmail,
-            isAdmin
-          });
-          
-          if (isAdmin) {
-            setPlan('premium');
-            console.log('👑 Admin access granted (client-side fallback)!');
-          } else {
-            setPlan('free');
-            console.log('❌ Not admin, plan set to free');
-          }
-        } else {
-          setPlan('free');
-          console.log('❌ Not authenticated, plan set to free');
-        }
-      }
-    } catch (e) {
-      console.warn('Fetch plan error', e);
-      // Fallback to client-side check
-      if (user?.email) {
-        const adminEmail = 'econopulse.info@econopulse.ai';
-        const isAdmin = user.email.toLowerCase().trim() === adminEmail.toLowerCase();
-        setPlan(isAdmin ? 'premium' : 'free');
-        console.log('🔄 Fallback to client check:', isAdmin ? 'premium' : 'free');
+        setPlan(json.plan || 'free');
       } else {
         setPlan('free');
       }
+    } catch (e) {
+      console.warn('Plan fetch failed:', e);
+      setPlan('free');
     } finally {
       setRefreshingPlan(false);
     }
@@ -123,12 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: string, session: Session | null) => {
-        console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         if (session?.user) {
-          // Lazy fetch plan after auth state change
           fetchPlan();
         } else {
           setPlan(null);

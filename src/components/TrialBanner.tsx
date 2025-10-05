@@ -22,11 +22,21 @@ export function TrialBanner({ className = '' }: TrialBannerProps) {
       }
 
       try {
-        const response = await fetch('/api/me');
+        const response = await fetch('/api/me', {
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          console.warn('TrialBanner: /api/me returned', response.status);
+          return;
+        }
+        
         const data = await response.json();
         setUserData(data);
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('TrialBanner: Error fetching user data:', error);
+        // Don't crash the app, just hide the banner
       } finally {
         setIsLoading(false);
       }

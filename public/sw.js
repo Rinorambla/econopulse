@@ -47,42 +47,34 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Strategy: Network First, falling back to cache
 self.addEventListener('fetch', (event) => {
-  // Skip for API routes that should always be fresh
-  if (event.request.url.includes('/api/')) {
-    return;
-  }
+  const req = event.request;
+  // Only handle GET requests
+  if (req.method !== 'GET') return;
+  // Skip API (dynamic) except maybe simple GET public endpoints
+  if (req.url.includes('/api/')) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(req)
       .then((response) => {
-        // If network request is successful, cache it
-        if (response.status === 200) {
+        // Only cache OK, basic/cors responses
+        if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+            cache.put(req, responseClone).catch(()=>{});
           });
         }
         return response;
       })
-      .catch(() => {
-        // Network failed, try cache
-        return caches.match(event.request).then((response) => {
-          if (response) {
-            console.log('💾 Service Worker: Serving from cache:', event.request.url);
-            return response;
-          }
-          
-          // If not in cache and it's a navigation request, serve the main page
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
-          
-          return new Response('Offline content not available', { 
-            status: 503,
-            statusText: 'Service Unavailable'
-          });
-        });
-      })
+      .catch(() => caches.match(req).then((cached) => {
+        if (cached) {
+          console.log('💾 Service Worker: Serving from cache:', req.url);
+          return cached;
+        }
+        if (req.mode === 'navigate') {
+          return caches.match('/');
+        }
+        return new Response('Offline content not available', { status: 503, statusText: 'Service Unavailable' });
+      }))
   );
 });
 

@@ -18,17 +18,6 @@ interface RequirePlanProps {
 export function RequirePlan({ min, children, inline }: RequirePlanProps) {
   const { user, loading, plan, refreshingPlan } = useAuth();
 
-  // DEV MODE: Bypass restrictions in development or with env flag
-  if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEV_BYPASS === 'true') {
-    return <>{children}</>;
-  }
-
-  // TEMPORARY: Allow all trial users full access
-  if (user && plan && plan.includes('trial')) {
-    console.log('🎯 TRIAL USER BYPASS - Full access granted');
-    return <>{children}</>;
-  }
-
   if (loading || refreshingPlan) {
     return (
       <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>

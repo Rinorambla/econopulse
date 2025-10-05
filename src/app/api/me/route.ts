@@ -12,16 +12,36 @@ function isAdminEmail(email: string | undefined): boolean {
 
 export async function GET(req: Request) {
   try {
+    // Try to extract bearer token (client will send if available)
+    const authHeader = req.headers.get('authorization');
+    let bearerToken: string | undefined;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      bearerToken = authHeader.slice(7);
+    }
+
     // Create Supabase client with proper cookie handling for API routes
     const supabase = await createClient();
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
-    
-    console.log('🔑 /api/me auth check:', {
-      hasUser: !!user,
-      email: user?.email,
-      userId: user?.id,
-      error: userErr?.message
-    });
+    let { data: { user }, error: userErr } = await supabase.auth.getUser();
+
+    // If no user via cookie, attempt manual fetch via token
+    if ((!user || userErr) && bearerToken) {
+      try {
+        const profileRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`, {
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+          },
+          cache: 'no-store'
+        });
+        if (profileRes.ok) {
+          const json = await profileRes.json();
+          user = json as any;
+          userErr = undefined as any;
+        }
+      } catch (e) {
+        console.warn('Manual token user fetch failed');
+      }
+    }
     
     if (userErr || !user) {
       return NextResponse.json({ authenticated: false, plan: 'free', requiresSubscription: true });
@@ -32,14 +52,7 @@ export async function GET(req: Request) {
     // Check if user is admin - grant premium immediately
     const isAdmin = isAdminEmail(userEmail);
     
-    console.log('👑 Admin check:', {
-      email: userEmail,
-      isAdmin,
-      adminEmail: ADMIN_EMAIL
-    });
-    
     if (isAdmin) {
-      console.log('✅ Admin user detected - granting premium access');
       return NextResponse.json({
         authenticated: true,
         email: userEmail,
@@ -65,27 +78,14 @@ export async function GET(req: Request) {
 
     let currentSubscriptionStatus = data?.subscription_status || 'free';
     
-    console.log('🔍 User subscription check:', {
-      userId,
-      subscription_status: currentSubscriptionStatus,
-      trial_end_date: data?.trial_end_date
-    });
-    
     // Check if trial has expired
     if (currentSubscriptionStatus === 'trial' && data?.trial_end_date) {
       const trialEndDate = new Date(data.trial_end_date);
       const now = new Date();
       
-      console.log('⏰ Trial check:', {
-        trialEndDate: trialEndDate.toISOString(),
-        now: now.toISOString(),
-        isExpired: now > trialEndDate
-      });
-      
       if (now > trialEndDate) {
         // Trial expired, update to free
         currentSubscriptionStatus = 'free';
-        console.log('❌ Trial expired, updating to free');
         
         // Update in database
         await supabase
@@ -95,8 +95,6 @@ export async function GET(req: Request) {
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
-      } else {
-        console.log('✅ Trial still active');
       }
     }
     
@@ -106,13 +104,6 @@ export async function GET(req: Request) {
     // FORCE premium access for trial users
     const finalPlan = currentSubscriptionStatus === 'trial' ? 'premium' : plan;
     const finalRequiresSubscription = currentSubscriptionStatus === 'trial' ? false : requiresSubscription;
-    
-    console.log('📊 Final plan mapping:', {
-      subscription_status: currentSubscriptionStatus,
-      normalized_plan: plan,
-      final_plan: finalPlan,
-      requiresSubscription: finalRequiresSubscription
-    });
     
     return NextResponse.json({
       authenticated: true,

@@ -8,6 +8,14 @@ const intl = createMiddleware({
 })
 
 export default function middleware(req: Request) {
+  // Allow public assets like manifest.json, service worker, icons without locale rewrite or CSP injection issues
+  const url = new URL((req as any).url)
+  const pathname = url.pathname
+  if (pathname === '/manifest.json' || pathname === '/sw.js' || pathname.startsWith('/icons/')) {
+    // Bypass i18n middleware for these static assets
+    return NextResponse.next()
+  }
+
   const res = intl(req as any) as any
   if (res?.headers) {
     // Security headers
@@ -18,7 +26,8 @@ export default function middleware(req: Request) {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https:",
+      // Allow Supabase + external APIs (explicitly include Supabase domain)
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https: wss:",
       // Allow embedding TradingView frames
       "frame-src https://s.tradingview.com https://www.tradingview.com",
       "frame-ancestors 'none'",

@@ -233,7 +233,7 @@ export default function AISignalsWidget() {
       {/* AI Analysis Summary for Mobile */}
       <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 sm:p-4 mb-4">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-yellow-400 rounded-full"></div>
           <span className="text-blue-400 text-xs sm:text-sm font-semibold">🤖 AI Market Intelligence</span>
         </div>
         <p className="text-blue-200 text-xs sm:text-sm leading-relaxed">

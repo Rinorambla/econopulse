@@ -87,23 +87,23 @@ const FearGreedIndex = () => {
       <MarketParticles />
 
       {/* Cerchio centrale */}
-      <div className={`relative w-28 h-28 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br ${getIndexColor(data.fearGreedIndex)} shadow-2xl ${getGlowColor(data.fearGreedIndex)} animate-pulse flex items-center justify-center`}>
+      <div className={`relative w-28 h-28 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br ${getIndexColor(data.fearGreedIndex)} shadow-2xl ${getGlowColor(data.fearGreedIndex)} flex items-center justify-center`}>
         <div className="absolute inset-2 bg-slate-900 rounded-full flex flex-col items-center justify-center border border-white/10">
           <div className="text-xl sm:text-3xl font-bold text-white leading-none">{data.fearGreedIndex}</div>
           <div className="text-[10px] sm:text-xs text-gray-300 text-center px-1 sm:px-2 leading-tight">{data.sentiment}</div>
         </div>
         <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2">
           {data.trend === 'up' ? (
-            <ArrowTrendingUpIcon className="h-4 w-4 sm:h-6 sm:w-6 text-green-400 animate-bounce" />
+            <ArrowTrendingUpIcon className="h-4 w-4 sm:h-6 sm:w-6 text-green-400" />
           ) : (
-            <ArrowTrendingDownIcon className="h-4 w-4 sm:h-6 sm:w-6 text-red-400 animate-bounce" />
+            <ArrowTrendingDownIcon className="h-4 w-4 sm:h-6 sm:w-6 text-red-400" />
           )}
         </div>
       </div>
 
       {/* Pannello testi in basso a destra */}
       <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex flex-col items-end gap-2 max-w-[230px] sm:max-w-xs text-right">
-        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-semibold animate-pulse flex items-center shadow-lg self-end">
+        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-semibold flex items-center shadow-lg self-end">
           <BoltIcon className="h-3 w-3 mr-1" /> AI POWERED
         </div>
 
@@ -124,7 +124,7 @@ const FearGreedIndex = () => {
             <span className="block text-[10px] font-bold text-white">{data.fearGreedIndex}</span>
           </div>
           <div className="flex items-center text-[9px] text-gray-400">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-ping mr-1" />Live
+            <div className="w-2 h-2 bg-green-400 rounded-full mr-1" />Live
           </div>
         </div>
       </div>

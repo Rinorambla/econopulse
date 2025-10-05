@@ -33,15 +33,15 @@ const MarketParticles = () => {
     // Initialize particles
     const initParticles = () => {
       particlesRef.current = [];
-      const particleCount = 50;
+      const particleCount = 30; // Reduced from 50 to 30
       
       for (let i = 0; i < particleCount; i++) {
         particlesRef.current.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 0.5,
-          vy: (Math.random() - 0.5) * 0.5,
-          opacity: Math.random() * 0.5 + 0.1,
+          vx: (Math.random() - 0.5) * 0.2, // Reduced speed from 0.5 to 0.2
+          vy: (Math.random() - 0.5) * 0.2, // Reduced speed from 0.5 to 0.2
+          opacity: Math.random() * 0.3 + 0.05, // Reduced opacity
           color: Math.random() > 0.5 ? '#3B82F6' : '#10B981'
         });
       }

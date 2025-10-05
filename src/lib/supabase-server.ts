@@ -3,6 +3,13 @@ import { cookies } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
+  
+  // Debug: log all cookies
+  const allCookies = cookieStore.getAll()
+  console.log('🍪 Server cookies:', {
+    count: allCookies.length,
+    cookies: allCookies.map(c => ({ name: c.name, hasValue: !!c.value }))
+  })
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

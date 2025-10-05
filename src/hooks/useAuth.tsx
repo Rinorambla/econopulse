@@ -31,16 +31,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchPlan = useCallback(async () => {
     try {
       setRefreshingPlan(true);
+      
+      // Try API first
       const res = await fetch('/api/me', { 
         cache: 'no-store',
-        credentials: 'include' // Important: include cookies in the request
+        credentials: 'include'
       });
+      
       if (!res.ok) throw new Error('me failed');
       const json = await res.json();
       console.log('📧 /api/me response:', json);
       
       if (json?.authenticated) {
-        // Server handles admin check, just use the plan it returns
+        // Server authenticated successfully
         const finalPlan = json.plan || 'free';
         setPlan(finalPlan);
         
@@ -50,16 +53,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         console.log('✅ Plan set to:', finalPlan);
       } else {
-        setPlan('free');
-        console.log('❌ Not authenticated, plan set to free');
+        // API couldn't authenticate, but we have user session locally
+        // Check if admin email on client-side as fallback
+        if (user?.email) {
+          const adminEmail = 'econopulse.info@econopulse.ai';
+          const isAdmin = user.email.toLowerCase().trim() === adminEmail.toLowerCase();
+          
+          console.log('🔐 Client-side admin check:', {
+            userEmail: user.email,
+            adminEmail,
+            isAdmin
+          });
+          
+          if (isAdmin) {
+            setPlan('premium');
+            console.log('👑 Admin access granted (client-side fallback)!');
+          } else {
+            setPlan('free');
+            console.log('❌ Not admin, plan set to free');
+          }
+        } else {
+          setPlan('free');
+          console.log('❌ Not authenticated, plan set to free');
+        }
       }
     } catch (e) {
       console.warn('Fetch plan error', e);
-      setPlan('free');
+      // Fallback to client-side check
+      if (user?.email) {
+        const adminEmail = 'econopulse.info@econopulse.ai';
+        const isAdmin = user.email.toLowerCase().trim() === adminEmail.toLowerCase();
+        setPlan(isAdmin ? 'premium' : 'free');
+        console.log('🔄 Fallback to client check:', isAdmin ? 'premium' : 'free');
+      } else {
+        setPlan('free');
+      }
     } finally {
       setRefreshingPlan(false);
     }
-  }, []);
+  }, [user]);
 
   const refreshPlan = useCallback(async () => {
     if (!user) return;

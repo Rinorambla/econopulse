@@ -1,72 +1,65 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { normalizePlan } from '@/lib/plan-access';
 
-// NOTE: This assumes RLS allows service key operations OR supabase client is service-role on server.
-// If not, adapt to use auth cookies + getUser.
+// Admin email configuration - hardcoded for server-side check
+const ADMIN_EMAIL = 'admin@econopulse.ai';
+
+function isAdminEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  return email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
+}
 
 export async function GET(req: Request) {
   try {
-    // Get auth token from Authorization header or cookies
-    const authHeader = req.headers.get('authorization');
-    const cookieHeader = req.headers.get('cookie');
-    
-    // Extract Supabase auth token from cookies
-    let accessToken: string | null = null;
-    if (cookieHeader) {
-      const cookies = cookieHeader.split(';').map(c => c.trim());
-      const authCookie = cookies.find(c => c.startsWith('sb-') && c.includes('-auth-token'));
-      if (authCookie) {
-        try {
-          const [, value] = authCookie.split('=');
-          const decoded = JSON.parse(decodeURIComponent(value));
-          accessToken = decoded.access_token || decoded[0]?.access_token;
-        } catch (e) {
-          console.error('Error parsing auth cookie:', e);
-        }
-      }
-    }
+    // Use the shared Supabase client which has cookie persistence configured
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
     
     console.log('🔑 /api/me auth check:', {
-      hasAuthHeader: !!authHeader,
-      hasCookieHeader: !!cookieHeader,
-      hasAccessToken: !!accessToken
+      hasUser: !!user,
+      email: user?.email,
+      userId: user?.id,
+      error: userErr?.message
     });
     
-    // Create Supabase client
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
-        }
-      }
-    );
-    
-    // Extract auth token from cookies (Supabase JS client manages on server if configured)
-    // Fallback: return minimal anon structure - now requires Pro minimum
-    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-    
-    console.log('🔑 /api/me session check:', {
-      hasSession: !!session,
-      email: session?.user?.email,
-      userId: session?.user?.id,
-      error: sessionErr?.message
-    });
-    
-    if (sessionErr || !session?.user) {
-      return NextResponse.json({ authenticated: false, plan: 'pro', requiresSubscription: true });
+    if (userErr || !user) {
+      return NextResponse.json({ authenticated: false, plan: 'free', requiresSubscription: true });
     }
-    const userId = session.user.id;
-    // Fetch extended user data
+    
+    const userEmail = user.email;
+    const userId = user.id;
+    // Check if user is admin - grant premium immediately
+    const isAdmin = isAdminEmail(userEmail);
+    
+    console.log('👑 Admin check:', {
+      email: userEmail,
+      isAdmin,
+      adminEmail: ADMIN_EMAIL
+    });
+    
+    if (isAdmin) {
+      console.log('✅ Admin user detected - granting premium access');
+      return NextResponse.json({
+        authenticated: true,
+        email: userEmail,
+        plan: 'premium',
+        subscription_status: 'premium',
+        trial_end_date: null,
+        requiresSubscription: false,
+        stripe_customer_id: null,
+        subscription_id: null,
+        isAdmin: true
+      });
+    }
+    
+    // Fetch extended user data for regular users
     const { data, error } = await supabase
       .from('users')
       .select('email, subscription_status, stripe_customer_id, subscription_id, trial_end_date')
       .eq('id', userId)
       .single();
     if (error) {
-      return NextResponse.json({ authenticated: true, email: session.user.email, plan: 'pro', warning: 'profile_missing', requiresSubscription: true });
+      return NextResponse.json({ authenticated: true, email: userEmail, plan: 'free', warning: 'profile_missing', requiresSubscription: true });
     }
 
     let currentSubscriptionStatus = data?.subscription_status || 'free';
@@ -122,13 +115,14 @@ export async function GET(req: Request) {
     
     return NextResponse.json({
       authenticated: true,
-      email: data?.email || session.user.email,
+      email: data?.email || userEmail,
       plan: finalPlan,
       subscription_status: currentSubscriptionStatus,
       trial_end_date: data?.trial_end_date || null,
       requiresSubscription: finalRequiresSubscription,
       stripe_customer_id: data?.stripe_customer_id || null,
-      subscription_id: data?.subscription_id || null
+      subscription_id: data?.subscription_id || null,
+      isAdmin: false
     });
   } catch (e) {
     console.error('GET /api/me error', e);

@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase, SUPABASE_ENABLED } from '@/lib/supabase';
-import { DEV_CONFIG } from '@/lib/dev-config';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -32,27 +31,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchPlan = useCallback(async () => {
     try {
       setRefreshingPlan(true);
-      const res = await fetch('/api/me', { cache: 'no-store' });
+      const res = await fetch('/api/me', { 
+        cache: 'no-store',
+        credentials: 'include' // Important: include cookies in the request
+      });
       if (!res.ok) throw new Error('me failed');
       const json = await res.json();
       console.log('📧 /api/me response:', json);
+      
       if (json?.authenticated) {
-        // Check if admin email - give premium automatically
-        const userPlan = json.plan || 'free';
-        const isAdmin = DEV_CONFIG.isAdminEmail(json.email);
-        console.log('🔍 Email check:', {
-          email: json.email,
-          isAdmin,
-          adminEmail: DEV_CONFIG.ADMIN_EMAIL,
-          finalPlan: isAdmin ? 'premium' : userPlan
-        });
-        setPlan(isAdmin ? 'premium' : userPlan);
+        // Server handles admin check, just use the plan it returns
+        const finalPlan = json.plan || 'free';
+        setPlan(finalPlan);
         
-        if (isAdmin) {
-          console.log('👑 Admin access detected - premium granted!');
+        if (json.isAdmin) {
+          console.log('👑 Admin access granted by server!');
         }
+        
+        console.log('✅ Plan set to:', finalPlan);
       } else {
         setPlan('free');
+        console.log('❌ Not authenticated, plan set to free');
       }
     } catch (e) {
       console.warn('Fetch plan error', e);
@@ -83,10 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setSession(session);
         setUser(session?.user ?? null);
-        // Auto-upgrade admin to premium
-        if (session?.user?.email && DEV_CONFIG.isAdminEmail(session.user.email)) {
-          console.log('👑 Admin access detected:', session.user.email);
-        }
       }
       setLoading(false);
     };

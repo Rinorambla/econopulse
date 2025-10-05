@@ -17,6 +17,7 @@
     "@headlessui/react": "^2.2.6",
     "@heroicons/react": "^2.2.0",
     "@stripe/stripe-js": "^7.7.0",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.53.0",
     "@types/nodemailer": "^7.0.1",
     "@types/plotly.js": "^3.0.3",

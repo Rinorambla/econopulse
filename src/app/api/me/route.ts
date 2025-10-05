@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase-server';
 import { normalizePlan } from '@/lib/plan-access';
 
 // Admin email configuration - hardcoded for server-side check
@@ -12,7 +12,8 @@ function isAdminEmail(email: string | undefined): boolean {
 
 export async function GET(req: Request) {
   try {
-    // Use the shared Supabase client which has cookie persistence configured
+    // Create Supabase client with proper cookie handling for API routes
+    const supabase = await createClient();
     const { data: { user }, error: userErr } = await supabase.auth.getUser();
     
     console.log('🔑 /api/me auth check:', {

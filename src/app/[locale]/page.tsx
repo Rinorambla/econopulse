@@ -1,15 +1,33 @@
-'use client';
-
-import { useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { ArrowRightIcon, ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+"use client";
+import { useTranslations, useLocale } from 'next-intl';
+import dynamic from 'next/dynamic';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import FearGreedIndex from '@/components/FearGreedIndex';
-import AIBackground from '@/components/AIBackground';
+
+// Lazy heavy visuals
+const AIBackground = dynamic(() => import('@/components/AIBackground'), { ssr: false });
+const FearGreedIndex = dynamic(() => import('@/components/FearGreedIndex'), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Loading…</div>
+});
 
 export default function HomePage() {
   const t = useTranslations();
+  const locale = useLocale();
+  const router = useRouter();
+
+  // Prefetch critical authenticated pages after idle
+  useEffect(() => {
+    const id = setTimeout(() => {
+      ['/dashboard','/ai-portfolio','/ai-pulse','/pricing'].forEach(p=>{
+        try { router.prefetch(`/${locale}${p}`);} catch {}
+      });
+    }, 500);
+    return () => clearTimeout(id);
+  }, [router, locale]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -36,7 +54,6 @@ export default function HomePage() {
         </div>
   <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
           <div className="h-48 w-full bg-[var(--color-panel)] sm:h-64 md:h-80 lg:w-full lg:h-full border border-[var(--color-border)]">
-            {/* AI-Powered Fear & Greed Index */}
             <FearGreedIndex />
           </div>
         </div>

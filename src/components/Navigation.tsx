@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
+import React, { startTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,7 +23,17 @@ export function NavigationLink({ href, className, children }: NavigationLinkProp
     : `/${locale}${href}`;
   
   return (
-    <Link href={localizedHref} className={className}>
+    <Link
+      href={localizedHref}
+      prefetch
+      className={className}
+      onClick={(e) => {
+        // If same route avoid re-navigation
+        if (pathname === localizedHref) return;
+        // Defer any heavy state updates
+        startTransition(() => {});
+      }}
+    >
       {children}
     </Link>
   );

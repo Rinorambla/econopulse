@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   plan: string | null;
   refreshingPlan: boolean;
+  isAdmin: boolean;
   refreshPlan: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string; needsConfirmation?: boolean }>;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<string | null>(null);
   const [refreshingPlan, setRefreshingPlan] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Fetch plan details for the current authenticated user
   const fetchPlan = useCallback(async () => {
@@ -52,12 +54,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (json?.authenticated) {
         setPlan(json.plan || 'free');
+        setIsAdmin(json.isAdmin || false);
       } else {
         setPlan('free');
+        setIsAdmin(false);
       }
     } catch (e) {
       console.warn('Plan fetch failed:', e);
       setPlan('free');
+      setIsAdmin(false);
     } finally {
       setRefreshingPlan(false);
     }
@@ -231,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     plan,
     refreshingPlan,
+    isAdmin,
     refreshPlan,
     signIn,
     signUp,

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Footer from '@/components/Footer'
+import RequirePlan from '@/components/RequirePlan'
 import GlobalMacroTable from '@/components/analytics/GlobalMacroTable'
 const MarketInteractiveChart = dynamic(() => import('@/components/analytics/MarketInteractiveChart'), { ssr: false })
 import BullBearSentimentMini from '@/components/analytics/BullBearSentimentMini'
@@ -546,6 +547,7 @@ export default function BloombergDashboard() {
   }
 
   return (
+    <RequirePlan min="premium">
   <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header con freccia indietro */}
@@ -886,5 +888,6 @@ export default function BloombergDashboard() {
   </div>
   <Footer />
     </div>
+    </RequirePlan>
   )
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import RequirePlan from '@/components/RequirePlan';
 
 interface PriceData {
   amount: number;
@@ -39,6 +40,7 @@ export default function PriceCheckPage() {
   }
 
   return (
+    <RequirePlan min="premium">
   <div className="min-h-screen bg-[var(--background)] text-white p-8">
       <h1 className="text-3xl font-bold mb-8">Price Comparison: Website vs Stripe</h1>
       
@@ -100,5 +102,6 @@ export default function PriceCheckPage() {
         </a>
       </div>
     </div>
+    </RequirePlan>
   );
 }

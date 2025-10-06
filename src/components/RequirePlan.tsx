@@ -16,9 +16,11 @@ interface RequirePlanProps {
  * Assumes AuthProvider is mounted higher. Falls back gracefully to login / upgrade prompts.
  */
 export function RequirePlan({ min, children, inline }: RequirePlanProps) {
-  const { user, loading, plan, refreshingPlan } = useAuth();
+  const { user, loading, plan, refreshingPlan, isAdmin } = useAuth();
 
-  if (loading || refreshingPlan) {
+  // Show loading only on initial page load, not on plan refreshes
+  // Skip loading screen entirely for admin users
+  if (loading && !user) {
     return (
       <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>
     );
@@ -33,6 +35,11 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
         </Link>
       </div>
     );
+  }
+
+  // Admin users have unrestricted access
+  if (isAdmin) {
+    return <>{children}</>;
   }
 
   // Treat null plan as free (still loading or no subscription) - plan-access util handles unknown gracefully

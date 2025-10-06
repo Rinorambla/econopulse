@@ -7,10 +7,22 @@ export async function GET() {
     console.log('🔍 Calculating Fear & Greed Index with Tiingo data...');
     
     // Get real market data from Tiingo for key indicators
-    const marketData = await getTiingoMarketData(['SPY', 'QQQ', 'VIX', 'GLD']).catch(() => null);
+    const marketData = await getTiingoMarketData(['SPY', 'QQQ', 'VIX', 'GLD']).catch((e) => {
+      console.warn('⚠️ Tiingo market data fetch failed:', e.message);
+      return null;
+    });
     
     // Get economic data from FRED
-    const economicData = await fredService.getEconomicSnapshot().catch(() => null);
+    const economicData = await fredService.getEconomicSnapshot().catch((e) => {
+      console.warn('⚠️ FRED economic data fetch failed:', e.message);
+      return null;
+    });
+    
+    console.log('📊 Market data status:', { 
+      hasMarketData: !!marketData, 
+      dataCount: marketData?.length ?? 0,
+      hasEconomicData: !!economicData 
+    });
     
   // Calculate Fear & Greed Index
   let fearGreedIndex = 50; // Base neutral (deterministic start)
@@ -59,24 +71,27 @@ export async function GET() {
     const trend = fearGreedIndex > 60 ? 'up' : fearGreedIndex < 40 ? 'down' : 'neutral';
 
     // Derive volatility from VIX (no random). If VIX not available, fallback to SPY abs change * 4 (rough intraday proxy)
-    let derivedVolatility = 0;
+    let derivedVolatility = 15; // Default baseline if no data
     if (marketData && marketData.length) {
       const vix = marketData.find(s => s.symbol === 'VIX');
       if (vix) {
         const d: any = 'data' in vix ? (vix as any).data : vix;
-        derivedVolatility = Math.round(d?.last ?? d?.close ?? 0);
+        const vixValue = d?.last ?? d?.close ?? 0;
+        if (vixValue > 0) {
+          derivedVolatility = Math.round(vixValue);
+        }
       } else {
         const spy = marketData.find(s => s.symbol === 'SPY');
         if (spy) {
           const d: any = 'data' in spy ? (spy as any).data : spy;
           if (typeof d?.changePercent === 'number') {
-            derivedVolatility = Math.round(Math.abs(d.changePercent) * 4);
+            derivedVolatility = Math.max(5, Math.round(Math.abs(d.changePercent) * 4));
           }
         }
       }
     }
     
-    console.log(`✅ Fear & Greed Index: ${Math.round(fearGreedIndex)} (${sentiment})`);
+    console.log(`✅ Fear & Greed Index: ${Math.round(fearGreedIndex)} (${sentiment}), Vol: ${derivedVolatility}%, Trend: ${trend}`);
     
     return NextResponse.json({
       fearGreedIndex: Math.round(fearGreedIndex),

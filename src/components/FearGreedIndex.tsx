@@ -48,20 +48,32 @@ const FearGreedIndex = () => {
   useEffect(() => {
     const fetchReal = async () => {
       try {
-        const r = await fetch('/api/market-sentiment-new');
+        const r = await fetch('/api/market-sentiment-new', { cache: 'no-store' });
         if (!r.ok) throw new Error('failed');
         const json = await r.json();
+        
+        // Log to debug if values are stuck
+        console.log('📊 Fear & Greed Update:', {
+          index: json.fearGreedIndex,
+          vol: json.volatility,
+          trend: json.trend,
+          updated: json.lastUpdated
+        });
+        
         setData(json);
       } catch (e) {
+        console.warn('❌ Fear & Greed API failed, using fallback');
         const now = Date.now();
         const cycle = Math.sin(Math.floor(now / 60000) / 5);
         const fg = Math.round(50 + cycle * 15);
+        const vol = Math.round(15 + Math.abs(cycle) * 10);
         const trend: 'up' | 'down' | 'neutral' = fg > 60 ? 'up' : fg < 40 ? 'down' : 'neutral';
         setData(d => ({
           ...d,
           fearGreedIndex: fg,
           trend,
-            aiPrediction: 'Fallback neutral composite displayed (live feed unavailable).',
+          volatility: vol,
+          aiPrediction: 'Fallback neutral composite displayed (live feed unavailable).',
           sentiment: getSentiment(fg),
           lastUpdated: new Date().toISOString()
         }));

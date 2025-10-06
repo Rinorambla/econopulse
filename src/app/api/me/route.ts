@@ -63,6 +63,10 @@ export async function GET(req: Request) {
         stripe_customer_id: null,
         subscription_id: null,
         isAdmin: true
+      }, {
+        headers: {
+          'Cache-Control': 'private, max-age=300', // 5 min cache
+        }
       });
     }
     
@@ -87,14 +91,19 @@ export async function GET(req: Request) {
         // Trial expired, update to free
         currentSubscriptionStatus = 'free';
         
-        // Update in database
-        await supabase
-          .from('users')
-          .update({ 
-            subscription_status: 'free',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
+        // Update in database ONLY if not already marked as expired
+        // This prevents unnecessary DB writes on every request
+        if (data.subscription_status === 'trial') {
+          // Fire and forget - don't await to avoid blocking response
+          supabase
+            .from('users')
+            .update({ 
+              subscription_status: 'free',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            .then(() => console.log('Trial expired updated for', userId));
+        }
       }
     }
     
@@ -115,6 +124,10 @@ export async function GET(req: Request) {
       stripe_customer_id: data?.stripe_customer_id || null,
       subscription_id: data?.subscription_id || null,
       isAdmin: false
+    }, {
+      headers: {
+        'Cache-Control': 'private, max-age=300', // 5 min cache
+      }
     });
   } catch (e) {
     console.error('GET /api/me error', e);

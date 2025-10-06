@@ -31,18 +31,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch plan details for the current authenticated user
   const fetchPlan = useCallback(async () => {
+    // Skip if already fetching or no session
+    if (!session) return;
+    
+    // Check sessionStorage cache first (5 min TTL)
+    const cacheKey = `plan_cache_${session.user.id}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { plan: cachedPlan, isAdmin: cachedAdmin, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 300000) { // 5 min cache
+          setPlan(cachedPlan);
+          setIsAdmin(cachedAdmin);
+          return;
+        }
+      } catch {}
+    }
+    
     try {
       setRefreshingPlan(true);
       
-      // Try API first
-      // Attempt to include bearer token explicitly
-      let accessToken: string | undefined;
-      if (!session) {
-        const current = await supabase.auth.getSession();
-        accessToken = current.data.session?.access_token;
-      } else {
-        accessToken = session.access_token as any;
-      }
+      const accessToken = session.access_token as any;
       const res = await fetch('/api/me', { 
         cache: 'no-store',
         credentials: 'include',
@@ -53,8 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const json = await res.json();
       
       if (json?.authenticated) {
-        setPlan(json.plan || 'free');
-        setIsAdmin(json.isAdmin || false);
+        const newPlan = json.plan || 'free';
+        const newAdmin = json.isAdmin || false;
+        setPlan(newPlan);
+        setIsAdmin(newAdmin);
+        
+        // Cache result
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          plan: newPlan,
+          isAdmin: newAdmin,
+          timestamp: Date.now()
+        }));
       } else {
         setPlan('free');
         setIsAdmin(false);
@@ -66,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setRefreshingPlan(false);
     }
-  }, [user]);
+  }, [session]);
 
   const refreshPlan = useCallback(async () => {
     if (!user) return;
@@ -96,20 +114,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   getInitialSession();
 
     // Listen for auth changes
+  let fetchTimer: NodeJS.Timeout;
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: string, session: Session | null) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         if (session?.user) {
-          fetchPlan();
+          // Debounce fetchPlan to avoid rapid successive calls
+          clearTimeout(fetchTimer);
+          fetchTimer = setTimeout(() => fetchPlan(), 200);
         } else {
           setPlan(null);
+          sessionStorage.clear(); // Clear cache on logout
         }
       }
     );
 
-  return () => subscription.unsubscribe();
+  return () => {
+    subscription.unsubscribe();
+    clearTimeout(fetchTimer);
+  };
   }, [fetchPlan]);
 
   const signIn = async (email: string, password: string) => {

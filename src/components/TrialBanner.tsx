@@ -56,7 +56,12 @@ export function TrialBanner({ className = '' }: TrialBannerProps) {
     return null;
   }
 
-  const { subscription_status, trial_end_date, requiresSubscription } = userData;
+  const { subscription_status, trial_end_date, requiresSubscription, isAdmin } = userData;
+
+  // Don't show any banners for admin users
+  if (isAdmin) {
+    return null;
+  }
 
   // Show trial banner only for trial users
   if (subscription_status === 'trial' && trial_end_date) {

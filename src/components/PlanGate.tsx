@@ -18,12 +18,11 @@ export default function PlanGate({
   redirectTo = '/pricing',
   showMessage = true 
 }: PlanGateProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, plan } = useAuth();
   const router = useRouter();
 
-  // TODO: Get user's subscription tier from API/context
-  // For now, we'll simulate the user tier
-  const userTier: 'free' | 'premium' = 'free'; // This should come from user's subscription data
+  // Get user's actual subscription tier from auth hook
+  const userTier: 'free' | 'premium' = (plan === 'premium' || plan === 'trial') ? 'premium' : 'free';
 
   useEffect(() => {
     if (!loading && !user) {
@@ -129,8 +128,8 @@ export function PremiumFeature({
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }) {
-  // TODO: Get user's subscription tier
-  const userTier: 'free' | 'premium' = 'free';
+  const { plan } = useAuth();
+  const userTier: 'free' | 'premium' = (plan === 'premium' || plan === 'trial') ? 'premium' : 'free';
   
   if ((userTier as 'free' | 'premium') === 'premium') {
     return <>{children}</>;

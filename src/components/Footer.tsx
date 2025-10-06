@@ -91,7 +91,7 @@ const Footer = () => {
       title: 'footer.company_section',
       links: [
         { key: 'about', href: '/about' },
-        { key: 'blog', href: '/blog' },
+        { key: 'news', href: '/news' },
         { key: 'pricing', href: '/pricing' },
   { key: 'help', href: '/help' },
         { key: 'work_with_us', href: '/work-with-us' }

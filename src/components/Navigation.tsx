@@ -73,8 +73,8 @@ export function Navigation({ className }: NavigationProps) {
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market DNA</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-  <NavigationLink href="/blog" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
-          <span className="relative z-10">{t('nav.blog')}</span>
+  <NavigationLink href="/news" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+          <span className="relative z-10">News</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">

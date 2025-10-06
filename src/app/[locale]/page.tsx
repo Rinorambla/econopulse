@@ -17,7 +17,7 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-  <AIBackground intensity="bold" />
+  <AIBackground intensity="subtle" />
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">

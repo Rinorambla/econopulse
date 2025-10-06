@@ -22,38 +22,37 @@ export default function AIBackground({ className = '', intensity = 'default' }: 
       {/* Animated AI Brain SVG */}
       <div className={`absolute inset-0 ${opacityClass}`}>
         <svg className="w-full h-full" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-          {/* Brain outline */}
+          {/* Brain outline - static for better performance */}
           <path 
             d="M300 200C350 150 450 120 550 140C650 120 750 150 800 200C850 250 870 350 850 450C830 550 780 600 700 620C650 640 550 650 500 640C450 650 350 640 300 620C220 600 170 550 150 450C130 350 150 250 200 200C220 180 260 170 300 200Z" 
             stroke="url(#brainGradient)" 
             strokeWidth="2" 
             fill="none"
-            className="motion-safe:animate-pulse"
           />
           
-          {/* Neural pathways */}
-          <g className="motion-safe:animate-pulse" style={{animationDelay: '1s'}}>
+          {/* Neural pathways - static for better performance */}
+          <g>
             <path d="M200 300 Q400 250 600 320" stroke="url(#neuralGradient)" strokeWidth="1.5" fill="none" opacity="0.6"/>
             <path d="M250 400 Q500 350 750 420" stroke="url(#neuralGradient)" strokeWidth="1.5" fill="none" opacity="0.6"/>
             <path d="M300 500 Q550 450 800 480" stroke="url(#neuralGradient)" strokeWidth="1.5" fill="none" opacity="0.6"/>
           </g>
           
-          {/* Synapses/nodes */}
+          {/* Synapses/nodes - removed animate-ping for better performance */}
           <g>
-            <circle cx="300" cy="280" r="4" fill="url(#nodeGradient)" className="motion-safe:animate-ping" style={{animationDelay: '0.5s'}}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+            <circle cx="300" cy="280" r="4" fill="url(#nodeGradient)">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="4s" repeatCount="indefinite"/>
             </circle>
-            <circle cx="500" cy="320" r="4" fill="url(#nodeGradient)" className="motion-safe:animate-ping" style={{animationDelay: '1.5s'}}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+            <circle cx="500" cy="320" r="4" fill="url(#nodeGradient)">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="4s" repeatCount="indefinite" begin="0.5s"/>
             </circle>
-            <circle cx="700" cy="380" r="4" fill="url(#nodeGradient)" className="motion-safe:animate-ping" style={{animationDelay: '2s'}}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+            <circle cx="700" cy="380" r="4" fill="url(#nodeGradient)">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="4s" repeatCount="indefinite" begin="1s"/>
             </circle>
-            <circle cx="400" cy="450" r="4" fill="url(#nodeGradient)" className="motion-safe:animate-ping" style={{animationDelay: '2.5s'}}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+            <circle cx="400" cy="450" r="4" fill="url(#nodeGradient)">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="4s" repeatCount="indefinite" begin="1.5s"/>
             </circle>
-            <circle cx="600" cy="480" r="4" fill="url(#nodeGradient)" className="motion-safe:animate-ping" style={{animationDelay: '3s'}}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+            <circle cx="600" cy="480" r="4" fill="url(#nodeGradient)">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="4s" repeatCount="indefinite" begin="2s"/>
             </circle>
           </g>
           

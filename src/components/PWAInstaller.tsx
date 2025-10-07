@@ -9,6 +9,14 @@ export default function PWAInstaller() {
       navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then((registration) => {
           console.log('💾 PWA: Service Worker registered successfully', registration.scope);
+          // Attempt background sync registration
+          try {
+            // @ts-expect-error: sync may be experimental
+            if (registration && registration.sync && typeof registration.sync.register === 'function') {
+              // @ts-expect-error: experimental background sync API
+              registration.sync.register('market-data-sync').catch(()=>{});
+            }
+          } catch {}
           
           // Check for updates
           registration.addEventListener('updatefound', () => {

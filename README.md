@@ -20,26 +20,14 @@ EconoPulse is a modern, AI-powered financial analysis platform built with Next.j
 
 ### 📈 AI Pulse Analytics
 - Best/worst performers identification
-- Economic quadrant analysis (Reflation, Expansion, Stagflation, Deflation)
-- Key economic indicators tracking
-- Market cycle predictions
-
-### 💳 Subscription Management
 - Three-tier pricing structure (Pro, Premium AI, Corporate)
 - Stripe integration for secure payments
 - 14-day free trial for all plans
 - Flexible monthly/yearly billing
-
-### 🌍 Multi-language Support
-- Full internationalization support (English/Italian)
-- Locale-based routing with Next.js App Router
 - Dynamic content translation
-
-## 🛠️ Tech Stack
 
 - **Framework**: Next.js 15 with App Router
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS
 - **Database**: Supabase (PostgreSQL)
 - **Payments**: Stripe
 - **AI**: OpenAI GPT-4
@@ -49,25 +37,17 @@ EconoPulse is a modern, AI-powered financial analysis platform built with Next.j
 
 ## 📋 Prerequisites
 
-Before running this application, make sure you have:
-
 - Node.js 18+ installed
 - NPM or Yarn package manager
-- Supabase account and project
-- Stripe account with test/live keys
-- Polygon.io API key
-- OpenAI API key
-
 ## 🔧 Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd econopulse
-   ```
-
 2. **Install dependencies**
    ```bash
+## 📊 API Endpoints
+
+```
    npm install
    ```
 
@@ -355,4 +335,37 @@ For support, email support@econopulse.com or join our Discord community.
 
 Built with ❤️ by the EconoPulse Team
 ## 🧪 Experimental: Q-CTA Position Indicator
+
+## 📦 Progressive Web App (PWA)
+
+EconoPulse include una PWA avanzata pronta per l'installazione su desktop e mobile.
+
+### Componenti Principali
+- `public/manifest.json` (icône, shortcuts, screenshots, categorie)
+- `public/sw.js` (cache static/dynamic versionato, offline fallback, background sync stub, push handler placeholder)
+- `public/offline.html` (pagina offline UX)
+- `src/components/PWAInstaller.tsx` (registrazione SW + background sync)
+- `src/components/PWAUpdateAndInstall.tsx` (banner install evidente + notifica aggiornamento versione)
+- Meta iOS aggiunte in `src/app/[locale]/layout.tsx` (apple web app, status bar, touch icon)
+
+### Strategia Cache
+- Static assets: stale‑while‑revalidate (icone, manifest, root)
+- Navigazioni HTML: network first → fallback a cache → `/offline.html`
+- API (se whitelisted nel fetch): network first con put in cache se OK
+- Dynamic content: cache-first fallback per risorse residuali con limitazione numero entry
+
+### Aggiornamenti
+Quando un nuovo service worker è pronto, appare un banner “Aggiornamento disponibile” con pulsante Aggiorna (esegue `SKIP_WAITING` + reload).
+
+### Install Banner
+Comparsa automatica quando il browser emette `beforeinstallprompt`. Stile evidente (gradient + shadow) posizionato in basso.
+
+### Da Implementare (Opzionale)
+1. Backend push (VAPID key + endpoint iscrizione) per notifiche reali.
+2. Telemetria offline / install rate.
+3. Localizzazione dinamica dello `start_url` del manifest.
+
+### Note Locale
+`start_url` attuale è `/` e il middleware rerouterà al locale corretto. Mantiene un’unica install entry (semplifica distribuzione).
+
 

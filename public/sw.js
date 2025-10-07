@@ -1,45 +1,52 @@
-const CACHE_NAME = 'econopulse-v1';
-const STATIC_CACHE_URLS = [
+// ——— EconoPulse Service Worker (Enhanced) ———
+// Version bump when changing caching logic
+const VERSION = '1.1.0';
+const STATIC_CACHE = `econopulse-static-${VERSION}`;
+const DYNAMIC_CACHE = `econopulse-dynamic-${VERSION}`;
+const STATIC_ASSETS = [
   '/',
+  '/offline.html',
   '/manifest.json',
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
+  '/icons/icon-512x512.png'
 ];
+const MAX_DYNAMIC_ENTRIES = 60;
+
+function limitCache(cacheName, max) {
+  caches.open(cacheName).then(cache =>
+    cache.keys().then(keys => {
+      if (keys.length > max) cache.delete(keys[0]).then(() => limitCache(cacheName, max));
+    })
+  );
+}
 
 // Install Service Worker
 self.addEventListener('install', (event) => {
-  console.log('💾 Service Worker: Installing...');
+  console.log('[SW] Install v', VERSION);
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('💾 Service Worker: Caching static assets');
-        return cache.addAll(STATIC_CACHE_URLS);
-      })
-      .then(() => {
-        console.log('💾 Service Worker: Installation complete');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('💾 Service Worker: Installation failed', error);
-      })
+    caches.open(STATIC_CACHE)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(err => console.error('[SW] Install error', err))
   );
 });
 
 // Activate Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('💾 Service Worker: Activating...');
+  console.log('[SW] Activate v', VERSION);
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('💾 Service Worker: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.map(k => {
+          if (![STATIC_CACHE, DYNAMIC_CACHE].includes(k)) {
+            console.log('[SW] Removing old cache', k);
+            return caches.delete(k);
           }
         })
-      );
-    }).then(() => {
-      console.log('💾 Service Worker: Activation complete');
+      )
+    ).then(async () => {
+      const clientsArr = await self.clients.matchAll({ includeUncontrolled: true });
+      clientsArr.forEach(client => client.postMessage({ type: 'SW_ACTIVATED', version: VERSION }));
       return self.clients.claim();
     })
   );
@@ -47,41 +54,84 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Strategy: Network First, falling back to cache
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  // Only handle GET requests
-  if (req.method !== 'GET') return;
-  // Skip API (dynamic) except maybe simple GET public endpoints
-  if (req.url.includes('/api/')) return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
 
-  event.respondWith(
-    fetch(req)
-      .then((response) => {
-        // Only cache OK, basic/cors responses
-        if (response && response.status === 200 && (response.type === 'basic' || response.type === 'cors')) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(req, responseClone).catch(()=>{});
-          });
-        }
-        return response;
+  const url = new URL(request.url);
+  // Ignore analytics or external sources we don't want to cache
+  if (url.origin !== self.location.origin && !/\.(?:png|jpg|jpeg|svg|webp|woff2?)$/i.test(url.pathname)) return;
+
+  // API: use network first with fallback to cache if previously stored (only selected endpoints)
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(DYNAMIC_CACHE).then(c => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // HTML navigations: network first -> offline page fallback
+  if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(DYNAMIC_CACHE).then(c => c.put(request, clone));
+          return res;
+        })
+        .catch(async () => (await caches.match(request)) || (await caches.match('/offline.html')))
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate
+  const isStatic = STATIC_ASSETS.includes(url.pathname) || /\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2?)$/i.test(url.pathname);
+  if (isStatic) {
+    event.respondWith(
+      caches.match(request).then(cached => {
+        const fetchPromise = fetch(request)
+          .then(res => {
+            if (res && res.status === 200) {
+              const clone = res.clone();
+              caches.open(STATIC_CACHE).then(c => c.put(request, clone));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
       })
-      .catch(() => caches.match(req).then((cached) => {
-        if (cached) {
-          console.log('💾 Service Worker: Serving from cache:', req.url);
-          return cached;
+    );
+    return;
+  }
+
+  // Everything else: cache first with network fallback
+  event.respondWith(
+    caches.match(request).then(cached =>
+      cached || fetch(request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+            caches.open(DYNAMIC_CACHE).then(c => {
+              c.put(request, clone);
+              limitCache(DYNAMIC_CACHE, MAX_DYNAMIC_ENTRIES);
+            });
         }
-        if (req.mode === 'navigate') {
-          return caches.match('/');
-        }
-        return new Response('Offline content not available', { status: 503, statusText: 'Service Unavailable' });
-      }))
+        return res;
+      }).catch(() => caches.match('/offline.html'))
+    )
   );
 });
 
 // Handle background sync for market data updates
 self.addEventListener('sync', (event) => {
   if (event.tag === 'market-data-sync') {
-    console.log('💾 Service Worker: Background sync triggered');
+    console.log('[SW] Background sync triggered');
     event.waitUntil(syncMarketData());
   }
 });
@@ -89,20 +139,20 @@ self.addEventListener('sync', (event) => {
 // Background sync function
 async function syncMarketData() {
   try {
-    const response = await fetch('/api/dashboard-data?scope=basic');
+  const response = await fetch('/api/dashboard-data?scope=basic');
     if (response.ok) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put('/api/dashboard-data?scope=basic', response.clone());
-      console.log('💾 Service Worker: Market data synced successfully');
+  console.log('[SW] Market data synced');
     }
   } catch (error) {
-    console.error('💾 Service Worker: Background sync failed', error);
+    console.error('[SW] Background sync failed', error);
   }
 }
 
 // Handle push notifications (for future market alerts)
 self.addEventListener('push', (event) => {
-  console.log('💾 Service Worker: Push message received');
+  console.log('[SW] Push');
   
   const options = {
     body: event.data ? event.data.text() : 'New market update available',
@@ -134,12 +184,19 @@ self.addEventListener('push', (event) => {
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-  console.log('💾 Service Worker: Notification clicked');
+  console.log('[SW] Notification click');
   event.notification.close();
 
   if (event.action === 'explore') {
     event.waitUntil(
       clients.openWindow('/ai-pulse')
     );
+  }
+});
+
+// Listen for skip waiting trigger from page
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });

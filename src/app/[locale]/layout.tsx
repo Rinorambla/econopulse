@@ -7,6 +7,7 @@ import { Navigation } from '@/components/Navigation';
 import { MissingServicesBanner } from '@/components/MissingServicesBanner';
 import TrialBanner from '@/components/TrialBanner';
 import PWAInstaller from '@/components/PWAInstaller';
+import PWAUpdateAndInstall from '@/components/PWAUpdateAndInstall';
 
 export default async function LocaleLayout({
   children,
@@ -25,9 +26,15 @@ export default async function LocaleLayout({
       <AuthProvider>
         <script
           dangerouslySetInnerHTML={{
-            __html: `document.documentElement.lang = '${locale}';`,
+            __html: `document.documentElement.lang='${locale}';`,
           }}
         />
+        <head>
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+          <meta name="apple-mobile-web-app-title" content="EconoPulse" />
+          <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
+        </head>
         <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
           {/* Global Top Navigation */}
           <header className="sticky top-0 z-40 bg-[var(--background)]/80 backdrop-blur border-b border-white/10">
@@ -41,6 +48,7 @@ export default async function LocaleLayout({
         </div>
         <CookieConsent />
         <PWAInstaller />
+        <PWAUpdateAndInstall />
       </AuthProvider>
     </NextIntlClientProvider>
   );

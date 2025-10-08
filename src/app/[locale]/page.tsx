@@ -5,7 +5,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
-import Footer from '@/components/Footer';
+const Footer = dynamic(() => import('@/components/Footer'), {
+  loading: () => <div className="text-center py-8 text-white/40 text-xs">Loading footer…</div>,
+  ssr: false
+});
 
 // Lazy heavy visuals
 const AIBackground = dynamic(() => import('@/components/AIBackground'), { ssr: false });

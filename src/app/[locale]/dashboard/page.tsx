@@ -2,11 +2,8 @@
 // If you need to revert to the Visual AI dashboard, reintroduce the export to '../visual-ai/page'.
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import {
-	BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid,
-	PieChart, Pie, Cell, ScatterChart, Scatter, Legend
-} from 'recharts';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { ArrowLeftIcon, ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
@@ -97,8 +94,30 @@ export default function DashboardPage() {
 	const [sortKey, setSortKey] = useState<string>('performance');
 	const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 	const [autoRefreshSec, setAutoRefreshSec] = useState<number>(300); // 5 min default
-	const [showCharts, setShowCharts] = useState<boolean>(true);
-	const [chartMode, setChartMode] = useState<'sectors'|'categories'|'ai'|'scatter'>('sectors');
+	// Lazy charts (dynamic import + intersection observer)
+	const [chartsReady, setChartsReady] = useState(false);
+	const chartsRef = useRef<HTMLDivElement | null>(null);
+	const DashboardCharts = useMemo(() => dynamic(() => import('@/components/DashboardCharts'), {
+		ssr: false,
+		loading: () => <div className="mt-6 bg-slate-800 border border-slate-700 rounded p-6 text-center text-[11px] text-gray-400">Loading analytics…</div>
+	}), []);
+	useEffect(() => {
+		if (chartsReady) return;
+		const el = chartsRef.current;
+		if (!el) return;
+		if ('IntersectionObserver' in window) {
+			const obs = new IntersectionObserver(entries => {
+				entries.forEach(e => {
+					if (e.isIntersecting) { setChartsReady(true); obs.disconnect(); }
+				});
+			}, { rootMargin: '250px' });
+			obs.observe(el);
+			return () => obs.disconnect();
+		} else {
+			const id = setTimeout(()=>setChartsReady(true), 800);
+			return () => clearTimeout(id);
+		}
+	}, [chartsReady]);
 
 // ============================================================================
 // Data Fetch
@@ -160,96 +179,7 @@ export default function DashboardPage() {
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [data]);
 
-	// ===================== Derived datasets for charts =====================
-	const sectorPerfData = useMemo(() => {
-		const m: Record<string,{sum:number;count:number}> = {};
-		enrichedData.forEach(d => { if(!d.sector) return; const p = parseFloat(d.performance); if(!m[d.sector]) m[d.sector]={sum:0,count:0}; m[d.sector].sum+=p; m[d.sector].count++; });
-		return Object.entries(m).map(([sector,v])=>({ sector, avg:+(v.sum/v.count).toFixed(2) }))
-			.sort((a,b)=> b.avg - a.avg).slice(0,15);
-	}, [enrichedData]);
-
-	const categoryDistribution = useMemo(() => {
-		const m: Record<string,number> = {};
-		enrichedData.forEach(d => { if(!d.category) return; m[d.category]=(m[d.category]||0)+1; });
-		return Object.entries(m).map(([category,value])=>({ category, value }));
-	}, [enrichedData]);
-
-	const topAISignals = useMemo(() => {
-		return [...enrichedData]
-			.filter(d=> d.aiSignal)
-			.sort((a,b)=> (b.aiSignal!.compositeScore - a.aiSignal!.compositeScore))
-			.slice(0,12)
-			.map(d=>({ ticker:d.ticker, score:d.aiSignal!.compositeScore, label:d.aiSignal!.label }));
-	}, [enrichedData]);
-
-	const momentumVsRS = useMemo(() => {
-		return enrichedData.filter(d=> d.aiSignal)
-			.map(d=>({
-				ticker:d.ticker,
-				momentum:d.aiSignal!.momentum,
-				rs:d.aiSignal!.relativeStrength,
-				category:d.category||'Other',
-				label:d.aiSignal!.label
-			}));
-	}, [enrichedData]);
-
-	// Parsing intraday flow – map qualitative labels to deterministic numeric intensities
-	// Labels from backend getIntradayFlow(): 'Gamma Bull','Buy to Open','Call hedging','Put selling','Hedge Flow','unusual activity','Delta Neutral'
-	const parseFlow = (f?: string) => {
-		if(!f) return 0;
-		const key = f.toLowerCase();
-		if (key.includes('gamma bull')) return 3;       // very strong positive flow
-		if (key.includes('buy to open')) return 2;      // bullish opening call buying
-		if (key.includes('call hedging')) return 1;     // mild positive (institutional hedging)
-		if (key.includes('put selling')) return -2;     // negative / defensive pressure
-		if (key.includes('hedge flow')) return -1;      // mild negative hedging
-		if (key.includes('unusual activity')) return 0; // treat as neutral directionally (could split later)
-		if (key.includes('delta neutral')) return 0;    // neutral
-		return 0;
-	};
-
-	const flowDirectionData = useMemo(()=>{
-		const map: Record<string,{sum:number;count:number}> = {};
-		enrichedData.forEach(d=>{
-			if(!d.intradayFlow) return;
-			const v = parseFlow(d.intradayFlow);
-			// include zeros to allow neutrality weighting if needed (kept in sum has no effect)
-			const sector = d.sector || 'Other';
-			if(!map[sector]) map[sector]={sum:0,count:0};
-			map[sector].sum += v;
-			map[sector].count += 1;
-		});
-		return Object.entries(map)
-			.map(([sector,val])=>({ sector, netFlow:+val.sum.toFixed(2) }))
-			.sort((a,b)=> Math.abs(b.netFlow) - Math.abs(a.netFlow))
-			.slice(0,12);
-	}, [enrichedData]);
-
-	const totalNetFlow = useMemo(()=> flowDirectionData.reduce((a,b)=> a + b.netFlow, 0), [flowDirectionData]);
-
-	const categoryColor = (cat:string) => {
-		switch(cat){
-			case 'Factor': return '#6366f1';
-			case 'Thematic': return '#f59e0b';
-			case 'Commodity': return '#d97706';
-			case 'International': return '#0ea5e9';
-			case 'Crypto': return '#84cc16';
-			case 'Forex': return '#14b8a6';
-			case 'LargeCap': return '#22d3ee';
-			default: return '#64748b';
-		}
-	};
-
-	const aiLabelColor = (lbl:string) => {
-		switch(lbl){
-			case 'STRONG BUY': return '#16a34a';
-			case 'BUY': return '#4ade80';
-			case 'HOLD': return '#64748b';
-			case 'SELL': return '#fb923c';
-			case 'STRONG SELL': return '#dc2626';
-			default: return '#94a3b8';
-		}
-	};
+	// (Chart datasets + helpers moved to lazy component)
 
 	// ======= Generic small tooltip components (avoid native title for multiline & styling) =======
 	const SmallTooltip: React.FC<{ lines: string[]; className?: string; }> = ({ lines, className='' }) => (
@@ -308,12 +238,7 @@ export default function DashboardPage() {
 		);
 	};
 
-	// Custom tooltip for Recharts
-	const ChartTooltip = ({ active, payload, label }: any) => {
-		if (!active || !payload || !payload.length) return null;
-		const lines = payload.map((p:any) => `${p.name||p.dataKey}: ${p.value}`);
-		return <SmallTooltip lines={[label, ...lines]} />;
-	};
+	// (Chart tooltip moved)
 
 				// Sector diagnostics (coverage + missing fields) with normalization + extended fields
 				const coreRequired: (keyof MarketData)[] = ['price','volume','trend','demandSupply','optionsSentiment','gammaRisk','putCallRatio'];
@@ -536,103 +461,11 @@ export default function DashboardPage() {
 										<span>Data refreshed {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'} (UTC)</span>
 										<span>VIX {vixData.price} ({vixData.volatilityLevel})</span>
 									</div>
-								{/* Charts Section */}
-								<div className="mt-6 bg-slate-800 border border-slate-700 rounded p-4">
-									<div className="flex items-center gap-2 mb-3 text-xs">
-										<button onClick={()=>setShowCharts(s=>!s)} className="px-2 py-1 rounded border border-slate-600 bg-slate-700 hover:bg-slate-600 font-medium">{showCharts?'Hide Charts':'Show Charts'}</button>
-										{['sectors','categories','ai','scatter'].map(m=> (
-											<button key={m} onClick={()=>setChartMode(m as any)} className={`px-2 py-1 rounded border text-[11px] ${chartMode===m?'bg-blue-600 border-blue-500':'bg-slate-700 border-slate-600 hover:bg-slate-600'}`}>{m}</button>
-										))}
-										<span className="ml-auto text-[10px] text-gray-400">Experimental analytical charts</span>
-									</div>
-									{showCharts && (
-										<div className="grid gap-6 md:grid-cols-2">
-											{chartMode==='sectors' && (
-												<div className="h-72">
-													<h3 className="text-xs font-semibold mb-2 text-gray-300">Top Sector Avg Performance (%)</h3>
-													<ResponsiveContainer width="100%" height="100%">
-														<BarChart data={sectorPerfData}>
-															<CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-															<XAxis dataKey="sector" hide={false} tick={{fontSize:10, fill:'#94a3b8'}} interval={0} angle={-35} textAnchor='end' height={70} />
-															<YAxis tick={{fontSize:10, fill:'#94a3b8'}} width={35} />
-															<RTooltip content={<ChartTooltip />} />
-															<Bar dataKey="avg" radius={[2,2,0,0]}>
-																{sectorPerfData.map((d,i)=>(<Cell key={i} fill={d.avg>=0?'#16a34a':'#dc2626'} />))}
-															</Bar>
-														</BarChart>
-													</ResponsiveContainer>
-												</div>
-											)}
-											{chartMode==='categories' && (
-												<div className="h-72">
-													<h3 className="text-xs font-semibold mb-2 text-gray-300">Category Distribution (Count)</h3>
-													<ResponsiveContainer width="100%" height="100%">
-														<PieChart>
-															<Pie data={categoryDistribution} dataKey="value" nameKey="category" outerRadius={90} innerRadius={40} paddingAngle={2}>
-																{categoryDistribution.map((d,i)=>(<Cell key={i} fill={categoryColor(d.category)} />))}
-															</Pie>
-															<RTooltip content={<ChartTooltip />} />
-															<Legend wrapperStyle={{fontSize:'9px'}}/>
-														</PieChart>
-													</ResponsiveContainer>
-												</div>
-											)}
-											{chartMode==='ai' && (
-												<div className="h-72">
-													<h3 className="text-xs font-semibold mb-2 text-gray-300">Top AI Composite Scores</h3>
-													<ResponsiveContainer width="100%" height="100%">
-														<BarChart data={topAISignals}>
-															<CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-															<XAxis dataKey="ticker" tick={{fontSize:10, fill:'#94a3b8'}} interval={0} angle={-25} textAnchor='end' height={60} />
-															<YAxis tick={{fontSize:10, fill:'#94a3b8'}} width={30} domain={[0,100]} />
-															<RTooltip content={<ChartTooltip />} />
-															<Bar dataKey="score" radius={[2,2,0,0]}>
-																{topAISignals.map((d,i)=>(<Cell key={i} fill={aiLabelColor(d.label)} />))}
-															</Bar>
-														</BarChart>
-													</ResponsiveContainer>
-												</div>
-											)}
-											{chartMode==='scatter' && (
-												<>
-												<div className="h-72 md:col-span-2">
-													<h3 className="text-xs font-semibold mb-2 text-gray-300">Momentum vs Relative Strength</h3>
-													<ResponsiveContainer width="100%" height="100%">
-														<ScatterChart>
-															<CartesianGrid stroke="#334155" />
-															<XAxis type="number" dataKey="momentum" name="Momentum" domain={[0,100]} tick={{fontSize:10, fill:'#94a3b8'}} label={{ value:'Momentum', position:'insideBottomRight', offset:-2, fill:'#94a3b8', fontSize:10 }} />
-															<YAxis type="number" dataKey="rs" name="RS" domain={[0,100]} tick={{fontSize:10, fill:'#94a3b8'}} label={{ value:'RS', angle:-90, position:'insideLeft', fill:'#94a3b8', fontSize:10 }}/>
-															<RTooltip content={<ChartTooltip />} cursor={{stroke:'#475569'}}/>
-															<Scatter data={momentumVsRS} fill="#3b82f6" shape="circle">
-																{momentumVsRS.map((d,i)=>(<Cell key={i} fill={categoryColor(d.category)} />))}
-															</Scatter>
-															<Legend wrapperStyle={{fontSize:'9px'}}/>
-														</ScatterChart>
-													</ResponsiveContainer>
-												</div>
-												<div className="h-72 md:col-span-2">
-													<h3 className="text-xs font-semibold mb-2 text-gray-300">Flow Direction (Intraday Net Flow by Sector)</h3>
-													<ResponsiveContainer width="100%" height="100%">
-														<BarChart data={flowDirectionData}>
-															<CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-															<XAxis dataKey="sector" tick={{fontSize:10, fill:'#94a3b8'}} interval={0} angle={-35} textAnchor='end' height={70} />
-															<YAxis tick={{fontSize:10, fill:'#94a3b8'}} width={40} />
-															<RTooltip content={<ChartTooltip />} />
-															<Bar dataKey="netFlow" radius={[2,2,0,0]}>
-																{flowDirectionData.map((d,i)=>(<Cell key={i} fill={d.netFlow>=0?'#16a34a':'#dc2626'} />))}
-															</Bar>
-														</BarChart>
-													</ResponsiveContainer>
-													<div className="mt-1 text-[10px] text-gray-400">Total Net Flow: <span className={totalNetFlow>=0?'text-green-400':'text-red-400'}>{totalNetFlow.toFixed(2)}</span></div>
-												</div>
-												</>
-											)}
-										</div>
-									)}
-									<div className="mt-3 text-[10px] text-gray-500">
-										<span>Methodology: Sector avg = mean of current % changes. AI Top = composite (momentum/RS). Scatter axes scaled 0-100. No synthetic smoothing.</span>
-									</div>
-								</div>
+								{/* Lazy charts mount */}
+								<div ref={chartsRef} className="mt-6" />
+								{chartsReady && (
+									<DashboardCharts enrichedData={enrichedData as any} />
+								)}
 								</div>
 				<Footer />
 			</div>

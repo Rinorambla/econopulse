@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
@@ -9,6 +10,8 @@ import { supabase } from '@/lib/supabase';
 
 export default function ForgotPasswordPage() {
   const t = useTranslations();
+  const params = useParams();
+  const locale = params.locale || 'en';
   
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,7 +26,7 @@ export default function ForgotPasswordPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/en/reset-password`,
+        redirectTo: `${window.location.origin}/${locale}/reset-password`,
       });
 
       if (error) {
@@ -106,7 +109,7 @@ export default function ForgotPasswordPage() {
 
           <div className="mt-6 text-center">
             <Link 
-              href="/en/login" 
+              href={`/${locale}/login`}
               className="inline-flex items-center text-sm font-semibold text-blue-400 hover:text-blue-300"
             >
               <ArrowLeftIcon className="h-4 w-4 mr-2" />

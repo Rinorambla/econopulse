@@ -368,4 +368,41 @@ Comparsa automatica quando il browser emette `beforeinstallprompt`. Stile eviden
 ### Note Locale
 `start_url` attuale è `/` e il middleware rerouterà al locale corretto. Mantiene un’unica install entry (semplifica distribuzione).
 
+## 🔐 Sicurezza & Headers
+Sono impostati header di sicurezza globali (in `next.config.js`):
+- Content-Security-Policy (baseline con Stripe, Supabase, OpenAI)
+- Referrer-Policy: strict-origin-when-cross-origin
+- Permissions-Policy: disabilita camera/microphone/geolocation
+- X-Frame-Options: DENY
+- X-Content-Type-Options: nosniff
+- Strict-Transport-Security: 2 anni + preload
+
+Per aggiungere altre origini ai servizi (es. analytics) modificare `csp` in `next.config.js`.
+
+## 📨 Push Notification (Scaffold)
+- Endpoint subscribe: `POST /api/push/subscribe` con JSON Web Push subscription.
+- Storage: file JSON locale `data-snapshots/push-subscriptions.json` (mock). In produzione migrare su DB (es. Supabase) con encryption at rest.
+- Libreria `web-push` già installata: usare VAPID keys (generare una volta) e inviare notifiche iterando le subscriptions.
+
+Esempio invio (script manuale):
+```ts
+import webpush from 'web-push';
+import { listSubscriptions } from './src/lib/push';
+webpush.setVapidDetails('mailto:you@example.com', process.env.VAPID_PUBLIC!, process.env.VAPID_PRIVATE!);
+for (const s of listSubscriptions()) {
+   await webpush.sendNotification(s as any, JSON.stringify({ title: 'Test', body: 'Hello' }));
+}
+```
+
+## 🛡️ Checklist Hardening Produzione
+- [x] CSP baseline
+- [x] HSTS + preload
+- [x] Disabilitato poweredByHeader
+- [x] PWA offline + update
+- [x] Background sync scaffold
+- [ ] Rate limiting avanzato per endpoint ad alto rischio (estendere `rate-limit.ts`)
+- [ ] Logging centralizzato (es. Logtail / Axiom) 
+- [ ] Integrazione error monitoring (Sentry / OpenTelemetry)
+- [ ] Cifratura subscription push (EC) + revoca
+
 

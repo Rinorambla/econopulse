@@ -23,12 +23,24 @@ function limitCache(cacheName, max) {
 // Install Service Worker
 self.addEventListener('install', (event) => {
   console.log('[SW] Install v', VERSION);
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-      .catch(err => console.error('[SW] Install error', err))
-  );
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(STATIC_CACHE);
+      await cache.addAll(STATIC_ASSETS);
+      // Best-effort prefetch of sentiment endpoint (non-blocking failure)
+      try {
+        const sentimentRes = await fetch('/api/market-sentiment-new', { cache: 'no-store' });
+        if (sentimentRes.ok) {
+          const clone = sentimentRes.clone();
+          const dyn = await caches.open(DYNAMIC_CACHE);
+          await dyn.put('/api/market-sentiment-new', clone);
+        }
+      } catch {}
+      await self.skipWaiting();
+    } catch (err) {
+      console.error('[SW] Install error', err);
+    }
+  })());
 });
 
 // Activate Service Worker

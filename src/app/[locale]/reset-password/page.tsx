@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Footer from '@/components/Footer';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,8 @@ export default function ResetPasswordPage() {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const params = useParams();
+  const locale = params.locale || 'en';
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -61,7 +63,7 @@ export default function ResetPasswordPage() {
       } else {
         setSuccess('Password updated successfully! Redirecting to login...');
         setTimeout(() => {
-          router.push('/en/login');
+          router.push(`/${locale}/login`);
         }, 2000);
       }
     } catch (err) {
@@ -180,7 +182,7 @@ export default function ResetPasswordPage() {
 
           <div className="mt-6 text-center">
             <Link 
-              href="/en/login" 
+              href={`/${locale}/login`}
               className="text-sm font-semibold text-blue-400 hover:text-blue-300"
             >
               Back to sign in

@@ -5,31 +5,12 @@ import { ArrowLeftIcon, ChartBarIcon, ArrowTrendingUpIcon, ExclamationTriangleIc
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  ScatterChart,
-  Scatter,
-  Area,
-  AreaChart,
-  Legend,
-  LabelList
-} from 'recharts';
+import dynamic from 'next/dynamic';
+import LazyVisible from '@/components/LazyVisible';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList, ScatterChart, Scatter } from 'recharts';
+const HistoricalSimilarityChart = dynamic(() => import('@/components/charts/HistoricalSimilarityChart'), { ssr: false });
+const MarketRegimeArea = dynamic(() => import('@/components/charts/MarketRegimeArea'), { ssr: false });
+const SectorRiskRadar = dynamic(() => import('@/components/charts/SectorRiskRadar'), { ssr: false });
 
 interface HistoricalPattern {
   date: string;
@@ -381,54 +362,10 @@ export default function MarketDNAPage() {
                 Historical Similarity Trends
               </h2>
               
-          <div className="h-64 mb-4">
-                <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={similaritySeries}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="#d1d5db"
-                      fontSize={12}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
-                    <YAxis 
-                      stroke="#d1d5db" 
-                      fontSize={12}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <Tooltip 
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                      formatter={(value, name) => [`${value}%`, name]}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    />
-                    <Line type="monotone" dataKey="crisis2007" stroke="#dc2626" strokeWidth={3} name="2007 Crisis" dot={{ r:0 }} activeDot={{ r:5 }} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="bubble2000" 
-                      stroke="#ea580c" 
-                      strokeWidth={3}
-                      name="2000 Bubble"
-                      dot={{ r:0 }}
-                      activeDot={{ r:5 }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="pandemic2020" 
-                      stroke="#d97706" 
-                      strokeWidth={3}
-                      name="2020 Pandemic"
-                      dot={{ r:0 }}
-                      activeDot={{ r:5 }}
-                    />
-                    <Line type="monotone" dataKey="composite" stroke="#6366f1" strokeDasharray="4 4" strokeWidth={2} name="Composite" dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="h-64 mb-4">
+                <LazyVisible minHeight={256}>
+                  <HistoricalSimilarityChart data={similaritySeries as any} />
+                </LazyVisible>
               </div>
 
               <div className={`border-l-4 border-red-500 pl-4`}>
@@ -535,30 +472,10 @@ export default function MarketDNAPage() {
               <h2 className="text-xl font-bold mb-4 flex items-center">
                 🔄 Market Regime Evolution
               </h2>
-        <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={regimeSeries}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="#d1d5db"
-                      fontSize={12}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short' })}
-                    />
-                    <YAxis stroke="#d1d5db" fontSize={12} />
-                    <Tooltip 
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                      formatter={(value, name) => [
-                        typeof value === 'number' ? (name === 'riskLevel' ? `${value.toFixed(1)}%` : value.toFixed(1)) : value,
-                        name === 'riskLevel' ? 'Risk Level' : 'Volatility'
-                      ]}
-                    />
-                    <Area type="monotone" dataKey="riskLevel" stroke="#dc2626" fill="#dc2626" fillOpacity={0.55} strokeWidth={2} />
-                    <Area type="monotone" dataKey="volatility" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.35} strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="h-64">
+                <LazyVisible minHeight={256}>
+                  <MarketRegimeArea data={regimeSeries as any} />
+                </LazyVisible>
               </div>
             </div>
 
@@ -567,42 +484,10 @@ export default function MarketDNAPage() {
               <h2 className="text-xl font-bold mb-4 flex items-center">
                 🎯 Sector Risk Analysis
               </h2>
-        <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={radarSeries}>
-                    <PolarGrid stroke="#475569" />
-                    <PolarAngleAxis dataKey="sector" tick={{ fill: '#d1d5db', fontSize: 12 }} />
-                    <PolarRadiusAxis 
-                      angle={0} 
-                      domain={[0, 100]} 
-                      tick={{ fill: '#d1d5db', fontSize: 10 }}
-                      stroke="#64748b"
-                    />
-                    <Radar
-                      name="Risk Score"
-                      dataKey="riskScore"
-                      stroke="#dc2626"
-                      fill="#dc2626"
-                      fillOpacity={0.6}
-                      strokeWidth={3}
-                      dot={{ fill: '#dc2626', strokeWidth: 2, r: 4 }}
-                    />
-                    <Radar
-                      name="Momentum"
-                      dataKey="momentum"
-                      stroke="#3b82f6"
-                      fill="#3b82f6"
-                      fillOpacity={0.3}
-                      strokeWidth={3}
-                      dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                    />
-                    <Tooltip 
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
+              <div className="h-64">
+                <LazyVisible minHeight={256}>
+                  <SectorRiskRadar data={radarSeries as any} />
+                </LazyVisible>
               </div>
             </div>
           </div>

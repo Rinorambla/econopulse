@@ -7,7 +7,9 @@ import Link from 'next/link';
 import { TrendingUp, TrendingDown, BarChart3, Target, RefreshCw, ArrowLeft, Calendar, Clock, Activity, Globe, DollarSign, Briefcase, PieChart } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MarketCategoriesEmbed = dynamic(()=> import('@/components/analytics/MarketCategoriesEmbed'), { ssr:false });
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+// Recharts moved to a lazy component to reduce initial JS
+const SectorPerformanceLazy = dynamic(() => import('@/components/charts/SectorPerformanceLazy'), { ssr: false });
+const ETFLineChartLazy = dynamic(() => import('@/components/charts/ETFLineChartLazy'), { ssr: false });
 // Calendars
 const EconomicCalendar = dynamic(() => import('@/components/analytics/EconomicCalendar').then(m=>m.EconomicCalendar), { ssr:false })
 const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m=>m.EarningsCalendar), { ssr:false })
@@ -832,28 +834,25 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             </div>
             <p className="-mt-3 mb-4 text-[10px] text-gray-500">6M, YTD e 52W attualmente riutilizzano l'aggregazione Yearly finché non saranno disponibili metriche dedicate.</p>
             {sectorData.length>0 && <div className="space-y-6">
-              <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3 flex items-center justify-between">Sector Performance - {getPeriodLabel()} <span className="text-[10px] uppercase tracking-wide text-gray-400">Real Data</span></h4><div className="h-80"><ResponsiveContainer width="100%" height="100%">{sectorView==='bar' ? (
-                <BarChart data={sortedSectors} margin={{top:20,right:30,left:20,bottom:5}}>
-                  <defs><linearGradient id="perfGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#38bdf8" stopOpacity={0.95} /><stop offset="100%" stopColor="#1e3a8a" stopOpacity={0.15} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="sector" tick={{fontSize:11,fill:'#f1f5f9'}} angle={-40} textAnchor="end" height={90} />
-                  <YAxis tick={{fontSize:11,fill:'#f1f5f9'}} label={{value:'Performance (%)',angle:-90,position:'insideLeft',style:{textAnchor:'middle',fill:'#f1f5f9'}}} />
-                  <Tooltip contentStyle={{backgroundColor:'rgba(15,23,42,0.95)',border:'1px solid rgba(148,163,184,0.3)',borderRadius:'8px',color:'#fff'}} formatter={(v:any,_n:any,p:any)=> [`${Number(v).toFixed(2)}%`, p.payload.sector]} />
-                  <Bar dataKey={(e:SectorPerformance)=> getPerformanceValue(e)} fill="url(#perfGradient)" stroke="#60a5fa" strokeWidth={1} radius={[4,4,0,0]} />
-                </BarChart>
-              ) : (
-                <LineChart data={sortedSectors} margin={{top:20,right:30,left:10,bottom:5}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="sector" tick={{fontSize:11,fill:'#f1f5f9'}} angle={-40} textAnchor="end" height={90} />
-                  <YAxis tick={{fontSize:11,fill:'#f1f5f9'}} />
-                  <Tooltip contentStyle={{backgroundColor:'rgba(15,23,42,0.95)',border:'1px solid rgba(148,163,184,0.3)',borderRadius:'8px',color:'#fff'}} />
-                  <Line type="monotone" dataKey="daily" stroke="#60a5fa" strokeWidth={2} dot={false} name="Daily %" />
-                  <Line type="monotone" dataKey="weekly" stroke="#34d399" strokeWidth={2} dot={false} name="Weekly %" />
-                  <Line type="monotone" dataKey="monthly" stroke="#fbbf24" strokeWidth={2} dot={false} name="Monthly %" />
-                  <Line type="monotone" dataKey="quarterly" stroke="#a78bfa" strokeWidth={2} dot={false} name="Quarterly %" />
-                  <Line type="monotone" dataKey="yearly" stroke="#f87171" strokeWidth={2} dot={false} name="Yearly %" />
-                </LineChart>
-              )}</ResponsiveContainer></div></div>
+              <div className="bg-white/5 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-3 flex items-center justify-between">
+                  Sector Performance - {getPeriodLabel()} <span className="text-[10px] uppercase tracking-wide text-gray-400">Real Data</span>
+                </h4>
+                <div className="h-80">
+                  <SectorPerformanceLazy
+                    data={sortedSectors.map(s => ({
+                      sector: s.sector,
+                      daily: s.daily,
+                      weekly: s.weekly,
+                      monthly: s.monthly,
+                      quarterly: s.quarterly,
+                      yearly: s.yearly,
+                      value: getPerformanceValue(s)
+                    }))}
+                    view={sectorView}
+                  />
+                </div>
+              </div>
               {showHeatmap && <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3 flex items-center justify-between">Performance Heatmap <span className="text-[10px] uppercase tracking-wide text-gray-400">Tap a sector to filter movers</span></h4><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">{sortedSectors.map(sec=> { const val=getPerformanceValue(sec); const active = selectedSector && selectedSector.toLowerCase()===sec.sector.toLowerCase(); return <button key={sec.sector} onClick={()=> setSelectedSector(active? '': sec.sector)} className={`rounded-lg p-3 text-center border backdrop-blur-sm hover:scale-[1.03] transition-transform w-full ${active? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900':''}`} style={{background:performanceToGradient(val), borderColor:'rgba(255,255,255,0.1)'}}><p className="text-xs font-medium truncate mb-1">{sec.sector}</p><p className={`text-sm font-bold ${getPerformanceColor(val)}`}>{val>=0?'+':''}{val.toFixed(2)}%</p></button>; })}</div></div>}
               {(topMovers.length>0 || bottomMovers.length>0) && (
                 <div className="bg-white/5 rounded-lg p-4">
@@ -954,15 +953,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         {etfSeriesLoading ? (
                           <div className="w-full h-full animate-pulse bg-white/5 rounded" />
                         ) : (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={etfSeries} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                              <XAxis dataKey="time" type="number" domain={["dataMin","dataMax"]} tick={{fontSize:11,fill:'#f1f5f9'}} tickFormatter={(t)=> new Date(Number(t)).toLocaleDateString()} />
-                              <YAxis tick={{fontSize:11,fill:'#f1f5f9'}} label={{ value: etfSpreadType==='percent' ? 'Spread (%)' : 'Spread ($)', angle: -90, position: 'insideLeft', style:{ textAnchor:'middle', fill:'#f1f5f9' } }} />
-                              <Tooltip contentStyle={{backgroundColor:'rgba(15,23,42,0.95)',border:'1px solid rgba(148,163,184,0.3)',borderRadius:'8px',color:'#ffffff'}} formatter={(v:any)=> etfSpreadType==='percent' ? [`${Number(v).toFixed(2)}%`, 'Spread'] : [`$${Number(v).toFixed(2)}`, 'Spread']} labelFormatter={(l)=> new Date(Number(l)).toLocaleDateString()} />
-                              <Line type="monotone" dataKey="spread" stroke="#60a5fa" strokeWidth={2} dot={false} activeDot={{ r: 3, stroke: '#93c5fd', strokeWidth: 1 }} />
-                            </LineChart>
-                          </ResponsiveContainer>
+                          <ETFLineChartLazy mode="spread" data={etfSeries as any} spreadType={etfSpreadType} />
                         )}
                       </div>
                       <p className="mt-2 text-[10px] text-gray-500">Spread defined as {etfSpreadType==='percent'? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
@@ -971,15 +962,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <div className="bg-white/5 rounded-lg p-4">
                       <h4 className="text-white font-semibold mb-3 capitalize">{etfMetric==='price'?'Price':etfMetric==='change'?'Daily Change %':etfMetric==='volume'?'Volume':etfMetric==='ytdReturn'?'YTD Return %':etfMetric==='expense'?'Expense Ratio %':'Volatility %'} Comparison</h4>
                       <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={currentComparison} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                            <XAxis dataKey="symbol" tick={{fontSize:12,fill:'#f1f5f9'}} />
-                            <YAxis tick={{fontSize:11,fill:'#f1f5f9'}} label={etfMetric==='price'?{value:'Price ($)',angle:-90,position:'insideLeft',style:{textAnchor:'middle',fill:'#f1f5f9'}}:undefined} />
-                            <Tooltip contentStyle={{backgroundColor:'rgba(15,23,42,0.95)',border:'1px solid rgba(148,163,184,0.3)',borderRadius:'8px',color:'#ffffff'}} formatter={(v:any)=> etfMetric==='price'?[`$${Number(v).toFixed(2)}`,'Price']:etfMetric==='volume'?[Number(v).toLocaleString(),'Volume']:[`${Number(v).toFixed(2)}%`,'Value']} />
-                            <Line type="monotone" dataKey={etfMetric} stroke="#6366f1" strokeWidth={2} dot={{ r: 3, stroke: '#818cf8', strokeWidth: 1, fill: '#818cf8' }} activeDot={{ r: 4, stroke: '#93c5fd', strokeWidth: 1 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <ETFLineChartLazy mode="value" data={currentComparison as any} metric={etfMetric} />
                       </div>
                     </div>
                   )}

@@ -22,6 +22,9 @@ import {
   Cpu,
   Database
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import LazyVisible from '@/components/LazyVisible';
+// Defer Recharts heavy components to client-only dynamic import
 import { 
   LineChart,
   Line,
@@ -37,7 +40,10 @@ import {
   Bar,
   Cell
 } from 'recharts';
-import SPXChart from '@/components/SPXChart';
+const ProbabilitySparkline = dynamic(() => import('@/components/charts/ProbabilitySparkline'), { ssr: false });
+const PopulationGrowthBarChart = dynamic(() => import('@/components/charts/PopulationGrowthBarChart'), { ssr: false });
+const DebtToGDPBarChart = dynamic(() => import('@/components/charts/DebtToGDPBarChart'), { ssr: false });
+const SPXChart = dynamic(() => import('@/components/SPXChart'), { ssr: false });
 
 // Lightweight fetch with timeout to avoid long stalls on slow endpoints
 const fetchWithTimeout = (url: string, timeoutMs = 5000): Promise<Response | null> => {
@@ -1505,66 +1511,26 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
               <div className="text-2xl font-bold text-white">{latest ? `${latest.probability}%` : '—'}</div>
               <div className="text-xs text-gray-400">{latest?.date?.slice(0,10)}</div>
             </div>
-            <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3,3" stroke="#ffffff15" />
-                <XAxis dataKey="date" hide />
-                <YAxis domain={[0, 100]} hide />
-                <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <LazyVisible minHeight={120}>
+              <ProbabilitySparkline data={data} />
+            </LazyVisible>
           </div>
         );
       }
       case 'population':
       case 'population_fallback':
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="country" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '10px', minWidth: '280px' }}
-              labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
-              formatter={(value, name, props:any) => {
-                const d = props.payload;
-                return [
-                  <div key="pop-tooltip" style={{ color: '#f9fafb', fontSize: '12px' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: 8 }}>🌍 {d.country}</div>
-                    <div>Population: <span style={{ fontWeight: 600 }}>{formatPopulation(d.population)}</span></div>
-                    <div>Growth: <span style={{ fontWeight: 600, color: d.growthRate>=1? '#22c55e':'#eab308' }}>{formatPercent(d.growthRate, 2)}</span></div>
-                    <div>Urbanization: <span style={{ fontWeight: 600 }}>{formatPercent(d.urbanization, 1)}</span></div>
-                    <div>Density: <span style={{ fontWeight: 600 }}>{formatNumber(d.density)}</span> /km²</div>
-                    <div>Median Age: <span style={{ fontWeight: 600 }}>{formatNumber(d.medianAge, 1)}</span></div>
-                  </div>, ''
-                ];
-              }}
-            />
-            <Bar dataKey="growthRate" name="Growth %" fill="#22d3ee" />
-          </BarChart>
+          <LazyVisible minHeight={300}>
+            <PopulationGrowthBarChart data={widget.data} />
+          </LazyVisible>
         );
       
       case 'debt':
       case 'debt_fallback':
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="country" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              labelStyle={{ color: '#f9fafb' }}
-            />
-            <Bar dataKey="debtToGdp">
-              {widget.data.map((entry: DebtData, index: number) => (
-                <Cell key={`cell-${index}`} fill={
-                  entry.riskLevel === 'low' ? '#22c55e' :
-                  entry.riskLevel === 'medium' ? '#eab308' :
-                  entry.riskLevel === 'high' ? '#f97316' : '#ef4444'
-                } />
-              ))}
-            </Bar>
-          </BarChart>
+          <LazyVisible minHeight={320}>
+            <DebtToGDPBarChart data={widget.data} />
+          </LazyVisible>
         );
       
       case 'yields':

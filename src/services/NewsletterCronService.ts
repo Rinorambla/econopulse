@@ -139,7 +139,13 @@ class NewsletterCronService {
 // Singleton instance
 export const newsletterCron = NewsletterCronService.getInstance();
 
-// Auto-start quando il modulo viene importato (solo in produzione)
-if (process.env.NODE_ENV === 'production') {
+// Auto-start solo in ambienti Node persistenti e quando esplicitamente abilitato
+// Evita di avviare cron su edge/serverless dove i process non sono persistenti
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.NEWSLETTER_CRON_ENABLED === 'true' &&
+  typeof process !== 'undefined' &&
+  process.release?.name === 'node'
+) {
   newsletterCron.startWeeklyNewsletter();
 }

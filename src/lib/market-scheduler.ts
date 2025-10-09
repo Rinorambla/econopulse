@@ -11,7 +11,11 @@ export class MarketDataScheduler {
   private scheduler: NodeJS.Timeout | null = null;
   
   constructor() {
-    this.initializeScheduler();
+    // Avoid background timers in serverless/Node runtimes
+    // Only initialize periodic checks in a real browser environment
+    if (typeof window !== 'undefined') {
+      this.initializeScheduler();
+    }
   }
 
   private initializeScheduler() {

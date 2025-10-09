@@ -1,8 +1,10 @@
 // ——— EconoPulse Service Worker (Enhanced) ———
 // Version bump when changing caching logic
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const STATIC_CACHE = `econopulse-static-${VERSION}`;
 const DYNAMIC_CACHE = `econopulse-dynamic-${VERSION}`;
+// Unified cache name for convenience in some handlers
+const CACHE_NAME = DYNAMIC_CACHE;
 const STATIC_ASSETS = [
   '/',
   '/offline.html',
@@ -71,7 +73,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   // Ignore analytics or external sources we don't want to cache
-  if (url.origin !== self.location.origin && !/\.(?:png|jpg|jpeg|svg|webp|woff2?)$/i.test(url.pathname)) return;
+  if (url.origin !== self.location.origin) {
+    // Skip caching for cross-origin HTML/JS; allow passive caching of images/fonts
+    const isAsset = /\.(?:png|jpg|jpeg|svg|webp|woff2?)$/i.test(url.pathname);
+    if (!isAsset) return;
+  }
 
   // API: use network first with fallback to cache if previously stored (only selected endpoints)
   if (url.pathname.startsWith('/api/')) {

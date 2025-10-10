@@ -1,6 +1,6 @@
 // ——— EconoPulse Service Worker (Enhanced) ———
 // Version bump when changing caching logic
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 const STATIC_CACHE = `econopulse-static-${VERSION}`;
 const DYNAMIC_CACHE = `econopulse-dynamic-${VERSION}`;
 // Unified cache name for convenience in some handlers
@@ -38,7 +38,7 @@ self.addEventListener('install', (event) => {
           await dyn.put('/api/market-sentiment-new', clone);
         }
       } catch {}
-      await self.skipWaiting();
+  // Do NOT auto-activate; wait for explicit SKIP_WAITING from the UI
     } catch (err) {
       console.error('[SW] Install error', err);
     }
@@ -95,17 +95,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML navigations: network first -> offline page fallback
+  // Helper: network fetch with timeout
+  const fetchWithTimeout = (req, ms = 6000) => {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms);
+    return fetch(req, { signal: ctrl.signal }).finally(() => clearTimeout(id));
+  };
+
+  // HTML navigations: stale-while-revalidate with network timeout -> avoids sudden offline fallback
   if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
-    event.respondWith(
-      fetch(request)
-        .then(res => {
-          const clone = res.clone();
-          caches.open(DYNAMIC_CACHE).then(c => c.put(request, clone));
-          return res;
-        })
-        .catch(async () => (await caches.match(request)) || (await caches.match('/offline.html')))
-    );
+    event.respondWith((async () => {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      const cached = await cache.match(request);
+      if (cached) {
+        // Revalidate in background
+        fetchWithTimeout(request, 6000)
+          .then(res => { if (res && res.ok) cache.put(request, res.clone()); })
+          .catch(() => {});
+        return cached;
+      }
+      try {
+        const res = await fetchWithTimeout(request, 7000);
+        if (res && res.ok) await cache.put(request, res.clone());
+        return res;
+      } catch {
+        // Last resort
+        return (await caches.match('/offline.html')) || Response.error();
+      }
+    })());
     return;
   }
 

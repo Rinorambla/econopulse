@@ -40,8 +40,24 @@ export const PWAUpdateAndInstall: React.FC = () => {
 
   const activateUpdate = useCallback(() => {
     swState.waiting?.postMessage({ type: 'SKIP_WAITING' });
-    // Force reload after a short delay
-    setTimeout(() => window.location.reload(), 400);
+    // Reload only when the new SW takes control AND tab is visible
+    let reloaded = false;
+    const maybeReload = () => {
+      if (reloaded) return;
+      if (document.visibilityState !== 'visible') return; // avoid disrupting when tab is hidden
+      reloaded = true;
+      window.location.reload();
+    };
+    // Fallback debounce in case message is missed
+    const timer = setTimeout(maybeReload, 1500);
+    const onMsg = (event: MessageEvent) => {
+      if (event.data?.type === 'SW_ACTIVATED') {
+        clearTimeout(timer);
+        maybeReload();
+        navigator.serviceWorker.removeEventListener('message', onMsg);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
   }, [swState.waiting]);
 
   // Install prompt handling (evident style)

@@ -213,8 +213,8 @@ export default function MarketDNAPage() {
     fetchMarketDNA();
     
     // Auto-refresh every 2 hours
-    const interval = setInterval(fetchMarketDNA, 7200000);
-    return () => clearInterval(interval);
+  const interval = setInterval(fetchMarketDNA, 7200000);
+  return () => { if (interval) clearInterval(interval); };
   }, []);
 
   // Peak signals state (real API)

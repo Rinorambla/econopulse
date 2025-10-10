@@ -250,8 +250,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
   // Auto-refresh: macro/sector/etf every 5 minutes; movers every 60s
   useEffect(()=>{
-  const heavy = setInterval(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchRiskRatios(); fetchRecessionIndex(); }, 300000);
-    const movers = setInterval(()=>{ fetchTopMovers(); }, 60000);
+  const heavy = setInterval(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchRiskRatios(); fetchRecessionIndex(); }, 600000);
+    const movers = setInterval(()=>{ fetchTopMovers(); }, 120000);
     return ()=>{ clearInterval(heavy); clearInterval(movers); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);

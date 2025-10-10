@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 // Removed unused NavigationLink and NewsWidget
 import { useAuth } from '@/hooks/useAuth';
@@ -13,9 +13,6 @@ const Footer = () => {
   const locale = useLocale();
   const router = useRouter();
   const { user } = useAuth();
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-  const [error, setError] = useState('');
 
   const currentYear = new Date().getFullYear();
 
@@ -41,34 +38,7 @@ const Footer = () => {
     router.push(`/${locale}${href}`);
   };
 
-  const handleNewsletterSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!email || !email.includes('@')) {
-      setError(t('footer.newsletter.error'));
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/newsletter', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (response.ok) {
-        setSubscribed(true);
-        setEmail('');
-      } else {
-        setError(t('footer.newsletter.error'));
-      }
-    } catch (error) {
-      setError(t('footer.newsletter.error'));
-    }
-  };
+  // Newsletter removed per request: no subscription UI and no API calls
 
   type FooterLink = {
     key: string;
@@ -126,42 +96,7 @@ const Footer = () => {
 
             {/* Contact Info intentionally removed: shown only on Contact page per request */}
 
-            {/* Newsletter Subscription */}
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold text-white">
-                {t('footer.newsletter.title')}
-              </h4>
-              
-              {!subscribed ? (
-                <form onSubmit={handleNewsletterSubscribe} className="space-y-3">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder={t('footer.newsletter.placeholder')}
-                      className="flex-1 px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <button
-                      type="submit"
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105"
-                    >
-                      {t('footer.newsletter.subscribe')}
-                    </button>
-                  </div>
-                  {error && (
-                    <p className="text-red-400 text-sm">{error}</p>
-                  )}
-                </form>
-              ) : (
-                <div className="flex items-center space-x-2 text-green-400">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>{t('footer.newsletter.success')}</span>
-                </div>
-              )}
-            </div>
+            {/* Newsletter removed */}
           </div>
 
           {/* Navigation Links */}

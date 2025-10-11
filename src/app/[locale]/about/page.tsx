@@ -86,8 +86,8 @@ export default function AboutPage() {
                     <div>
                       <h5 className="font-medium text-white mb-2">Email</h5>
                       <p className="text-gray-300">
-                        <a href="mailto:econopulse.info@econopulse.ai" className="text-blue-400 hover:text-blue-300">
-                          econopulse.info@econopulse.ai
+                        <a href="mailto:info@econopulse.ai" className="text-blue-400 hover:text-blue-300">
+                          info@econopulse.ai
                         </a>
                       </p>
                     </div>

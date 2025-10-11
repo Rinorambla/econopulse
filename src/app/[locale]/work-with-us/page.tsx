@@ -27,8 +27,8 @@ export default function WorkWithUsPage() {
         </p>
         <p className="mt-4 text-white/90">
           Send your CV and a short intro to{' '}
-          <a href="mailto:econopulse.info@econopulse.ai" className="underline hover:text-white">
-            econopulse.info@econopulse.ai
+          <a href="mailto:info@econopulse.ai" className="underline hover:text-white">
+            info@econopulse.ai
           </a>.
         </p>
 

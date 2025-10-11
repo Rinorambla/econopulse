@@ -13,7 +13,7 @@ export default function HelpPage() {
   }
 
   const t = useTranslations();
-  const email = 'econopulse.info@econopulse.ai';
+  const email = 'support@econopulse.ai';
 
   const [query, setQuery] = useState('');
   const faqs = useMemo(

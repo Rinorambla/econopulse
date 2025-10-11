@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase-server';
 import { normalizePlan } from '@/lib/plan-access';
 
 // Admin email configuration - hardcoded for server-side check
-const ADMIN_EMAIL = 'econopulse.info@econopulse.ai';
+const ADMIN_EMAIL = 'info@econopulse.ai';
 
 function isAdminEmail(email: string | undefined): boolean {
   if (!email) return false;

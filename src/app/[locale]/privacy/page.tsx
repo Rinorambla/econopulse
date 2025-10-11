@@ -125,7 +125,7 @@ export default function PrivacyPolicy() {
             </p>
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-700">
-                Email: econopulse.info@econopulse.ai<br />
+                Email: info@econopulse.ai<br />
                 EconoPulse<br />
                 Via Tassoni 1<br />
                 41049 Sassuolo (MO), Italy

@@ -320,7 +320,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For support, email support@econopulse.com or join our Discord community.
+For support, email support@econopulse.ai or join our Discord community.
+
+For general inquiries, contact info@econopulse.ai.
 
 ## 🙏 Acknowledgments
 

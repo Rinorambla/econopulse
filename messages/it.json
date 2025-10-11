@@ -252,10 +252,12 @@
       "error": "Inserisci un indirizzo email valido"
     },
     "contact_info": {
-      "email": "econopulse.info@econopulse.ai",
-      "phone": "+3553519509674",
+      "email": "info@econopulse.ai",
+      "support": "support@econopulse.ai",
+      "phone": "+393519509674",
       "address": "Viale Tassoni 1, Sassuolo (MO)"
     },
+    "contact_us": "Contattaci",
     "market_analysis": "Analisi di Mercato",
     "dashboard": "Dashboard",
     "ai_portfolio": "AI Portfolio",

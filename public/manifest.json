@@ -10,6 +10,10 @@
   "scope": "/",
   "lang": "en",
   "categories": ["finance", "business", "productivity", "news"],
+  "contact": {
+    "email": "info@econopulse.ai",
+    "support": "support@econopulse.ai"
+  },
   "icons": [
     {
       "src": "/icons/icon-72x72.png",

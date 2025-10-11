@@ -209,7 +209,7 @@ export default function CookiePolicy() {
               </p>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-gray-700">
-                  <strong>Email:</strong> econopulse.info@econopulse.ai<br />
+                  <strong>Email:</strong> info@econopulse.ai<br />
                   <strong>Address:</strong> Viale Tassoni 1, Sassuolo (MO)<br />
                   <strong>Phone:</strong> +393519509674
                 </p>

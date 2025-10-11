@@ -248,11 +248,27 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   };
 
   useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
-  // Auto-refresh: macro/sector/etf every 5 minutes; movers every 60s
+  // Auto-refresh with visibility guard to avoid hidden-tab work
   useEffect(()=>{
-  const heavy = setInterval(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchRiskRatios(); fetchRecessionIndex(); }, 600000);
-    const movers = setInterval(()=>{ fetchTopMovers(); }, 120000);
-    return ()=>{ clearInterval(heavy); clearInterval(movers); };
+    let stopped = false;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return; // skip hidden tabs
+      fetchSectorData();
+      fetchEconomicData();
+      fetchCountryData();
+      fetchAIAnalysis();
+      fetchETFData();
+      fetchRiskRatios();
+      fetchRecessionIndex();
+      fetchTopMovers();
+    };
+    const heavy = setInterval(()=>{ if (!stopped) tick(); }, 600000); // 10 min
+    const movers = setInterval(()=>{ if (document.visibilityState === 'visible') fetchTopMovers(); }, 180000); // 3 min
+    const onVis = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return ()=>{ stopped = true; clearInterval(heavy); clearInterval(movers); document.removeEventListener('visibilitychange', onVis); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
   // Refetch movers on sector/period/sync changes

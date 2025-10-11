@@ -96,7 +96,10 @@ const FearGreedIndex = () => {
 
   return (
     <div className="relative w-full h-full flex items-center justify-center p-3 sm:p-6">
-      <MarketParticles />
+      {/* Hide particles on very small screens and respect reduced motion via CSS media query */}
+      <div className="hidden sm:block motion-safe:opacity-100 motion-reduce:hidden">
+        <MarketParticles />
+      </div>
 
       {/* Cerchio centrale */}
       <div className={`relative w-28 h-28 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br ${getIndexColor(data.fearGreedIndex)} shadow-2xl ${getGlowColor(data.fearGreedIndex)} flex items-center justify-center`}>

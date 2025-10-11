@@ -1,6 +1,6 @@
 // ——— EconoPulse Service Worker (Enhanced) ———
 // Version bump when changing caching logic
-const VERSION = '1.1.2';
+const VERSION = '1.1.3';
 const STATIC_CACHE = `econopulse-static-${VERSION}`;
 const DYNAMIC_CACHE = `econopulse-dynamic-${VERSION}`;
 // Unified cache name for convenience in some handlers
@@ -74,9 +74,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   // Ignore analytics or external sources we don't want to cache
   if (url.origin !== self.location.origin) {
-    // Skip caching for cross-origin HTML/JS; allow passive caching of images/fonts
-    const isAsset = /\.(?:png|jpg|jpeg|svg|webp|woff2?)$/i.test(url.pathname);
-    if (!isAsset) return;
+    // Skip caching for cross-origin requests except safe static assets
+    const isStaticAsset = /\.(?:png|jpg|jpeg|svg|webp|gif|ico|woff2?)$/i.test(url.pathname);
+    if (!isStaticAsset) return;
   }
 
   // API: use network first with fallback to cache if previously stored (only selected endpoints)
@@ -96,7 +96,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Helper: network fetch with timeout
-  const fetchWithTimeout = (req, ms = 6000) => {
+  const fetchWithTimeout = (req, ms = 8000) => {
     const ctrl = new AbortController();
     const id = setTimeout(() => ctrl.abort(), ms);
     return fetch(req, { signal: ctrl.signal }).finally(() => clearTimeout(id));
@@ -109,13 +109,13 @@ self.addEventListener('fetch', (event) => {
       const cached = await cache.match(request);
       if (cached) {
         // Revalidate in background
-        fetchWithTimeout(request, 6000)
+        fetchWithTimeout(request, 7000)
           .then(res => { if (res && res.ok) cache.put(request, res.clone()); })
           .catch(() => {});
         return cached;
       }
       try {
-        const res = await fetchWithTimeout(request, 7000);
+        const res = await fetchWithTimeout(request, 8000);
         if (res && res.ok) await cache.put(request, res.clone());
         return res;
       } catch {
@@ -146,20 +146,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else: cache first with network fallback
+  // Everything else: network first with gentle fallback (avoid holding main thread)
   event.respondWith(
-    caches.match(request).then(cached =>
-      cached || fetch(request).then(res => {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-            caches.open(DYNAMIC_CACHE).then(c => {
-              c.put(request, clone);
-              limitCache(DYNAMIC_CACHE, MAX_DYNAMIC_ENTRIES);
-            });
-        }
-        return res;
-      }).catch(() => caches.match('/offline.html'))
-    )
+    fetchWithTimeout(request, 6000).then(res => {
+      if (res && res.ok) {
+        const clone = res.clone();
+        caches.open(DYNAMIC_CACHE).then(c => {
+          c.put(request, clone);
+          limitCache(DYNAMIC_CACHE, MAX_DYNAMIC_ENTRIES);
+        });
+      }
+      return res;
+    }).catch(() => caches.match(request).then(m => m || caches.match('/offline.html')))
   );
 });
 

@@ -35,7 +35,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [etfData, setEtfData] = useState<ETFData[]>([]);
   const [selectedComparison, setSelectedComparison] = useState('');
   // ETF comparison enhancements
-  const [etfCompareMode, setEtfCompareMode] = useState<'value'|'spread'>('spread');
+  // Simplified: spread-only mode by request
   const [etfSpreadType, setEtfSpreadType] = useState<'percent'|'absolute'>('percent');
   const [etfRange, setEtfRange] = useState<'1mo'|'3mo'|'6mo'|'1y'|'2y'|'5y'|'10y'|'max'>('3mo');
   const [etfSeries, setEtfSeries] = useState<Array<{ time:number; a?:number; b?:number; spread?:number }>>([]);
@@ -103,7 +103,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [sectorView, setSectorView] = useState<'bar'|'multi'>('bar');
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showMarketDetails, setShowMarketDetails] = useState(false);
-  const [etfMetric, setEtfMetric] = useState<'price'|'change'|'volume'|'ytdReturn'|'expense'|'volatility'>('price');
+  // Metric controls removed with value mode
   const [dataHealth, setDataHealth] = useState({ sector:false, economic:false, ai:false, etf:false, country:false });
   // Commodities placeholder removed (restored pre-tabs)
 
@@ -344,11 +344,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     }
   };
   useEffect(()=>{
-    if (etfCompareMode === 'spread' && selectedComparison) {
+    if (selectedComparison) {
       fetchEtfComparisonSeries();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etfCompareMode, etfRange, etfSpreadType, selectedComparison]);
+  }, [etfRange, etfSpreadType, selectedComparison]);
 
   // Helpers
   const getPerformanceValue = (s:SectorPerformance) => ({ daily:s.daily, weekly:s.weekly, monthly:s.monthly, quarterly:s.quarterly, yearly:s.yearly }[selectedPeriod]);
@@ -939,63 +939,42 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
               <h2 className="text-2xl font-bold mb-6 flex items-center justify-between">ETF Comparison Tool <span className="text-[10px] uppercase tracking-wide text-gray-400">Snapshot</span></h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">{[{key:'QQQ-SPY',label:'QQQ vs SPY'},{key:'VOO-VUG',label:'VOO vs VUG'},{key:'QQQ-VGT',label:'QQQ vs VGT'},{key:'IVV-VOO',label:'IVV vs VOO'},{key:'VOO-VTI',label:'VOO vs VTI'},{key:'JEPI-JEPQ',label:'JEPI vs JEPQ'}].map(c => <button key={c.key} onClick={()=>setSelectedComparison(c.key)} className={`px-4 py-3 rounded-lg border transition-all ${selectedComparison===c.key?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20'}`}>{c.label}</button>)}</div>
-              {/* Mode & metric controls */}
+              {/* Range and spread-type controls only */}
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <div className="bg-white/5 border border-white/10 rounded-md p-1">
-                  {(['spread','value'] as const).map(m => (
-                    <button key={m} onClick={()=> setEtfCompareMode(m)} className={`px-3 py-1 text-xs rounded ${etfCompareMode===m? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}>{m==='spread'?'Spread':'Value'}</button>
+                <div className="flex items-center gap-2">
+                  {(['1mo','3mo','6mo','1y','2y','5y','10y','max'] as const).map(r => (
+                    <button key={r} onClick={()=> setEtfRange(r)} className={`px-3 py-1 rounded-md text-xs border transition-colors ${etfRange===r?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:text-white'}`}>{r.toUpperCase()}</button>
                   ))}
                 </div>
-                {etfCompareMode==='value' && (
-                  <div className="flex flex-wrap items-center gap-2">{(['price','change','volume','ytdReturn','expense','volatility'] as const).map(m => <button key={m} onClick={()=>setEtfMetric(m)} className={`px-3 py-1 rounded-md text-xs border transition-colors ${etfMetric===m?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:text-white'}`}>{m}</button>)}</div>
-                )}
-                {etfCompareMode==='spread' && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      {(['1mo','3mo','6mo','1y','2y','5y','10y','max'] as const).map(r => (
-                        <button key={r} onClick={()=> setEtfRange(r)} className={`px-3 py-1 rounded-md text-xs border transition-colors ${etfRange===r?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:text-white'}`}>{r.toUpperCase()}</button>
-                      ))}
-                    </div>
-                    <div className="bg-white/5 border border-white/10 rounded-md p-1">
-                      {(['percent','absolute'] as const).map(t => (
-                        <button key={t} onClick={()=> setEtfSpreadType(t)} className={`px-3 py-1 text-xs rounded ${etfSpreadType===t? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}>{t==='percent'?'% Spread':'$ Spread'}</button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <div className="bg-white/5 border border-white/10 rounded-md p-1">
+                  {(['percent','absolute'] as const).map(t => (
+                    <button key={t} onClick={()=> setEtfSpreadType(t)} className={`px-3 py-1 text-xs rounded ${etfSpreadType===t? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}>{t==='percent'?'% Spread':'$ Spread'}</button>
+                  ))}
+                </div>
               </div>
 
               {selectedComparison && currentComparison && currentComparison.length>=2 && (
                 <div className="space-y-6">
-                  {etfCompareMode==='spread' ? (
-                    <div className="bg-white/5 rounded-lg p-4">
-                      <h4 className="text-white font-semibold mb-3">Spread over Time ({selectedComparison.replace('-', ' − ')})</h4>
-                      <div className="h-80">
-                        {etfSeriesLoading ? (
-                          <div className="w-full h-full animate-pulse bg-white/5 rounded" />
-                        ) : (
-                          <ETFLineChartLazy mode="spread" data={etfSeries as any} spreadType={etfSpreadType} />
-                        )}
-                      </div>
-                      <p className="mt-2 text-[10px] text-gray-500">Spread defined as {etfSpreadType==='percent'? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
+                  <div className="bg-white/5 rounded-lg p-4">
+                    <h4 className="text-white font-semibold mb-3">Spread over Time ({selectedComparison.replace('-', ' − ')})</h4>
+                    <div className="h-80">
+                      {etfSeriesLoading ? (
+                        <div className="w-full h-full animate-pulse bg-white/5 rounded" />
+                      ) : (
+                        <ETFLineChartLazy mode="spread" data={etfSeries as any} spreadType={etfSpreadType} />
+                      )}
                     </div>
-                  ) : (
-                    <div className="bg-white/5 rounded-lg p-4">
-                      <h4 className="text-white font-semibold mb-3 capitalize">{etfMetric==='price'?'Price':etfMetric==='change'?'Daily Change %':etfMetric==='volume'?'Volume':etfMetric==='ytdReturn'?'YTD Return %':etfMetric==='expense'?'Expense Ratio %':'Volatility %'} Comparison</h4>
-                      <div className="h-80">
-                        <ETFLineChartLazy mode="value" data={currentComparison as any} metric={etfMetric} />
-                      </div>
-                    </div>
-                  )}
+                    <p className="mt-2 text-[10px] text-gray-500">Spread defined as {etfSpreadType==='percent'? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
+                  </div>
                   <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3">Detailed Comparison</h4><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-white/10"><th className="text-left py-2 text-gray-300">Symbol</th><th className="text-right py-2 text-gray-300">Price</th><th className="text-right py-2 text-gray-300">Change</th><th className="text-right py-2 text-gray-300">Volume</th><th className="text-right py-2 text-gray-300">High</th><th className="text-right py-2 text-gray-300">Low</th><th className="text-right py-2 text-gray-300">YTD</th><th className="text-right py-2 text-gray-300">Exp%</th><th className="text-right py-2 text-gray-300">Vol%</th></tr></thead><tbody>{currentComparison.map(etf => <tr key={etf.symbol} className="border-b border-white/5"><td className="py-3 font-medium">{etf.symbol}</td><td className="py-3 text-right">{typeof etf.price==='number'?`$${etf.price.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.change)}`}>{typeof etf.change==='number'?(etf.change>=0?'+':'')+etf.change.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volume==='number'?etf.volume.toLocaleString():'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.high==='number'?`$${etf.high.toFixed(2)}`:'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.low==='number'?`$${etf.low.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.ytdReturn)}`}>{typeof etf.ytdReturn==='number'?(etf.ytdReturn>=0?'+':'')+etf.ytdReturn.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.expense==='number'?etf.expense.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volatility==='number'?etf.volatility.toFixed(2)+'%':'—'}</td></tr>)}</tbody></table></div></div>
                 </div>
               )}
 
               {/* Composite Risk Regime & Ratios (moved here) */}
-              {(riskSummary || Object.keys(riskRatios).length>0 || recessionIndex) && (
-                <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  <div className="xl:col-span-1 bg-white/5 rounded-lg p-4 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
+              {(riskSummary || recessionIndex) && (
+                <div className="mt-6">
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="flex items-center justify-between mb-3">
                       <h4 className="text-white font-semibold">Composite Risk Regime</h4>
                       {riskSummary && (
                         <span className={`px-2 py-1 rounded-full text-[11px] font-bold ${riskSummary.regime==='Risk-On'?'bg-emerald-900/30 text-emerald-300': riskSummary.regime==='Risk-Off'?'bg-red-900/30 text-red-300':'bg-slate-700/60 text-slate-200'}`}>
@@ -1003,72 +982,32 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         </span>
                       )}
                     </div>
-                    {riskSummary ? (
-                      <>
-                        <div className="text-sm text-gray-300">Votes: <span className="text-emerald-300 font-semibold">ON {riskSummary.votes.on}</span> • <span className="text-red-300 font-semibold">OFF {riskSummary.votes.off}</span> • <span className="text-gray-300">NEU {riskSummary.votes.neutral}</span></div>
-                        <div className="mt-3 grid grid-cols-1 gap-2">
-                          {riskSummary.signals.map(s => (
-                            <div key={s.key} className="flex items-center justify-between bg-slate-900/40 border border-white/10 rounded-md px-2 py-1 text-[12px]">
-                              <span className="text-slate-300">{s.label}</span>
-                              <span className={`font-semibold ${s.dir==='risk-on'?'text-emerald-300': s.dir==='risk-off'?'text-red-300':'text-slate-300'}`}>{s.dir.toUpperCase()}{s.note?` • ${s.note}`:''}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="mt-2 text-[10px] text-gray-500">Heuristic regime from ratio trends (SMA20 vs SMA60) and MOVE/SKEW thresholds.</p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-gray-400">Loading regime…</p>
-                    )}
-                  </div>
-                  <div className="xl:col-span-2 bg-white/5 rounded-lg p-4 border border-white/10">
-                    <h4 className="text-white font-semibold mb-2">Risk-On / Risk-Off Ratios</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {recessionIndex && (
-                        <div className="flex items-start justify-between bg-slate-800/60 rounded-md p-3 border border-white/10">
-                          <div className="pr-3">
-                            <div className="flex items-center gap-2">
-                              <div className="font-semibold text-slate-100">Recession Index (mspred)</div>
-                              {mspredRisk && (
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${mspredRisk.badge}`}>{mspredRisk.level} risk</span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-slate-400">TB3MS / BAMLH0A0HYM2 • lower = higher recession risk (HY stress); higher = lower risk</div>
-                          </div>
-                          <div className="text-right min-w-[90px]">
-                            <div className="font-bold text-slate-100">{recessionIndex.value.toFixed(3)}</div>
-                            <div className="text-[10px] text-slate-500">last {new Date(recessionIndex.date).toLocaleDateString()}</div>
-                            {mspredDelta && (
-                              <div className={`text-[10px] ${mspredDelta.diff>=0? 'text-emerald-300':'text-red-300'}`}>
-                                {mspredDelta.diff>=0? '+' : ''}{(mspredDelta.diff).toFixed(3)} vs 20M avg
-                              </div>
+                    {/* Only show Recession Index inside this panel */}
+                    {recessionIndex ? (
+                      <div className="flex items-start justify-between bg-slate-800/60 rounded-md p-3 border border-white/10">
+                        <div className="pr-3">
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-slate-100">Recession Index (mspred)</div>
+                            {mspredRisk && (
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${mspredRisk.badge}`}>{mspredRisk.level} risk</span>
                             )}
                           </div>
+                          <div className="text-[11px] text-slate-400">TB3MS / BAMLH0A0HYM2 • lower = higher recession risk (HY stress); higher = lower risk</div>
                         </div>
-                      )}
-                      {Object.entries(riskRatios).map(([k,v])=> (
-                        <div key={k} className="flex items-start justify-between bg-slate-800/60 rounded-md p-3 border border-white/10">
-                          <div className="pr-3">
-                            <div className="font-semibold text-slate-100">{k}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {k==='VVIX/VIX' && 'Vol-of-vol vs VIX: options market stress.'}
-                              {k==='SPHB/SPLV' && 'High beta vs low volatility: rising = risk-on, falling = risk-off.'}
-                              {k==='XLY/XLP' && 'Discretionary vs Staples: confidence (XLY) vs defensive (XLP).'}
-                              {k==='IWD/IWF' && 'Value vs Growth: preference for defensives vs growth.'}
-                              {k==='HYG/IEF' && 'High yield vs Treasuries: risk appetite.'}
-                              {k==='HG/GC' && 'Copper vs Gold: economic growth vs risk aversion.'}
-                              {k==='MOVE' && 'Bond volatility (MOVE): credit/rates stress.'}
-                              {k==='SKEW' && 'CBOE SKEW: tail-risk of extreme events.'}
+                        <div className="text-right min-w-[90px]">
+                          <div className="font-bold text-slate-100">{recessionIndex.value.toFixed(3)}</div>
+                          <div className="text-[10px] text-slate-500">last {new Date(recessionIndex.date).toLocaleDateString()}</div>
+                          {mspredDelta && (
+                            <div className={`text-[10px] ${mspredDelta.diff>=0? 'text-emerald-300':'text-red-300'}`}>
+                              {mspredDelta.diff>=0? '+' : ''}{(mspredDelta.diff).toFixed(3)} vs 20M avg
                             </div>
-                          </div>
-                          <div className="text-right min-w-[90px]">
-                            <div className="font-bold text-slate-100">{typeof v==='number' ? (k==='MOVE'||k==='SKEW'? v.toFixed(0) : v.toFixed(3)) : '—'}</div>
-                            <div className="text-[10px] text-slate-500">{(k==='MOVE'||k==='SKEW')?'index':'ratio'}</div>
-                          </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">Loading recession index…</p>
+                    )}
                   </div>
-                  {/* Q-CTA Position Indicator Card (optional display) */}
                 </div>
               )}
               {/* New extended comparison tool (synthetic demo). Real data already powering snapshot above. */}

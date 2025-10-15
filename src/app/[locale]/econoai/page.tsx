@@ -377,35 +377,7 @@ export default function EconoAIPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="py-20 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="rounded-3xl bg-gradient-to-br from-blue-600/20 via-cyan-600/20 to-emerald-600/20 ring-1 ring-white/10 p-12 text-center backdrop-blur-xl">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Ready to make smarter investment decisions?
-            </h2>
-            <p className="text-lg text-white/70 mb-8 max-w-2xl mx-auto">
-              Join thousands of investors using EconoAI to get instant, data-backed answers to their toughest market questions.
-            </p>
-            
-            <div className="flex flex-wrap justify-center gap-4 mb-6">
-              <NavigationLink href="/login" className="group px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold transition-all shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-105">
-                <span className="flex items-center gap-2">
-                  Start Free Trial
-                  <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </span>
-              </NavigationLink>
-              <NavigationLink href="/ai-pulse" className="px-8 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition-all ring-1 ring-white/10">
-                Explore AI Pulse
-              </NavigationLink>
-            </div>
-            
-            <p className="text-sm text-white/50">
-              No credit card required • Free tier available • Upgrade anytime
-            </p>
-          </div>
-        </div>
-      </section>
+      {/* Final CTA removed per request */}
 
       <Footer />
     </div>

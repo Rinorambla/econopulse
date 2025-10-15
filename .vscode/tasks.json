@@ -31,6 +31,13 @@
 			"command": "git add src/components/SymbolAutocomplete.tsx src/app/[locale]/ai-pulse/page.tsx; git commit -m \"feat(ai-pulse): add ticker autocomplete to comparison\"; git push",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Build Next.js app (prod)",
+			"type": "shell",
+			"command": "npm run build",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -205,39 +205,9 @@ export default function DashboardPage() {
 		</div>
 	);
 
-	const AISignalBadge: React.FC<{ item: MarketData & { rs:number } }> = ({ item }) => {
-		if(!item.aiSignal) return <span>—</span>;
+	const AIScoreBadge: React.FC<{ item: MarketData & { rs: number } }> = ({ item }) => {
 		const sig = item.aiSignal;
-		return (
-			<span className="relative group inline-flex">
-				<span
-					className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold tracking-tight transition-colors
-					${sig.label==='STRONG BUY' ? 'bg-green-600/30 text-green-300 border border-green-500/40' : ''}
-					${sig.label==='BUY' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30' : ''}
-					${sig.label==='HOLD' ? 'bg-slate-600/30 text-slate-200 border border-slate-500/30' : ''}
-					${sig.label==='SELL' ? 'bg-orange-600/30 text-orange-300 border border-orange-500/30' : ''}
-					${sig.label==='STRONG SELL' ? 'bg-red-700/30 text-red-300 border border-red-600/40' : ''}`}
-					aria-label={`AI Signal ${sig.label}`}
-				>
-					{sig.label}
-				</span>
-				{/* Hover tooltip */}
-				<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
-					<SmallTooltip lines={[
-						`AI v${sig.version}`,
-						`Composite: ${sig.compositeScore}`,
-						`Momentum: ${sig.momentum}  RS: ${sig.relativeStrength}`,
-						`Volatility: ${sig.volatility}  MR: ${sig.meanReversion}`,
-						sig.rationale
-					]} />
-				</div>
-			</span>
-		);
-	};
-
-	const AIScoreBadge: React.FC<{ item: MarketData & { rs:number } }> = ({ item }) => {
-		if(!item.aiSignal) return <span>—</span>;
-		const sig = item.aiSignal;
+		if (!sig) return <span>—</span>;
 		return (
 			<span className="relative group inline-flex">
 				<span className="inline-flex items-center justify-center px-1 py-0.5 rounded bg-indigo-700/40 text-indigo-300 font-semibold min-w-[28px] text-[10px]" aria-label="AI Composite Score">
@@ -248,81 +218,30 @@ export default function DashboardPage() {
 						`Momentum: ${sig.momentum}`,
 						`RS: ${sig.relativeStrength}`,
 						`Vol: ${sig.volatility}  MR: ${sig.meanReversion}`,
-						`Breakout: ${sig.breakout ? 'Yes':'No'}`
+						`Breakout: ${sig.breakout ? 'Yes' : 'No'}`
 					]} />
 				</div>
 			</span>
 		);
 	};
 
-	// (Chart tooltip moved)
+	const AISignalBadge: React.FC<{ item: MarketData & { rs: number } }> = ({ item }) => {
+		const sig = item.aiSignal;
+		if (!sig) return <span>—</span>;
+		const base = 'inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold tracking-tight border';
+		const cls = sig.label === 'STRONG BUY'
+			? 'bg-green-600/30 text-green-300 border-green-500/40'
+			: sig.label === 'BUY'
+			? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
+			: sig.label === 'HOLD'
+			? 'bg-slate-600/30 text-slate-200 border-slate-500/30'
+			: sig.label === 'SELL'
+			? 'bg-orange-600/30 text-orange-300 border-orange-500/30'
+			: 'bg-red-700/30 text-red-300 border-red-600/40';
+		return <span className={`${base} ${cls}`} aria-label={`AI Signal ${sig.label}`}>{sig.label}</span>;
+	};
 
-				// Sector diagnostics (coverage + missing fields) with normalization + extended fields
-				const coreRequired: (keyof MarketData)[] = ['price','volume','trend','demandSupply','optionsSentiment','gammaRisk','putCallRatio'];
-				const extendedRequired: (keyof MarketData)[] = ['unusualAtm','unusualOtm','otmSkew','intradayFlow'];
-				const requiredFields: (keyof MarketData)[] = [...coreRequired, ...extendedRequired];
-				// Fields where a literal zero / 0% is highly unlikely and usually means "no data"
-				const improbableZeroFields: (keyof MarketData)[] = ['unusualAtm','unusualOtm','otmSkew','intradayFlow','optionsSentiment','gammaRisk','demandSupply'];
-			const normalizeSector = (s?: string) => {
-				if (!s) return 'Unclassified';
-				const t = s.trim().toLowerCase();
-				if (t === 'health care' || t === 'healthcare') return 'Healthcare';
-				if (t === 'financial' || t === 'financial services') return 'Financial Services';
-				if (t === 'consumer discretionary') return 'Consumer Discretionary';
-				if (t === 'consumer staples') return 'Consumer Staples';
-				if (t.includes('growth etf')) return 'Growth ETF';
-				if (t.includes('value etf')) return 'Value ETF';
-				if (t.includes('index')) return 'Index Fund';
-				return s; // keep original casing for others
-			};
-				const isMissing = (_field: keyof MarketData, val: any) => {
-					if (val === undefined || val === null) return true;
-					if (typeof val === 'string') {
-						const t = val.trim();
-						if (!t) return true; // empty string
-						if (['n/a','na','-','--','null'].includes(t.toLowerCase())) return true;
-					}
-					return false; // keep zeros / flat / neutral as real values
-				};
-				const sectorStats = useMemo(() => {
-				const map: Record<string, { count:number; missing: Record<string, number>; sumPerf:number; values: Record<string, Set<string>>;}> = {};
-				enrichedData.forEach(item => {
-					const sector = normalizeSector(item.sector);
-					if (!map[sector]) map[sector] = { count:0, missing: Object.fromEntries(requiredFields.map(f=>[f,0])) as Record<string, number>, sumPerf:0, values: Object.fromEntries(requiredFields.map(f=>[f,new Set<string>()])) as Record<string, Set<string>> };
-					map[sector].count += 1;
-					map[sector].sumPerf += parsePerf(item.performance);
-					requiredFields.forEach(f => {
-						const v: any = (item as any)[f];
-						if (isMissing(f, v)) map[sector].missing[f] += 1; else if (v !== undefined && v !== null) map[sector].values[f].add(String(v).trim());
-					});
-				});
-				const total = enrichedData.length || 1;
-				const rows = Object.entries(map)
-					.map(([sector, info]) => {
-						const totalCells = info.count * requiredFields.length || 1;
-						const missingTotal = requiredFields.reduce((acc,f)=> acc + info.missing[f],0);
-						const completeness = +(100 - (missingTotal / totalCells * 100)).toFixed(1);
-						const avgPerf = info.count ? +(info.sumPerf / info.count).toFixed(2) : 0;
-						const missingPct = +(missingTotal / totalCells * 100).toFixed(1);
-						// Detect uniform (no variance) fields (>=2 rows & all same non-missing value)
-						const uniform: Record<string, boolean> = Object.fromEntries(requiredFields.map(f=> [f, info.count > 1 && info.values[f].size === 1]));
-						return { sector, count: info.count, weight: +(100 * info.count / total).toFixed(1), completeness, missingPct, avgPerf, missing: info.missing, uniform };
-					})
-					.sort((a,b)=> b.count - a.count);
-				const totalMissing: Record<string, number> = Object.fromEntries(requiredFields.map(f=> [f, rows.reduce((acc,r)=> acc + r.missing[f],0)]));
-				const totalRow = {
-					sector: 'TOTAL',
-					count: rows.reduce((a,r)=> a + r.count, 0),
-					weight: 100,
-					completeness: +(rows.reduce((a,r)=> a + (r.completeness * r.count),0) / (rows.reduce((a,r)=> a + r.count,0) || 1)).toFixed(1),
-					missingPct: +(rows.reduce((a,r)=> a + (r.missingPct * r.count),0) / (rows.reduce((a,r)=> a + r.count,0) || 1)).toFixed(1),
-					avgPerf: +(rows.reduce((a,r)=> a + (r.avgPerf * r.count),0) / (rows.reduce((a,r)=> a + r.count,0) || 1)).toFixed(2),
-					missing: totalMissing,
-					uniform: Object.fromEntries(requiredFields.map(f=> [f,false])) as Record<string, boolean>
-				};
-				return { rows, totalRow };
-			}, [enrichedData]);
-		const [showDiagnostics, setShowDiagnostics] = useState(false);
+		// (Chart tooltip moved)
 
 	const filteredData = useMemo(() => {
 		return enrichedData.filter(item => {
@@ -406,7 +325,7 @@ export default function DashboardPage() {
 														{[
 															{k:'ticker', l:'Ticker / Name'},
 															{k:'price', l:'Price / Δ'},
-															{k:'performance', l:'Perf %'},
+															// performance removed per request
 															{k:'volume', l:'Volume'},
 															{k:'trend', l:'Trend'},
 															{k:'demandSupply', l:'D/S'},
@@ -417,7 +336,7 @@ export default function DashboardPage() {
 															{k:'otmSkew', l:'Skew'},
 															{k:'intradayFlow', l:'Intra'},
 															{k:'unusualAtm', l:'ATM'},
-															{k:'rs', l:'RS%'},
+															// RS% removed per request
 															{k:'aiScore', l:'AI Score'},
 															{k:'aiLabel', l:'AI Signal'},
 															{k:'category', l:'Cat'}
@@ -447,9 +366,7 @@ export default function DashboardPage() {
 																	<span className={`text-[10px] ${getPerformanceColor(item.change)}`}>{item.change?`${item.change.startsWith('$')? '': '$'}${item.change}`:'—'}</span>
 																</div>
 															</td>
-															<td className="px-2 py-1 font-semibold whitespace-nowrap">
-																<span className={`${getPerformanceColor(item.performance)}`}>{item.performance || '—'}</span>
-															</td>
+															{/* Performance column removed */}
 															<td className="px-2 py-1 tabular-nums">{item.volume || '—'}</td>
 															<td className="px-2 py-1"><span className={`inline-flex px-1 py-0.5 rounded ${getTrendColor(item.trend)} font-semibold`}>{item.trend}</span></td>
 															<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
@@ -460,24 +377,20 @@ export default function DashboardPage() {
 															<td className="px-2 py-1 text-gray-300">{item.otmSkew}</td>
 															<td className="px-2 py-1 text-gray-300">{item.intradayFlow}</td>
 															<td className="px-2 py-1 text-gray-300">{item.unusualAtm}</td>
-															<td className="px-2 py-1 font-medium text-blue-300">{item.rs}</td>
+															{/* RS% column removed */}
 															<td className="px-2 py-1 text-center"><AIScoreBadge item={item} /></td>
 															<td className="px-2 py-1"><AISignalBadge item={item} /></td>
 															<td className="px-2 py-1 text-gray-300">{item.category || '—'}</td>
 														</tr>
 													))}
 													{!filteredData.length && (
-														<tr><td colSpan={14} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
+														<tr><td colSpan={15} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}
 												</tbody>
 											</table>
 										</div>
 									</div>
-									<div className="text-[10px] text-gray-500 mt-2 flex flex-wrap gap-4">
-										<span>RS%: Relative Strength percentile (100 = strongest perf in set)</span>
-										<span>Data refreshed {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'} (UTC)</span>
-										<span>VIX {vixData.price} ({vixData.volatilityLevel})</span>
-									</div>
+									{/* Footnotes removed per request */}
 								{/* Lazy charts mount */}
 								<div ref={chartsRef} className="mt-6" />
 								{chartsReady && (

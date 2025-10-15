@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "regions": ["fra1"],
+  "env": {},
+  "build": {
+    "env": {}
+  },
+  "crons": [
+    {
+      "path": "/api/newsletter/cron",
+      "schedule": "0 6 * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "geolocation=()" }
+      ]
+    },
+    {
+      "source": "/api/stripe/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://js.stripe.com" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, stripe-signature" }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/dashboard/billing",
+      "destination": "/dashboard/account",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/stripe/webhook",
+      "destination": "/api/stripe/webhook"
+    }
+  ]
+}

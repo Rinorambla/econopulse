@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Disallow admin pages
+Disallow: /api/
+Disallow: /admin/
+
+# Sitemap
+Sitemap: https://econopulse.ai/sitemap.xml

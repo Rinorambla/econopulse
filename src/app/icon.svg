@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <circle cx="256" cy="256" r="256" fill="#0f172a"/>
+  <path d="M100 256 Q150 200 200 256 T300 256 Q350 200 400 256 Q450 300 500 256" stroke="#3b82f6" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M120 280 L140 260 L160 300 L180 220 L200 280" stroke="#60a5fa" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M320 280 L340 260 L360 300 L380 220 L400 280" stroke="#60a5fa" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="60" fill="#1e40af" opacity="0.8"/>
+  <text x="256" y="270" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="bold">EP</text>
+</svg>

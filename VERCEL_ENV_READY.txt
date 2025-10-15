@@ -1,0 +1,74 @@
+# ==================================================
+# VERCEL ENVIRONMENT VARIABLES - PRODUCTION READY
+# ==================================================
+# Copia e incolla questo contenuto completo su Vercel
+# Settings → Environment Variables → Import .env
+
+# ---- SUPABASE (Auth) ----
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# ---- SITE URL ----
+NEXT_PUBLIC_SITE_URL=https://econopulse.ai
+BASE_URL=https://econopulse.ai
+
+# ---- STRIPE (LIVE MODE) ----
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+
+# ---- STRIPE PRICE IDs (REQUIRED by code) ----
+# Pro Plan
+NEXT_PUBLIC_STRIPE_PRICE_ID_PRO=your_pro_price_id
+NEXT_PUBLIC_STRIPE_PRICE_ID_PRO_YEARLY=your_pro_yearly_price_id
+# Premium Plan
+NEXT_PUBLIC_STRIPE_PRICE_ID_PREMIUM=your_premium_price_id
+NEXT_PUBLIC_STRIPE_PRICE_ID_PREMIUM_YEARLY=your_premium_yearly_price_id
+# Corporate Plan
+NEXT_PUBLIC_STRIPE_PRICE_ID_CORPORATE=your_corporate_price_id
+NEXT_PUBLIC_STRIPE_PRICE_ID_CORPORATE_YEARLY=your_corporate_yearly_price_id
+
+# Alternative format (for compatibility)
+STRIPE_PREMIUM_MONTHLY_PRICE_ID=your_premium_monthly_price_id
+STRIPE_PREMIUM_YEARLY_PRICE_ID=your_premium_yearly_price_id
+
+# ---- MARKET DATA APIs ----
+TIINGO_API_KEY=your_tiingo_api_key
+FMP_API_KEY=your_fmp_api_key
+FRED_API_KEY=your_fred_api_key
+POLYGON_API_KEY=your_polygon_api_key
+
+# ---- AI (OpenAI) ----
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o
+OPENAI_ENABLED=true
+
+# ---- DATABASE (MongoDB) ----
+MONGODB_URI=your_mongodb_uri
+
+# ---- EMAIL (Resend) ----
+RESEND_API_KEY=your_resend_api_key
+NEWSLETTER_FROM_EMAIL=noreply@yourdomain.com
+NEWSLETTER_FROM_NAME=YourSite
+NEWSLETTER_CRON_ENABLED=false
+NEWSLETTER_CRON_SECRET=econopulse-newsletter-cron-2025
+
+# ---- SECURITY & WEBHOOKS ----
+WEBHOOK_SECRET=your_webhook_secret
+CRON_SECRET=your_cron_secret
+
+# ---- NEXTAUTH (Legacy, may be unused) ----
+NEXTAUTH_URL=https://yourdomain.com
+NEXTAUTH_SECRET=your_nextauth_secret
+
+# ---- CONFIGURATION ----
+NODE_ENV=production
+MAX_SYMBOL_UNIVERSE=600
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_WINDOW_MS=900000
+
+# ---- DEVELOPMENT (disable in production) ----
+DEV_BYPASS_PLANS=false
+NEXT_PUBLIC_DEV_BYPASS=false

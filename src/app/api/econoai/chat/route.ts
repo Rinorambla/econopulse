@@ -13,7 +13,7 @@ function getOpenAIClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, userId } = await req.json()
+    const { question, userId, context } = await req.json()
 
     console.log('🎯 EconoAI request received:', { 
       question: question?.substring(0, 100), 
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
     console.log('✅ OpenAI client initialized')
     const openai = getOpenAIClient()
 
-    // System prompt for financial analysis
-    const systemPrompt = `You are EconoAI, an expert financial analyst and market strategist at EconoPulse with 20+ years of Wall Street experience. You provide comprehensive market intelligence across ALL asset classes and market topics.
+  // System prompt for financial analysis
+  const systemPrompt = `You are EconoAI, an expert financial analyst and market strategist at EconoPulse with 20+ years of Wall Street experience. You provide comprehensive market intelligence across ALL asset classes and market topics.
 
 YOUR EXPERTISE COVERS:
 📊 Equities: Individual stocks, sectors, indices (S&P 500, Nasdaq, Dow, Russell 2000, international markets)
@@ -82,7 +82,21 @@ TONE & STYLE:
 - Be decisive but balanced (bull case + bear case)
 - NO generic fluff - every sentence must add value
 
-CRITICAL: Answer EVERY question asked, even if you need to make reasonable market assumptions based on typical conditions. Never say "I don't have real-time data" - provide framework-based analysis instead.`
+CRITICAL: Answer EVERY question asked, even if you need to make reasonable market assumptions based on typical conditions. Never say "I don't have real-time data" - provide framework-based analysis instead.
+
+If the user provided context, you MUST incorporate it precisely. Context can include: recent market summary, macro indicators, key levels, and top headlines. Prioritize accuracy from context.
+
+When helpful, structure the output JSON-like sections:
+{
+  "summary": "2-line takeaway",
+  "market": { "levels": ["S&P 500 ~","VIX ~","10Y ~"], "sectors": ["..."], "flows": ["..."] },
+  "macro": { "cycle": "...", "inflation": "...", "labor": "..." },
+  "news": [ { "title": "...", "why": "impact" } ],
+  "scenarios": [ { "if": "...", "then": "..." } ],
+  "risks": ["..."],
+  "actions": ["level to watch", "hedge idea", "timing note"]
+}
+Keep prose crisp and professional.`
 
     // Choose model: allow override via env, default to gpt-4o (fallback to gpt-4o-mini on 404)
     const primaryModel = process.env.OPENAI_MODEL || 'gpt-4o';
@@ -95,6 +109,7 @@ CRITICAL: Answer EVERY question asked, even if you need to make reasonable marke
         model: primaryModel,
         messages: [
           { role: 'system', content: systemPrompt },
+          ...(context ? [{ role: 'user' as const, content: `Context:\n${JSON.stringify(context).slice(0, 8000)}` }] : []),
           { role: 'user', content: question }
         ],
         temperature: 0.8, // Slightly higher for more nuanced financial analysis
@@ -111,6 +126,7 @@ CRITICAL: Answer EVERY question asked, even if you need to make reasonable marke
         model: fallbackModel,
         messages: [
           { role: 'system', content: systemPrompt },
+          ...(context ? [{ role: 'user' as const, content: `Context:\n${JSON.stringify(context).slice(0, 8000)}` }] : []),
           { role: 'user', content: question }
         ],
         temperature: 0.8,
@@ -135,6 +151,7 @@ CRITICAL: Answer EVERY question asked, even if you need to make reasonable marke
     return NextResponse.json({
       answer,
       question,
+      usedContext: Boolean(context),
       timestamp: new Date().toISOString(),
       model: completion.model,
       usage: completion.usage

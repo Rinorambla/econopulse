@@ -74,6 +74,25 @@ export default function EconoAIPage() {
     try {
       console.log('🚀 Sending question to EconoAI:', userQuestion)
       
+      // Build lightweight context: market snapshot, macro, and top news
+      const [marketRes, recessionRes, newsRes] = await Promise.all([
+        fetch('/api/yahoo-unified?category=all&limit=20', { cache:'no-store' }).catch(()=>null),
+        fetch('/api/recession-index?limit=60', { cache:'no-store' }).catch(()=>null),
+        fetch('/api/news/top?limit=6', { cache:'no-store' }).catch(()=>null)
+      ])
+      const context: any = {}
+      try {
+        const js = marketRes && marketRes.ok ? await marketRes.json() : null
+        if (js?.ok && Array.isArray(js.data)) {
+          context.market = {
+            summary: js.summary || null,
+            sample: js.data.slice(0, 10).map((a: any)=>({ symbol:a.symbol, name:a.name, price:a.price, change:a.changePercent }))
+          }
+        }
+      } catch {}
+      try { const rj = recessionRes && recessionRes.ok ? await recessionRes.json() : null; if (rj?.latest) context.macro = { recession: rj.latest, seriesLen: (rj.series||[]).length } } catch {}
+      try { const nj = newsRes && newsRes.ok ? await newsRes.json() : null; if (nj?.data) context.news = nj.data } catch {}
+
       const response = await fetch('/api/econoai/chat', {
         method: 'POST',
         headers: {
@@ -81,7 +100,8 @@ export default function EconoAIPage() {
         },
         body: JSON.stringify({
           question: userQuestion,
-          userId: user?.id || 'anonymous'
+          userId: user?.id || 'anonymous',
+          context
         }),
       })
 

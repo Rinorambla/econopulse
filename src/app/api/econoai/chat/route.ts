@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString()
     })
 
-    // Basic rate limiting per IP
+    // Basic rate limiting per IP (generous for testing/demo)
     const ip = getClientIp(req as unknown as Request)
-    const rl = rateLimit(`econoai:${ip}`, 20, 60_000) // 20 req/min per IP
+    const rl = rateLimit(`econoai:${ip}`, 100, 60_000) // 100 req/min per IP
     if (!rl.ok) {
       const res = NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 })
       const headers = rateLimitHeaders(rl)

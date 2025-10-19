@@ -9,12 +9,18 @@ import Logo from './Logo';
 
 const Footer = () => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isDevUser } = useAuth();
 
   const currentYear = new Date().getFullYear();
 
   // Handle protected links
   const handleProtectedLink = (e: React.MouseEvent, href: string, requiredPlan?: string) => {
+    // Dev users bypass all gating
+    if (isDevUser) {
+      e.preventDefault();
+      router.push(href);
+      return;
+    }
     if (!user) {
       e.preventDefault();
       // Redirect to login with return URL

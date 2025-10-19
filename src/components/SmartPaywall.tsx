@@ -115,7 +115,7 @@ export function SmartPaywall({
   allowPreview = false,
   children 
 }: PaywallProps) {
-  const { user, plan } = useAuth();
+  const { user, plan, isDevUser } = useAuth();
   const [showPaywall, setShowPaywall] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -123,8 +123,8 @@ export function SmartPaywall({
   const IconComponent = config.icon;
 
   useEffect(() => {
-    // Don't show paywall if user has sufficient plan
-    if (plan === 'premium' || plan === 'professional' || plan === 'institutional') {
+    // Don't show paywall if user has sufficient plan or is a dev user
+    if (isDevUser || plan === 'premium' || plan === 'professional' || plan === 'institutional') {
       return;
     }
 
@@ -136,7 +136,7 @@ export function SmartPaywall({
     }, type === 'soft' ? 2000 : 0);
 
     return () => clearTimeout(timer);
-  }, [type, dismissed, plan]);
+  }, [type, dismissed, plan, isDevUser]);
 
   const handleClose = () => {
     setShowPaywall(false);
@@ -155,7 +155,7 @@ export function SmartPaywall({
     }
     
     // Redirect to upgrade
-    window.location.href = `/en/subscribe/${planId}?source=paywall&trigger=${trigger}`;
+  window.location.href = `/subscribe/${planId}?source=paywall&trigger=${trigger}`;
   };
 
   // Soft paywall - show content with overlay
@@ -193,7 +193,7 @@ export function SmartPaywall({
                     {config.ctaPrimary}
                   </button>
                   <Link
-                    href="/en/pricing"
+                    href="/pricing"
                     className="flex-1 bg-white/10 hover:bg-white/20 text-white py-2 px-4 rounded-lg font-medium text-center transition-colors"
                   >
                     {config.ctaSecondary || 'View Plans'}
@@ -304,7 +304,7 @@ export function SmartPaywall({
                       {config.ctaPrimary}
                     </button>
                     <Link
-                      href="/en/pricing"
+                      href="/pricing"
                       className="block w-full bg-white/10 hover:bg-white/20 text-white py-3 px-6 rounded-lg font-medium text-center transition-colors"
                     >
                       {config.ctaSecondary || 'Compare All Plans'}
@@ -336,7 +336,7 @@ export function SmartPaywall({
               </p>
             </div>
             <Link
-              href="/en/pricing"
+              href="/pricing"
               className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               Upgrade

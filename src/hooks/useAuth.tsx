@@ -11,6 +11,7 @@ interface AuthContextType {
   plan: string | null;
   refreshingPlan: boolean;
   isAdmin: boolean;
+  isDevUser: boolean;
   refreshPlan: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string; needsConfirmation?: boolean }>;
@@ -29,6 +30,7 @@ const defaultAuthContext: AuthContextType = {
   plan: null,
   refreshingPlan: false,
   isAdmin: false,
+  isDevUser: false,
   refreshPlan: async () => {},
   signIn: async () => ({ success: false, error: 'Auth unavailable' }),
   signUp: async () => ({ success: false, error: 'Auth unavailable' }),
@@ -317,6 +319,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     plan,
     refreshingPlan,
     isAdmin,
+    // Developer bypass: allow specific emails to have full access regardless of plan
+    // Reads from NEXT_PUBLIC_DEV_ACCESS_EMAILS (comma/space separated). Defaults to info@econopulse.ai
+    isDevUser: (() => {
+      try {
+        const raw = (process.env.NEXT_PUBLIC_DEV_ACCESS_EMAILS || 'info@econopulse.ai') as string;
+        const list = raw.split(/[\s,;]+/).map(e => e.trim().toLowerCase()).filter(Boolean);
+        const email = (user?.email || '').toLowerCase();
+        return !!email && list.includes(email);
+      } catch {
+        return false;
+      }
+    })(),
     refreshPlan,
     signIn,
     signUp,

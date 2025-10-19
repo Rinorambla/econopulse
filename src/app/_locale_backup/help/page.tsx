@@ -1,18 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
-import { redirect } from '@/i18n/routing';
+import Link from 'next/link';
 import Footer from '@/components/Footer';
-import { Link } from '@/i18n/routing';
 
 export default function HelpPage() {
-  const locale = useLocale();
-  if (locale !== 'en') {
-    redirect({ href: '/help', locale: 'en' });
-  }
-
-  const t = useTranslations();
   const email = 'support@econopulse.ai';
 
   const [query, setQuery] = useState('');

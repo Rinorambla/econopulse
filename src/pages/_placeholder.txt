@@ -1,0 +1,1 @@
+This project uses the App Router (src/app). Do not add conflicting routes in /src/pages unless intentionally using the Pages Router for legacy routes.

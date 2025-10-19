@@ -1,13 +1,10 @@
 'use client';
 
 import React from 'react';
-import { useTranslations } from 'next-intl';
 import Footer from '@/components/Footer';
 import { AlertTriangle, TrendingUp, BookOpen, Shield } from 'lucide-react';
 
 export default function Disclaimer() {
-  const t = useTranslations();
-
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

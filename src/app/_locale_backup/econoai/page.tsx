@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useTranslations, useLocale } from 'next-intl'
 import Footer from '@/components/Footer'
 import { NavigationLink } from '@/components/Navigation'
 import RequirePlan from '@/components/RequirePlan'
@@ -20,8 +19,6 @@ import {
 } from '@heroicons/react/24/outline'
 
 export default function EconoAIPage() {
-  const t = useTranslations()
-  const locale = useLocale()
   const { user } = useAuth()
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [typing, setTyping] = useState(false)

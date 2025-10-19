@@ -6,10 +6,11 @@ import Link from 'next/link';
 
 export function LanguageSwitcher() {
   const locale = useLocale();
-  const pathname = usePathname();
+  // usePathname can return null in some edge cases; default to root
+  const pathname = usePathname() || '/';
 
   // Remove current locale from pathname
-  const pathWithoutLocale = pathname.replace(/^\/(en|it)/, '') || '/';
+  const pathWithoutLocale = (pathname ?? '/').replace(/^\/(en|it)/, '') || '/';
   
   // Construct URLs for both languages
   const enUrl = `/en${pathWithoutLocale === '/' ? '' : pathWithoutLocale}`;

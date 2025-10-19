@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+
+// Ensure Node.js runtime for OpenAI SDK
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const preferredRegion = 'auto'
 
 // Initialize OpenAI client
 function getOpenAIClient() {
@@ -22,12 +28,24 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString()
     })
 
+    // Basic rate limiting per IP
+    const ip = getClientIp(req as unknown as Request)
+    const rl = rateLimit(`econoai:${ip}`, 20, 60_000) // 20 req/min per IP
+    if (!rl.ok) {
+      const res = NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 })
+      const headers = rateLimitHeaders(rl)
+      Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
+      res.headers.set('Cache-Control', 'no-store')
+      return res
+    }
+
     if (!question || typeof question !== 'string') {
       console.error('❌ Invalid question format')
-      return NextResponse.json(
-        { error: 'Question is required' },
-        { status: 400 }
-      )
+      const res = NextResponse.json({ error: 'Question is required' }, { status: 400 })
+      const headers = rateLimitHeaders(rl)
+      Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
+      res.headers.set('Cache-Control', 'no-store')
+      return res
     }
 
     // Utility: build a successful fallback response (always 200 so UI keeps working)
@@ -52,7 +70,10 @@ export async function POST(req: NextRequest) {
     // If OpenAI is not configured, return a graceful fallback instead of 503
     if (!process.env.OPENAI_API_KEY) {
       console.error('❌ OpenAI API key not configured')
-      return fallbackResponse('openai_not_configured')
+      const res = fallbackResponse('openai_not_configured')
+      const headers = rateLimitHeaders(rl)
+      Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
+      return res
     }
 
     console.log('✅ OpenAI client initialized')
@@ -148,7 +169,10 @@ Keep prose crisp and professional.`
       // If timed out, return fallback
       if (err?.message === 'openai_timeout') {
         console.warn(`⏳ OpenAI request timed out after ${TIMEOUT_MS}ms, returning fallback`)
-        return fallbackResponse('openai_timeout')
+        const res = fallbackResponse('openai_timeout')
+        const headers = rateLimitHeaders(rl)
+        Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
+        return res
       }
       if (!isModelNotFound) throw err;
       console.warn(`Model ${primaryModel} unavailable, retrying with ${fallbackModel}...`);
@@ -189,6 +213,8 @@ Keep prose crisp and professional.`
       model: completion.model,
       usage: completion.usage
     })
+  const headers = rateLimitHeaders(rl)
+  Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
     res.headers.set('Cache-Control', 'no-store')
     return res
 
@@ -203,17 +229,21 @@ Keep prose crisp and professional.`
 
     // Handle specific OpenAI errors
     if (error?.status === 429) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: 'Rate limit exceeded. Please try again in a moment.' },
         { status: 429 }
       )
+      res.headers.set('Cache-Control', 'no-store')
+      return res
     }
 
     if (error?.status === 401 || error?.message?.includes('API key')) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: 'API authentication failed. Please contact support.' },
         { status: 500 }
       )
+      res.headers.set('Cache-Control', 'no-store')
+      return res
     }
 
     if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT' || error?.message === 'openai_timeout') {

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { fredService } from '@/lib/fred';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const preferredRegion = 'auto';
+
 // Initialize OpenAI client only when needed to avoid build-time errors
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
         recommendation: "Monitor key economic indicators for trend changes."
       };
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         data: {
           analysis: fallbackAnalysis,
@@ -61,6 +65,8 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString()
         }
       });
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
     }
 
     // Get current economic data
@@ -116,7 +122,12 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
     try {
       // Get AI analysis
       const openai = getOpenAIClient();
-      const completion = await openai.chat.completions.create({
+      const TIMEOUT_MS = 12_000;
+      const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => new Promise<T>((resolve, reject) => {
+        const id = setTimeout(() => reject(new Error('openai_timeout')), ms);
+        p.then(v => { clearTimeout(id); resolve(v); }).catch(e => { clearTimeout(id); reject(e); });
+      });
+      const completion = await withTimeout(openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
@@ -130,12 +141,29 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
         ],
         temperature: 0.3,
         max_tokens: 800
-      });
+      }), TIMEOUT_MS);
 
       aiResponse = completion.choices[0]?.message?.content || '';
     } catch (error: any) {
-      console.error('OpenAI API error:', error?.status, error?.code);
-      // Do not generate synthetic analysis. Return service unavailable.
+      console.error('OpenAI API error:', error?.status, error?.code, error?.message);
+      if (error?.message === 'openai_timeout') {
+        // Soft fallback with 200 to keep UI responsive
+        const fallbackAnalysis: EconomicAnalysis = {
+          currentCycle: economicContext.currentCycle || "Mixed",
+          direction: "neutral",
+          confidence: 60,
+          timeframe: "3-6 months",
+          keyFactors: ["Fed policy path", "Labor market momentum", "Inflation persistence"],
+          risks: ["Growth slowdown", "Policy mistake", "Geopolitical tensions"],
+          opportunities: ["Quality factor", "Defensive sectors", "Duration timing"],
+          summary: "AI analysis timed out. Providing a framework-based view while live insights are unavailable.",
+          recommendation: "Maintain diversified exposure; add defensives until visibility improves."
+        };
+        const res = NextResponse.json({ success: true, realtime: false, data: { analysis: fallbackAnalysis, dataSource: 'FRED', fallback: true, timestamp: new Date().toISOString() } }, { status: 200 });
+        res.headers.set('Cache-Control', 'no-store');
+        return res;
+      }
+      // Hard failure
       return NextResponse.json({ success:false, realtime:false, error:'AI economic analysis unavailable' }, { status: 503 });
     }
 
@@ -148,7 +176,7 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
     const analysis = parseAiResponse(aiResponse, economicContext);
 
     // Return comprehensive analysis
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       realtime: true,
       data: {
@@ -161,11 +189,15 @@ Be specific, data-driven, and focus on actionable insights. Consider both curren
         fallback: false
       }
     });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
 
   } catch (error) {
     console.error('Error in AI economic analysis:', error);
-    // Do not provide synthetic fallback
-    return NextResponse.json({ success:false, realtime:false, error:'AI analysis failed' }, { status: 503 });
+    // Soft fallback path when upstreams fail unexpectedly
+    const res = NextResponse.json({ success:false, realtime:false, error:'AI analysis failed' }, { status: 503 });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   }
 }
 

@@ -120,25 +120,36 @@ export default function EconoAIPage() {
         timeoutMs: 12000,
       })
 
+      if (!response) {
+        // Network-level failure (aborted or unreachable)
+        setUserAnswer('Network is busy right now. Quick take: focus on primary trend, major support/resistance, and risk limits. Try again in a few seconds for a full AI answer.')
+        setTyping(false)
+        return
+      }
+
       console.log('📡 Response status:', response.status)
       
-      const data = await response.json()
+      let data: any = null
+      try {
+        data = await response.json()
+      } catch {}
       console.log('📦 Response data:', data)
 
       // Accept both normal and fallback answers
-      if (!response.ok && !data?.answer) {
-        throw new Error(data.error || 'Failed to get answer')
-      }
-
-      if (!data.answer) {
+      if (data?.answer) {
+        setUserAnswer(data.answer)
+      } else if (!response.ok) {
+        // Friendly fallback when server returns error without answer
+        setUserAnswer('Temporary issue retrieving the AI response. Quick framework: assess earnings momentum, breadth, and macro (10Y yield, USD). Re-try for detailed guidance.')
+      } else {
         throw new Error('No answer received from AI')
       }
-
-      setUserAnswer(data.answer)
       setTyping(false)
     } catch (err: any) {
       console.error('❌ EconoAI error:', err)
-      setError(err.message || 'Failed to process question. Please try again.')
+      // Show a soft inline answer instead of only an error banner
+      setUserAnswer('Quick guidance while we reconnect: define your time horizon, outline bull/bear scenarios with catalysts, and pick 2–3 levels to manage risk. Try again for the full AI view.')
+      setError('')
       setTyping(false)
     } finally {
       setIsAsking(false)

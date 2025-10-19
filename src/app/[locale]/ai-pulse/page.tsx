@@ -26,6 +26,16 @@ interface ETFData { symbol:string; name:string; category:string; price:number; c
 const getCountryFlag = (code:string) => ({ US:'🇺🇸', CN:'🇨🇳', DE:'🇩🇪', JP:'🇯🇵', IN:'🇮🇳', GB:'🇬🇧', FR:'🇫🇷', CA:'🇨🇦', IT:'🇮🇹', AU:'🇦🇺', BR:'🇧🇷', KR:'🇰🇷', ES:'🇪🇸', NL:'🇳🇱', CH:'🇨🇭' }[code] || '🏳️');
 
 export default function AIPulsePage({ params }: { params: Promise<{ locale: string }> }) {
+  // Client-side fetch with timeout to avoid long hangs
+  const fetchT = React.useCallback(async (input: RequestInfo | URL, timeoutMs = 10000, init?: RequestInit) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...(init || {}), signal: ctrl.signal });
+    } finally {
+      clearTimeout(t);
+    }
+  }, []);
   // Data state
   const [sectorData, setSectorData] = useState<SectorPerformance[]>([]);
   const [economicData, setEconomicData] = useState<EconomicCycle | null>(null);
@@ -109,14 +119,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
 
   // Fetchers
-  const fetchCountryData = async () => { try { const r = await fetch('/api/country-data'); if(!r.ok) throw new Error('country'); const j = await r.json(); setCountryData(j.data); setDataHealth(h=>({...h,country:!!j.data})); } catch(e){ console.error(e);} };
-  const fetchSectorData = async () => { try { setRefreshing(true); const r = await fetch('/api/sector-performance'); if(!r.ok) throw new Error('sector'); const j = await r.json(); const sectors = j.sectors||[]; setSectorData(sectors); setDataHealth(h=>({...h,sector:sectors.length>0})); setLastUpdated(j.lastUpdated || new Date().toISOString()); setError(''); } catch(e){ console.error(e); setError('Failed to load sector performance data'); } finally { setLoading(false); setRefreshing(false);} };
-  const fetchEconomicData = async () => { try { const r = await fetch('/api/economic-data'); if(!r.ok) { console.warn('economic-data unavailable'); return; } const j = await r.json(); setEconomicData(j.data); setDataHealth(h=>({...h,economic:!!j.data})); } catch(e){ console.error(e);} };
-  const fetchAIAnalysis = async () => { try { setAiLoading(true); const r = await fetch('/api/ai-economic-analysis'); if(!r.ok) { console.warn('ai-economic-analysis unavailable'); setAiMeta(null); setAiAnalysis(null); return; } const j = await r.json(); const analysis = j.data?.analysis || j; setAiAnalysis(analysis); setAiMeta(j ? { realtime: !!j.realtime, dataSource: j.data?.dataSource||'N/A', fallback: !!j.data?.fallback } : null); setDataHealth(h=>({...h,ai:!!analysis})); } catch(e){ console.error(e);} finally { setAiLoading(false);} };
-  const fetchETFData = async () => { try { const r = await fetch('/api/etf-comparison'); if(!r.ok) throw new Error('etf'); const j = await r.json(); const etfs = j.etfs || []; setEtfData(etfs); setDataHealth(h=>({...h,etf:etfs.length>0})); } catch(e){ console.error(e);} };
+  const fetchCountryData = async () => { try { const r = await fetchT('/api/country-data', 12000); if(!r.ok) throw new Error('country'); const j = await r.json(); setCountryData(j.data); setDataHealth(h=>({...h,country:!!j.data})); } catch(e){ console.error(e);} };
+  const fetchSectorData = async () => { try { setRefreshing(true); const r = await fetchT('/api/sector-performance', 12000); if(!r.ok) throw new Error('sector'); const j = await r.json(); const sectors = j.sectors||[]; setSectorData(sectors); setDataHealth(h=>({...h,sector:sectors.length>0})); setLastUpdated(j.lastUpdated || new Date().toISOString()); setError(''); } catch(e){ console.error(e); setError('Failed to load sector performance data'); } finally { setLoading(false); setRefreshing(false);} };
+  const fetchEconomicData = async () => { try { const r = await fetchT('/api/economic-data', 10000); if(!r.ok) { console.warn('economic-data unavailable'); return; } const j = await r.json(); setEconomicData(j.data); setDataHealth(h=>({...h,economic:!!j.data})); } catch(e){ console.error(e);} };
+  const fetchAIAnalysis = async () => { try { setAiLoading(true); const r = await fetchT('/api/ai-economic-analysis', 12000); if(!r.ok) { console.warn('ai-economic-analysis unavailable'); setAiMeta(null); setAiAnalysis(null); return; } const j = await r.json(); const analysis = j.data?.analysis || j; setAiAnalysis(analysis); setAiMeta(j ? { realtime: !!j.realtime, dataSource: j.data?.dataSource||'N/A', fallback: !!j.data?.fallback } : null); setDataHealth(h=>({...h,ai:!!analysis})); } catch(e){ console.error(e);} finally { setAiLoading(false);} };
+  const fetchETFData = async () => { try { const r = await fetchT('/api/etf-comparison', 10000); if(!r.ok) throw new Error('etf'); const j = await r.json(); const etfs = j.etfs || []; setEtfData(etfs); setDataHealth(h=>({...h,etf:etfs.length>0})); } catch(e){ console.error(e);} };
   const fetchRecessionIndex = async () => {
     try {
-      const r = await fetch('/api/recession-index?limit=180', { cache:'no-store' });
+  const r = await fetchT('/api/recession-index?limit=180', 8000, { cache:'no-store' });
       if (!r.ok) throw new Error('recession-index');
       const j = await r.json();
       if (Array.isArray(j?.series)) setRecessionSeries(j.series);
@@ -132,7 +142,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     try {
       const symbols = ['^VVIX','^VIX','SPHB','SPLV','XLY','XLP','IWD','IWF','HYG','IEF','HG=F','GC=F','^MOVE','^SKEW'];
       const qs = new URLSearchParams({ symbols: symbols.join(','), range:'6mo', interval:'1d' });
-      const res = await fetch(`/api/yahoo-history?${qs.toString()}`, { cache:'no-store' });
+  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 10000, { cache:'no-store' });
       if (!res.ok) throw new Error('risk-ratios');
       const js = await res.json();
       const arr: Array<{ symbol:string; bars:Array<{time:number; close:number}> }> = js.data || [];
@@ -219,7 +229,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   };
   // Oil seasonality fetch removed
   // Movers are strictly DAILY % change; always fetch period=daily and refresh with page data.
-  const fetchTopMovers = async (sectorOverride?: string) => { try { const s = sectorOverride ?? selectedSector; const p = syncMoversWithPeriod ? selectedPeriod : 'daily'; const qs = new URLSearchParams({ limit:'10', period:p }); if (s) qs.set('sector', s); const r = await fetch(`/api/top-movers?${qs.toString()}`, { cache:'no-store' }); if(!r.ok) throw new Error('movers'); const j = await r.json(); setTopMovers((j.top||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); setBottomMovers((j.bottom||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); } catch(e){ console.error(e);} };
+  const fetchTopMovers = async (sectorOverride?: string) => { try { const s = sectorOverride ?? selectedSector; const p = syncMoversWithPeriod ? selectedPeriod : 'daily'; const qs = new URLSearchParams({ limit:'10', period:p }); if (s) qs.set('sector', s); const r = await fetchT(`/api/top-movers?${qs.toString()}`, 8000, { cache:'no-store' }); if(!r.ok) throw new Error('movers'); const j = await r.json(); setTopMovers((j.top||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); setBottomMovers((j.bottom||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); } catch(e){ console.error(e);} };
 
   // Fetch mini history for visible movers (limit 15 per route constraints)
   const fetchSparkHistory = async (symbols: string[]) => {
@@ -233,7 +243,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       for (let i = 0; i < uniq.length; i += 15) {
         const chunk = uniq.slice(i, i + 15);
         const qs = new URLSearchParams({ symbols: chunk.join(','), range: '1mo', interval: '1d' });
-        const res = await fetch(`/api/yahoo-history?${qs.toString()}`, { cache: 'no-store' });
+  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 9000, { cache: 'no-store' });
         if (!res.ok) throw new Error('spark');
         const json = await res.json();
         (json.data || []).forEach((h: any) => {
@@ -309,7 +319,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
         return '1d'
       })()
       const qs = new URLSearchParams({ symbols: syms.join(','), range: etfRange, interval });
-      const res = await fetch(`/api/yahoo-history?${qs.toString()}`, { cache: 'no-store' });
+  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 10000, { cache: 'no-store' });
       if (!res.ok) throw new Error('history');
       const json = await res.json();
       const arr: any[] = json.data || [];

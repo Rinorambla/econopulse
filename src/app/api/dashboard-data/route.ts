@@ -123,7 +123,7 @@ function buildUniverse(scope: string, limit?: number) {
   if (scope === 'full') base.push(...EXTENDED_SYMBOLS);
   const uniq = [...new Set(base)];
   const maxEnv = parseInt(process.env.MAX_SYMBOL_UNIVERSE || '',10);
-  const hardCap = !isNaN(maxEnv) ? maxEnv : 450; // safety
+  const hardCap = !isNaN(maxEnv) ? maxEnv : 320; // tighter safety cap to reduce latency
   const appliedLimit = Math.min(limit || hardCap, hardCap);
   return uniq.slice(0, appliedLimit);
 }
@@ -237,6 +237,10 @@ async function handleDashboardRequest(params: DashboardParams) {
   }
 
   console.log('🔄 Fetching fresh data from Tiingo (equities/etfs)... universe size', REQUESTED_UNIVERSE.length);
+  if (REQUESTED_UNIVERSE.length > 400) {
+    console.warn('⚠️ Requested universe too large, trimming for safety');
+    REQUESTED_UNIVERSE = REQUESTED_UNIVERSE.slice(0, 400);
+  }
   const tiingoData = await withTimeout(
     getTiingoMarketData(REQUESTED_UNIVERSE),
     50000,

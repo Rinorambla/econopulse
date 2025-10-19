@@ -70,6 +70,78 @@ export default function MarketDNAPage() {
   const [sectorSort, setSectorSort] = useState<'score'|'change'>('score');
   const [sectorView, setSectorView] = useState<'bars'|'table'>('bars');
 
+  // Client fetch with timeout to avoid hangs
+  const fetchT = React.useCallback(async (input: RequestInfo | URL, timeoutMs = 10000, init?: RequestInit) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...(init||{}), signal: ctrl.signal });
+    } finally { clearTimeout(t); }
+  }, []);
+
+  // Normalize response and synthesize series if missing (older API payloads)
+  function normalizeMarketDNA(result: MarketDNAData): MarketDNAData {
+    const out = { ...result } as MarketDNAData;
+    // Historical similarity
+    if (!out.historicalSimilaritySeries || out.historicalSimilaritySeries.length === 0) {
+      const base = Math.max(40, Math.min(95, out.topHistoricalMatch?.similarity ?? out.currentDNAScore ?? 60));
+      const days = 60;
+      const series = Array.from({ length: days }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (days - i));
+        const s1 = Math.max(20, Math.min(95, base + Math.sin(i * 0.15) * 8));
+        const s2 = Math.max(10, Math.min(85, base - 12 + Math.cos(i * 0.09) * 7));
+        const s3 = Math.max(5, Math.min(80, base - 18 + Math.sin(i * 0.07) * 9));
+        const composite = Math.round((s1 + s2 + s3) / 3);
+        return { date: d.toISOString().slice(0,10), crisis2007: Math.round(s1), bubble2000: Math.round(s2), pandemic2020: Math.round(s3), composite };
+      });
+      out.historicalSimilaritySeries = series;
+    }
+    // Market regime series
+    if (!out.marketRegimeSeries || out.marketRegimeSeries.length === 0) {
+      const days = 120; const target = Math.max(40, Math.min(95, out.topHistoricalMatch?.similarity ?? out.currentDNAScore ?? 60));
+      out.marketRegimeSeries = Array.from({ length: days }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (days - i));
+        const progress = i / days; const baseRisk = 40 + progress * (target - 40) + Math.sin(i * 0.11) * 5;
+        const volatility = baseRisk * 0.8 + Math.cos(i * 0.07) * 6 + 10;
+        let regime = 'Recovery';
+        if (baseRisk > 80) regime = 'Crisis Formation';
+        else if (baseRisk > 65) regime = 'Late Cycle';
+        else if (baseRisk > 50) regime = 'Mid Cycle';
+        else if (baseRisk > 40) regime = 'Expansion';
+        return { date: d.toISOString().slice(0,10), riskLevel: Math.round(baseRisk * 10) / 10, volatility: Math.round(volatility * 10) / 10, regime };
+      });
+    }
+    // Sector radar (needs radial points)
+    if (!out.sectorRadar || out.sectorRadar.length < 3) {
+      const base = (out.sectorVulnerabilities && out.sectorVulnerabilities.length)
+        ? out.sectorVulnerabilities.slice(0,5).map(s => ({
+            sector: s.sector,
+            riskScore: Math.max(10, Math.min(100, s.score)),
+            momentum: Math.max(10, Math.min(100, 100 - s.score + 10)),
+            valuation: Math.max(10, Math.min(100, 50 + 10)),
+            sentiment: Math.max(10, Math.min(100, 60 - s.score / 2 + 5))
+          }))
+        : [
+            { sector: 'Technology', riskScore: 65, momentum: 55, valuation: 60, sentiment: 55 },
+            { sector: 'Financials', riskScore: 72, momentum: 48, valuation: 52, sentiment: 50 },
+            { sector: 'Healthcare', riskScore: 40, momentum: 62, valuation: 58, sentiment: 63 },
+            { sector: 'Energy', riskScore: 58, momentum: 45, valuation: 54, sentiment: 48 },
+            { sector: 'Consumer Disc.', riskScore: 70, momentum: 50, valuation: 56, sentiment: 52 }
+          ];
+      out.sectorRadar = base;
+    }
+    // Correlation matrix baseline if missing
+    if (!out.correlationMatrix || out.correlationMatrix.length === 0) {
+      const assets = ['SPY','TLT','GLD','VIX','DXY'];
+      out.correlationMatrix = assets.map(row => {
+        const rowObj: any = { asset: row };
+        assets.forEach(col => { rowObj[col.toLowerCase()] = row === col ? 1 : (Math.sin((row.charCodeAt(0)+col.charCodeAt(0)) * 0.15) * 0.6); });
+        return rowObj;
+      });
+    }
+    return out;
+  }
+
   // Access precomputed series from server
   const similaritySeries = data?.historicalSimilaritySeries || [];
   const regimeSeries = data?.marketRegimeSeries || [];
@@ -123,14 +195,15 @@ export default function MarketDNAPage() {
       setRefreshing(true);
       
       // Add cache busting to force fresh data
-      const response = await fetch(`/api/market-dna?t=${Date.now()}`);
+  const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 12000);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const result: MarketDNAData = await response.json();
-      setData(result);
+  const result: MarketDNAData = await response.json();
+  const normalized = normalizeMarketDNA(result);
+  setData(normalized);
     } catch (error) {
       console.error('Error fetching Market DNA data:', error);
       // Fallback data for development

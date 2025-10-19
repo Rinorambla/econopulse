@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_pulse">AI Pulse</string>
+    <string name="app_name">EconoPulse</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="econo_ai">EconoAI</string>
+    <string name="email">Email</string>
+    <string name="error">Error</string>
+    <string name="loading">Loading...</string>
+    <string name="login">Login</string>
+    <string name="logout">Logout</string>
+    <string name="market_dna">Market DNA</string>
+    <string name="market_overview">Market Overview</string>
+    <string name="news">News</string>
+    <string name="password">Password</string>
+    <string name="performance">Performance</string>
+    <string name="portfolio">Portfolio</string>
+    <string name="register">Register</string>
+    <string name="retry">Retry</string>
+    <string name="visual_ai">Visual AI</string>
+    <string name="welcome">Welcome to EconoPulse</string>
+    <style name="Theme.EconoPulse" parent="android:Theme.Material.Light.NoActionBar">
+        
+        <item name="android:colorPrimary">@android:color/holo_blue_bright</item>
+        <item name="android:colorAccent">@android:color/holo_green_light</item>
+        
+        <item name="android:statusBarColor">@android:color/holo_blue_dark</item>
+    </style>
+</resources>

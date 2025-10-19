@@ -1,0 +1,8 @@
+# Android SDK location
+sdk.dir=C\:\\Users\\[USERNAME]\\AppData\\Local\\Android\\Sdk
+
+# EconoPulse API Configuration (optional for development)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+
+# Copy this file to local.properties and update with your actual values

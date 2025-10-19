@@ -70,7 +70,8 @@ async function fetchETFData(symbols: string[], token: string): Promise<ETFQuote[
             headers: {
               'Content-Type': 'application/json',
             },
-            next: { revalidate: 300 } // Cache for 5 minutes
+            next: { revalidate: 300 }, // Cache for 5 minutes
+            signal: AbortSignal.timeout(8000)
           }
         );
 

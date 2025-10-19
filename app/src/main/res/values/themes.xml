@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EconoPulse" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="android:colorPrimary">@android:color/holo_blue_bright</item>
+        <item name="android:colorAccent">@android:color/holo_green_light</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@android:color/holo_blue_dark</item>
+    </style>
+</resources>

@@ -90,11 +90,13 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then(res => {
-          if (res.ok) {
+          if (res && res.ok) {
             const clone = res.clone();
             caches.open(DYNAMIC_CACHE).then(c => c.put(request, clone));
+            return res;
           }
-          return res;
+          // If network responded with error, try cache fallback
+          return caches.match(request).then(cached => cached || res);
         })
         .catch(() => caches.match(request))
     );
@@ -121,7 +123,7 @@ self.addEventListener('fetch', (event) => {
         return cached;
       }
       try {
-        const res = await fetchWithTimeout(request, 12000);
+        const res = await fetchWithTimeout(request, 15000);
         if (res && res.ok) await cache.put(request, res.clone());
         return res;
       } catch {

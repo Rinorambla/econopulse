@@ -14,6 +14,7 @@ function getOpenAIClient() {
 export async function POST(req: NextRequest) {
   try {
     const { question, userId, context } = await req.json()
+    const usedContextFlag = Boolean(context)
 
     console.log('🎯 EconoAI request received:', { 
       question: question?.substring(0, 100), 
@@ -29,16 +30,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Check if OpenAI is configured
+    // Utility: build a successful fallback response (always 200 so UI keeps working)
+    const fallbackResponse = (reason: string) => {
+      const res = NextResponse.json({
+        answer:
+          'Here’s a quick, framework-based analysis while the live AI is initializing: \n\n' +
+          '- Summary: Based on typical market conditions, consider focusing on trend strength, earnings momentum, and key support/resistance levels.\n' +
+          '- What to watch: S&P 500, VIX, 10Y yield, USD, sector rotation (Tech vs. Energy/Financials).\n' +
+          '- Next steps: Define time horizon, set risk limits, and identify 2–3 catalysts that could change the thesis.\n\n' +
+          '(AI live answer will be enabled shortly.)',
+        question,
+        usedContext: usedContextFlag,
+        fallback: true,
+        reason,
+        timestamp: new Date().toISOString(),
+      })
+      res.headers.set('Cache-Control', 'no-store')
+      return res
+    }
+
+    // If OpenAI is not configured, return a graceful fallback instead of 503
     if (!process.env.OPENAI_API_KEY) {
       console.error('❌ OpenAI API key not configured')
-      return NextResponse.json(
-        { 
-          error: 'AI service not configured', 
-          answer: 'EconoAI is currently being configured. Please try again later.' 
-        },
-        { status: 503 }
-      )
+      return fallbackResponse('openai_not_configured')
     }
 
     console.log('✅ OpenAI client initialized')
@@ -102,10 +116,19 @@ Keep prose crisp and professional.`
     const primaryModel = process.env.OPENAI_MODEL || 'gpt-4o';
     const fallbackModel = 'gpt-4o-mini';
 
-    let completion;
+    let completion: any
+    const TIMEOUT_MS = 12000
+    // Helper to timeout the OpenAI request
+    const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
+      return new Promise<T>((resolve, reject) => {
+        const id = setTimeout(() => reject(new Error('openai_timeout')), ms)
+        p.then((v) => { clearTimeout(id); resolve(v) }).catch((e) => { clearTimeout(id); reject(e) })
+      })
+    }
     try {
       // Primary attempt
-      completion = await openai.chat.completions.create({
+      completion = await withTimeout(
+        openai.chat.completions.create({
         model: primaryModel,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -116,13 +139,21 @@ Keep prose crisp and professional.`
         max_tokens: 1000, // More space for comprehensive answers
         presence_penalty: 0.1, // Encourage varied responses
         frequency_penalty: 0.1, // Reduce repetition
-      })
+      }),
+        TIMEOUT_MS
+      )
     } catch (err: any) {
       // Retry on model not found / no access
       const isModelNotFound = err?.status === 404 || err?.code === 'model_not_found' || /model .* does not exist/i.test(err?.message||'');
+      // If timed out, return fallback
+      if (err?.message === 'openai_timeout') {
+        console.warn(`⏳ OpenAI request timed out after ${TIMEOUT_MS}ms, returning fallback`)
+        return fallbackResponse('openai_timeout')
+      }
       if (!isModelNotFound) throw err;
       console.warn(`Model ${primaryModel} unavailable, retrying with ${fallbackModel}...`);
-      completion = await openai.chat.completions.create({
+      completion = await withTimeout(
+        openai.chat.completions.create({
         model: fallbackModel,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -133,7 +164,9 @@ Keep prose crisp and professional.`
         max_tokens: 1000,
         presence_penalty: 0.1,
         frequency_penalty: 0.1,
-      });
+      }),
+        TIMEOUT_MS
+      );
     }
 
     const answer = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.'
@@ -148,14 +181,16 @@ Keep prose crisp and professional.`
       timestamp: new Date().toISOString()
     })
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       answer,
       question,
-      usedContext: Boolean(context),
+      usedContext: usedContextFlag,
       timestamp: new Date().toISOString(),
       model: completion.model,
       usage: completion.usage
     })
+    res.headers.set('Cache-Control', 'no-store')
+    return res
 
   } catch (error: any) {
     console.error('❌ EconoAI API error:', {
@@ -181,19 +216,27 @@ Keep prose crisp and professional.`
       )
     }
 
-    if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT') {
-      return NextResponse.json(
-        { error: 'Network error. Please check your connection and try again.' },
-        { status: 503 }
-      )
+    if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT' || error?.message === 'openai_timeout') {
+      // Return a graceful fallback rather than a 5xx so UI remains usable
+      return NextResponse.json({
+        answer:
+          'Quick market framework while network is unstable: focus on trend, breadth, and macro levels (10Y yield, USD). Consider staged entries and clear risk limits until connectivity stabilizes.',
+        question: 'network_recovery',
+        usedContext: false,
+        fallback: true,
+        reason: 'network_error',
+        timestamp: new Date().toISOString(),
+      }, { status: 200 })
     }
 
-    return NextResponse.json(
-      { 
-        error: 'Failed to process your question. Please try again.',
-        details: process.env.NODE_ENV === 'development' ? error?.message : undefined
-      },
-      { status: 500 }
-    )
+    // Unknown error: still provide a soft fallback so UX doesn't break
+    return NextResponse.json({
+      answer: 'Temporary issue processing your request. Here is a quick guidance: define your time horizon, identify catalysts, and watch key support/resistance. Try again shortly for a full AI answer.',
+      question: 'unknown_error',
+      usedContext: false,
+      fallback: true,
+      reason: 'unknown_error',
+      timestamp: new Date().toISOString(),
+    }, { status: 200 })
   }
 }

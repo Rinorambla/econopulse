@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 /**
  * Dynamic country macro data using public World Bank indicators + optional FRED (US policy rate).
@@ -44,7 +45,7 @@ const CACHE_TTL_MS = 1000 * 60 * 60; // 1h
 
 async function fetchWorldBankIndicator(countryCode:string, indicator:string) {
   const url = `https://api.worldbank.org/v2/country/${countryCode}/indicator/${indicator}?format=json&per_page=10`;
-  const res = await fetch(url, { next: { revalidate: 3600 } });
+  const res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(9000) });
   if(!res.ok) throw new Error(`WorldBank ${countryCode} ${indicator}`);
   const json:any = await res.json();
   const rows = Array.isArray(json) ? json[1] : [];
@@ -58,7 +59,7 @@ async function fetchUsdFxRate(currency:string):Promise<number> {
   if(currency==='USD') return 1;
   // Use exchangerate.host (ECB) free API
   try {
-    const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${currency}`);
+  const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${currency}`, { signal: AbortSignal.timeout(6000) });
     if(!res.ok) return NaN;
     const j = await res.json();
     return j.rates?.[currency] || NaN;
@@ -70,7 +71,7 @@ async function fetchFredPolicyRate():Promise<{ value:number; date:string } | nul
   if(!key) return null;
   try {
     const url = `https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=${key}&file_type=json&observation_start=2024-01-01`;
-    const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if(!res.ok) throw new Error('FRED');
     const j:any = await res.json();
     const obs = j.observations?.filter((o:any)=> o.value !== '.' );
@@ -82,6 +83,11 @@ async function fetchFredPolicyRate():Promise<{ value:number; date:string } | nul
 
 export async function GET(request:Request) {
   try {
+  const ip = getClientIp(request);
+  const rl = rateLimit(`country:${ip}`, 60, 60_000);
+  if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
+    }
   const url = new URL(request.url);
   const forceRefresh = url.searchParams.get('refresh') === '1';
   if(!forceRefresh && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
@@ -89,7 +95,7 @@ export async function GET(request:Request) {
       const avgGrowth = cache.data.reduce((s,c)=> s + c.gdp.growth, 0) / cache.data.length;
       const avgInfl = cache.data.reduce((s,c)=> s + c.inflation.value, 0) / cache.data.length;
       const avgUnemp = cache.data.reduce((s,c)=> s + c.unemployment.value, 0) / cache.data.length;
-      return NextResponse.json({ success:true, data: { countries: cache.data.sort((a,b)=> b.gdp.value - a.gdp.value), global:{ totalGdp, averageGrowth: avgGrowth, averageInflation: avgInfl, averageUnemployment: avgUnemp, totalCountries: cache.data.length }, lastUpdated: new Date(cache.timestamp).toISOString() }, realtime:true, cached:true });
+      return NextResponse.json({ success:true, data: { countries: cache.data.sort((a,b)=> b.gdp.value - a.gdp.value), global:{ totalGdp, averageGrowth: avgGrowth, averageInflation: avgInfl, averageUnemployment: avgUnemp, totalCountries: cache.data.length }, lastUpdated: new Date(cache.timestamp).toISOString() }, realtime:true, cached:true }, { headers: rateLimitHeaders(rl) });
     }
 
     // Fetch FRED policy rate for US if available
@@ -177,7 +183,7 @@ export async function GET(request:Request) {
       indicatorsMissingBreakdown: countries.reduce((acc:Record<string,number>,c)=> { (c.diagnostics?.missing||[]).forEach(m=> { acc[m]=(acc[m]||0)+1; }); return acc; }, {})
     };
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success:true,
       data:{
         countries: countries.sort((a,b)=> b.gdp.value - a.gdp.value),
@@ -193,7 +199,8 @@ export async function GET(request:Request) {
       realtime:true,
       validation: validationSummary,
       sources:[ 'World Bank API', 'FRED (US policy rate where available)' ]
-    });
+    }, { headers: rateLimitHeaders(rl) });
+    return res;
   } catch (error) {
     console.error('Error fetching dynamic country data', error);
     return NextResponse.json({ success:false, error:'Failed to fetch country economic data (dynamic)', timestamp:new Date().toISOString() }, { status: 500 });

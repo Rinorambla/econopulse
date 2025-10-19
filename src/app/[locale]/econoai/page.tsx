@@ -74,11 +74,24 @@ export default function EconoAIPage() {
     try {
       console.log('🚀 Sending question to EconoAI:', userQuestion)
       
+      // Small helper with abort timeout to avoid hangs
+      const fetchT = async (input: RequestInfo | URL, init?: RequestInit & { timeoutMs?: number }) => {
+        const ms = init?.timeoutMs ?? 12000
+        const ctrl = new AbortController()
+        const id = setTimeout(() => ctrl.abort(), ms)
+        try {
+          const res = await fetch(input, { ...init, signal: ctrl.signal })
+          return res
+        } finally {
+          clearTimeout(id)
+        }
+      }
+
       // Build lightweight context: market snapshot, macro, and top news
       const [marketRes, recessionRes, newsRes] = await Promise.all([
-        fetch('/api/yahoo-unified?category=all&limit=20', { cache:'no-store' }).catch(()=>null),
-        fetch('/api/recession-index?limit=60', { cache:'no-store' }).catch(()=>null),
-        fetch('/api/news/top?limit=6', { cache:'no-store' }).catch(()=>null)
+        fetchT('/api/yahoo-unified?category=all&limit=20', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null),
+        fetchT('/api/recession-index?limit=60', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null),
+        fetchT('/api/news/top?limit=6', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null)
       ])
       const context: any = {}
       try {
@@ -93,7 +106,7 @@ export default function EconoAIPage() {
       try { const rj = recessionRes && recessionRes.ok ? await recessionRes.json() : null; if (rj?.latest) context.macro = { recession: rj.latest, seriesLen: (rj.series||[]).length } } catch {}
       try { const nj = newsRes && newsRes.ok ? await newsRes.json() : null; if (nj?.data) context.news = nj.data } catch {}
 
-      const response = await fetch('/api/econoai/chat', {
+      const response = await fetchT('/api/econoai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,6 +116,8 @@ export default function EconoAIPage() {
           userId: user?.id || 'anonymous',
           context
         }),
+        cache: 'no-store',
+        timeoutMs: 12000,
       })
 
       console.log('📡 Response status:', response.status)
@@ -110,7 +125,8 @@ export default function EconoAIPage() {
       const data = await response.json()
       console.log('📦 Response data:', data)
 
-      if (!response.ok) {
+      // Accept both normal and fallback answers
+      if (!response.ok && !data?.answer) {
         throw new Error(data.error || 'Failed to get answer')
       }
 

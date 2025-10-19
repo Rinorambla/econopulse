@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 interface MarketFeatures {
   vix: number;
@@ -176,7 +177,7 @@ async function fetchFREDData() {
     for (const indicator of indicators) {
       const response = await fetch(
         `https://api.stlouisfed.org/fred/series/observations?series_id=${indicator}&api_key=${FRED_API_KEY}&file_type=json&limit=1&sort_order=desc`,
-        { next: { revalidate: 3600 } }
+        { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) }
       );
       
       if (response.ok) {
@@ -211,7 +212,7 @@ async function fetchTwelveDataMetrics() {
     // Fetch VIX data
     const vixResponse = await fetch(
       `https://api.twelvedata.com/quote?symbol=VIX&apikey=${TWELVE_DATA_API_KEY}`,
-      { next: { revalidate: 300 } }
+      { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
     );
 
     let vixLevel = 19.2;
@@ -225,7 +226,7 @@ async function fetchTwelveDataMetrics() {
     // Fetch Dollar Index
     const dxyResponse = await fetch(
       `https://api.twelvedata.com/quote?symbol=DXY&apikey=${TWELVE_DATA_API_KEY}`,
-      { next: { revalidate: 300 } }
+      { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
     );
 
     let dollarIndex = 103.5;
@@ -252,7 +253,7 @@ async function fetchPolygonData() {
     // Fetch SPY price
     const spyResponse = await fetch(
       `https://api.polygon.io/v2/last/trade/SPY?apikey=${POLYGON_API_KEY}`,
-      { next: { revalidate: 60 } }
+      { next: { revalidate: 60 }, signal: AbortSignal.timeout(5000) }
     );
 
     let spyPrice = 450.0;
@@ -266,7 +267,7 @@ async function fetchPolygonData() {
     // Fetch Gold price (GLD ETF as proxy)
     const goldResponse = await fetch(
       `https://api.polygon.io/v2/last/trade/GLD?apikey=${POLYGON_API_KEY}`,
-      { next: { revalidate: 60 } }
+      { next: { revalidate: 60 }, signal: AbortSignal.timeout(5000) }
     );
 
     let goldPrice = 2050.0;
@@ -291,8 +292,9 @@ function calculateBondEquityCorrelation(polygonData: any): number {
   
   // For now, simulate based on market conditions
   const baseCorr = -0.25; // Normal negative correlation
-  const volatilityAdjustment = Math.random() * 0.8 - 0.4; // Random adjustment
-  
+  // Deterministic adjustment based on date to avoid randomness
+  const daySeed = new Date().getUTCDate();
+  const volatilityAdjustment = ((daySeed % 10) - 5) / 25; // ~[-0.2, 0.2]
   return Math.max(-1, Math.min(1, baseCorr + volatilityAdjustment));
 }
 
@@ -300,7 +302,8 @@ function calculateBondEquityCorrelation(polygonData: any): number {
 function analyzeSectorRotation(polygonData: any): string {
   // In a real implementation, this would analyze relative sector performance
   const patterns = ['defensive', 'cyclical', 'growth', 'value', 'momentum', 'quality'];
-  return patterns[Math.floor(Math.random() * patterns.length)];
+  const idx = new Date().getUTCMonth() % patterns.length;
+  return patterns[idx];
 }
 
 // Calculate similarity between current and historical patterns
@@ -500,6 +503,11 @@ function analyzeSectorVulnerabilities(currentFeatures: MarketFeatures) {
 
 export async function GET(request: NextRequest) {
   try {
+    const ip = getClientIp(request as unknown as Request);
+    const rl = rateLimit(`market-dna:${ip}`, 60, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
+    }
     console.log('🧠 Starting Market DNA analysis with REAL DATA...');
     
     // Get current market features from multiple data sources
@@ -765,7 +773,7 @@ export async function GET(request: NextRequest) {
   riskSummary
     };
     
-    return NextResponse.json(response);
+  return NextResponse.json(response, { headers: rateLimitHeaders(rl) });
     
   } catch (error) {
     console.error('Market DNA API Error:', error);

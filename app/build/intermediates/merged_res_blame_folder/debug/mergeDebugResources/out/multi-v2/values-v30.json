@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.econopulse.app-mergeDebugResources-67:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\HP\\.gradle\\caches\\8.9\\transforms\\b5036483bd3d917402a6b39cf2834a98\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

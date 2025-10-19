@@ -93,7 +93,7 @@ export default function DashboardPage() {
 	const [perfMax, setPerfMax] = useState<string>('');
 	const [sortKey, setSortKey] = useState<string>('performance');
 	const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
-	const [autoRefreshSec, setAutoRefreshSec] = useState<number>(300); // 5 min default
+	const [autoRefreshSec, setAutoRefreshSec] = useState<number>(420); // 7 min default to reduce load
 	// Lazy charts (dynamic import + intersection observer)
 	const [chartsReady, setChartsReady] = useState(false);
 	const chartsRef = useRef<HTMLDivElement | null>(null);
@@ -127,7 +127,10 @@ export default function DashboardPage() {
 		try {
 			setLoading(true);
 			// Request a larger universe of symbols for richer coverage
-			const response = await fetch('/api/dashboard-data?scope=full&limit=600&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' } });
+			const ctrl = new AbortController();
+			const t = setTimeout(() => ctrl.abort(), 15000);
+			const response = await fetch('/api/dashboard-data?scope=full&limit=600&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
+			clearTimeout(t);
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 			const result: DashboardResponse = await response.json();
 			setData(result.data || []);
@@ -138,7 +141,7 @@ export default function DashboardPage() {
 		} finally { setLoading(false); }
 	};
 
-	const fetchVixData = async () => { try { const r = await fetch('/api/vix'); if (r.ok) { const j = await r.json(); if (j.success && j.data) setVixData({ price: j.data.price, volatilityLevel: j.data.volatilityLevel, color: j.data.color }); } } catch {} };
+	const fetchVixData = async () => { try { const c = new AbortController(); const t = setTimeout(()=>c.abort(), 8000); const r = await fetch('/api/vix', { signal: c.signal }); clearTimeout(t); if (r.ok) { const j = await r.json(); if (j.success && j.data) setVixData({ price: j.data.price, volatilityLevel: j.data.volatilityLevel, color: j.data.color }); } } catch {} };
 
 // Initial + interval refresh
 	useEffect(() => {

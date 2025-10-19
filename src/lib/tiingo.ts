@@ -130,11 +130,11 @@ export class TiingoService {
       console.log(`Bulk processing ${symbols.length} symbols from Tiingo IEX...`);
       const results: any[] = [];
       const startTime = Date.now();
-      const batchPromises: Promise<any[]>[] = [];
+      const batchPromises: Array<() => Promise<any[]>> = [];
       for (let i = 0; i < symbols.length; i += batchSize) {
         const batch = symbols.slice(i, i + batchSize);
         const symbolsQuery = batch.join(',');
-        const batchPromise = (async (): Promise<any[]> => {
+        const batchPromise = async (): Promise<any[]> => {
           try {
             const url = `${this.baseUrl}/iex?tickers=${symbolsQuery}&token=${this.apiKey}`;
             const response = await fetch(url, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000) });
@@ -153,10 +153,17 @@ export class TiingoService {
             console.warn('❌ Batch error:', batchError);
             return [];
           }
-        })();
+        };
         batchPromises.push(batchPromise);
       }
-      const parallelResults = await Promise.all(batchPromises);
+      // Limit concurrency to avoid overwhelming network/providers
+      const CONCURRENCY = 4;
+      const parallelResults: any[][] = [];
+      for (let i = 0; i < batchPromises.length; i += CONCURRENCY) {
+        const slice = batchPromises.slice(i, i + CONCURRENCY);
+        const step = await Promise.all(slice.map(fn => fn()));
+        parallelResults.push(...step.map(arr => (Array.isArray(arr) ? arr : [])));
+      }
       for (const r of parallelResults) if (r?.length) results.push(...r);
       const duration = Date.now() - startTime;
       return results.map((quote: any) => ({

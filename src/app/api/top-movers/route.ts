@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { getTiingoMarketData, getTiingoHistorical } from '@/lib/tiingo'
 import { SP500_SYMBOLS } from '@/lib/universe'
 import { fetchYahooBatchQuotes } from '@/lib/yahoo-quote-batch'
@@ -30,6 +31,11 @@ function daysFor(period: string) {
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req as unknown as Request)
+    const rl = rateLimit(`movers:${ip}`, 90, 60_000)
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) })
+    }
     const { searchParams } = new URL(req.url)
     const limitParam = searchParams.get('limit')
     const limit = Math.max(1, Math.min(50, Number(limitParam) || 10))
@@ -43,7 +49,7 @@ export async function GET(req: NextRequest) {
     let sectorName: string | null = null
     let sectorApplied = false
     if (sector) {
-      const info = await fetchYahooBatchQuotes(universe)
+  const info = await fetchYahooBatchQuotes(universe)
       const filtered = info.filter(q => (q.sector || '').toLowerCase() === sector.toLowerCase())
       if (filtered.length > 0) {
         // Sort by market cap and take top 60 for perf
@@ -57,7 +63,7 @@ export async function GET(req: NextRequest) {
     if (period === 'daily') {
       // For daily, reduce load by taking top 200 by market cap when no sector filter
       if (!sector) {
-        const caps = await fetchYahooBatchQuotes(universe)
+  const caps = await fetchYahooBatchQuotes(universe)
         if (caps.length > 0) {
           caps.sort((a,b)=> (b.marketCap||0) - (a.marketCap||0))
           universe = caps.slice(0, 200).map(c => c.symbol)
@@ -84,14 +90,14 @@ export async function GET(req: NextRequest) {
       const sorted = items.sort((a, b) => (b.changePercent - a.changePercent))
       const top = sorted.filter(m => m.changePercent > 0).slice(0, limit)
       const bottom = [...sorted].reverse().filter(m => m.changePercent < 0).slice(0, limit)
-      return NextResponse.json({ success:true, period:'daily', sector: sectorName, sectorApplied, universe:'sp500', universeSize: universe.length, top, bottom, timestamp: new Date().toISOString() })
+      return NextResponse.json({ success:true, period:'daily', sector: sectorName, sectorApplied, universe:'sp500', universeSize: universe.length, top, bottom, timestamp: new Date().toISOString() }, { headers: rateLimitHeaders(rl) })
     }
 
     // Multi-period path: compute perf over N days using Tiingo historical
     const days = daysFor(period)
     // If no sector filter, limit by market cap to keep latency reasonable
     if (!sector) {
-      const caps = await fetchYahooBatchQuotes(universe)
+  const caps = await fetchYahooBatchQuotes(universe)
       if (caps.length > 0) {
         caps.sort((a,b)=> (b.marketCap||0) - (a.marketCap||0))
         universe = caps.slice(0, 150).map(c => c.symbol)
@@ -115,14 +121,14 @@ export async function GET(req: NextRequest) {
     }))
 
     if (perfs.length === 0) {
-      return NextResponse.json({ error: 'No historical data available' }, { status: 503 })
+      return NextResponse.json({ error: 'No historical data available' }, { status: 503, headers: rateLimitHeaders(rl) })
     }
 
     perfs.sort((a,b)=> b.ret - a.ret)
     const top = perfs.filter(p=> p.ret>0).slice(0, limit).map(p=> ({ symbol:p.symbol, price:p.last, change:p.last, changePercent:p.ret }))
     const bottom = [...perfs].reverse().filter(p=> p.ret<0).slice(0, limit).map(p=> ({ symbol:p.symbol, price:p.last, change:p.last, changePercent:p.ret }))
 
-  return NextResponse.json({ success:true, period, sector: sectorName, sectorApplied, universe:'sp500', universeSize: universe.length, top, bottom, timestamp: new Date().toISOString() })
+  return NextResponse.json({ success:true, period, sector: sectorName, sectorApplied, universe:'sp500', universeSize: universe.length, top, bottom, timestamp: new Date().toISOString() }, { headers: rateLimitHeaders(rl) })
   } catch (error) {
     console.error('❌ Error in /api/top-movers:', error)
     return NextResponse.json({ error: 'Failed to compute top movers' }, { status: 500 })

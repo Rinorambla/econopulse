@@ -1,16 +1,13 @@
 "use client";
 
 import React from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+// Removed next-intl usage (temporary de-i18n)
 // Removed unused NavigationLink and NewsWidget
 import { useAuth } from '@/hooks/useAuth';
-import { hasAccess, planRank } from '@/lib/plan-access';
 import { useRouter } from 'next/navigation';
 import Logo from './Logo';
 
 const Footer = () => {
-  const t = useTranslations();
-  const locale = useLocale();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -21,7 +18,7 @@ const Footer = () => {
     if (!user) {
       e.preventDefault();
       // Redirect to login with return URL
-      router.push(`/${locale}/login?redirect=${encodeURIComponent(href)}`);
+      router.push(`/login?redirect=${encodeURIComponent(href)}`);
       return;
     }
     
@@ -30,12 +27,12 @@ const Footer = () => {
     if (requiredPlan && userPlan !== requiredPlan) {
       e.preventDefault();
       // Redirect to pricing/upgrade page
-      router.push(`/${locale}/pricing?plan=${requiredPlan}`);
+      router.push(`/pricing?plan=${requiredPlan}`);
       return;
     }
     
     // Allow navigation
-    router.push(`/${locale}${href}`);
+    router.push(href);
   };
 
   // Newsletter removed per request: no subscription UI and no API calls
@@ -48,7 +45,7 @@ const Footer = () => {
 
   const linkSections = [
     {
-      title: 'footer.services_section',
+      title: 'Services',
       links: [
         { key: 'dashboard', href: '/dashboard', requiresPlan: 'pro' },
         { key: 'ai_portfolio', href: '/ai-portfolio', requiresPlan: 'premium' },
@@ -59,17 +56,17 @@ const Footer = () => {
       ] as FooterLink[]
     },
     {
-      title: 'footer.company_section',
+      title: 'Company',
       links: [
         { key: 'about', href: '/about' },
         { key: 'news', href: '/news' },
         { key: 'pricing', href: '/pricing' },
-  { key: 'help', href: '/help' },
+        { key: 'help', href: '/help' },
         { key: 'work_with_us', href: '/work-with-us' }
       ] as FooterLink[]
     },
     {
-      title: 'footer.legal_section',
+      title: 'Legal',
       links: [
         { key: 'privacy', href: '/privacy' },
         { key: 'terms', href: '/terms' },
@@ -92,12 +89,12 @@ const Footer = () => {
             <Logo size={40} showText={true} className="text-white" />
             
             <p className="text-white/80 text-lg leading-relaxed max-w-md">
-              {t('footer.description')}
+              AI-powered market analytics and portfolio intelligence. Actionable signals distilled from macro, sentiment and price structure.
             </p>
 
             {/* Contact Information */}
             <div className="space-y-3">
-              <h4 className="text-lg font-semibold text-white">{t('footer.contact_us')}</h4>
+              <h4 className="text-lg font-semibold text-white">Contact us</h4>
               <div className="space-y-2 text-white/70">
                 <a 
                   href="mailto:info@econopulse.ai" 
@@ -127,18 +124,32 @@ const Footer = () => {
           {/* Navigation Links */}
           {linkSections.map((section, index) => (
             <div key={index}>
-        <h4 className="font-semibold text-lg mb-6 text-white">
-                {t(section.title)}
-              </h4>
+        <h4 className="font-semibold text-lg mb-6 text-white">{section.title}</h4>
               <ul className="space-y-4">
                 {section.links.map((link) => (
                   <li key={link.key}>
                     <a
-                      href={`/${locale}${link.href}`}
+                      href={link.href}
                       onClick={(e) => handleProtectedLink(e, link.href, link.requiresPlan)}
                       className="text-white/90 hover:text-white transition-colors duration-200 flex items-center space-x-2 group"
                     >
-                      <span>{t(`footer.${link.key}`)}</span>
+                      <span>{
+                        link.key === 'dashboard' ? 'Dashboard' :
+                        link.key === 'ai_portfolio' ? 'AI Portfolio' :
+                        link.key === 'ai_pulse' ? 'AI Pulse' :
+                        link.key === 'visual_ai' ? 'Visual AI' :
+                        link.key === 'market_dna' ? 'Market DNA' :
+                        link.key === 'econoai' ? 'EconoAI' :
+                        link.key === 'about' ? 'About' :
+                        link.key === 'news' ? 'News' :
+                        link.key === 'pricing' ? 'Pricing' :
+                        link.key === 'help' ? 'Help' :
+                        link.key === 'work_with_us' ? 'Work with us' :
+                        link.key === 'privacy' ? 'Privacy Policy' :
+                        link.key === 'terms' ? 'Terms of Service' :
+                        link.key === 'disclaimer' ? 'Disclaimer' :
+                        link.key === 'cookies' ? 'Cookies' : link.key
+                      }</span>
                     </a>
                   </li>
                 ))}
@@ -155,12 +166,8 @@ const Footer = () => {
         <div className="border-t border-slate-700 mt-16 pt-8">
       <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="text-center md:text-left">
-        <p className="text-white/70">
-                © {currentYear} EconoPulse.ai. {t('footer.all_rights_reserved')}
-              </p>
-        <p className="text-sm text-white/60 mt-1">
-                {t('footer.financial_disclaimer')}
-              </p>
+        <p className="text-white/70">© {currentYear} EconoPulse.ai. All rights reserved.</p>
+        <p className="text-sm text-white/60 mt-1">EconoPulse is not a financial advisor. All information is provided for educational purposes only.</p>
             </div>
 
             {/* Social Links */}
@@ -213,27 +220,27 @@ const Footer = () => {
         <div className="border-t border-slate-600 mt-8 pt-4">
           <div className="flex flex-wrap justify-center items-center gap-4 text-sm">
             <a
-              href={`/${locale}/privacy`}
+              href={`/privacy`}
               onClick={(e) => handleProtectedLink(e, '/privacy')}
               className="text-white/70 hover:text-white transition-colors duration-200"
             >
-              {t('footer.privacy')}
+              Privacy
             </a>
             <span className="text-white/40">•</span>
             <a
-              href={`/${locale}/cookies`}
+              href={`/cookies`}
               onClick={(e) => handleProtectedLink(e, '/cookies')}
               className="text-white/70 hover:text-white transition-colors duration-200"
             >
-              {t('footer.cookies')}
+              Cookies
             </a>
             <span className="text-white/40">•</span>
             <a
-              href={`/${locale}/terms`}
+              href={`/terms`}
               onClick={(e) => handleProtectedLink(e, '/terms')}
               className="text-white/70 hover:text-white transition-colors duration-200"
             >
-              {t('footer.terms')}
+              Terms
             </a>
             <span className="text-white/40">•</span>
             <button
@@ -244,7 +251,7 @@ const Footer = () => {
               }}
               className="text-white/70 hover:text-white transition-colors duration-200 underline cursor-pointer"
             >
-              {t('footer.cookie_settings')}
+              Cookie settings
             </button>
           </div>
         </div>

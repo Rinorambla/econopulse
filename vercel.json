@@ -34,12 +34,6 @@
   ],
   "redirects": [
     {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.econopulse.ai" }],
-      "destination": "https://econopulse.ai/:path*",
-      "permanent": true
-    },
-    {
       "source": "/dashboard/billing",
       "destination": "/dashboard/account",
       "permanent": false

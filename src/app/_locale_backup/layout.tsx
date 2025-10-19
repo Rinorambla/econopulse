@@ -10,6 +10,11 @@ import PWAInstaller from '@/components/PWAInstaller';
 import PWAUpdateAndInstall from '@/components/PWAUpdateAndInstall';
 import GlobalErrorLogger from '@/components/GlobalErrorLogger';
 
+// Tell Next.js which locale params to generate at build time
+export async function generateStaticParams() {
+  return [{ locale: 'en' }, { locale: 'it' }];
+}
+
 export default async function LocaleLayout({
   children,
   params

@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import React, { startTransition } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import Logo from './Logo';
@@ -14,22 +13,16 @@ interface NavigationLinkProps {
 }
 
 export function NavigationLink({ href, className, children }: NavigationLinkProps) {
-  const locale = useLocale();
   const pathname = usePathname();
-  
-  // Se è la homepage, usa solo il locale
-  const localizedHref = href === '/' 
-    ? `/${locale}` 
-    : `/${locale}${href}`;
   
   return (
     <Link
-      href={localizedHref}
+      href={href}
       prefetch
       className={className}
       onClick={(e) => {
         // If same route avoid re-navigation
-        if (pathname === localizedHref) return;
+        if (pathname === href) return;
         // Defer any heavy state updates
         startTransition(() => {});
       }}
@@ -44,7 +37,6 @@ interface NavigationProps {
 }
 
 export function Navigation({ className }: NavigationProps) {
-  const t = useTranslations();
   const { user, signOut } = useAuth();
   
   const handleSignOut = async () => {
@@ -64,15 +56,15 @@ export function Navigation({ className }: NavigationProps) {
   <nav className="flex-1 min-w-0 flex items-center flex-wrap gap-1 xs:gap-2 sm:gap-3 mx-1 sm:mx-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Always show feature links; if user not logged in add a subtle lock indicator */}
   <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">{t('nav.dashboard')}</span>
+          <span className="relative z-10 flex items-center gap-1">Dashboard</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">{t('nav.ai_portfolio')}</span>
+          <span className="relative z-10 flex items-center gap-1">AI Portfolio</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">{t('nav.ai_pulse')}</span>
+          <span className="relative z-10 flex items-center gap-1">AI Pulse</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
@@ -92,7 +84,7 @@ export function Navigation({ className }: NavigationProps) {
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
-          <span className="relative z-10">{t('nav.pricing')}</span>
+          <span className="relative z-10">Pricing</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
       </nav>
@@ -115,7 +107,7 @@ export function Navigation({ className }: NavigationProps) {
           </div>
       ) : (
   <NavigationLink href="/login" className="group relative ml-auto shrink-0 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 sm:px-5 py-2 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-105 active:scale-95">
-          <span className="relative z-10">{t('nav.login')}</span>
+          <span className="relative z-10">Login</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         </NavigationLink>
       )}

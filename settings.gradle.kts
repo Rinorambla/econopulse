@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "EconoPulse"
-include(":app")
+include(":android-app")

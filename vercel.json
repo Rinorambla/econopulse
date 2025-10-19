@@ -34,6 +34,16 @@
   ],
   "redirects": [
     {
+      "source": "/:lang(en|it)",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/:lang(en|it)/:path*",
+      "destination": "/:path",
+      "permanent": false
+    },
+    {
       "source": "/dashboard/billing",
       "destination": "/dashboard/account",
       "permanent": false

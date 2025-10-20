@@ -3,10 +3,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Navigation } from '@/components/Navigation';
 import { AuthProvider } from '@/hooks/useAuth';
-import dynamic from 'next/dynamic';
-
-// Cookie consent is a client component; load it on the client only
-const CookieConsent = dynamic(() => import('@/components/CookieConsent'), { ssr: false });
+import CookieConsent from '@/components/CookieConsent';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),

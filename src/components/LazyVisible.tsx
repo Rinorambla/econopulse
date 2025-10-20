@@ -40,9 +40,16 @@ export default function LazyVisible({ children, minHeight = 300, rootMargin = '2
     return () => obs.disconnect();
   }, [visible, rootMargin]);
 
+  const minH = typeof minHeight === 'number' ? `${minHeight}px` : String(minHeight);
   return (
-    <div ref={ref} style={{ minHeight: typeof minHeight === 'number' ? `${minHeight}px` : String(minHeight) }}>
-      {visible ? children : (placeholder ?? <div className="w-full h-full bg-white/5 rounded animate-pulse" style={{ minHeight: typeof minHeight === 'number' ? `${minHeight}px` : String(minHeight) }} />)}
+    <div ref={ref} style={{ minHeight: minH }}>
+      {visible ? (
+        <div style={{ width: '100%', height: minH }}>
+          {children}
+        </div>
+      ) : (
+        placeholder ?? <div className="w-full h-full bg-white/5 rounded animate-pulse" style={{ minHeight: minH }} />
+      )}
     </div>
   );
 }

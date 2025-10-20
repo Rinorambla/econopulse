@@ -671,7 +671,7 @@ const generateOilSeasonalityData = (): OilSeasonalityData[] => [
 ];
 
 // ===== MAIN COMPONENT =====
-export default function VisualAIPage() {
+export default function VisualAIPage({ params }: { params: Promise<{ locale: string }> }) {
   const [widgets, setWidgets] = useState<WidgetData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWidget, setSelectedWidget] = useState<WidgetData | null>(null);

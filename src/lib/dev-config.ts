@@ -5,7 +5,7 @@
  */
 
 // Admin email - hardcoded for client-side access
-const ADMIN_EMAIL = 'admin@econopulse.ai';
+const ADMIN_EMAIL = 'info@econopulse.ai';
 
 export const DEV_CONFIG = {
   // Set your admin email here - this email gets automatic premium access

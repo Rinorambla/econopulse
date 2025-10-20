@@ -1,6 +1,5 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
-import { useLocale } from 'next-intl'
 
 type Importance = '-1' | '0' | '1' | '-1,0' | '-1,1' | '0,1' | '-1,0,1'
 
@@ -18,7 +17,10 @@ const EconomicCalendarComponent: React.FC<EconomicCalendarProps> = ({
   countryFilter = 'ar,au,br,ca,cn,fr,de,in,id,it,jp,kr,mx,ru,sa,za,tr,gb,us,eu',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const locale = useLocale?.() || 'en'
+  // Determine locale without next-intl to avoid provider/runtime issues
+  const locale = (typeof navigator !== 'undefined' && navigator.language
+    ? navigator.language.split('-')[0]
+    : 'en') as string
   const [computedHeight, setComputedHeight] = useState<number>(() => {
     if (typeof window === 'undefined') return height || 600
     // Try to fill nicely without overflowing the viewport area

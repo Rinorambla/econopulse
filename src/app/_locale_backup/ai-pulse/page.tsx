@@ -510,7 +510,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }
 
   if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mb-4 mx-auto" /><p className="text-white text-xl">Loading AI Pulse Dashboard...</p></div></div>;
-  if (error) return <div className="min-h-screen bg-[var(--background)]"><div className="container mx-auto px-4 py-8"><Link href="/en" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10 mb-8"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link><div className="bg-red-500/10 backdrop-blur-md rounded-xl p-8 border border-red-500/20"><h1 className="text-2xl font-bold text-red-400 mb-4">Error Loading Data</h1><p className="text-white">{error}</p></div></div></div>;
+  if (error) return <div className="min-h-screen bg-[var(--background)]"><div className="container mx-auto px-4 py-8"><Link href="/dashboard" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10 mb-8"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link><div className="bg-red-500/10 backdrop-blur-md rounded-xl p-8 border border-red-500/20"><h1 className="text-2xl font-bold text-red-400 mb-4">Error Loading Data</h1><p className="text-white">{error}</p></div></div></div>;
 
   return (
     <LocalErrorBoundary fallbackTitle="AI Pulse section error">
@@ -519,7 +519,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <Link href="/en" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
+              <Link href="/dashboard" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-emerald-400 bg-clip-text text-transparent">AI Pulse Dashboard</h1>
             </div>
             {/* Market Categories button removed per request */}

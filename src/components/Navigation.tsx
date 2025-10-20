@@ -106,10 +106,15 @@ export function Navigation({ className }: NavigationProps) {
             </button>
           </div>
       ) : (
-  <NavigationLink href="/login" className="group relative ml-auto shrink-0 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 sm:px-5 py-2 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-105 active:scale-95">
-          <span className="relative z-10">Login</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        </NavigationLink>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <NavigationLink href="/signup" className="group relative text-white/90 hover:text-white px-3 py-2 rounded-lg text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-white/10">
+            <span className="relative z-10">Sign Up</span>
+          </NavigationLink>
+          <NavigationLink href="/login" className="group relative bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 sm:px-5 py-2 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-105 active:scale-95">
+            <span className="relative z-10">Login</span>
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-700 to-blue-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </NavigationLink>
+        </div>
       )}
     </div>
   );

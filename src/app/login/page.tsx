@@ -72,7 +72,10 @@ export default function LoginPage() {
           >
             Continue with Google
           </button>
-          <a href="/forgot-password" className="text-blue-400 hover:text-blue-300">Forgot password?</a>
+          <div className="flex items-center gap-3">
+            <a href="/forgot-password" className="text-blue-400 hover:text-blue-300">Forgot password?</a>
+            <a href="/signup" className="text-white/80 hover:text-white">Create account</a>
+          </div>
         </div>
       </div>
     </div>

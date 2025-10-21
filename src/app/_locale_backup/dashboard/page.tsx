@@ -103,6 +103,7 @@ export default function DashboardPage() {
 	}), []);
 	const GlobalDrivers = useMemo(() => dynamic(() => import('@/components/GlobalDrivers'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading global drivers…</div> }), [])
 	const ImportantNewsPopup = useMemo(() => dynamic(() => import('@/components/ImportantNewsPopup'), { ssr: false }), [])
+	const WorldDriversMap = useMemo(() => dynamic(() => import('@/components/WorldDriversMap'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading world map…</div> }), [])
 	useEffect(() => {
 		if (chartsReady) return;
 		const el = chartsRef.current;
@@ -338,6 +339,11 @@ export default function DashboardPage() {
 
 				{/* Important News popup (impactful headlines) */}
 				<ImportantNewsPopup />
+
+				{/* World map drivers (grouped by G7/Developed/Emerging) */}
+				<div className="max-w-7xl mx-auto px-3 py-2">
+					<WorldDriversMap />
+				</div>
 
 								{/* Advanced Filters */}
 								<div className="max-w-7xl mx-auto px-3 pb-4">

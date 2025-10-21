@@ -101,7 +101,6 @@ export default function DashboardPage() {
 		ssr: false,
 		loading: () => <div className="mt-6 bg-slate-800 border border-slate-700 rounded p-6 text-center text-[11px] text-gray-400">Loading analytics…</div>
 	}), []);
-	const GlobalDrivers = useMemo(() => dynamic(() => import('@/components/GlobalDrivers'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading global drivers…</div> }), [])
 	const ImportantNewsPopup = useMemo(() => dynamic(() => import('@/components/ImportantNewsPopup'), { ssr: false }), [])
 	const WorldDriversMap = useMemo(() => dynamic(() => import('@/components/WorldDriversMap'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading world map…</div> }), [])
 	useEffect(() => {
@@ -332,10 +331,7 @@ export default function DashboardPage() {
 					</div>
 				)}
 
-				{/* Global Market Drivers module */}
-				<div className="max-w-7xl mx-auto px-3 py-2">
-					<GlobalDrivers />
-				</div>
+				{/* Global Market Drivers module removed in favor of WorldDriversMap */}
 
 				{/* Important News popup (impactful headlines) */}
 				<ImportantNewsPopup />

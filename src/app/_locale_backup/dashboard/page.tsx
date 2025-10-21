@@ -101,6 +101,7 @@ export default function DashboardPage() {
 		ssr: false,
 		loading: () => <div className="mt-6 bg-slate-800 border border-slate-700 rounded p-6 text-center text-[11px] text-gray-400">Loading analytics…</div>
 	}), []);
+	const GlobalDrivers = useMemo(() => dynamic(() => import('@/components/GlobalDrivers'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading global drivers…</div> }), [])
 	useEffect(() => {
 		if (chartsReady) return;
 		const el = chartsRef.current;
@@ -303,6 +304,11 @@ export default function DashboardPage() {
 							</div>
 						</div>
 				{summary && (<div className="max-w-7xl mx-auto px-3 py-1 grid grid-cols-5 gap-1 mb-2">{[['Avg Performance',summary.avgPerformance, summary.avgPerformance.startsWith('+')?'text-green-500':'text-red-500'],['Volume',summary.totalVolume,'text-white'],['Bull/Bear',`${summary.bullishCount}/${summary.bearishCount}`,'text-white'],['Sentiment',summary.marketSentiment, summary.marketSentiment==='Bullish'?'text-green-500':summary.marketSentiment==='Bearish'?'text-red-500':'text-yellow-500'],['Status','LIVE','text-green-500']].map(([l,v,c],i)=>(<div key={i} className="bg-slate-800 rounded p-1"><div className="text-xs text-gray-400">{l}</div><div className={`text-xs font-bold ${c}`}>{v}</div></div>))}</div>)}
+
+				{/* Global Market Drivers module */}
+				<div className="max-w-7xl mx-auto px-3 py-2">
+					<GlobalDrivers />
+				</div>
 
 								{/* Advanced Filters */}
 								<div className="max-w-7xl mx-auto px-3 pb-4">

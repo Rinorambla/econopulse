@@ -92,8 +92,9 @@ export async function GET() {
         'Range-bound; catalysts needed to resolve direction.'
       )
 
-      const headlines = [
-        { title: `${region.name}: ${driverCategory} in focus`, reason: sentiment === 'Bullish' ? 'Up' : sentiment === 'Bearish' ? 'Down' : 'Mixed' as const }
+      const reason: 'Up'|'Down'|'Mixed' = sentiment === 'Bullish' ? 'Up' : (sentiment === 'Bearish' ? 'Down' : 'Mixed')
+      const headlines: Array<{ title: string; reason: 'Up'|'Down'|'Mixed'; source?: string }> = [
+        { title: `${region.name}: ${driverCategory} in focus`, reason }
       ]
 
       return {

@@ -61,7 +61,7 @@ export default function SentimentPanel() {
               </svg>
             </div>
           </div>
-          <div className="text-[11px] text-gray-400 mt-1">> 1.00 = risk-off skew; < 0.80 = risk-on skew</div>
+          <div className="text-[11px] text-gray-400 mt-1">&gt; 1.00 = risk-off skew; &lt; 0.80 = risk-on skew</div>
         </div>
       </div>
     </section>

@@ -102,6 +102,7 @@ export default function DashboardPage() {
 		loading: () => <div className="mt-6 bg-slate-800 border border-slate-700 rounded p-6 text-center text-[11px] text-gray-400">Loading analytics…</div>
 	}), []);
 	const ImportantNewsPopup = useMemo(() => dynamic(() => import('@/components/ImportantNewsPopup'), { ssr: false }), [])
+	const SentimentPanel = useMemo(() => dynamic(() => import('@/components/SentimentPanel'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading sentiment…</div> }), [])
 	const WorldDriversMap = useMemo(() => dynamic(() => import('@/components/WorldDriversMap'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading world map…</div> }), [])
 	useEffect(() => {
 		if (chartsReady) return;
@@ -330,6 +331,9 @@ export default function DashboardPage() {
 						})()}
 					</div>
 				)}
+
+				{/* Real-time Sentiment block (Composite + Put/Call) */}
+				<SentimentPanel />
 
 				{/* Global Market Drivers module removed in favor of WorldDriversMap */}
 

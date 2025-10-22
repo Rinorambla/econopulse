@@ -44,7 +44,7 @@ export function Navigation({ className }: NavigationProps) {
   };
   
   return (
-  <div className={`flex flex-nowrap items-center gap-2 sm:gap-3 ${className||''} w-full overflow-hidden`}> 
+  <div className={`flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full overflow-hidden`}> 
       {/* Left: Logo */}
       <div className="shrink-0">
         <NavigationLink href="/" className="flex items-center">
@@ -53,7 +53,7 @@ export function Navigation({ className }: NavigationProps) {
       </div>
 
     {/* Center: Links */}
-  <nav className="flex-1 min-w-0 flex items-center flex-nowrap gap-1 xs:gap-2 sm:gap-3 mx-1 sm:mx-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <nav className="flex-1 min-w-0 flex items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Always show feature links; if user not logged in add a subtle lock indicator */}
   <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1">Dashboard</span>

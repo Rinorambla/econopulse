@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { TrendingUp, TrendingDown, BarChart3, Target, RefreshCw, ArrowLeft, Calendar, Clock, Activity, Globe, DollarSign, Briefcase, PieChart } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MarketCategoriesEmbed = dynamic(()=> import('@/components/analytics/MarketCategoriesEmbed'), { ssr:false });
+const WatchlistPanel = dynamic(()=> import('@/components/WatchlistPanel'), { ssr:false });
 // Recharts moved to a lazy component to reduce initial JS
 const SectorPerformanceLazy = dynamic(() => import('@/components/charts/SectorPerformanceLazy'), { ssr: false });
 const ETFLineChartLazy = dynamic(() => import('@/components/charts/ETFLineChartLazy'), { ssr: false });
@@ -693,6 +694,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           <div className="mb-8">
             <MarketCategoriesEmbed />
           </div>
+
+          {/* Watchlist */}
+          <WatchlistPanel />
 
           {economicData && (
             <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">

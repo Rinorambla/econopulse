@@ -45,6 +45,10 @@ export default function WatchlistPanel() {
   const [rows, setRows] = React.useState<QuoteRow[]>([])
   const [sortKey, setSortKey] = React.useState<'symbol'|'price'|'changePercent'|'volume'>('changePercent')
   const [sortDir, setSortDir] = React.useState<'asc'|'desc'>('desc')
+  const [filter, setFilter] = React.useState<'all'|'gainers'|'losers'>('all')
+  const [timeframe, setTimeframe] = React.useState<'1D'|'1W'|'1M'>('1D')
+  const [perfMap, setPerfMap] = React.useState<Record<string, number>>({})
+  const [perfLoading, setPerfLoading] = React.useState(false)
 
   // Load from storage
   React.useEffect(() => {
@@ -96,15 +100,74 @@ export default function WatchlistPanel() {
     run()
   }, [symbols])
 
+  // Compute performance for 1W/1M using yahoo-history (multi) when selected
+  React.useEffect(() => {
+    const run = async () => {
+      if (timeframe === '1D' || symbols.length === 0) { setPerfMap({}); return }
+      setPerfLoading(true)
+      try {
+        const chunkSize = 15
+        const needBars = timeframe === '1W' ? 5 : 21
+        const perf: Record<string, number> = {}
+        for (let i = 0; i < symbols.length; i += chunkSize) {
+          const chunk = symbols.slice(i, i + chunkSize)
+          const qs = new URLSearchParams({ symbols: chunk.join(','), range: timeframe === '1W' ? '1mo' : '3mo', interval: '1d' })
+          const res = await fetch(`/api/yahoo-history?${qs.toString()}`, { cache: 'no-store' })
+          const js = await res.json()
+          const arr: Array<{ symbol: string; bars: Array<{ time: number; close: number }> }> = js?.data || []
+          for (const h of arr) {
+            const bars = (h.bars || []).map(b => ({ time: b.time, close: (b as any).close ?? (b as any).c ?? 0 }))
+            if (bars.length < needBars + 1) continue
+            const last = bars[bars.length - 1]?.close
+            const past = bars[bars.length - 1 - needBars]?.close
+            if (Number.isFinite(last) && Number.isFinite(past) && past) {
+              perf[h.symbol] = ((last / past) - 1) * 100
+            }
+          }
+        }
+        setPerfMap(perf)
+      } catch (e) {
+        console.error('perf compute error', e)
+        setPerfMap({})
+      } finally {
+        setPerfLoading(false)
+      }
+    }
+    run()
+  }, [symbols, timeframe])
+
+  const metric = (row: QuoteRow) => timeframe === '1D' ? row.changePercent : (perfMap[row.symbol] ?? Number.NaN)
+
   const sorted = React.useMemo(() => {
     const arr = [...rows]
     arr.sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1
+      if (sortKey === 'changePercent') {
+        const av = metric(a)
+        const bv = metric(b)
+        const diff = (Number.isFinite(av) ? av : -Infinity) - (Number.isFinite(bv) ? bv : -Infinity)
+        return dir * diff
+      }
       const av = sortKey === 'symbol' ? a.symbol.localeCompare(b.symbol) : (a as any)[sortKey] - (b as any)[sortKey]
       return dir * (typeof av === 'number' ? av : av)
     })
     return arr
-  }, [rows, sortKey, sortDir])
+  }, [rows, sortKey, sortDir, timeframe, perfMap])
+
+  const filtered = React.useMemo(() => {
+    if (filter === 'all') return sorted
+    const TOP_N = 10
+    const arr = [...sorted]
+    if (filter === 'gainers') {
+      return arr
+        .filter(r => Number.isFinite(metric(r)) && metric(r) > 0)
+        .slice(0, TOP_N)
+    }
+    // losers
+    return arr
+      .filter(r => Number.isFinite(metric(r)) && metric(r) < 0)
+      .slice(0, TOP_N)
+  }, [sorted, filter, timeframe, perfMap])
 
   const header = (key: typeof sortKey, label: string) => (
     <button
@@ -129,7 +192,7 @@ export default function WatchlistPanel() {
         <span className="text-[10px] uppercase tracking-wide text-gray-400">{limit < 0 ? 'Unlimited' : `${symbols.length}/${limit}`}</span>
       </div>
 
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         <SymbolAutocomplete
           value={input}
           onChange={setInput}
@@ -144,6 +207,18 @@ export default function WatchlistPanel() {
         {limit >= 0 && symbols.length >= limit && (
           <span className="text-xs text-yellow-400">Limit reached for plan: {plan}</span>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="bg-white/5 border border-white/10 rounded-md p-1">
+            {(['1D','1W','1M'] as const).map(tf => (
+              <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2.5 py-1 text-[11px] rounded ${timeframe===tf? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}>{tf}</button>
+            ))}
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-md p-1">
+            {(['all','gainers','losers'] as const).map(f => (
+              <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 text-[11px] rounded capitalize ${filter===f? 'bg-emerald-600/40 text-emerald-200' : 'text-gray-300 hover:text-white'}`}>{f}</button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-white/10">
@@ -161,15 +236,23 @@ export default function WatchlistPanel() {
           <tbody className="divide-y divide-white/5">
             {loading ? (
               <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={6}>Loading quotes…</td></tr>
-            ) : sorted.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={6}>Add symbols to start your watchlist.</td></tr>
             ) : (
-              sorted.map(row => (
+              filtered.map(row => (
                 <tr key={row.symbol}>
                   <td className="py-2 px-2 font-semibold">{row.symbol}</td>
                   <td className="py-2 px-2 text-gray-300 max-w-[240px] truncate" title={row.name}>{row.name}</td>
                   <td className="py-2 px-2 text-right">{Number.isFinite(row.price) ? `$${row.price.toFixed(2)}` : '—'}</td>
-                  <td className={`py-2 px-2 text-right font-semibold ${row.changePercent>=0 ? 'text-emerald-400' : 'text-red-400'}`}>{Number.isFinite(row.changePercent) ? `${row.changePercent>=0?'+':''}${row.changePercent.toFixed(2)}%` : '—'}</td>
+                  {(() => {
+                    const pct = metric(row)
+                    const showLoading = timeframe !== '1D' && perfLoading && !Number.isFinite(pct)
+                    return (
+                      <td className={`py-2 px-2 text-right font-semibold ${Number.isFinite(pct) ? (pct>=0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'}`}>
+                        {showLoading ? '…' : Number.isFinite(pct) ? `${pct>=0?'+':''}${pct.toFixed(2)}%` : '—'}
+                      </td>
+                    )
+                  })()}
                   <td className="py-2 px-2 text-right text-gray-300">{Number.isFinite(row.volume) ? row.volume.toLocaleString() : '—'}</td>
                   <td className="py-2 px-2 text-right"><button onClick={() => removeSymbol(row.symbol)} className="text-xs text-gray-400 hover:text-white">Remove</button></td>
                 </tr>
@@ -178,8 +261,6 @@ export default function WatchlistPanel() {
           </tbody>
         </table>
       </div>
-
-      <p className="mt-2 text-[10px] text-gray-500">Data via Yahoo Finance; refreshed on changes. Use official symbols (e.g., futures like GC=F, FX pairs like EURUSD=X).</p>
     </div>
   )
 }

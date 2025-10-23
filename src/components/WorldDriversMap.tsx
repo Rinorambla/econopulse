@@ -138,7 +138,24 @@ export default function WorldDriversMap() {
     // Volumes
     const vol = bars[bars.length-1]?.volume || 0
     const volHuman = vol>=1e9? `${(vol/1e9).toFixed(1)}B` : vol>=1e6? `${(vol/1e6).toFixed(1)}M` : vol>=1e3? `${(vol/1e3).toFixed(1)}K` : String(vol)
-    return { change1d, perf1w, perf1m, rsi, atrPct, volLabel, breakout, momScore, rsScore, mr, dirLabel, rating, volHuman, last }
+    // Volume vs 20d average for Demand/FOMO proxy
+    const vols = bars.slice(-21).map(b=>b.volume || 0)
+    const avgVol = vols.length? (vols.reduce((a,b)=>a+b,0) / vols.length) : 0
+    const volRatio = avgVol ? (vol / avgVol) : 0
+    const demand = volRatio >= 1.5 ? 'High Demand' : volRatio >= 1.1 ? 'Rising Demand' : 'Normal'
+    const fomo = volRatio >= 2.5 && dirLabel.startsWith('Strong Up')
+    // Call Skew / Gamma Bull heuristics (no options data):
+    const callSkew = (rsi>55 && perf1w>1) ? 'High' : (rsi>50 ? 'Moderate' : 'Low')
+    const gammaBull = breakout && rsi>60
+    // Cap class (heuristic via dollar volume; non-equities labeled Other)
+    const t = (symbolOpen||'').toUpperCase()
+    const isOther = t.startsWith('^') || t.endsWith('=X') || t.endsWith('=F')
+    const dollarVol = last * vol
+    const capClass = isOther ? 'Other' : (dollarVol>5e9 ? 'LargeCap' : dollarVol>1e9 ? 'MidCap' : 'SmallCap')
+    // Composite Score (0-100)
+    const volNorm = Math.max(0, Math.min(1, (volRatio-1)/(3-1)))
+    const score = Math.round(0.4*momScore + 0.3*rsScore + 0.2*(breakout?100:0) + 0.1*(volNorm*100))
+    return { change1d, perf1w, perf1m, rsi, atrPct, volLabel, breakout, momScore, rsScore, mr, dirLabel, rating, volHuman, last, volRatio, demand, fomo, callSkew, gammaBull, capClass, score }
   }, [bars])
 
   function MiniLine({ data, color='#60a5fa' }: { data: Array<{time:number; close:number}>; color?: string }){
@@ -235,16 +252,30 @@ export default function WorldDriversMap() {
               )}
 
               {analytics && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3 text-[12px] text-gray-200">
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Direction</div><div className="font-semibold">{analytics.dirLabel}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Volume</div><div>{analytics.volHuman}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Momentum</div><div>{analytics.momScore}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">RS</div><div>{analytics.rsScore}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Volatility</div><div>{analytics.volLabel}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Mean Reversion</div><div>{analytics.mr}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Breakout</div><div>{analytics.breakout? 'Yes' : 'No'}</div></div>
-                  <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Rating</div><div className={`font-bold ${analytics.rating==='STRONG BUY'?'text-emerald-300':''}`}>{analytics.rating}</div></div>
-                </div>
+                <>
+                  {/* Badge row to mirror requested summary */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="px-2 py-1 rounded bg-white/5 border border-white/10">{analytics.volHuman}</span>
+                    <span className={`px-2 py-1 rounded bg-white/5 border border-white/10 ${analytics.dirLabel.includes('Up')?'text-emerald-300':'text-red-300'}`}>{analytics.dirLabel}</span>
+                    <span className="px-2 py-1 rounded bg-white/5 border border-white/10">{analytics.demand}</span>
+                    {analytics.fomo && <span className="px-2 py-1 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200">FOMO Buying</span>}
+                    <span className="px-2 py-1 rounded bg-white/5 border border-white/10">V/Avg {analytics.volRatio.toFixed(2)}x</span>
+                    <span className="px-2 py-1 rounded bg-white/5 border border-white/10">Call Skew {analytics.callSkew}</span>
+                    {analytics.gammaBull && <span className="px-2 py-1 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-200">Gamma Bull</span>}
+                    <span className="px-2 py-1 rounded bg-white/5 border border-white/10">Score {analytics.score}</span>
+                  </div>
+
+                  {/* Metrics grid */}
+                  <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3 text-[12px] text-gray-200">
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Momentum</div><div>{analytics.momScore}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">RS</div><div>{analytics.rsScore}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Volatility</div><div>{analytics.volLabel}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Mean Reversion</div><div>{analytics.mr}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Breakout</div><div>{analytics.breakout? 'Yes' : 'No'}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Rating</div><div className={`font-bold ${analytics.rating==='STRONG BUY'?'text-emerald-300':''}`}>{analytics.rating}</div></div>
+                    <div className="bg-white/5 rounded p-2 border border-white/10"><div className="text-gray-400 text-[10px]">Cap Class</div><div>{analytics.capClass}</div></div>
+                  </div>
+                </>
               )}
             </div>
           </div>

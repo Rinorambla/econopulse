@@ -104,6 +104,18 @@ export default function DashboardPage() {
 	const ImportantNewsPopup = useMemo(() => dynamic(() => import('@/components/ImportantNewsPopup'), { ssr: false }), [])
 	const SentimentPanel = useMemo(() => dynamic(() => import('@/components/SentimentPanel'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading sentiment…</div> }), [])
 	const WorldDriversMap = useMemo(() => dynamic(() => import('@/components/WorldDriversMap'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading world map…</div> }), [])
+
+	// Options metrics enrichment (precise OI / P-C / GEX / Skew)
+	const [optsByTicker, setOptsByTicker] = useState<Record<string, {
+		putCallRatioVol?: string|null;
+		putCallRatioOI?: string|null;
+		gammaExposure?: number|null;
+		gammaLabel?: 'Low'|'Medium'|'High'|'Extreme'|'Unknown';
+		callSkew?: 'Call Skew'|'Put Skew'|'Neutral';
+		optionsSentiment?: string;
+		unusualAtm?: 'Low'|'Medium'|'High';
+		unusualOtm?: 'Low'|'Medium'|'High';
+	}>>({});
 	useEffect(() => {
 		if (chartsReady) return;
 		const el = chartsRef.current;
@@ -202,6 +214,8 @@ export default function DashboardPage() {
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [data]);
 
+
+
 	// (Chart datasets + helpers moved to lazy component)
 
 	// ======= Generic small tooltip components (avoid native title for multiline & styling) =======
@@ -285,6 +299,33 @@ export default function DashboardPage() {
 			return String(av).localeCompare(String(bv))*dir;
 		});
 	}, [enrichedData, selectedSector, selectedMarket, searchTerm, minVolume, perfMin, perfMax, sortKey, sortDir]);
+
+	// Fetch precise options metrics for the first slice of filtered rows
+	useEffect(() => {
+		let abort = false;
+		const run = async () => {
+			try {
+				const firstSlice = filteredData.slice(0, 60).map(x => x.ticker);
+				const missing = firstSlice.filter(t => !optsByTicker[t]);
+				if (!missing.length) return;
+				const qs = new URLSearchParams({ symbols: missing.join(',') });
+				const ctrl = new AbortController();
+				const t = setTimeout(() => ctrl.abort(), 12000);
+				const res = await fetch(`/api/options-metrics?${qs.toString()}`, { cache: 'no-store', signal: ctrl.signal });
+				clearTimeout(t);
+				if (!res.ok) return;
+				const js = await res.json();
+				if (abort) return;
+				const out: Record<string, any> = {};
+				const m = js?.data || {};
+				Object.keys(m).forEach(k => { out[k] = m[k]; });
+				setOptsByTicker(prev => ({ ...prev, ...out }));
+			} catch {}
+		};
+		run();
+		return () => { abort = true; };
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filteredData]);
 
 	const toggleSort = (key:string) => {
 		if (sortKey === key) setSortDir(d=> d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('desc'); }
@@ -395,7 +436,9 @@ export default function DashboardPage() {
 													</tr>
 												</thead>
 												<tbody className="divide-y divide-slate-700">
-													{filteredData.map(item => (
+																{filteredData.map(item => {
+																	const opt = optsByTicker[item.ticker];
+																	return (
 														<tr key={item.ticker} className="hover:bg-slate-700/40">
 															<td className={`px-2 py-1 ${wideSymbols ? 'min-w-[220px]' : 'min-w-[140px]'}`}>
 																<div className="flex flex-col">
@@ -413,20 +456,21 @@ export default function DashboardPage() {
 															{/* Performance column removed */}
 															<td className="px-2 py-1 tabular-nums">{item.volume || '—'}</td>
 															<td className="px-2 py-1"><span className={`inline-flex px-1 py-0.5 rounded ${getTrendColor(item.trend)} font-semibold`}>{item.trend}</span></td>
-															<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
-															<td className="px-2 py-1 text-gray-300">{item.optionsSentiment}</td>
-															<td className="px-2 py-1 text-gray-300">{item.gammaRisk}</td>
-															<td className="px-2 py-1 text-gray-300">{item.putCallRatio}</td>
-															<td className="px-2 py-1 text-gray-300">{item.unusualOtm}</td>
-															<td className="px-2 py-1 text-gray-300">{item.otmSkew}</td>
-															<td className="px-2 py-1 text-gray-300">{item.intradayFlow}</td>
-															<td className="px-2 py-1 text-gray-300">{item.unusualAtm}</td>
+																			<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.optionsSentiment || item.optionsSentiment}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.putCallRatioVol ?? item.putCallRatio}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.unusualOtm || item.unusualOtm}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.callSkew || item.otmSkew}</td>
+																			<td className="px-2 py-1 text-gray-300">{(opt && typeof opt.gammaExposure === 'number' && opt.gammaExposure > 0) ? 'Gamma Bull' : item.intradayFlow}</td>
+																			<td className="px-2 py-1 text-gray-300">{opt?.unusualAtm || item.unusualAtm}</td>
 															{/* RS% column removed */}
 															<td className="px-2 py-1 text-center"><AIScoreBadge item={item} /></td>
 															<td className="px-2 py-1"><AISignalBadge item={item} /></td>
 															<td className="px-2 py-1 text-gray-300">{item.category || '—'}</td>
 														</tr>
-													))}
+																	);
+																})}
 													{!filteredData.length && (
 														<tr><td colSpan={15} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}

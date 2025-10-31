@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import SafeBoundary from '@/components/SafeBoundary';
 import { NavigationLink } from '@/components/Navigation';
 const Footer = dynamic(() => import('@/components/Footer'), {
   loading: () => <div className="text-center py-8 text-white/40 text-xs">Loading footer…</div>,
@@ -10,6 +11,9 @@ const Footer = dynamic(() => import('@/components/Footer'), {
 });
 
 const AIBackground = dynamic(() => import('@/components/AIBackground'), { ssr: false });
+const NeuralTickerRibbon = dynamic(() => import('@/components/NeuralTickerRibbon'), { ssr: false });
+const AIPromptBar = dynamic(() => import('@/components/AIPromptBar'), { ssr: false });
+const PremarketIndexes = dynamic(() => import('@/components/PremarketIndexes'), { ssr: false });
 const FearGreedIndex = dynamic(() => import('@/components/FearGreedIndex'), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Loading…</div>
@@ -30,7 +34,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="relative overflow-hidden">
-        <AIBackground intensity="subtle" />
+        <SafeBoundary>
+          <AIBackground intensity="subtle" />
+        </SafeBoundary>
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
@@ -43,18 +49,28 @@ export default function HomePage() {
                 <p className="mt-3 text-sm text-white/80 sm:mt-4 sm:text-base md:text-lg sm:max-w-xl sm:mx-auto md:mt-5 lg:mx-0 lg:max-w-lg xl:max-w-xl ai-fade-up ai-delay-400">
                   Experience the future of financial analysis. Our AI anticipates market movements and transforms complex patterns into clear investment strategies.
                 </p>
+                <AIPromptBar />
               </div>
             </main>
           </div>
         </div>
         <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
           <div className="h-48 w-full bg-[var(--color-panel)] sm:h-64 md:h-80 lg:w-full lg:h-full border border-[var(--color-border)]">
-            <FearGreedIndex />
+            <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
+              <FearGreedIndex />
+            </SafeBoundary>
           </div>
         </div>
       </div>
 
-      <div id="features" className="py-8 sm:py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
+  <SafeBoundary fallback={<div className="bg-[var(--color-panel)]/70 backdrop-blur-sm border-y border-[var(--color-border)] text-center text-xs text-white/40 py-2">Premarket unavailable</div>}>
+    <PremarketIndexes />
+  </SafeBoundary>
+  <SafeBoundary>
+    <NeuralTickerRibbon />
+  </SafeBoundary>
+
+  <div id="features" className="py-8 sm:py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="lg:text-center">
             <h2 className="text-sm sm:text-base text-blue-400 font-semibold tracking-wide uppercase">

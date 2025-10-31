@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import Footer from '@/components/Footer';
 import AIBackground from '@/components/AIBackground';
 import NeuralTickerRibbon from '@/components/NeuralTickerRibbon';

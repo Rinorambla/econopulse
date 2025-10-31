@@ -1,20 +1,12 @@
-import dynamic from 'next/dynamic';
+import Footer from '@/components/Footer';
+import AIBackground from '@/components/AIBackground';
+import NeuralTickerRibbon from '@/components/NeuralTickerRibbon';
+import AIPromptBar from '@/components/AIPromptBar';
+import PremarketIndexes from '@/components/PremarketIndexes';
+import FearGreedIndex from '@/components/FearGreedIndex';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import SafeBoundary from '@/components/SafeBoundary';
 import { NavigationLink } from '@/components/Navigation';
-const Footer = dynamic(() => import('@/components/Footer'), {
-  loading: () => <div className="text-center py-8 text-white/40 text-xs">Loading footer…</div>,
-  ssr: false
-});
-
-const AIBackground = dynamic(() => import('@/components/AIBackground'), { ssr: false });
-const NeuralTickerRibbon = dynamic(() => import('@/components/NeuralTickerRibbon'), { ssr: false });
-const AIPromptBar = dynamic(() => import('@/components/AIPromptBar'), { ssr: false });
-const PremarketIndexes = dynamic(() => import('@/components/PremarketIndexes'), { ssr: false });
-const FearGreedIndex = dynamic(() => import('@/components/FearGreedIndex'), {
-  ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Loading…</div>
-});
 
 export default function HomePage() {
 

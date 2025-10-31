@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Navigation } from '@/components/Navigation';
 import { AuthProvider } from '@/hooks/useAuth';
 import CookieConsent from '@/components/CookieConsent';
+import SafeBoundary from '@/components/SafeBoundary';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -11,6 +12,9 @@ export const metadata: Metadata = {
   description:
     'Discover the power of AI-driven financial insights with real-time market analysis, dynamic portfolio generation, and comprehensive economic intelligence.',
   manifest: '/manifest.json',
+  alternates: {
+    canonical: 'https://econopulse.ai/',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -24,9 +28,17 @@ export const metadata: Metadata = {
     siteName: 'EconoPulse',
     title: 'EconoPulse - AI Economic Analysis',
     description: 'Professional AI-powered economic analysis and market insights platform',
+    images: [
+      { url: '/icons/icon-512x512.png', width: 512, height: 512, alt: 'EconoPulse' },
+    ],
   },
   icons: {
-    icon: [{ url: '/icon.svg' }],
+    // Explicit favicon for Google SERP favicon discovery
+    icon: [
+      { url: '/favicon.ico', rel: 'icon', sizes: 'any' },
+      { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
     shortcut: '/icons/icon-192x192.png',
     apple: [
       { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
@@ -39,15 +51,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased font-sans min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+        {/* Organization JSON-LD to help Google associate the correct logo */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'EconoPulse',
+              url: 'https://econopulse.ai',
+              logo: 'https://econopulse.ai/icons/icon-512x512.png',
+              sameAs: [
+                // Add social profiles when available
+              ],
+            }),
+          }}
+        />
         <AuthProvider>
           <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
             <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
-              <Navigation />
+              <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
+                <Navigation />
+              </SafeBoundary>
             </div>
           </header>
           <main>{children}</main>
           {/* Site-wide cookie consent banner */}
-          <CookieConsent />
+          <SafeBoundary>
+            <CookieConsent />
+          </SafeBoundary>
         </AuthProvider>
       </body>
     </html>

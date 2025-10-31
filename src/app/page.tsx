@@ -1,7 +1,4 @@
-"use client";
 import dynamic from 'next/dynamic';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import SafeBoundary from '@/components/SafeBoundary';
 import { NavigationLink } from '@/components/Navigation';
@@ -20,16 +17,6 @@ const FearGreedIndex = dynamic(() => import('@/components/FearGreedIndex'), {
 });
 
 export default function HomePage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      ['/dashboard','/ai-portfolio','/ai-pulse','/pricing'].forEach(p=>{
-        try { router.prefetch(p);} catch {}
-      });
-    }, 500);
-    return () => clearTimeout(id);
-  }, [router]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">

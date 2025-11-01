@@ -49,9 +49,7 @@ export default function HomePage() {
   <SafeBoundary fallback={<div className="bg-[var(--color-panel)]/70 backdrop-blur-sm border-y border-[var(--color-border)] text-center text-xs text-white/40 py-2">Premarket unavailable</div>}>
     <PremarketIndexes />
   </SafeBoundary>
-  <SafeBoundary>
-    <NeuralTickerRibbon />
-  </SafeBoundary>
+  {/* Removed scrolling ticker ribbon per request */}
 
   <div id="features" className="py-8 sm:py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">

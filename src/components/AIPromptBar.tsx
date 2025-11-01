@@ -1,7 +1,7 @@
 "use client";
 
 import React, {useState} from 'react';
-import { useRouter } from '@/i18n/routing';
+import { useRouter } from 'next/navigation';
 
 export default function AIPromptBar() {
   const router = useRouter();

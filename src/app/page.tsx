@@ -4,7 +4,6 @@ import Footer from '@/components/Footer';
 import AIBackground from '@/components/AIBackground';
 import NeuralTickerRibbon from '@/components/NeuralTickerRibbon';
 import AIPromptBar from '@/components/AIPromptBar';
-import PremarketIndexes from '@/components/PremarketIndexes';
 import FearGreedIndex from '@/components/FearGreedIndex';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import SafeBoundary from '@/components/SafeBoundary';
@@ -46,10 +45,8 @@ export default function HomePage() {
         </div>
       </div>
 
-  <SafeBoundary fallback={<div className="bg-[var(--color-panel)]/70 backdrop-blur-sm border-y border-[var(--color-border)] text-center text-xs text-white/40 py-2">Premarket unavailable</div>}>
-    <PremarketIndexes />
-  </SafeBoundary>
-  {/* Removed scrolling ticker ribbon per request */}
+  {/* Indices widget removed per request */}
+  {/* Scrolling ticker ribbon removed per request */}
 
   <div id="features" className="py-8 sm:py-12 bg-[var(--color-panel)]/70 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">

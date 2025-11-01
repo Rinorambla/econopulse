@@ -26,6 +26,7 @@ export default function EconoAIPage() {
   const [userAnswer, setUserAnswer] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [error, setError] = useState('')
+  const [online, setOnline] = useState(true)
 
   // Demo questions that cycle
   const demoQuestions = [
@@ -135,9 +136,12 @@ export default function EconoAIPage() {
       // Accept both normal and fallback answers
       if (data?.answer) {
         setUserAnswer(data.answer)
+        // If backend returned a soft fallback, mark offline so header reflects limited mode
+        if (data?.fallback) setOnline(false); else setOnline(true)
       } else if (!response.ok) {
         // Friendly fallback when server returns error without answer
         setUserAnswer('Temporary issue retrieving the AI response. Quick framework: assess earnings momentum, breadth, and macro (10Y yield, USD). Re-try for detailed guidance.')
+        setOnline(false)
       } else {
         throw new Error('No answer received from AI')
       }
@@ -148,6 +152,7 @@ export default function EconoAIPage() {
       setUserAnswer('Quick guidance while we reconnect: define your time horizon, outline bull/bear scenarios with catalysts, and pick 2–3 levels to manage risk. Try again for the full AI view.')
       setError('')
       setTyping(false)
+      setOnline(false)
     } finally {
       setIsAsking(false)
     }
@@ -239,10 +244,17 @@ export default function EconoAIPage() {
                   </div>
                   <div>
                     <h3 className="text-white font-semibold">EconoAI Assistant</h3>
-                    <p className="text-xs text-emerald-400 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Online • Real-time data
-                    </p>
+                    {online ? (
+                      <p className="text-xs text-emerald-400 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Online • Real-time data
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-300 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                        Limited mode • AI offline
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="text-xs text-white/50">Try it now ↓</div>

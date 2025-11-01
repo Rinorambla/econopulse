@@ -30,7 +30,9 @@ export default function HomePage() {
                 <p className="mt-3 text-sm text-white/80 sm:mt-4 sm:text-base md:text-lg sm:max-w-xl sm:mx-auto md:mt-5 lg:mx-0 lg:max-w-lg xl:max-w-xl ai-fade-up ai-delay-400">
                   Experience the future of financial analysis. Our AI anticipates market movements and transforms complex patterns into clear investment strategies.
                 </p>
-                <AIPromptBar />
+                <SafeBoundary fallback={<div className="mt-3 text-xs text-white/40">AI prompt temporarily unavailable</div>}>
+                  <AIPromptBar />
+                </SafeBoundary>
               </div>
             </main>
           </div>

@@ -698,66 +698,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           {/* Watchlist */}
           <WatchlistPanel />
 
-          {economicData && (
-            <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold flex items-center gap-3"><Globe className="w-7 h-7 text-blue-400" /> Economic Cycle Analysis</h2>
-                {lastUpdated && <div className="flex items-center gap-2 text-gray-400 text-sm"><Clock className="w-4 h-4" /> {new Date(lastUpdated).toLocaleTimeString()}</div>}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className={`rounded-lg p-4 border ${getEconomicCycleColor(economicData.current.cycle)} relative overflow-hidden`}> 
-                  <h3 className="font-semibold mb-1 flex items-center gap-2 text-sm"><Activity className="w-4 h-4" /> Current Cycle</h3>
-                  <p className="text-xl font-bold tracking-wide">{economicData.current.cycle}</p>
-                  <span className="absolute inset-0 pointer-events-none opacity-10 bg-gradient-to-br from-blue-400/30 to-transparent" />
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                  <h3 className="text-gray-300 font-semibold mb-1 text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Growth</h3>
-                  <p className="text-lg font-bold">{economicData.current.growth}</p>
-                  <p className="text-[11px] text-gray-500 mt-1">Trend macro</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                  <h3 className="text-gray-300 font-semibold mb-1 text-sm flex items-center gap-2"><DollarSign className="w-4 h-4" /> Inflation</h3>
-                  <p className="text-lg font-bold">{economicData.current.inflation}</p>
-                  <p className="text-[11px] text-gray-500 mt-1">Pressione prezzi</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                  <h3 className="text-gray-300 font-semibold mb-1 text-sm flex items-center gap-2"><Briefcase className="w-4 h-4" /> Confidence</h3>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-slate-700/60 h-2 rounded-full overflow-hidden"><div className="h-2 bg-gradient-to-r from-indigo-500 to-blue-400" style={{width:`${Math.min(100, Math.max(0, economicData.current.confidence))}%`}} /></div>
-                    <p className="text-base font-bold">{economicData.current.confidence}/100</p>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">Sentiment composito</p>
-                </div>
-              </div>
-              {economicData.indicators && (
-                <div className="mt-2">
-                  <h3 className="text-lg font-semibold mb-3">Key Economic Indicators</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                      <p className="text-gray-400 text-[11px] uppercase tracking-wide">GDP Growth</p>
-                      <p className="font-semibold text-white text-lg">{economicData.indicators.gdp?.value}%</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                      <p className="text-gray-400 text-[11px] uppercase tracking-wide">Fed Rate</p>
-                      <p className="font-semibold text-white text-lg">{economicData.indicators.fedRate?.value}%</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                      <p className="text-gray-400 text-[11px] uppercase tracking-wide">Unemployment</p>
-                      <p className="font-semibold text-white text-lg">{economicData.indicators.unemployment?.value}%</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                      <p className="text-gray-400 text-[11px] uppercase tracking-wide">Inflation Rate</p>
-                      <p className="font-semibold text-white text-lg">{economicData.indicators.inflation?.value}%</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* Sintesi in italiano richiesta */}
-              <p className="mt-4 text-[12px] text-gray-300 leading-relaxed">
-                Summary: Current cycle <span className="font-semibold text-blue-300">{economicData.current.cycle}</span>. Growth <span className="text-emerald-300 font-medium">{economicData.current.growth}</span>, Inflation <span className="text-amber-300 font-medium">{economicData.current.inflation}</span>, Unemployment <span className="text-purple-300 font-medium">{economicData.indicators?.unemployment?.value}%</span>, Fed Rate <span className="text-cyan-300 font-medium">{economicData.indicators?.fedRate?.value}%</span>, Confidence <span className="font-semibold text-indigo-300">{economicData.current.confidence}/100</span>. This macro snapshot helps contextualize regime; not investment advice.
-              </p>
-            </div>
-          )}
+          {/* Economic Cycle Analysis section removed per request */}
 
           {aiAnalysis && (
             <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
@@ -1044,18 +985,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             </div>
           </div>
 
-          {/* Earnings Calendar */}
-          <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-2xl p-6 border border-white/10 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Calendar className="w-7 h-7 text-cyan-400" /> Earnings Calendar
-              </h2>
-              <span className="text-[10px] uppercase tracking-wide text-gray-400">Next 2–4 weeks</span>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <EarningsCalendar />
-            </div>
-          </div>
+          {/* Earnings Calendar removed per request */}
 
           {/* Latest News simplified to only left column (NewsWidget) */}
           <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8 max-w-3xl">

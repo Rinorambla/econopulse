@@ -427,78 +427,7 @@ export function MarketCategoriesEmbed() {
       <div className="w-full mb-3 h-[520px]">
         <TradingViewWidget symbol={tvSymbol} theme="dark" interval="D" showRSI={false} showStochastic={false} />
       </div>
-      {/* BB • Volume • Volatility • Economic Conditions snapshot */}
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Bollinger Bands</div>
-          {bbInfo ? (
-            <div className="text-sm text-gray-200">
-              <div><span className="text-gray-400">Position:</span> <b className="text-white capitalize">{bbInfo.pos}</b></div>
-              <div><span className="text-gray-400">%B:</span> <b className="text-white">{(bbInfo.percentB*100).toFixed(1)}%</b></div>
-              <div><span className="text-gray-400">Bandwidth:</span> <b className="text-white">{(bbInfo.bandwidth*100).toFixed(2)}%</b></div>
-              {bbInfo.squeeze && <div className="mt-1 text-amber-300 text-xs">Squeeze: Low volatility regime</div>}
-            </div>
-          ) : <div className="text-gray-400 text-sm">Loading…</div>}
-        </div>
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Volume</div>
-          {bbInfo ? (
-            <div className="text-sm text-gray-200">
-              <div><span className="text-gray-400">vs 20d avg:</span> <b className={bbInfo.volVsAvg>=1? 'text-emerald-300':'text-gray-200'}>{bbInfo.volVsAvg.toFixed(2)}×</b></div>
-              <div className="text-xs text-gray-400">Higher than average suggests conviction on moves</div>
-            </div>
-          ) : <div className="text-gray-400 text-sm">Loading…</div>}
-        </div>
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Volatility</div>
-          {bbInfo ? (
-            <div className="text-sm text-gray-200">
-              <div><span className="text-gray-400">ATR%:</span> <b className="text-white">{(bbInfo.atrPct*100).toFixed(2)}%</b></div>
-              <div className="text-xs text-gray-400">ATR normalized by price</div>
-            </div>
-          ) : <div className="text-gray-400 text-sm">Loading…</div>}
-        </div>
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Price</div>
-          {priceInfo ? (
-            <div className="text-sm text-gray-200">
-              <div className="flex items-baseline gap-2">
-                <span className="text-white text-lg font-semibold tabular-nums">{priceInfo.price?.toFixed(2)}</span>
-                {typeof priceInfo.change==='number' && typeof priceInfo.changePct==='number' && (
-                  <span className={`text-xs font-medium tabular-nums ${priceInfo.change>0?'text-emerald-400':priceInfo.change<0?'text-red-400':'text-gray-300'}`}>
-                    {(priceInfo.change>0?'+':'')+priceInfo.change.toFixed(2)} ({(priceInfo.changePct).toFixed(2)}%)
-                  </span>
-                )}
-              </div>
-              {obos && (
-                <div className="mt-1 text-xs">
-                  <span className="text-gray-400">Status:</span> <span className={`${obos.color} font-medium`}>{obos.label}</span>
-                </div>
-              )}
-              {priceInfo.asOf && (
-                <div className="text-[10px] text-gray-500 mt-1">As of {new Date(priceInfo.asOf).toLocaleDateString()}</div>
-              )}
-            </div>
-          ) : <div className="text-gray-400 text-sm">Loading…</div>}
-        </div>
-        {/* AI Signal */}
-        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-          <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">AI Signal</div>
-          {aiSignal ? (
-            <div className="text-sm text-gray-200">
-              <div className="flex items-baseline gap-2">
-                <span className={`text-lg font-semibold ${aiSignal.action==='Buy'?'text-emerald-400':aiSignal.action==='Sell'?'text-red-400':'text-gray-200'}`}>{aiSignal.action}</span>
-                <span className="text-xs text-gray-400">Confidence {aiSignal.confidence}%</span>
-              </div>
-              {aiSignal.reasons.length>0 && (
-                <ul className="mt-1 text-[11px] text-gray-300 list-disc list-inside space-y-0.5">
-                  {aiSignal.reasons.slice(0,3).map((r,i)=>(<li key={i}>{r}</li>))}
-                </ul>
-              )}
-            </div>
-          ) : <div className="text-gray-400 text-sm">Waiting for data…</div>}
-        </div>
-      </div>
+      {/* Snapshot cards under chart removed per request */}
 
       {/* Controls under the chart as requested */}
       <div className="flex flex-wrap items-center gap-3 mb-6">

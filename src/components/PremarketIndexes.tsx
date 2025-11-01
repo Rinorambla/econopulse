@@ -15,12 +15,14 @@ type ExtQ = {
 };
 
 type IndexCfg = { id: string; label: string; fetch: string };
-// Use liquid ETF proxies for reliable pre/post market fields
+// Minimal table view with direct index tickers as requested
 const INDEXES: IndexCfg[] = [
-  { id: '^GSPC', label: 'S&P 500', fetch: 'SPY' },
-  { id: '^NDX', label: 'Nasdaq 100', fetch: 'QQQ' },
-  { id: '^DJI', label: 'Dow Jones', fetch: 'DIA' },
-  { id: '^RUT', label: 'Russell 2000', fetch: 'IWM' },
+  { id: '^GSPC', label: 'S&P 500', fetch: '^GSPC' },
+  { id: '^DJI', label: 'Dow Jones', fetch: '^DJI' },
+  { id: '^RUT', label: '^RUT', fetch: '^RUT' },
+  { id: '^NDX', label: '^NDX', fetch: '^NDX' },
+  { id: '^VIX', label: 'VIX', fetch: '^VIX' },
+  { id: '^N225', label: 'Nikkei 225', fetch: '^N225' },
 ];
 
 function pickDisplay(q?: ExtQ): { price?: number | null; pct?: number | null; stateLabel: string } {
@@ -56,46 +58,76 @@ export default function PremarketIndexes() {
       try {
         const qs = new URLSearchParams({ symbols: INDEXES.map(i=> i.fetch).join(',') });
         const r = await fetch(`/api/yahoo-extended-quotes?${qs.toString()}`, { cache: 'no-store' });
-        if (!r.ok) return;
+        if (!r.ok) throw new Error(`api_status_${r.status}`);
+        const ct = r.headers.get('content-type') || '';
+        if (ct.includes('text/html')) {
+          // Likely Vercel protection page — try direct Yahoo as a best-effort fallback from the browser
+          try {
+            const y = await fetch(`https://query2.finance.yahoo.com/v7/finance/quote?${qs.toString()}`, { cache: 'no-store' });
+            const yct = y.headers.get('content-type') || '';
+            if (!y.ok || !yct.includes('application/json')) throw new Error('yahoo_cors_or_blocked');
+            const yj = await y.json();
+            const arr: ExtQ[] = ((yj?.quoteResponse?.result) || []).map((r: any)=> ({
+              symbol: r.symbol,
+              marketState: r.marketState,
+              regularMarketPrice: r.regularMarketPrice ?? null,
+              regularMarketChangePercent: r.regularMarketChangePercent ?? null,
+              preMarketPrice: r.preMarketPrice ?? null,
+              preMarketChangePercent: r.preMarketChangePercent ?? null,
+              postMarketPrice: r.postMarketPrice ?? null,
+              postMarketChangePercent: r.postMarketChangePercent ?? null,
+              shortName: r.shortName ?? r.longName ?? null,
+            }));
+            if (alive) {
+              setRows(arr);
+            }
+          } catch (e) {
+            // ignore; we’ll keep placeholders
+          }
+          return;
+        }
         const j = await r.json();
         const arr: ExtQ[] = (j?.data||[]) as ExtQ[];
-        if (alive) setRows(arr);
-      } catch {}
+        if (alive) {
+          setRows(arr);
+        }
+      } catch (e: any) {
+        // ignore; we’ll keep placeholders
+      }
     };
     load();
     timer = setInterval(load, 20_000);
     return ()=>{ alive=false; if (timer) clearInterval(timer); };
   }, []);
 
-  // Determine overall state label from the first index
-  const overall = pickDisplay(rows.find(r=> r.symbol===INDEXES[0].fetch));
+  const dataMap = (id: string)=> pickDisplay(rows.find(r=> r.symbol===id));
 
   return (
     <div className="bg-[var(--color-panel)]/70 backdrop-blur-sm border-y border-[var(--color-border)]">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs text-white/60">Stock Indexes</div>
-          <div className="text-[10px] px-2 py-0.5 rounded-full border border-white/15 bg-white/5 text-white/70">{overall.stateLabel}</div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {INDEXES.map((cfg)=>{
-            const q = rows.find(r=> r.symbol===cfg.fetch);
-            const d = pickDisplay(q);
-            const pct = d.pct ?? 0;
-            const up = (pct||0) >= 0;
-            return (
-              <div key={cfg.id} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-white/70">{cfg.label}</div>
-                  <div className="text-[10px] text-white/50">{d.stateLabel}</div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.04]">
+          <div className="px-3 py-2 grid grid-cols-[1fr_auto] gap-2 text-xs text-white/60">
+            <div>Indices</div>
+            <div className="text-right">Chg</div>
+          </div>
+          <div className="divide-y divide-white/10">
+            {INDEXES.map((cfg)=>{
+              const d = dataMap(cfg.fetch);
+              const pct = d.pct ?? null;
+              const up = (pct ?? 0) >= 0;
+              return (
+                <div key={cfg.id} className="px-3 py-1.5 grid grid-cols-[1fr_auto] gap-2 items-baseline">
+                  <div className="text-white/90">
+                    <span className="font-medium">{cfg.label}</span>
+                    <span className="ml-2 text-white/60">{d.price != null ? d.price.toFixed(2) : '—'}</span>
+                  </div>
+                  <div className={`text-right text-[13px] font-medium ${pct==null ? 'text-white/50' : up ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {pct != null ? `${up?'+':''}${pct.toFixed(2)}%` : '—'}
+                  </div>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-white font-semibold text-sm">{d.price != null ? d.price.toFixed(2) : '—'}</div>
-                  <div className={`text-[11px] font-medium ${up?'text-emerald-400':'text-red-400'}`}>{d.pct != null ? `${up?'+':''}${pct.toFixed(2)}%`:'—'}</div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

@@ -13,6 +13,15 @@ type QuoteRow = {
   volume: number
 }
 
+type FundRow = {
+  symbol: string
+  dividendYield?: number | null
+  forwardPE?: number | null
+  earningsDate?: string | null
+  earningsGrowth?: number | null
+  holdingsCount?: number | null
+}
+
 const POPULAR_SYMBOLS = [
   'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','AVGO','AMD','NFLX','ORCL','CRM','ADBE','INTC','CSCO','IBM',
   'SPY','QQQ','VOO','VTI','DIA','IWM','JEPI','JEPQ','VUG','VTV',
@@ -49,6 +58,7 @@ export default function WatchlistPanel() {
   const [timeframe, setTimeframe] = React.useState<'1D'|'1W'|'1M'>('1D')
   const [perfMap, setPerfMap] = React.useState<Record<string, number>>({})
   const [perfLoading, setPerfLoading] = React.useState(false)
+  const [funds, setFunds] = React.useState<Record<string, FundRow>>({})
 
   // Load from storage
   React.useEffect(() => {
@@ -90,6 +100,14 @@ export default function WatchlistPanel() {
         const js = await res.json()
         const data = (js?.data || []) as QuoteRow[]
         setRows(data)
+        // fundamentals fetch (best-effort)
+        try {
+          const fRes = await fetch(`/api/watchlist-fundamentals?${qs.toString()}`, { cache: 'no-store' })
+          if (fRes.ok) {
+            const fj = await fRes.json()
+            if (fj?.ok && fj?.data) setFunds(fj.data as Record<string, FundRow>)
+          }
+        } catch {}
       } catch (e) {
         console.error('watchlist fetch error', e)
         setRows([])
@@ -222,7 +240,7 @@ export default function WatchlistPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[900px]">
           <thead className="bg-white/5">
             <tr className="border-b border-white/10 text-[11px] text-gray-400 uppercase tracking-wide">
               <th className="text-left py-2 px-2">{header('symbol', 'Symbol')}</th>
@@ -230,6 +248,10 @@ export default function WatchlistPanel() {
               <th className="text-right py-2 px-2">{header('price', 'Price')}</th>
               <th className="text-right py-2 px-2">{header('changePercent', '%Chg')}</th>
               <th className="text-right py-2 px-2">{header('volume', 'Vol')}</th>
+              <th className="text-right py-2 px-2">Hold.</th>
+              <th className="text-right py-2 px-2">Div.Y</th>
+              <th className="text-right py-2 px-2">Fwd PE</th>
+              <th className="text-right py-2 px-2">Earnings</th>
               <th className="py-2 px-2"></th>
             </tr>
           </thead>
@@ -254,6 +276,21 @@ export default function WatchlistPanel() {
                     )
                   })()}
                   <td className="py-2 px-2 text-right text-gray-300">{Number.isFinite(row.volume) ? row.volume.toLocaleString() : '—'}</td>
+                  {(() => {
+                    const f = funds[row.symbol] || {} as FundRow
+                    const dy = typeof f.dividendYield === 'number' ? (f.dividendYield * (f.dividendYield > 1 ? 1 : 100)) : null // Yahoo sometimes returns decimal (0.015) or %; normalize best-effort
+                    const fpe = typeof f.forwardPE === 'number' ? f.forwardPE : null
+                    const hold = typeof f.holdingsCount === 'number' ? f.holdingsCount : null
+                    const ed = f.earningsDate ? new Date(f.earningsDate).toLocaleDateString() : null
+                    return (
+                      <>
+                        <td className="py-2 px-2 text-right text-gray-300">{hold ?? '—'}</td>
+                        <td className="py-2 px-2 text-right text-gray-300">{dy!=null ? `${dy.toFixed(2)}%` : '—'}</td>
+                        <td className="py-2 px-2 text-right text-gray-300">{fpe!=null ? fpe.toFixed(2) : '—'}</td>
+                        <td className="py-2 px-2 text-right text-gray-300">{ed ?? '—'}</td>
+                      </>
+                    )
+                  })()}
                   <td className="py-2 px-2 text-right"><button onClick={() => removeSymbol(row.symbol)} className="text-xs text-gray-400 hover:text-white">Remove</button></td>
                 </tr>
               ))

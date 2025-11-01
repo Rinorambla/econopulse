@@ -303,23 +303,30 @@ export default function DashboardPage() {
 	// Fetch precise options metrics for the first slice of filtered rows
 	useEffect(() => {
 		let abort = false;
+		const sleep = (ms:number)=> new Promise(r=> setTimeout(r, ms));
 		const run = async () => {
 			try {
-				const firstSlice = filteredData.slice(0, 60).map(x => x.ticker);
-				const missing = firstSlice.filter(t => !optsByTicker[t]);
+				const firstSlice = filteredData.slice(0, 80).map(x => x.ticker);
+				let missing = firstSlice.filter(t => !optsByTicker[t]);
 				if (!missing.length) return;
-				const qs = new URLSearchParams({ symbols: missing.join(',') });
-				const ctrl = new AbortController();
-				const t = setTimeout(() => ctrl.abort(), 12000);
-				const res = await fetch(`/api/options-metrics?${qs.toString()}`, { cache: 'no-store', signal: ctrl.signal });
-				clearTimeout(t);
-				if (!res.ok) return;
-				const js = await res.json();
-				if (abort) return;
-				const out: Record<string, any> = {};
-				const m = js?.data || {};
-				Object.keys(m).forEach(k => { out[k] = m[k]; });
-				setOptsByTicker(prev => ({ ...prev, ...out }));
+				// Batch in chunks of 20 to respect server safety cap
+				for (let i=0; i<missing.length && !abort; i+=20) {
+					const chunk = missing.slice(i, i+20);
+					const qs = new URLSearchParams({ symbols: chunk.join(',') });
+					const ctrl = new AbortController();
+					const t = setTimeout(() => ctrl.abort(), 12000);
+					const res = await fetch(`/api/options-metrics?${qs.toString()}`, { cache: 'no-store', signal: ctrl.signal });
+					clearTimeout(t);
+					if (!res.ok) continue;
+					const js = await res.json();
+					if (abort) return;
+					const out: Record<string, any> = {};
+					const m = js?.data || {};
+					Object.keys(m).forEach(k => { out[k] = m[k]; });
+					setOptsByTicker(prev => ({ ...prev, ...out }));
+					// gentle pacing to avoid bursts
+					if (i + 20 < missing.length) await sleep(300);
+				}
 			} catch {}
 		};
 		run();
@@ -457,9 +464,34 @@ export default function DashboardPage() {
 															<td className="px-2 py-1 tabular-nums">{item.volume || '—'}</td>
 															<td className="px-2 py-1"><span className={`inline-flex px-1 py-0.5 rounded ${getTrendColor(item.trend)} font-semibold`}>{item.trend}</span></td>
 																			<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
-																			<td className="px-2 py-1 text-gray-300">{opt?.optionsSentiment || item.optionsSentiment}</td>
+																			<td className="px-2 py-1 text-gray-300">
+																				<span className="relative group inline-flex items-center gap-1">
+																					{opt?.optionsSentiment || item.optionsSentiment}
+																					{opt && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
+																					{opt && (
+																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
+																							<SmallTooltip lines={[
+																								`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
+																								`OI P/C: ${opt.putCallRatioOI ?? '—'}`
+																							]} />
+																						</div>
+																					)}
+																				</span>
+																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
-																			<td className="px-2 py-1 text-gray-300">{opt?.putCallRatioVol ?? item.putCallRatio}</td>
+																			<td className="px-2 py-1 text-gray-300">
+																				<span className="relative group inline-flex">
+																					{opt?.putCallRatioVol ?? item.putCallRatio}
+																					{opt && (
+																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
+																							<SmallTooltip lines={[
+																								`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
+																								`OI P/C: ${opt.putCallRatioOI ?? '—'}`
+																							]} />
+																						</div>
+																					)}
+																				</span>
+																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualOtm || item.unusualOtm}</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.callSkew || item.otmSkew}</td>
 																			<td className="px-2 py-1 text-gray-300">{(opt && typeof opt.gammaExposure === 'number' && opt.gammaExposure > 0) ? 'Gamma Bull' : item.intradayFlow}</td>

@@ -30,7 +30,7 @@ export default function HomePage() {
                   Experience the future of financial analysis. Our AI anticipates market movements and transforms complex patterns into clear investment strategies.
                 </p>
                 <SafeBoundary fallback={<div className="mt-3 text-xs text-white/40">AI prompt temporarily unavailable</div>}>
-                  <AIPromptBar />
+                  <AIPromptBar compact />
                 </SafeBoundary>
               </div>
             </main>

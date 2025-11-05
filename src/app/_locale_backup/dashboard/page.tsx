@@ -380,8 +380,7 @@ export default function DashboardPage() {
 					</div>
 				)}
 
-				{/* Real-time Sentiment block (Composite + Put/Call) */}
-				<SentimentPanel />
+				{/* Real-time Sentiment block (Composite + Put/Call) removed per request */}
 
 				{/* Global Market Drivers module removed in favor of WorldDriversMap */}
 

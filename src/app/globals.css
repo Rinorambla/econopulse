@@ -34,6 +34,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Recharts dark theme fixes */
+.recharts-default-tooltip, .recharts-tooltip-wrapper {
+  color: #e5e7eb !important; /* text-gray-200 */
+}
+.recharts-cartesian-axis-tick-value, .recharts-legend-item-text {
+  fill: #9ca3af !important; /* text-gray-400 */
+}
+.recharts-surface text { fill: #9ca3af; }
+.recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line { stroke: #2B2F34; }
+.recharts-responsive-container { background: transparent; }
+
 a {
   color: var(--foreground);
 }

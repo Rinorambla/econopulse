@@ -10,6 +10,17 @@ type QuoteRow = {
   volume?: number
 }
 
+type OptionContractRow = {
+  symbol: string
+  option: string
+  type: 'Call' | 'Put'
+  last: number | null
+  changePct: number | null
+  volume: number
+  oi: number
+  ivPct: number | null
+}
+
 type MoversResponse = {
   success: boolean
   asOf: string
@@ -18,6 +29,8 @@ type MoversResponse = {
   topLosers: QuoteRow[]
   highIV: Array<{ symbol: string; name?: string; price?: number|null; ivPercent: number|null; openInterest: number }>
   highOI: Array<{ symbol: string; name?: string; price?: number|null; openInterest: number; ivPercent: number|null }>
+  highIVContracts?: OptionContractRow[]
+  highOIContracts?: OptionContractRow[]
 }
 
 const tabs = [
@@ -26,7 +39,7 @@ const tabs = [
   { key: 'topLosers', label: 'Top Losers' },
   { key: 'highIV', label: 'Highest IV' },
   { key: 'highOI', label: 'Highest OI' },
- ] as const
+] as const
 
 type TabKey = typeof tabs[number]['key']
 
@@ -57,8 +70,10 @@ export default function MarketMovers() {
     return () => { abort = true; clearInterval(id) }
   }, [])
 
-  const rows: Array<any> = useMemo(() => {
-    if (!data) return []
+  const rows = useMemo(() => {
+    if (!data) return [] as any[]
+    if (tab === 'highIV' && data.highIVContracts?.length) return data.highIVContracts
+    if (tab === 'highOI' && data.highOIContracts?.length) return data.highOIContracts
     switch (tab) {
       case 'mostActive': return data.mostActive
       case 'topGainers': return data.topGainers
@@ -90,16 +105,21 @@ export default function MarketMovers() {
           <table className="min-w-full text-left text-[12px]">
             <thead className="bg-slate-900/60">
               <tr>
-                <th className="px-3 py-2 text-slate-300 font-semibold">Ticker</th>
-                <th className="px-3 py-2 text-slate-300 font-semibold">Name</th>
-                <th className="px-3 py-2 text-slate-300 font-semibold">Price</th>
-                {tab==='highIV' || tab==='highOI' ? (
+                <th className="px-3 py-2 text-slate-300 font-semibold">Symbol</th>
+                {(tab==='highIV' || tab==='highOI') && rows.length && rows[0]?.option ? (
                   <>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Option</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Type</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Last</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Chg %</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Volume</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">OI</th>
                     <th className="px-3 py-2 text-slate-300 font-semibold">IV</th>
-                    <th className="px-3 py-2 text-slate-300 font-semibold">Open Interest</th>
                   </>
                 ) : (
                   <>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Name</th>
+                    <th className="px-3 py-2 text-slate-300 font-semibold">Price</th>
                     <th className="px-3 py-2 text-slate-300 font-semibold">% Chg</th>
                     <th className="px-3 py-2 text-slate-300 font-semibold">Volume</th>
                   </>
@@ -107,23 +127,27 @@ export default function MarketMovers() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, idx) => {
-                const sym = r.symbol
-                const name = r.name || ''
-                const price = r.price ?? null
-                if (tab==='highIV' || tab==='highOI') {
-                  const iv = r.ivPercent
-                  const oi = r.openInterest
+              {rows.map((r: any, idx: number) => {
+                // Contract rows for Highest IV/OI when option field present
+                if ((tab==='highIV' || tab==='highOI') && r.option) {
+                  const chgCls = typeof r.changePct === 'number' ? (r.changePct>0?'text-green-400': r.changePct<0?'text-red-400':'text-slate-200') : 'text-slate-200'
                   return (
-                    <tr key={sym+idx} className={idx%2===0? 'bg-slate-800':'bg-slate-800/70'}>
-                      <td className="px-3 py-1.5 font-bold text-white">{sym}</td>
-                      <td className="px-3 py-1.5 text-slate-300 truncate max-w-[280px]">{name}</td>
-                      <td className="px-3 py-1.5 text-slate-200">{price!=null? price.toFixed(2): '—'}</td>
-                      <td className="px-3 py-1.5 text-slate-200">{iv!=null? iv.toFixed(1)+'%':'—'}</td>
-                      <td className="px-3 py-1.5 text-slate-200">{oi?.toLocaleString?.() || '—'}</td>
+                    <tr key={r.option+idx} className={idx%2===0? 'bg-slate-800':'bg-slate-800/70'}>
+                      <td className="px-3 py-1.5 font-bold text-white">{r.symbol}</td>
+                      <td className="px-3 py-1.5 text-blue-300 font-mono truncate max-w-[200px]" title={r.option}>{r.option}</td>
+                      <td className="px-3 py-1.5 text-slate-200">{r.type}</td>
+                      <td className="px-3 py-1.5 text-slate-200">{r.last!=null? r.last.toFixed(2):'—'}</td>
+                      <td className={"px-3 py-1.5 "+chgCls}>{r.changePct!=null? r.changePct.toFixed(2)+'%':'—'}</td>
+                      <td className="px-3 py-1.5 text-slate-200 tabular-nums">{r.volume?.toLocaleString?.()||'—'}</td>
+                      <td className="px-3 py-1.5 text-slate-200 tabular-nums">{r.oi?.toLocaleString?.()||'—'}</td>
+                      <td className="px-3 py-1.5 text-slate-200">{r.ivPct!=null? r.ivPct.toFixed(1)+'%':'—'}</td>
                     </tr>
                   )
                 }
+                // Underlying rows (existing behavior)
+                const sym = r.symbol
+                const name = r.name || ''
+                const price = r.price ?? null
                 const chg = r.changePercent
                 const vol = r.volume
                 const chgCls = typeof chg === 'number' ? (chg>0?'text-green-400': chg<0? 'text-red-400':'text-slate-200') : 'text-slate-200'

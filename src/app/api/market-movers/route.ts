@@ -54,7 +54,10 @@ async function fetchYahooOptions(symbol: string): Promise<YahooOptionChain | nul
 async function fetchYahooScreener(scrId: string, count = 30): Promise<QuoteRow[]> {
   const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${encodeURIComponent(scrId)}&count=${count}`;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)' }, cache: 'no-store' });
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 10_000);
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)' }, cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(t);
     if (!res.ok) return [];
     const js = await res.json();
     const quotes = js?.finance?.result?.[0]?.quotes || [];
@@ -69,6 +72,11 @@ async function fetchYahooScreener(scrId: string, count = 30): Promise<QuoteRow[]
     return [];
   }
 }
+
+// Simple in-memory cache to avoid heavy bursts; reset on server reloads
+type CacheShape = { at: number; payload: any } | null;
+let lastCache: CacheShape = null;
+const CACHE_TTL_MS = 120_000; // 2 minutes
 
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -85,6 +93,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Serve from cache when fresh
+    if (lastCache && (Date.now() - lastCache.at) < CACHE_TTL_MS) {
+      const res = NextResponse.json(lastCache.payload);
+      const headers = rateLimitHeaders(rl);
+      Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v));
+      res.headers.set('Cache-Control', 'no-store');
+      res.headers.set('X-Cache', 'HIT');
+      return res;
+    }
     // Fetch predefined screeners for Most Active / Gainers / Losers
     const [mostActive, topGainers, topLosers] = await Promise.all([
       fetchYahooScreener('most_actives', 30),
@@ -97,7 +114,7 @@ export async function GET(req: NextRequest) {
       ...mostActive.map(x => x.symbol),
       ...topGainers.map(x => x.symbol),
       ...topLosers.map(x => x.symbol)
-    ])).slice(0, 60);
+    ])).slice(0, 40);
 
     // Compute lightweight options metrics for IV/OI rankings on a small subset
     // Limit concurrency to avoid hammering Yahoo
@@ -164,7 +181,10 @@ export async function GET(req: NextRequest) {
       highOI,
       // Below: option-level lists for Highest IV and Highest OI (contract rows)
       highIVContracts: await (async () => {
-        const universe = Array.from(new Set(results.map(r => r.symbol))).slice(0, 40);
+        const universe = Array.from(new Set([
+          ...highIV.map(r => r.symbol).slice(0, 12),
+          ...highOI.map(r => r.symbol).slice(0, 8)
+        ])).slice(0, 20);
         const out: Array<{
           symbol: string;
           option: string;
@@ -176,7 +196,7 @@ export async function GET(req: NextRequest) {
           ivPct: number|null;
         }> = [];
         const now = Date.now();
-        const concurrency = 4;
+  const concurrency = 3;
         for (let i=0; i<universe.length; i+=concurrency) {
           const chunk = universe.slice(i,i+concurrency);
           const chunkRes = await Promise.all(chunk.map(async (sym) => {
@@ -202,7 +222,10 @@ export async function GET(req: NextRequest) {
           .slice(0,40);
       })(),
       highOIContracts: await (async () => {
-        const universe = Array.from(new Set(results.map(r => r.symbol))).slice(0, 40);
+        const universe = Array.from(new Set([
+          ...highOI.map(r => r.symbol).slice(0, 12),
+          ...highIV.map(r => r.symbol).slice(0, 8)
+        ])).slice(0, 20);
         const out: Array<{
           symbol: string;
           option: string;
@@ -214,7 +237,7 @@ export async function GET(req: NextRequest) {
           ivPct: number|null;
         }> = [];
         const now = Date.now();
-        const concurrency = 4;
+  const concurrency = 3;
         for (let i=0; i<universe.length; i+=concurrency) {
           const chunk = universe.slice(i,i+concurrency);
           const chunkRes = await Promise.all(chunk.map(async (sym) => {

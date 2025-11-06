@@ -104,6 +104,7 @@ export default function DashboardPage() {
 	const ImportantNewsPopup = useMemo(() => dynamic(() => import('@/components/ImportantNewsPopup'), { ssr: false }), [])
 	const SentimentPanel = useMemo(() => dynamic(() => import('@/components/SentimentPanel'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading sentiment…</div> }), [])
 	const WorldDriversMap = useMemo(() => dynamic(() => import('@/components/WorldDriversMap'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading world map…</div> }), [])
+    const MarketMovers = useMemo(() => dynamic(() => import('@/components/MarketMovers'), { ssr: false, loading: () => <div className="bg-slate-800 border border-slate-700 rounded p-3 text-[11px] text-gray-400">Loading movers…</div> }), [])
 
 	// Options metrics enrichment (precise OI / P-C / GEX / Skew)
 	const [optsByTicker, setOptsByTicker] = useState<Record<string, {
@@ -390,6 +391,11 @@ export default function DashboardPage() {
 				{/* World map drivers (grouped by G7/Developed/Emerging) */}
 				<div className="max-w-7xl mx-auto px-3 py-2">
 					<WorldDriversMap />
+				</div>
+
+				{/* Market Movers (Yahoo-based) */}
+				<div className="max-w-7xl mx-auto px-3 py-2">
+					<MarketMovers />
 				</div>
 
 								{/* Advanced Filters */}

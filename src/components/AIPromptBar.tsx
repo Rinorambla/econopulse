@@ -19,17 +19,17 @@ export default function AIPromptBar({ compact = false }: { compact?: boolean }) 
             value={q}
             onChange={(e)=>setQ(e.target.value)}
             onKeyDown={(e)=>{ if (e.key==='Enter') go(q); }}
-            placeholder="Chiedi all’AI…"
+            placeholder="Ask the AI…"
             className={`flex-1 bg-transparent outline-none ${compact ? 'text-[12px]' : 'text-sm'} text-white placeholder-white/40`}
             aria-label="Ask the AI"
           />
-          <button onClick={()=>go(q)} className={`${compact ? 'text-[11px] px-2 py-0.5' : 'text-xs px-3 py-1'} rounded bg-blue-600 hover:bg-blue-700 text-white`}>Invia</button>
+          <button onClick={()=>go(q)} className={`${compact ? 'text-[11px] px-2 py-0.5' : 'text-xs px-3 py-1'} rounded bg-blue-600 hover:bg-blue-700 text-white`}>Send</button>
         </div>
         <div className={`${compact ? 'mt-1 gap-1' : 'mt-2 gap-2'} flex flex-wrap`}>
           {[
-            'Strong buy su Semiconductors',
-            'Unusual options flow oggi',
-            'Top RS su Energy 1M',
+            'Strong buy on Semiconductors',
+            'Unusual options flow today',
+            'Top RS in Energy 1M',
           ].map((s,i)=> (
             <button
               key={i}

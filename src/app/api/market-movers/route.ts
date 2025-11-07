@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
       return res;
     }
     // Fetch predefined screeners for Most Active / Gainers / Losers
+    const t0 = Date.now();
     const [mostActive, topGainers, topLosers] = await Promise.all([
       fetchYahooScreener('most_actives', 30),
       fetchYahooScreener('day_gainers', 30),
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
 
     // Compute lightweight options metrics for IV/OI rankings on a small subset
     // Limit concurrency to avoid hammering Yahoo
-    const concurrency = 5;
+  const concurrency = 4;
     const results: Array<{ symbol: string; iv: number | null; oi: number } > = [];
     for (let i = 0; i < universe.length; i += concurrency) {
       const chunk = universe.slice(i, i + concurrency);
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest) {
       const chunkRes = await Promise.all(chunkPromises);
       results.push(...chunkRes);
       // gentle pacing
-      if (i + concurrency < universe.length) await new Promise(r => setTimeout(r, 200));
+      if (i + concurrency < universe.length) await new Promise(r => setTimeout(r, 250));
     }
 
   const bySymbol = new Map(results.map(r => [r.symbol, r]));
@@ -196,11 +197,11 @@ export async function GET(req: NextRequest) {
           ivPct: number|null;
         }> = [];
         const now = Date.now();
-  const concurrency = 3;
+  const concurrency = 2;
         for (let i=0; i<universe.length; i+=concurrency) {
           const chunk = universe.slice(i,i+concurrency);
           const chunkRes = await Promise.all(chunk.map(async (sym) => {
-            const chain = await withTimeout(fetchYahooOptions(sym), 10_000).catch(()=>null);
+            const chain = await withTimeout(fetchYahooOptions(sym), 6_500).catch(()=>null);
             if (!chain) return [] as typeof out;
             const block = (chain.options || []).find(b => b.expirationDate*1000 > now) || chain.options?.[0];
             if (!block) return [] as typeof out;
@@ -214,12 +215,12 @@ export async function GET(req: NextRequest) {
             return rows;
           }));
           out.push(...chunkRes.flat());
-          if (i+concurrency<universe.length) await new Promise(r=>setTimeout(r,200));
+          if (i+concurrency<universe.length) await new Promise(r=>setTimeout(r,300));
         }
         return out
           .filter(r => r.ivPct!=null && isFinite(r.ivPct as number) && (r.volume>0 || r.oi>0))
           .sort((a,b)=> (b.ivPct as number) - (a.ivPct as number))
-          .slice(0,40);
+          .slice(0,30);
       })(),
       highOIContracts: await (async () => {
         const universe = Array.from(new Set([
@@ -237,11 +238,11 @@ export async function GET(req: NextRequest) {
           ivPct: number|null;
         }> = [];
         const now = Date.now();
-  const concurrency = 3;
+  const concurrency = 2;
         for (let i=0; i<universe.length; i+=concurrency) {
           const chunk = universe.slice(i,i+concurrency);
           const chunkRes = await Promise.all(chunk.map(async (sym) => {
-            const chain = await withTimeout(fetchYahooOptions(sym), 10_000).catch(()=>null);
+            const chain = await withTimeout(fetchYahooOptions(sym), 6_500).catch(()=>null);
             if (!chain) return [] as typeof out;
             const block = (chain.options || []).find(b => b.expirationDate*1000 > now) || chain.options?.[0];
             if (!block) return [] as typeof out;
@@ -255,17 +256,22 @@ export async function GET(req: NextRequest) {
             return rows;
           }));
           out.push(...chunkRes.flat());
-          if (i+concurrency<universe.length) await new Promise(r=>setTimeout(r,200));
+          if (i+concurrency<universe.length) await new Promise(r=>setTimeout(r,300));
         }
         return out
           .filter(r => r.oi>0)
           .sort((a,b)=> b.oi - a.oi)
-          .slice(0,40);
+          .slice(0,30);
       })()
     });
+    const t1 = Date.now();
     const headers = rateLimitHeaders(rl);
     Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v));
     res.headers.set('Cache-Control', 'no-store');
+    res.headers.set('X-Diagnostics', JSON.stringify({
+      universe: universe.length,
+      ms: t1 - t0
+    }));
     return res;
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message || 'unknown_error' }, { status: 500, headers: rateLimitHeaders(rl) });

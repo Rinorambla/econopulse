@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { MagnifyingGlassIcon, HomeIcon } from '@heroicons/react/24/outline';
 
+// Disable static prerender for not-found to avoid router context issues triggering usePathname
+// inside nested client components (Navigation) during export.
+export const dynamic = 'force-dynamic';
+
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">

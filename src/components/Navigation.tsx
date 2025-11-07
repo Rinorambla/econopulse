@@ -103,6 +103,10 @@ export function Navigation({ className }: NavigationProps) {
           <span className="relative z-10 flex items-center gap-1">AI Pulse</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
+  <NavigationLink href="/options" className="group relative text-white/90 hover:text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[12px] sm:text-[13px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-green-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1">Options Flow</span>
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+        </NavigationLink>
   <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[12px] sm:text-[13px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Visual AI</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
@@ -169,6 +173,9 @@ export function Navigation({ className }: NavigationProps) {
               </NavigationLink>
               <NavigationLink href="/ai-pulse" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 AI Pulse
+              </NavigationLink>
+              <NavigationLink href="/options" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
+                Options Flow
               </NavigationLink>
               <NavigationLink href="/visual-ai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 Visual AI

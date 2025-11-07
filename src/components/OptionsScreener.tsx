@@ -53,8 +53,10 @@ export default function OptionsScreener() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
-  const [sortKey, setSortKey] = useState<'symbol'|'option'|'type'|'last'|'changePct'|'volume'|'oi'|'ivPct'>('volume');
+  const [sortKey, setSortKey] = useState<'symbol'|'option'|'type'|'last'|'changePct'|'volume'|'oi'|'ivPct'|'strike'|'expiry'>('volume');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
+  const [typeFilter, setTypeFilter] = useState<'All'|'Call'|'Put'>('All');
+  const [expiryFilter, setExpiryFilter] = useState<string>('All');
 
   const fetchData = async () => {
     try {
@@ -80,7 +82,9 @@ export default function OptionsScreener() {
     if (!data) return [] as Row[];
     const all = (data as any)[active] as Row[];
     const f = filter.trim().toLowerCase();
-    const filtered = !f ? all : all.filter(r => r.symbol.toLowerCase().includes(f) || r.option.toLowerCase().includes(f) || expiryToStr(r.expiry).includes(f));
+    let filtered = !f ? all : all.filter(r => r.symbol.toLowerCase().includes(f) || r.option.toLowerCase().includes(f) || expiryToStr(r.expiry).includes(f));
+    if (typeFilter !== 'All') filtered = filtered.filter(r => r.type === typeFilter);
+    if (expiryFilter !== 'All') filtered = filtered.filter(r => expiryToStr(r.expiry) === expiryFilter);
     const sorted = [...filtered].sort((a,b)=>{
       const dir = sortDir==='asc'?1:-1;
       const av: any = (a as any)[sortKey];
@@ -89,7 +93,14 @@ export default function OptionsScreener() {
       return String(av).localeCompare(String(bv))*dir;
     });
     return sorted;
-  }, [data, active, sortKey, sortDir, filter]);
+  }, [data, active, sortKey, sortDir, filter, typeFilter, expiryFilter]);
+
+  const expiryOptions = useMemo(() => {
+    if (!data) return [] as string[];
+    const all = (data as any)[active] as Row[];
+    const set = new Set(all.map(r => expiryToStr(r.expiry)));
+    return Array.from(set).sort();
+  }, [data, active]);
 
   const onTab = (k: typeof tabs[number]['key']) => {
     setActive(k);
@@ -114,7 +125,17 @@ export default function OptionsScreener() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value as any)} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded outline-none">
+            <option value="All">All Types</option>
+            <option value="Call">Calls</option>
+            <option value="Put">Puts</option>
+          </select>
+          <select value={expiryFilter} onChange={e=>setExpiryFilter(e.target.value)} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded outline-none">
+            <option value="All">All Expiries</option>
+            {expiryOptions.map(d => (<option key={d} value={d}>{d}</option>))}
+          </select>
           <input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Filter symbol / option / expiry" className="px-2 py-1 bg-slate-700 border border-slate-600 rounded outline-none focus:ring-1 focus:ring-blue-500" />
+          <button onClick={()=>{setFilter('');setTypeFilter('All');setExpiryFilter('All');}} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded hover:bg-slate-600">Clear</button>
           <span className="text-gray-400">{rows.length} / {data.counts.total}</span>
         </div>
       </div>
@@ -126,6 +147,8 @@ export default function OptionsScreener() {
                 {k:'symbol', l:'Symbol'},
                 {k:'option', l:'Option'},
                 {k:'type', l:'Type'},
+                {k:'strike', l:'Strike'},
+                {k:'expiry', l:'Expiry'},
                 {k:'last', l:'Last'},
                 {k:'changePct', l:'Chg %'},
                 {k:'volume', l:'Volume'},
@@ -155,6 +178,8 @@ export default function OptionsScreener() {
                   </span>
                 </td>
                 <td className="px-2 py-1">{r.type}</td>
+                <td className="px-2 py-1 tabular-nums">{formatNum(r.strike, { maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-1">{expiryToStr(r.expiry)}</td>
                 <td className="px-2 py-1 tabular-nums">{r.last==null?'—':`$${formatNum(r.last, { maximumFractionDigits: 2 })}`}</td>
                 <td className={`px-2 py-1 tabular-nums ${r.changePct==null?'text-gray-300': r.changePct>0? 'text-green-500':'text-red-500'}`}>{r.changePct==null?'—':`${formatNum(r.changePct, { maximumFractionDigits: 2 })}%`}</td>
                 <td className="px-2 py-1 tabular-nums">{formatNum(r.volume, { maximumFractionDigits: 0 })}</td>

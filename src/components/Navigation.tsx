@@ -1,15 +1,16 @@
   'use client';
 
-import Link from 'next/link';
-import React, { startTransition, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+  // Use i18n-aware navigation utilities so locale prefixes resolve correctly.
+  import { startTransition, useEffect, useState } from 'react';
+  import type { ReactNode } from 'react';
+  import { Link, usePathname } from '@/i18n/routing';
 import { useAuth } from '@/hooks/useAuth';
 import Logo from './Logo';
 
 interface NavigationLinkProps {
   href: string;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: (e: React.MouseEvent) => void;
 }
 

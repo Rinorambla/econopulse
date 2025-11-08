@@ -1,5 +1,7 @@
+
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { ExclamationTriangleIcon, HomeIcon } from '@heroicons/react/24/outline';
 
@@ -9,6 +11,22 @@ interface ErrorPageProps {
 }
 
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
+  // Prevent duplicate render if multiple boundaries trigger
+  const [skip, setSkip] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const w = window as any;
+      if (w.__EP_ERROR_RENDERED) {
+        setSkip(true);
+      }
+      w.__EP_ERROR_RENDERED = true;
+      return () => {
+        // Allow future renders on navigation
+        delete w.__EP_ERROR_RENDERED;
+      };
+    }
+  }, []);
+  if (skip) return null;
   // Best-effort client log to help diagnose intermittent issues
   if (typeof window !== 'undefined') {
     try {
@@ -33,19 +51,6 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-      {/* Navigation */}
-      <nav className="bg-white/10 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="text-2xl font-bold text-white">
-                EconoPulse
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Error Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full text-center">

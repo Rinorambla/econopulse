@@ -5,12 +5,15 @@ export default function middleware(req: Request) {
   const url = new URL((req as any).url)
   const pathname = url.pathname
   
-  // Redirect legacy locale-prefixed paths to non-locale equivalents
-  // e.g., /en/ai-pulse -> /ai-pulse, /it -> /
-  const localeMatch = pathname.match(/^\/(en|it)(?:\/(.*))?$/)
-  if (localeMatch) {
-    const rest = localeMatch[2] ? `/${localeMatch[2]}` : '/'
-    return NextResponse.redirect(new URL(rest, url.origin), 308)
+  // Enforce locale prefix (default: en). If no locale prefix, redirect to /en + path
+  const hasLocalePrefix = /^\/(en|it)(\/|$)/.test(pathname)
+  const isStatic = pathname === '/manifest.json' || pathname === '/sw.js' || pathname.startsWith('/icons/')
+  const isFramework = pathname.startsWith('/_next') || pathname.startsWith('/_vercel')
+  const isApi = pathname.startsWith('/api')
+  if (!hasLocalePrefix && !isStatic && !isFramework && !isApi) {
+    const target = `/en${pathname === '/' ? '' : pathname}`
+    const redirectUrl = new URL(target + url.search, url.origin)
+    return NextResponse.redirect(redirectUrl, 308)
   }
   
   if (pathname === '/manifest.json' || pathname === '/sw.js' || pathname.startsWith('/icons/')) {

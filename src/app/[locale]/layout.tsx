@@ -6,12 +6,11 @@ export default async function LocaleLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
+  params: { locale: string };
 }) {
   try {
-    // Ensure locale is read so Next sets the segment param
-    const resolvedParams = await params;
-    console.log('[LocaleLayout] Resolved locale:', resolvedParams.locale);
+    // Read locale param (useful for diagnostics)
+    console.log('[LocaleLayout] Resolved locale:', params.locale);
     const messages = await getMessages();
     return <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>;
   } catch (error) {

@@ -6,6 +6,8 @@ import SafeBoundary from '@/components/SafeBoundary';
 import AIBackground from '@/components/AIBackground';
 import AIPromptBar from '@/components/AIPromptBar';
 import FearGreedIndex from '@/components/FearGreedIndex';
+import MarketMovers from '@/components/MarketMovers';
+import AISignalsWidget from '@/components/AISignalsWidget';
 import Footer from '@/components/Footer';
 
 // Phase 1 restore: add only AIBackground (under SafeBoundary) to confirm stability.
@@ -42,15 +44,20 @@ export default function HomePage() {
               </div>
             </div>
           </SafeBoundary>
-          {/* Placeholder cards for future widgets */}
-          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64">
-            <div className="text-xs text-white/70 mb-2">Market Movers</div>
-            <div className="text-white/50 text-sm">Coming back next step.</div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64">
-            <div className="text-xs text-white/70 mb-2">AI Signals</div>
-            <div className="text-white/50 text-sm">Coming back next step.</div>
-          </div>
+          <SafeBoundary fallback={<div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64 text-white/60">Movers unavailable</div>}> 
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
+              <div className="p-3 border-b border-white/10 text-xs text-white/70">Market Movers</div>
+              <MarketMovers />
+            </div>
+          </SafeBoundary>
+          <SafeBoundary fallback={<div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64 text-white/60">AI Signals unavailable</div>}>
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
+              <div className="p-3 border-b border-white/10 text-xs text-white/70">AI Signals</div>
+              <div className="min-h-64">
+                <AISignalsWidget />
+              </div>
+            </div>
+          </SafeBoundary>
         </div>
       </section>
 

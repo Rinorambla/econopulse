@@ -47,6 +47,9 @@ export const metadata: Metadata = {
   },
 };
 
+// Force dynamic rendering globally to bypass static export evaluating client hooks on pages like /about
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>

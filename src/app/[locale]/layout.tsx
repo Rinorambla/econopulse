@@ -9,33 +9,50 @@ export function generateStaticParams() {
 
 type LayoutProps = {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
+  // Next normally supplies a plain object; we keep Promise for backwards compatibility with prior diagnostic version.
+  params: Promise<{ locale: string }> | { locale: string };
 };
 
 export default async function LocaleLayout({ children, params }: LayoutProps) {
+  // Support either direct object or Promise (awaiting a non-promise is fine)
+  const { locale } = await params as Promise<{ locale: string }> | { locale: string };
+
+  if (!locale || !['en', 'it'].includes(locale)) {
+    console.warn('[LocaleLayout] Invalid locale -> notFound()');
+    notFound();
+  }
+
+  // Replace dynamic variable path import (which can sometimes confuse the bundler in production) with
+  // a static conditional mapping to ensure both JSON files are explicitly included in the bundle.
+  let messages: any;
   try {
-    const { locale } = await params;
-    if (!locale || !['en', 'it'].includes(locale)) {
-      console.warn('[LocaleLayout] Invalid locale -> notFound()');
+    if (locale === 'en') {
+      messages = (await import('../../../messages/en.json')).default;
+    } else if (locale === 'it') {
+      messages = (await import('../../../messages/it.json')).default;
+    } else {
       notFound();
     }
+  } catch (e) {
+    console.error(`[LocaleLayout] Failed loading messages for "${locale}"`, e);
+    notFound();
+  }
 
-    let messages: any;
-    try {
-      // Load JSON messages explicitly rather than relying on next-intl auto loader (reduces ambiguity)
-      messages = (await import(`../../../messages/${locale}.json`)).default;
-    } catch (e) {
-      console.error(`[LocaleLayout] Missing messages for locale "${locale}"`, e);
-      notFound();
-    }
+  // Lightweight production diagnostic marker to verify layout executed (will appear in page HTML comment).
+  const diagnosticComment = `LocaleLayout:loaded locale=${locale} ts=${Date.now()}`;
 
+  try {
     return (
-      <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
-        {children}
-      </NextIntlClientProvider>
+      <>
+        {/* {diagnosticComment} */}
+        <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
+          {children}
+        </NextIntlClientProvider>
+      </>
     );
   } catch (e) {
-    console.error('[LocaleLayout] Fatal i18n initialization error; rendering children without provider', e);
+    // Final fallback: render children without provider to avoid hard crash (should not normally happen)
+    console.error('[LocaleLayout] Fatal render error; falling back without provider', e);
     return <>{children}</>;
   }
 }

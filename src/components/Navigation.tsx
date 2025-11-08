@@ -1,8 +1,7 @@
     'use client';
 
-  import Link from 'next/link';
   import React, { startTransition, useEffect, useState } from 'react';
-  import { usePathname } from 'next/navigation';
+  import { Link, usePathname } from '@/i18n/routing';
   import { useAuth } from '@/hooks/useAuth';
   import Logo from './Logo';
   import type { ReactNode } from 'react';
@@ -16,14 +15,19 @@ interface NavigationLinkProps {
 
 export function NavigationLink({ href, className, children, onClick }: NavigationLinkProps) {
   const pathname = usePathname();
+  // Inject current locale prefix if missing (assuming pathname starts with /en or /it)
+  let localePrefix = 'en';
+  const m = pathname?.match(/^\/(en|it)(?:\/|$)/);
+  if (m) localePrefix = m[1];
+  const finalHref = /^\/(en|it)(\/|$)/.test(href) ? href : `/${localePrefix}${href === '/' ? '' : href}`;
 
   return (
     <Link
-      href={href}
+      href={finalHref}
       prefetch
       className={className}
       onClick={(e) => {
-        if (pathname === href) return; // avoid redundant navigation
+        if (pathname === finalHref) return;
         startTransition(() => {});
         if (onClick) onClick(e);
       }}
@@ -85,35 +89,35 @@ export function Navigation({ className }: NavigationProps) {
       </div>
 
       <nav className="hidden md:flex flex-1 min-w-0 items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
+  <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1">Dashboard</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
+  <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1">AI Portfolio</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
+  <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1">AI Pulse</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
+  <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Visual AI</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/market-dna" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-500/20 hover:to-orange-500/20 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105">
+  <NavigationLink href="/market-dna" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-500/20 hover:to-orange-500/20 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market DNA</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/econoai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-sky-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-sky-500/25 hover:scale-105">
+  <NavigationLink href="/econoai" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-sky-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-sky-500/25 hover:scale-105">
           <span className="relative z-10">EconoAI</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/news" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+  <NavigationLink href="/news" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
           <span className="relative z-10">News</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-        <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+  <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
           <span className="relative z-10">Pricing</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>

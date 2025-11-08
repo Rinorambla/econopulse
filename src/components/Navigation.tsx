@@ -2,6 +2,8 @@
 
   // Use i18n-aware navigation utilities so locale prefixes resolve correctly.
   import { startTransition, useEffect, useState } from 'react';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import React from 'react';
   import type { ReactNode } from 'react';
   import { Link, usePathname } from '@/i18n/routing';
 import { useAuth } from '@/hooks/useAuth';

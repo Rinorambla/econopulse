@@ -51,6 +51,23 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Minimal server-side boot diagnostics to help identify production-only crashes
+  // Logged once per render in server logs; safe to keep in production.
+  try {
+    if (typeof window === 'undefined') {
+      // Avoid leaking secrets: only log presence flags
+      const boot = {
+        env: process.env.NODE_ENV,
+        vercel: !!process.env.VERCEL,
+        vercelUrl: process.env.VERCEL_URL || undefined,
+        supabaseEnabled: !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        openaiEnabled: !!process.env.OPENAI_API_KEY,
+        stripeEnabled: !!process.env.STRIPE_SECRET_KEY,
+      };
+      // eslint-disable-next-line no-console
+      console.log('[Boot] RootLayout', boot);
+    }
+  } catch {}
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased font-sans min-h-screen bg-[var(--background)] text-[var(--foreground)]">

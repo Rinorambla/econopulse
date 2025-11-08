@@ -26,7 +26,9 @@ interface ETFData { symbol:string; name:string; category:string; price:number; c
 
 const getCountryFlag = (code:string) => ({ US:'🇺🇸', CN:'🇨🇳', DE:'🇩🇪', JP:'🇯🇵', IN:'🇮🇳', GB:'🇬🇧', FR:'🇫🇷', CA:'🇨🇦', IT:'🇮🇹', AU:'🇦🇺', BR:'🇧🇷', KR:'🇰🇷', ES:'🇪🇸', NL:'🇳🇱', CH:'🇨🇭' }[code] || '🏳️');
 
-export default function AIPulsePage({ params }: { params: Promise<{ locale: string }> }) {
+// NOTE: Removed incorrect Promise-based params typing. App Router supplies a plain object.
+// Accept no params (locale routing handled higher-level); this fixes a production runtime mismatch.
+export default function AIPulsePage() {
   // Client-side fetch with timeout to avoid long hangs
   const fetchT = React.useCallback(async (input: RequestInfo | URL, timeoutMs = 10000, init?: RequestInit) => {
     const ctrl = new AbortController();

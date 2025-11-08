@@ -1,11 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import SafeBoundary from '@/components/SafeBoundary';
-import nextDynamic from 'next/dynamic';
-// Lazy heavy visuals & widgets like original rich homepage
-const AIBackground = nextDynamic(() => import('@/components/AIBackground'), { ssr: false });
-const FearGreedIndex = nextDynamic(() => import('@/components/FearGreedIndex'), { ssr: false });
-const Footer = nextDynamic(() => import('@/components/Footer'), { ssr: false });
+import AIBackground from '@/components/AIBackground';
+import FearGreedIndex from '@/components/FearGreedIndex';
+import Footer from '@/components/Footer';
 
 // Original rich marketing homepage (features + use cases) restored in simplified static English
 // Removed i18n hooks and locale prefetch logic; keeping core structure.

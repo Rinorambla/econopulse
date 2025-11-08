@@ -5,6 +5,8 @@ import { Navigation } from '@/components/Navigation';
 import { AuthProvider } from '@/hooks/useAuth';
 import CookieConsent from '@/components/CookieConsent';
 import SafeBoundary from '@/components/SafeBoundary';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -50,7 +52,11 @@ export const metadata: Metadata = {
 // Force dynamic rendering globally to bypass static export evaluating client hooks on pages like /about
 export const dynamic = 'force-dynamic';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Load i18n messages for default locale (en) – non-locale routes use 'as-needed' prefix policy.
+  // Prevent runtime crash if navigation helpers expect context.
+  let messages: any = {};
+  try { messages = await getMessages(); } catch { messages = {}; }
   // Minimal server-side boot diagnostics to help identify production-only crashes
   // Logged once per render in server logs; safe to keep in production.
   try {
@@ -86,8 +92,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         {/* Top-level safety net to prevent full-app crash and show a minimal fallback instead of global error page */}
-        <SafeBoundary fallback={<div className="min-h-screen flex items-center justify-center text-white/70 text-sm">Temporary issue loading the application. Please refresh.</div>}>
-          <AuthProvider>
+        <NextIntlClientProvider messages={messages} locale="en">
+          <SafeBoundary fallback={<div className="min-h-screen flex items-center justify-center text-white/70 text-sm">Temporary issue loading the application. Please refresh.</div>}>
+            <AuthProvider>
             <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
               <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
                 <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
@@ -100,8 +107,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <SafeBoundary>
               <CookieConsent />
             </SafeBoundary>
-          </AuthProvider>
-        </SafeBoundary>
+            </AuthProvider>
+          </SafeBoundary>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

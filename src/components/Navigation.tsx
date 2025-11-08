@@ -1,7 +1,7 @@
-    'use client';
+"use client";
 
-  import React, { startTransition, useEffect, useState } from 'react';
-  import { Link, usePathname } from '@/i18n/routing';
+import React, { startTransition, useEffect, useState } from 'react';
+import { Link, usePathname } from '@/i18n/routing';
   import { useAuth } from '@/hooks/useAuth';
   import Logo from './Logo';
   import type { ReactNode } from 'react';

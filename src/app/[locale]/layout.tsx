@@ -1,16 +1,29 @@
-// Temporary diagnostic layout: remove i18n provider to isolate runtime crash.
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
+import React from 'react';
+
 export default async function LocaleLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
+  params: { locale: string };
 }) {
   try {
-    const resolved = await params;
-    console.log('[LocaleLayout/FALLBACK] locale param:', resolved?.locale);
+    const locale = (params as any)?.locale;
+    if (!locale || !['en','it'].includes(locale)) {
+      console.warn('[LocaleLayout] Invalid or missing locale param -> rendering children without provider');
+      return <>{children}</>;
+    }
+    // Force messages load for this locale
+    const messages = await getMessages({ locale });
+    return (
+      <NextIntlClientProvider messages={messages} locale={locale} timeZone="UTC">
+        {children}
+      </NextIntlClientProvider>
+    );
   } catch (e) {
-    console.warn('[LocaleLayout/FALLBACK] failed to read params', e);
+    console.error('[LocaleLayout] i18n load failed, rendering without provider', e);
+    return <>{children}</>;
   }
-  return <>{children}</>;
 }

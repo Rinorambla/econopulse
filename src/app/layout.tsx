@@ -2,8 +2,9 @@ import './globals.css';
 import React from 'react';
 import type { Metadata } from 'next';
 import { Navigation } from '@/components/Navigation';
-import { AuthProvider } from '@/hooks/useAuth';
-import CookieConsent from '@/components/CookieConsent';
+// TEMP: disable AuthProvider & CookieConsent to isolate crash source
+// import { AuthProvider } from '@/hooks/useAuth';
+// import CookieConsent from '@/components/CookieConsent';
 import SafeBoundary from '@/components/SafeBoundary';
 
 export const metadata: Metadata = {
@@ -87,7 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         {/* Top-level safety net to prevent full-app crash and show a minimal fallback instead of global error page */}
         <SafeBoundary fallback={<div className="min-h-screen flex items-center justify-center text-white/70 text-sm">Temporary issue loading the application. Please refresh.</div>}>
-          <AuthProvider>
+          {/* AuthProvider temporarily removed for crash isolation */}
             <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
               <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
                 <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
@@ -96,11 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </header>
             <main>{children}</main>
-            {/* Site-wide cookie consent banner */}
-            <SafeBoundary>
-              <CookieConsent />
-            </SafeBoundary>
-          </AuthProvider>
+          {/* CookieConsent temporarily removed for crash isolation */}
         </SafeBoundary>
       </body>
     </html>

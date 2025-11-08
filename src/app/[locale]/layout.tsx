@@ -1,29 +1,41 @@
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
 import React from 'react';
+import { notFound } from 'next/navigation';
 
-export default async function LocaleLayout({
-  children,
-  params,
-}: {
+// Explicit static params generation (helps Next identify valid locales & avoid unexpected runtime errors)
+export function generateStaticParams() {
+  return [{ locale: 'en' }, { locale: 'it' }];
+}
+
+type LayoutProps = {
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
-}) {
+};
+
+export default async function LocaleLayout({ children, params }: LayoutProps) {
   try {
-    const resolved = await params;
-    const locale = resolved?.locale;
+    const { locale } = await params;
     if (!locale || !['en', 'it'].includes(locale)) {
-      console.warn('[LocaleLayout] Invalid or missing locale param -> rendering children without provider');
-      return <>{children}</>;
+      console.warn('[LocaleLayout] Invalid locale -> notFound()');
+      notFound();
     }
-    const messages = await getMessages();
+
+    let messages: any;
+    try {
+      // Load JSON messages explicitly rather than relying on next-intl auto loader (reduces ambiguity)
+      messages = (await import(`../../../messages/${locale}.json`)).default;
+    } catch (e) {
+      console.error(`[LocaleLayout] Missing messages for locale "${locale}"`, e);
+      notFound();
+    }
+
     return (
-      <NextIntlClientProvider messages={messages} locale={locale} timeZone="UTC">
+      <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
         {children}
       </NextIntlClientProvider>
     );
   } catch (e) {
-    console.error('[LocaleLayout] i18n load failed, rendering without provider', e);
+    console.error('[LocaleLayout] Fatal i18n initialization error; rendering children without provider', e);
     return <>{children}</>;
   }
 }

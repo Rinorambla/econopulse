@@ -1,16 +1,10 @@
-// Ultra-minimal diagnostic home page to isolate production crash.
-// Removed all client components to test pure server rendering path.
 export const dynamic = 'force-dynamic';
 
 import SafeBoundary from '@/components/SafeBoundary';
 import AIBackground from '@/components/AIBackground';
-import AIPromptBar from '@/components/AIPromptBar';
 import FearGreedIndex from '@/components/FearGreedIndex';
-import MarketMovers from '@/components/MarketMovers';
-import AISignalsWidget from '@/components/AISignalsWidget';
 import Footer from '@/components/Footer';
 
-// Phase 1 restore: add only AIBackground (under SafeBoundary) to confirm stability.
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] relative">
@@ -18,47 +12,41 @@ export default function HomePage() {
         <AIBackground intensity="subtle" />
       </SafeBoundary>
 
-      {/* Hero + Prompt */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 pt-10 pb-6 sm:pt-16 sm:pb-10">
+      {/* Hero (English-only) */}
+      <section className="relative z-10 max-w-7xl mx-auto px-4 pt-10 pb-10 sm:pt-16 sm:pb-14">
         <div className="text-center">
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">EconoPulse</h1>
-          <p className="mt-3 text-sm sm:text-base text-white/70 max-w-2xl mx-auto">
-            Real-time market insights and AI portfolio tools. Ask the AI or jump to analytics.
+          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-white via-blue-200 to-white bg-clip-text text-transparent">
+            AI market intelligence you can feel
+          </h1>
+          <p className="mt-5 text-base sm:text-lg md:text-xl text-white/80 max-w-3xl mx-auto leading-relaxed">
+            EconoPulse distills the mood of the market into a single, intuitive signal. Explore the
+            Fear & Greed Index below and sense when momentum turns—without noise, hype, or clutter.
           </p>
-          <SafeBoundary fallback={<div className="mt-4 text-white/60 text-sm">Prompt unavailable</div>}> 
-            <div className="max-w-2xl mx-auto">
-              <AIPromptBar />
-            </div>
-          </SafeBoundary>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <a href="/dashboard" className="group relative bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-5 py-3 rounded-xl text-sm sm:text-base font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-blue-700/30 hover:scale-[1.02] active:scale-95">
+              <span className="relative z-10">Open the Dashboard</span>
+              <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </a>
+            <a href="/pricing" className="text-white/80 hover:text-white px-4 py-3 rounded-xl text-sm sm:text-base font-semibold border border-white/15 hover:border-white/30 transition-colors">
+              Pricing
+            </a>
+          </div>
         </div>
       </section>
 
-      {/* Widgets Row */}
-      <section className="relative z-10 max-w-6xl mx-auto px-4 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <SafeBoundary fallback={<div className="h-64 rounded-lg border border-white/10" />}> 
-            <div className="col-span-1 lg:col-span-1 rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
-              <div className="p-3 border-b border-white/10 text-xs text-white/70">Fear & Greed</div>
-              <div className="h-64">
-                <FearGreedIndex />
-              </div>
+      {/* Fear & Greed only */}
+      <section className="relative z-10 max-w-6xl mx-auto px-4 pb-14">
+        <SafeBoundary fallback={<div className="h-72 rounded-xl border border-white/10 bg-slate-900/40" />}> 
+          <div className="rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden backdrop-blur-sm">
+            <div className="px-4 sm:px-6 py-4 border-b border-white/10 flex items-center justify-between">
+              <div className="text-sm sm:text-base font-semibold text-white/80">Fear & Greed Index</div>
+              <span className="text-xs text-white/50">updated in real time</span>
             </div>
-          </SafeBoundary>
-          <SafeBoundary fallback={<div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64 text-white/60">Movers unavailable</div>}> 
-            <div className="rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
-              <div className="p-3 border-b border-white/10 text-xs text-white/70">Market Movers</div>
-              <MarketMovers />
+            <div className="h-[320px] sm:h-[380px]">
+              <FearGreedIndex />
             </div>
-          </SafeBoundary>
-          <SafeBoundary fallback={<div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 min-h-64 text-white/60">AI Signals unavailable</div>}>
-            <div className="rounded-xl border border-white/10 bg-slate-900/50 overflow-hidden">
-              <div className="p-3 border-b border-white/10 text-xs text-white/70">AI Signals</div>
-              <div className="min-h-64">
-                <AISignalsWidget />
-              </div>
-            </div>
-          </SafeBoundary>
-        </div>
+          </div>
+        </SafeBoundary>
       </section>
 
       {/* Footer */}

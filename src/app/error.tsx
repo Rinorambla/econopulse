@@ -52,12 +52,8 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
           <div className="mb-8">
             <ExclamationTriangleIcon className="mx-auto h-24 w-24 text-red-500 mb-4" />
             <h1 className="text-4xl font-bold text-white mb-2">Oops!</h1>
-            <h2 className="text-xl font-semibold text-gray-300 mb-4">
-              Something went wrong
-            </h2>
-            <p className="text-gray-400 mb-8">
-              We encountered an unexpected error. Please try again or contact support if the problem persists.
-            </p>
+            <h2 className="text-xl font-semibold text-gray-300 mb-4">Something went wrong</h2>
+            <p className="text-gray-400 mb-8">We encountered an unexpected error. Please try again or contact support if the problem persists.</p>
           </div>
 
           {process.env.NODE_ENV === 'development' && (

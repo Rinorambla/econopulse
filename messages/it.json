@@ -311,5 +311,25 @@
       "company": "Azienda",
       "support": "Supporto"
     }
+  },
+  "error_page": {
+    "title_short": "Ops!",
+    "title_full": "Qualcosa è andato storto",
+    "description": "Si è verificato un errore imprevisto. Riprova oppure contatta il supporto se il problema persiste.",
+    "try_again": "Riprova",
+    "back_home": "Torna alla Home",
+    "need_help": "Hai bisogno di aiuto?",
+    "contact_support": "Contatta il Supporto"
+  },
+  "not_found": {
+    "code": "404",
+    "title": "Pagina Non Trovata",
+    "description": "Spiacenti, non abbiamo trovato la pagina richiesta. Potrebbe essere stata spostata, eliminata oppure l'URL è errato.",
+    "back_home": "Torna alla Home",
+    "dashboard": "Dashboard",
+    "pricing": "Prezzi",
+    "popular_pages": "Pagine popolari:",
+    "ai_portfolio": "AI Portfolio",
+    "ai_pulse": "AI Pulse"
   }
 }

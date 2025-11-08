@@ -288,6 +288,11 @@
 			"type": "shell",
 			"command": "git add vercel.json; git commit -m \"chore(routing): redirect /options-screener -> /options\"; git push",
 			"group": "build"
+		},
+		{
+			"label": "Deploy: commit and push fixes for prod crash",
+			"type": "shell",
+			"command": "git add src/app/options/page.tsx src/app/_locale_backup/ai-pulse/page.tsx src/app/layout.tsx; git commit -m \"fix(runtime): avoid client redirect crash (/options) + correct AI Pulse page signature + add boot diagnostics\"; git push"
 		}
 	]
 }

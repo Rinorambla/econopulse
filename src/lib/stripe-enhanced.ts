@@ -4,14 +4,24 @@
 import Stripe from 'stripe';
 import { env } from './env';
 
-if (!env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is required');
+// Lazily create Stripe client only if key is present to avoid crashing the whole app on pages
+// that do not use Stripe functionality. API routes will still throw a clear error when invoked.
+let stripe: Stripe | null = null;
+if (env.STRIPE_SECRET_KEY) {
+  try {
+    // Use account default API version to avoid type/version mismatches during build
+    stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+      typescript: true,
+    });
+  } catch (e) {
+    console.warn('Stripe initialization failed:', e);
+    stripe = null;
+  }
+} else {
+  if (typeof console !== 'undefined') {
+    console.warn('Stripe disabled: STRIPE_SECRET_KEY missing');
+  }
 }
-
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-06-30.basil',
-  typescript: true,
-});
 
 // Product IDs in Stripe - Set these up in your Stripe Dashboard
 export const STRIPE_PRODUCTS = {
@@ -39,7 +49,8 @@ export class StripeSubscriptionManager {
     const { userId, email, name, metadata = {} } = params;
     
     // Check if customer already exists
-    const existingCustomers = await stripe.customers.list({
+  if (!stripe) throw new Error('Stripe not configured');
+  const existingCustomers = await stripe.customers.list({
       email: email,
       limit: 1,
     });
@@ -110,7 +121,8 @@ export class StripeSubscriptionManager {
       subscriptionParams.automatic_tax = { enabled: true };
     }
     
-    return await stripe.subscriptions.create(subscriptionParams);
+  if (!stripe) throw new Error('Stripe not configured');
+  return await stripe.subscriptions.create(subscriptionParams);
   }
   
   /**
@@ -125,7 +137,8 @@ export class StripeSubscriptionManager {
     const { subscriptionId, newTier, newBillingCycle, prorate = true } = params;
     
     // Get current subscription
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  if (!stripe) throw new Error('Stripe not configured');
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const currentBillingCycle = newBillingCycle || 
       (subscription.metadata?.billingCycle as BillingCycle) || 'monthly';
     
@@ -156,7 +169,8 @@ export class StripeSubscriptionManager {
   }): Promise<Stripe.Subscription> {
     const { subscriptionId, immediately = false, reason } = params;
     
-    if (immediately) {
+  if (!stripe) throw new Error('Stripe not configured');
+  if (immediately) {
       return await stripe.subscriptions.cancel(subscriptionId, {
         cancellation_details: reason ? { comment: reason } : undefined,
       });
@@ -194,7 +208,8 @@ export class StripeSubscriptionManager {
     
     const priceId = STRIPE_PRODUCTS[tier][billingCycle];
     
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+  if (!stripe) throw new Error('Stripe not configured');
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       payment_method_types: ['card'],
       mode: 'subscription',
@@ -232,7 +247,7 @@ export class StripeSubscriptionManager {
       };
     }
     
-    return await stripe.checkout.sessions.create(sessionParams);
+  return await stripe.checkout.sessions.create(sessionParams);
   }
   
   /**
@@ -244,7 +259,8 @@ export class StripeSubscriptionManager {
   }): Promise<Stripe.BillingPortal.Session> {
     const { customerId, returnUrl } = params;
     
-    return await stripe.billingPortal.sessions.create({
+  if (!stripe) throw new Error('Stripe not configured');
+  return await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
     });
@@ -257,7 +273,8 @@ export class StripeSubscriptionManager {
     subscription: Stripe.Subscription;
     upcomingInvoice: Stripe.Invoice | null;
   }> {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+  if (!stripe) throw new Error('Stripe not configured');
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ['customer', 'latest_invoice', 'latest_invoice.payment_intent'],
     });
     
@@ -274,7 +291,8 @@ export class StripeSubscriptionManager {
    * Get customer payment methods
    */
   static async getPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
-    const paymentMethods = await stripe.paymentMethods.list({
+  if (!stripe) throw new Error('Stripe not configured');
+  const paymentMethods = await stripe.paymentMethods.list({
       customer: customerId,
       type: 'card',
     });
@@ -292,7 +310,8 @@ export class StripeSubscriptionManager {
   }): Promise<Stripe.Event> {
     const { body, signature, endpointSecret } = params;
     
-    return stripe.webhooks.constructEvent(body, signature, endpointSecret);
+  if (!stripe) throw new Error('Stripe not configured');
+  return stripe.webhooks.constructEvent(body, signature, endpointSecret);
   }
   
   /**
@@ -311,7 +330,8 @@ export class StripeSubscriptionManager {
     const { startDate, endDate } = params;
     
     // Get charges in date range
-    const charges = await stripe.charges.list({
+  if (!stripe) throw new Error('Stripe not configured');
+  const charges = await stripe.charges.list({
       created: {
         gte: Math.floor(startDate.getTime() / 1000),
         lte: Math.floor(endDate.getTime() / 1000),

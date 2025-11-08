@@ -64,26 +64,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               name: 'EconoPulse',
               url: 'https://econopulse.ai',
               logo: 'https://econopulse.ai/icons/icon-512x512.png',
-              sameAs: [
-                // Add social profiles when available
-              ],
+              sameAs: [],
             }),
           }}
         />
-        <AuthProvider>
-          <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
-              <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
-                <Navigation />
-              </SafeBoundary>
-            </div>
-          </header>
-          <main>{children}</main>
-          {/* Site-wide cookie consent banner */}
-          <SafeBoundary>
-            <CookieConsent />
-          </SafeBoundary>
-        </AuthProvider>
+        {/* Top-level safety net to prevent full-app crash and show a minimal fallback instead of global error page */}
+        <SafeBoundary fallback={<div className="min-h-screen flex items-center justify-center text-white/70 text-sm">Temporary issue loading the application. Please refresh.</div>}>
+          <AuthProvider>
+            <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
+              <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
+                <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
+                  <Navigation />
+                </SafeBoundary>
+              </div>
+            </header>
+            <main>{children}</main>
+            {/* Site-wide cookie consent banner */}
+            <SafeBoundary>
+              <CookieConsent />
+            </SafeBoundary>
+          </AuthProvider>
+        </SafeBoundary>
       </body>
     </html>
   );

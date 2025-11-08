@@ -7,16 +7,16 @@ export default async function LocaleLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
   try {
-    const locale = (params as any)?.locale;
-    if (!locale || !['en','it'].includes(locale)) {
+    const resolved = await params;
+    const locale = resolved?.locale;
+    if (!locale || !['en', 'it'].includes(locale)) {
       console.warn('[LocaleLayout] Invalid or missing locale param -> rendering children without provider');
       return <>{children}</>;
     }
-    // Force messages load for this locale
-    const messages = await getMessages({ locale });
+    const messages = await getMessages();
     return (
       <NextIntlClientProvider messages={messages} locale={locale} timeZone="UTC">
         {children}

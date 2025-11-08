@@ -2,7 +2,7 @@
 // Health check endpoint for monitoring and deployment verification
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_ENABLED } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -14,14 +14,17 @@ export async function GET(request: NextRequest) {
     
     try {
       const dbStart = Date.now();
-      const { data, error } = await supabase
-        .from('users')
-        .select('count')
-        .limit(1)
-        .single();
-      
-      dbLatency = Date.now() - dbStart;
-      dbStatus = error ? 'error' : 'healthy';
+      if (SUPABASE_ENABLED) {
+        const { error } = await supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .limit(1);
+        dbLatency = Date.now() - dbStart;
+        dbStatus = error ? 'error' : 'healthy';
+      } else {
+        dbLatency = Date.now() - dbStart;
+        dbStatus = 'disabled';
+      }
     } catch (error) {
       dbStatus = 'error';
     }
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
     // System information
     const systemInfo = {
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
+  uptime: typeof process !== 'undefined' && process.uptime ? process.uptime() : 0,
       environment: process.env.NODE_ENV || 'development',
       version: process.env.npm_package_version || '1.0.0',
       region: process.env.VERCEL_REGION || 'unknown',

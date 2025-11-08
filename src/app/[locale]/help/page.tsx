@@ -1,7 +1,9 @@
 import { redirect } from '@/i18n/routing';
 
-// Server component: redirect locale-scoped /[locale]/help to canonical /help.
-// Avoid client-side redirect() which triggers runtime exceptions in production.
-export default function HelpRedirect({ params }: { params: { locale?: string } }) {
-  redirect({ href: '/help', locale: params?.locale || 'en' });
+export const dynamic = 'force-dynamic';
+
+// Server redirect for locale-scoped help. Loosen param typing to satisfy current Next.js PageProps inference.
+export default function HelpRedirect({ params }: any) {
+  const locale = params?.locale || 'en';
+  redirect({ href: '/help', locale });
 }

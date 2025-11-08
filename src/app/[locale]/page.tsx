@@ -1,4 +1,5 @@
 "use client";
+import React from 'react';
 import SafeBoundary from '@/components/SafeBoundary';
 import AIBackground from '@/components/AIBackground';
 import AIPromptBar from '@/components/AIPromptBar';
@@ -8,6 +9,11 @@ import AISignalsWidget from '@/components/AISignalsWidget';
 import Footer from '@/components/Footer';
 
 export default function HomePage() {
+  // Diagnostic: log if this page component renders successfully
+  React.useEffect(() => {
+    console.log('[HomePage] Rendered successfully at', new Date().toISOString());
+  }, []);
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] relative">
       <SafeBoundary fallback={<div className="absolute inset-0" />}> 

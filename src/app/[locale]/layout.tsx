@@ -8,8 +8,15 @@ export default async function LocaleLayout({
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
 }) {
-  // Ensure locale is read so Next sets the segment param
-  await params;
-  const messages = await getMessages();
-  return <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>;
+  try {
+    // Ensure locale is read so Next sets the segment param
+    const resolvedParams = await params;
+    console.log('[LocaleLayout] Resolved locale:', resolvedParams.locale);
+    const messages = await getMessages();
+    return <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>;
+  } catch (error) {
+    console.error('[LocaleLayout] Error loading locale layout:', error);
+    // Fallback: render children without i18n provider to avoid full crash
+    return <>{children}</>;
+  }
 }

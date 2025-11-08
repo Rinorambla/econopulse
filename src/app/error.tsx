@@ -13,6 +13,21 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
   if (typeof window !== 'undefined') {
     try {
       console.error('Global Error Boundary:', { message: error?.message, digest: error?.digest, at: new Date().toISOString() });
+      // Fire and forget send to diagnostics endpoint (production only)
+      if (process.env.NODE_ENV === 'production') {
+        fetch('/api/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            scope: 'global-error-page',
+            message: error?.message?.slice(0,400) || 'n/a',
+            digest: error?.digest,
+            url: window.location.href,
+            ts: Date.now()
+          })
+        }).catch(()=>{});
+      }
     } catch {}
   }
 

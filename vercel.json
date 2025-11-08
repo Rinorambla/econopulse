@@ -43,11 +43,7 @@
       "destination": "/:path",
       "permanent": false
     },
-    {
-      "source": "/options-screener",
-      "destination": "/options",
-      "permanent": false
-    },
+    
     {
       "source": "/dashboard/billing",
       "destination": "/dashboard/account",

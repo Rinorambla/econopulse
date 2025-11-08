@@ -1,5 +1,12 @@
 "use client";
 
+import { redirect } from '@/i18n/routing';
+
+export default function OptionsRemovedRedirect() {
+  redirect('/');
+}
+"use client";
+
 import dynamic from 'next/dynamic';
 
 const OptionsScreener = dynamic(() => import('@/components/OptionsScreener'), { ssr: false });

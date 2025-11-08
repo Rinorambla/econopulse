@@ -14,20 +14,16 @@ export function hasAccess(userTier: PlanTier | string | null | undefined, requir
 }
 
 export function normalizePlan(raw: string | null | undefined): PlanTier {
-  if (!raw) return 'free'; // Default to free when no subscription
-  const v = raw.toLowerCase();
-  
-  // Debug logging for Vercel
-  console.log('🔍 normalizePlan input:', raw, 'lowercase:', v);
-  
-  if (v.startsWith('prem') || v.includes('premium')) return 'premium';
-  if (v === 'trial') {
-    console.log('✅ Trial detected - granting premium access');
-    return 'premium'; // Trial users get premium access during 14 days
+  try {
+    if (!raw) return 'free';
+    const v = raw.toLowerCase();
+    if (v.startsWith('prem') || v.includes('premium')) return 'premium';
+    if (v === 'trial') return 'premium';
+    // Only allow 'free' explicitly; anything else is treated as free without logging spam
+    return 'free';
+  } catch {
+    return 'free';
   }
-  
-  console.log('⚠️ Unknown plan, defaulting to free:', v);
-  return 'free'; // Default fallback
 }
 
 export function nextUpgrade(from: PlanTier): PlanTier | null {

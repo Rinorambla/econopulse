@@ -1,14 +1,23 @@
 "use client";
 
 import React, {useState} from 'react';
-import { useRouter } from 'next/navigation';
+// Use i18n-aware router
+import { useRouter } from '@/i18n/routing';
+
+// Future enhancement: leverage a shared fetchSafe when wiring real AI query endpoint.
+// import { fetchSafe } from '@/lib/fetchSafe';
 
 export default function AIPromptBar({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState('Top momentum LargeCap Tech next week');
   const go = (query: string) => {
-    const qp = new URLSearchParams({ q: query });
-    router.push(`/ai-pulse?${qp.toString()}`);
+    try {
+      const qp = new URLSearchParams({ q: query });
+      // Router may throw if locale resolution changes mid-flight; guard to avoid boundary crash
+      router.push(`/ai-pulse?${qp.toString()}`);
+    } catch (_err) {
+      // Soft fail: ignore navigation error
+    }
   };
   return (
     <div className={compact ? 'mt-2' : 'mt-6'}>

@@ -15,12 +15,16 @@ export async function GET(_req: NextRequest) {
     // Check ability to access Stripe API (minimal call: list prices 1 item)
     let apiReachable = false;
     let priceSample: string | null = null;
-    try {
-      const prices = await stripe.prices.list({ limit: 1 });
-      apiReachable = true;
-      if (prices.data.length > 0) priceSample = prices.data[0].id;
-    } catch (e) {
-      // swallow; will report unreachable
+    if (stripe) {
+      try {
+        const prices = await stripe.prices.list({ limit: 1 });
+        apiReachable = true;
+        if (prices.data.length > 0) priceSample = prices.data[0].id;
+      } catch {
+        // unreachable or misconfigured
+      }
+    } else {
+      apiReachable = false;
     }
 
     return NextResponse.json({

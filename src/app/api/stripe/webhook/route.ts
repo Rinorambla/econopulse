@@ -82,10 +82,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log('Checkout session completed:', session.id);
 
     if (session.mode === 'subscription' && session.subscription) {
-      // Get subscription details
-      const subscription = await stripe.subscriptions.retrieve(
-        session.subscription as string,
-        { expand: ['customer'] }
+      // Get subscription details via manager (handles null stripe internally)
+      const { subscription } = await StripeSubscriptionManager.getSubscriptionDetails(
+        session.subscription as string
       );
 
       const customerId = typeof subscription.customer === 'string' 
@@ -269,8 +268,8 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
     const subscriptionId = (invoice as any).subscription;
 
     if (subscriptionId) {
-      // Get subscription details
-      const subscription = await stripe.subscriptions.retrieve(
+      // Get subscription details via manager (handles null stripe internally)
+      const { subscription } = await StripeSubscriptionManager.getSubscriptionDetails(
         typeof subscriptionId === 'string' ? subscriptionId : subscriptionId.id
       );
 

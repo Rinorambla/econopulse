@@ -179,3 +179,4 @@ const MarketParticles = () => {
 };
 
 export default MarketParticles;
+      return;

@@ -270,6 +270,24 @@
 			"command": "npm run build",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Deploy: commit and push options link + route",
+			"type": "shell",
+			"command": "git add src/components/Navigation.tsx src/app/options/page.tsx; git commit -m \"fix(nav+route): use i18n Link and add /options route to resolve 404\"; git push",
+			"group": "build"
+		},
+		{
+			"label": "Deploy: commit and push lint fix",
+			"type": "shell",
+			"command": "git add src/components/Navigation.tsx; git commit -m \"chore(nav): remove unused React import to fix linter warning\"; git push",
+			"group": "build"
+		},
+		{
+			"label": "Deploy: commit and push options redirect",
+			"type": "shell",
+			"command": "git add vercel.json; git commit -m \"chore(routing): redirect /options-screener -> /options\"; git push",
+			"group": "build"
 		}
 	]
 }

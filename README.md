@@ -6,10 +6,9 @@ EconoPulse is a modern, AI-powered financial analysis platform built with Next.j
 
 ### 📊 Real-Time Market Dashboard
 - Advanced heatmap visualization with ETF/stock performance
-- Options sentiment analysis and gamma risk assessment
-- Unusual options flow detection (ATM/OTM)
-- Put/Call ratio monitoring
-- Intraday flow analysis
+- Streamlined sentiment and momentum indicators (options flow module removed per rollback)
+- Simplified demand/supply heuristics
+- Intraday trend and volatility signals
 
 ### 🤖 AI Portfolio Builder
 - Dynamic portfolio generation powered by OpenAI GPT
@@ -267,8 +266,7 @@ EconoPulse is fully responsive and optimized for:
 The dashboard displays financial instruments in a trading desk style heatmap with:
 - Real-time price updates
 - Color-coded performance indicators
-- Options flow analysis
-- Market sentiment indicators
+- Market sentiment indicators (options-specific flow removed)
 
 ### AI Portfolio Generation
 Using OpenAI GPT-4, the platform generates portfolios based on:

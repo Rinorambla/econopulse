@@ -16,27 +16,26 @@ interface MarketDataItem {
   volume: string;
   trend: string;
   demandSupply: string;
-  optionsSentiment: string;
-  gammaRisk: string;
-  unusualAtm: string;
-  unusualOtm: string;
-  otmSkew: string;
+  flowSentiment: string; // formerly optionsSentiment
+  volRisk: string; // formerly gammaRisk
+  unusualNear: string; // formerly unusualAtm
+  unusualFar: string; // formerly unusualOtm
+  skew1M: string; // formerly otmSkew
   intradayFlow: string;
-  putCallRatio: string;
+  buySellRatio: string; // formerly putCallRatio
   sector: string;
   direction?: string;
   category?: string; // Core / Factor / Thematic / Commodity / International / Crypto / Forex / LargeCap
-  // Added AI signal enrichment (deterministic, no randomness)
   aiSignal?: {
-    momentum: number;          // 0-100 scaled intraday momentum score
-    relativeStrength: number;  // 0-100 percentile vs universe
+    momentum: number;
+    relativeStrength: number;
     volatility: 'Low'|'Normal'|'High'|'Extreme';
-    breakout: boolean;         // basic breakout condition
+    breakout: boolean;
     meanReversion: 'Overbought'|'Oversold'|'Neutral';
-    compositeScore: number;    // 0-100 composite
+    compositeScore: number;
     label: 'STRONG BUY'|'BUY'|'HOLD'|'SELL'|'STRONG SELL';
-    rationale: string;         // short explanation string
-    version: string;           // version tag for methodology tracking
+    rationale: string;
+    version: string;
   };
 }
 
@@ -292,13 +291,13 @@ async function handleDashboardRequest(params: DashboardParams) {
       volume: formatVolume(item.volume || 0),
       trend: getTrend(performanceStr),
       demandSupply: getDemandSupply(performanceStr),
-      optionsSentiment: getOptionsSentiment(performanceStr),
-      gammaRisk: getGammaRisk(performanceStr),
-      unusualAtm: getUnusualActivity(performanceStr, 'ATM'),
-      unusualOtm: getUnusualActivity(performanceStr, 'OTM'),
-      otmSkew: getOTMSkew(performanceStr),
-      intradayFlow: getIntradayFlow(performanceStr),
-      putCallRatio: getPutCallRatio(performanceStr),
+  flowSentiment: getFlowSentiment(performanceStr),
+  volRisk: getVolRisk(performanceStr),
+  unusualNear: getUnusualActivity(performanceStr, 'ATM'),
+  unusualFar: getUnusualActivity(performanceStr, 'OTM'),
+  skew1M: getSkew1M(performanceStr),
+  intradayFlow: getIntradayFlow(performanceStr),
+  buySellRatio: getBuySellRatio(performanceStr),
       sector: sector,
       direction: item.changePercent >= 0 ? 'up' : 'down',
       category: deriveCategory(item.symbol)
@@ -319,13 +318,13 @@ async function handleDashboardRequest(params: DashboardParams) {
         volume: formatVolume(c.volume || 0),
         trend: getTrend(perf),
         demandSupply: getDemandSupply(perf),
-        optionsSentiment: getOptionsSentiment(perf),
-        gammaRisk: getGammaRisk(perf),
-        unusualAtm: getUnusualActivity(perf, 'ATM'),
-        unusualOtm: getUnusualActivity(perf, 'OTM'),
-        otmSkew: getOTMSkew(perf),
-        intradayFlow: getIntradayFlow(perf),
-        putCallRatio: getPutCallRatio(perf),
+  flowSentiment: getFlowSentiment(perf),
+  volRisk: getVolRisk(perf),
+  unusualNear: getUnusualActivity(perf, 'ATM'),
+  unusualFar: getUnusualActivity(perf, 'OTM'),
+  skew1M: getSkew1M(perf),
+  intradayFlow: getIntradayFlow(perf),
+  buySellRatio: getBuySellRatio(perf),
         sector: 'Cryptocurrency',
         direction: c.changePercent >= 0 ? 'up' : 'down',
         category: 'Crypto'
@@ -347,13 +346,13 @@ async function handleDashboardRequest(params: DashboardParams) {
         volume: '—',
         trend: 'Down',
         demandSupply: 'Moderate Supply',
-        optionsSentiment: 'Neutral Flow',
-        gammaRisk: 'Low',
-        unusualAtm: 'Low',
-        unusualOtm: 'Low',
-        otmSkew: 'Neutral',
-        intradayFlow: 'Delta Neutral',
-        putCallRatio: '1.00',
+  flowSentiment: 'Neutral Flow',
+  volRisk: 'Low',
+  unusualNear: 'Low',
+  unusualFar: 'Low',
+  skew1M: 'Neutral',
+  intradayFlow: 'Delta Neutral',
+  buySellRatio: '1.00',
         sector: 'Forex',
         direction: 'up',
         category: 'Forex'
@@ -687,7 +686,7 @@ function getDemandSupply(performance: string): string {
   return 'Moderate Supply';
 }
 
-function getOptionsSentiment(performance: string): string {
+function getFlowSentiment(performance: string): string {
   const perf = parseFloat(performance);
   // Deterministic mapping – removes randomness
   if (perf > 2) return 'FOMO Buying';
@@ -699,7 +698,7 @@ function getOptionsSentiment(performance: string): string {
   return 'Neutral Flow';
 }
 
-function getGammaRisk(performance: string): string {
+function getVolRisk(performance: string): string {
   const perf = parseFloat(performance);
   const absPerf = Math.abs(perf);
   if (absPerf > 3) return 'High';
@@ -715,7 +714,7 @@ function getUnusualActivity(performance: string, type: 'ATM' | 'OTM'): string {
   return 'Low';
 }
 
-function getOTMSkew(performance: string): string {
+function getSkew1M(performance: string): string {
   const perf = parseFloat(performance);
   if (perf > 1) return 'Call Skew';
   if (perf < -1) return 'Put Skew';
@@ -733,7 +732,7 @@ function getIntradayFlow(performance: string): string {
   return 'Delta Neutral';
 }
 
-function getPutCallRatio(performance: string): string {
+function getBuySellRatio(performance: string): string {
   const perf = parseFloat(performance);
   // Deterministic mapping to eliminate randomness (approx proxy)
   let ratio: number;

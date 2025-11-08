@@ -21,7 +21,7 @@
     "subtitle": "Tutto ciò di cui hai bisogno per l'analisi finanziaria professionale",
     "dashboard": {
       "title": "Dashboard in Tempo Reale",
-      "description": "Visualizzazione avanzata con heatmap delle performance degli ETF, trend e analisi del sentiment delle opzioni"
+      "description": "Visualizzazione avanzata con heatmap performance ETF, trend e analisi del sentiment dei flussi"
     },
     "ai_portfolio": {
       "title": "Costruttore Portfolio AI",
@@ -66,7 +66,7 @@
         "Supporto prioritario",
         "Avvisi personalizzati",
         "Analisi del quadrante economico",
-        "Analisi del flusso opzioni"
+  "Analisi del sentiment dei flussi"
       ]
     },
     "corporate": {
@@ -81,7 +81,7 @@
         "Accesso API",
         "Integrazioni personalizzate",
         "Supporto dedicato",
-        "Opzioni white-label",
+  "Branding white-label",
         "Report personalizzati"
       ]
     }
@@ -95,13 +95,13 @@
       "performance": "Performance Giornaliera",
       "trend": "Trend",
       "demand_supply": "Domanda/Offerta",
-      "options_sentiment": "Sentiment Opzioni",
-      "gamma_risk": "Bias Rischio Gamma",
-      "unusual_atm": "Flussi Inusuali ATM",
-      "unusual_otm": "Flussi Inusuali OTM",
-      "otm_skew": "OTM Skew 1M",
+      "options_sentiment": "Sentiment Flussi",
+      "gamma_risk": "Bias Rischio Volatilità",
+      "unusual_atm": "Attività Inusuale Vicina",
+      "unusual_otm": "Attività Inusuale Lontana",
+      "otm_skew": "Skew 1M",
       "intraday_flow": "Flusso Intraday",
-      "put_call_ratio": "Rapporto Put/Call"
+      "put_call_ratio": "Rapporto Acquisti/Vendite"
     }
   },
   "ai_portfolio": {

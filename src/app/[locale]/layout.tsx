@@ -9,13 +9,12 @@ export function generateStaticParams() {
 
 type LayoutProps = {
   children: React.ReactNode;
-  // Next normally supplies a plain object; we keep Promise for backwards compatibility with prior diagnostic version.
-  params: Promise<{ locale: string }> | { locale: string };
+  // Match Next.js generated types which expect params as a Promise
+  params: Promise<{ locale: string }>;
 };
 
 export default async function LocaleLayout({ children, params }: LayoutProps) {
-  // Support either direct object or Promise (awaiting a non-promise is fine)
-  const { locale } = await params as Promise<{ locale: string }> | { locale: string };
+  const { locale } = await params;
 
   if (!locale || !['en', 'it'].includes(locale)) {
     console.warn('[LocaleLayout] Invalid locale -> notFound()');
@@ -38,17 +37,11 @@ export default async function LocaleLayout({ children, params }: LayoutProps) {
     notFound();
   }
 
-  // Lightweight production diagnostic marker to verify layout executed (will appear in page HTML comment).
-  const diagnosticComment = `LocaleLayout:loaded locale=${locale} ts=${Date.now()}`;
-
   try {
     return (
-      <>
-        {/* {diagnosticComment} */}
-        <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
-          {children}
-        </NextIntlClientProvider>
-      </>
+      <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
+        {children}
+      </NextIntlClientProvider>
     );
   } catch (e) {
     // Final fallback: render children without provider to avoid hard crash (should not normally happen)

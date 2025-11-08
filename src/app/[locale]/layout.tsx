@@ -1,6 +1,4 @@
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
-
+// Temporary diagnostic layout: remove i18n provider to isolate runtime crash.
 export default async function LocaleLayout({
   children,
   params,
@@ -9,14 +7,10 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   try {
-    // Ensure locale param is awaited if framework provides a promise-like
     const resolved = await params;
-    console.log('[LocaleLayout] Resolved locale:', resolved?.locale);
-    const messages = await getMessages();
-    return <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>;
-  } catch (error) {
-    console.error('[LocaleLayout] Error loading locale layout:', error);
-    // Fallback: render children without i18n provider to avoid full crash
-    return <>{children}</>;
+    console.log('[LocaleLayout/FALLBACK] locale param:', resolved?.locale);
+  } catch (e) {
+    console.warn('[LocaleLayout/FALLBACK] failed to read params', e);
   }
+  return <>{children}</>;
 }

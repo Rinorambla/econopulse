@@ -8,6 +8,19 @@
 
 import { gamma as bsGamma, callDelta, putDelta } from './blackScholes';
 
+// Simple in-memory cache to reduce upstream load and improve reliability
+type CacheEntry = { ts: number; data: OptionsMetrics | null }
+const CACHE = new Map<string, CacheEntry>()
+const TTL_MS = 2 * 60 * 1000 // 2 minutes
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 2, backoffMs = 300): Promise<T> {
+  let lastErr: any
+  for (let i=0; i<attempts; i++) {
+    try { return await fn() } catch (e) { lastErr = e; if (i+1<attempts) await new Promise(r=>setTimeout(r, backoffMs)) }
+  }
+  throw lastErr
+}
+
 export type OptionsMetrics = {
   symbol: string;
   asOf: string;
@@ -93,7 +106,12 @@ function classifyGEXMagnitude(gexAbs: number): 'Low'|'Medium'|'High'|'Extreme' {
 
 export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): Promise<OptionsMetrics | null> {
   try {
-    const chain = await fetchYahooOptions(symbol);
+    const cacheKey = `${symbol}:${expirationsToUse}`
+    const nowTs = Date.now()
+    const cached = CACHE.get(cacheKey)
+    if (cached && nowTs - cached.ts < TTL_MS) return cached.data
+
+    const chain = await withRetry(() => fetchYahooOptions(symbol))
     if (!chain) return null;
     const S = chain.quote?.regularMarketPrice || 0;
     if (!S || !isFinite(S)) return null;
@@ -169,7 +187,7 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     const atmVolumeShare = totVolume ? atmVolume / totVolume : null;
     const otmVolumeShare = totVolume ? otmVolume / totVolume : null;
 
-    return {
+    const result: OptionsMetrics = {
       symbol,
       asOf: new Date().toISOString(),
       underlyingPrice: S,
@@ -187,6 +205,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       atmVolumeShare,
       otmVolumeShare,
     };
+    CACHE.set(cacheKey, { ts: Date.now(), data: result })
+    return result
   } catch (e) {
     console.warn('Options metrics error for', symbol, e);
     return null;

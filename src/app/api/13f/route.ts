@@ -93,51 +93,88 @@ async function getInfoTableUrl(cik10: string, accession: string): Promise<string
   const indexUrl = `${base}/index.json`
   const idx: any = await fetchJson(indexUrl)
   const items: Array<{ name: string }> = idx?.directory?.item || []
-  // Select file containing xml and likely infotable
-  const xmlCandidates = items.filter(it => /\.xml$/i.test(it.name))
-  const preferred = xmlCandidates.find(it => /(info|table|form13f)/i.test(it.name)) || xmlCandidates[0]
-  if (!preferred) return null
-  return `${base}/${preferred.name}`
+  // Consider XML and TXT candidates (some filers provide infotable as .txt)
+  const cand = items.filter(it => /\.(xml|txt)$/i.test(it.name))
+  // Try to pick by filename first
+  const preferredNames = [
+    /info\s*table/i,
+    /form13f.*info/i,
+    /informationtable/i,
+  ]
+  for (const rx of preferredNames) {
+    const hit = cand.find(it => rx.test(it.name))
+    if (hit) return `${base}/${hit.name}`
+  }
+  // Fallback: probe first few candidates to find one containing <infoTable>
+  const probe = cand.slice(0, 6)
+  for (const it of probe) {
+    const url = `${base}/${it.name}`
+    const txt = await fetchText(url).catch(()=>null as any)
+    if (txt && /<\s*infoTable[\s>]/i.test(txt) || /<\s*informationTable[\s>]/i.test(txt)) return url
+  }
+  // Last resort: return first XML if exists
+  const xmlOnly = cand.find(it => /\.xml$/i.test(it.name))
+  return xmlOnly ? `${base}/${xmlOnly.name}` : null
 }
 
 // Lightweight XML parser tailored for 13F infoTable
 function parseInfoTableXml(xml: string): Holding[] {
-  // Remove namespaces to simplify tag matching
+  // Remove namespaces to simplify tag matching (works for both open and close tags)
   const noNs = xml.replace(/<\/?[a-zA-Z0-9_-]+:/g, m => m.replace(/^[^:]+:/, ''))
-  // Split by infoTable blocks
-  const blocks = noNs.split(/<infoTable[^>]*>/i).slice(1).map(b => b.split(/<\/infoTable>/i)[0])
-  const getTag = (src: string, tag: string) => {
+
+  // Robustly extract each <infoTable>...</infoTable> block
+  let blocks = noNs.match(/<infoTable[\s\S]*?<\/infoTable>/gi) || []
+  if (blocks.length === 0) {
+    blocks = noNs.match(/<infotable[\s\S]*?<\/infotable>/gi) || []
+  }
+  if (blocks.length === 0 && /<informationTable/i.test(noNs)) {
+    // Fallback: try to isolate rows by common fields if closing tags are inconsistent
+    const rowRx = /<nameOfIssuer[\s\S]*?<\/nameOfIssuer>[\s\S]*?<cusip[\s\S]*?<\/cusip>[\s\S]*?(?:<putCall[\s\S]*?<\/putCall>)?[\s\S]*?(?:<sshPrnamt[\s\S]*?<\/sshPrnamt>)[\s\S]*?(?:<value[\s\S]*?<\/value>)[\s\S]*?/gi
+    const m = noNs.match(rowRx)
+    if (m) blocks = m
+  }
+
+  const pickTag = (src: string, tag: string) => {
+    // Case-insensitive, tolerant of extraneous attributes
     const m = src.match(new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i'))
     return m ? m[1].trim() : undefined
   }
-  const getNum = (src: string, tag: string) => {
-    const v = getTag(src, tag)
-    const n = v ? Number(String(v).replace(/[,]/g, '')) : NaN
+  const pickNum = (src: string, tag: string) => {
+    const v = pickTag(src, tag)
+    if (!v) return undefined
+    const cleaned = v.replace(/[,\s]/g, '')
+    const n = Number(cleaned)
     return Number.isFinite(n) ? n : undefined
   }
-  const getVote = (src: string, tag: string) => {
-    const sect = getTag(src, 'votingAuthority') || ''
+  const pickVote = (src: string, tag: string) => {
+    const sect = pickTag(src, 'votingAuthority') || ''
     const m = sect.match(new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i'))
-    const n = m ? Number(String(m[1]).replace(/[,]/g, '')) : NaN
+    const raw = m ? String(m[1]) : ''
+    const n = Number(raw.replace(/[,\s]/g, ''))
     return Number.isFinite(n) ? n : undefined
   }
+
   const out: Holding[] = []
   for (const b of blocks) {
+    let value = pickNum(b, 'value')
+    let shares = pickNum(b, 'sshPrnamt')
     const h: Holding = {
-      nameOfIssuer: getTag(b, 'nameOfIssuer'),
-      titleOfClass: getTag(b, 'titleOfClass'),
-      cusip: getTag(b, 'cusip'),
-      value: getNum(b, 'value'),
-      sshPrnamt: getNum(b, 'sshPrnamt'),
-      sshPrnamtType: getTag(b, 'sshPrnamtType'),
-      putCall: getTag(b, 'putCall'),
-      investmentDiscretion: getTag(b, 'investmentDiscretion'),
+      nameOfIssuer: pickTag(b, 'nameOfIssuer'),
+      titleOfClass: pickTag(b, 'titleOfClass'),
+      cusip: pickTag(b, 'cusip'),
+      value,
+      sshPrnamt: shares,
+      sshPrnamtType: pickTag(b, 'sshPrnamtType'),
+      putCall: pickTag(b, 'putCall'),
+      investmentDiscretion: pickTag(b, 'investmentDiscretion'),
       votingAuthority: {
-        Sole: getVote(b, 'Sole'),
-        Shared: getVote(b, 'Shared'),
-        None: getVote(b, 'None'),
+        Sole: pickVote(b, 'Sole'),
+        Shared: pickVote(b, 'Shared'),
+        None: pickVote(b, 'None'),
       }
     }
+    // If CUSIP and issuer are both missing, likely not a real row; skip
+    if (!h.cusip && !h.nameOfIssuer) continue
     out.push(h)
   }
   return out

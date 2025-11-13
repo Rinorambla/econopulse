@@ -48,6 +48,17 @@ export default function EconoAIPage() {
   ]
 
   useEffect(() => {
+    // Preflight check: detect if OpenAI is configured in this environment
+    ;(async () => {
+      try {
+        const r = await fetch('/api/health', { cache: 'no-store' })
+        if (r.ok) {
+          const j = await r.json()
+          if (j?.services?.openai) setOnline(Boolean(j.services.openai.configured))
+        }
+      } catch {}
+    })()
+
     // Only cycle demo questions if user hasn't asked anything
     if (userQuestion || userAnswer) return
 

@@ -229,21 +229,27 @@ Keep prose crisp and professional.`
 
     // Handle specific OpenAI errors
     if (error?.status === 429) {
-      const res = NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again in a moment.' },
-        { status: 429 }
-      )
-      res.headers.set('Cache-Control', 'no-store')
-      return res
+      // Soften rate-limit responses to keep UI responsive
+      return NextResponse.json({
+        answer: 'We are receiving many requests right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
+        question: 'rate_limited',
+        usedContext: false,
+        fallback: true,
+        reason: 'rate_limited',
+        timestamp: new Date().toISOString(),
+      }, { status: 200 })
     }
 
     if (error?.status === 401 || error?.message?.includes('API key')) {
-      const res = NextResponse.json(
-        { error: 'API authentication failed. Please contact support.' },
-        { status: 500 }
-      )
-      res.headers.set('Cache-Control', 'no-store')
-      return res
+      // Return a soft fallback instead of 500 so the page never shows an error banner
+      return NextResponse.json({
+        answer: 'Authentication issue with AI provider. Meanwhile, here’s a structured framework: summarize current trend, watch support/resistance, and align with macro (rates, USD).',
+        question: 'auth_issue',
+        usedContext: false,
+        fallback: true,
+        reason: 'auth_error',
+        timestamp: new Date().toISOString(),
+      }, { status: 200 })
     }
 
     if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT' || error?.message === 'openai_timeout') {

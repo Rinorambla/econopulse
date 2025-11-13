@@ -27,6 +27,7 @@ export default function EconoAIPage() {
   const [isAsking, setIsAsking] = useState(false)
   const [error, setError] = useState('')
   const [online, setOnline] = useState(true)
+  const [openaiConfigured, setOpenaiConfigured] = useState(false)
 
   // Demo questions that cycle
   const demoQuestions = [
@@ -54,7 +55,9 @@ export default function EconoAIPage() {
         const r = await fetch('/api/health', { cache: 'no-store' })
         if (r.ok) {
           const j = await r.json()
-          if (j?.services?.openai) setOnline(Boolean(j.services.openai.configured))
+          const configured = Boolean(j?.services?.openai?.configured)
+          setOpenaiConfigured(configured)
+          if (j?.services?.openai) setOnline(configured)
         }
       } catch {}
     })()
@@ -147,12 +150,13 @@ export default function EconoAIPage() {
       // Accept both normal and fallback answers
       if (data?.answer) {
         setUserAnswer(data.answer)
-        // If backend returned a soft fallback, mark offline so header reflects limited mode
-        if (data?.fallback) setOnline(false); else setOnline(true)
+        // If backend returned a soft fallback, remain online when OpenAI is configured; else show limited mode
+        if (data?.fallback && !openaiConfigured) setOnline(false); else setOnline(true)
       } else if (!response.ok) {
         // Friendly fallback when server returns error without answer
         setUserAnswer('Temporary issue retrieving the AI response. Quick framework: assess earnings momentum, breadth, and macro (10Y yield, USD). Re-try for detailed guidance.')
-        setOnline(false)
+        // Keep UI online if OpenAI is configured; otherwise limited mode
+        setOnline(!openaiConfigured ? false : true)
       } else {
         throw new Error('No answer received from AI')
       }

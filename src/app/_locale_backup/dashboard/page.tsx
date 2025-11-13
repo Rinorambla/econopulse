@@ -480,7 +480,7 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
 																			<td className="px-2 py-1 text-gray-300">
 																				<span className="relative group inline-flex">
-																					{opt?.putCallRatioVol ?? item.putCallRatio}
+																					{opt ? (opt.putCallRatioVol ?? '—') : item.putCallRatio}
 																					{opt && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[

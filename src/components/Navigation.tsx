@@ -127,15 +127,15 @@ export function Navigation({ className }: NavigationProps) {
 
       {/* Right: Auth (desktop) */}
     {user ? (
-      <div className="hidden md:flex items-center gap-3 sm:gap-4 ml-auto shrink-0">
-            <div className="relative group max-w-[35vw] truncate">
-              <span className="text-sm font-medium text-white/80 truncate" title={user.user_metadata?.full_name || user.email}>
-                Welcome, <span className="font-semibold text-white truncate">{user.user_metadata?.full_name || user.email}</span>
+      <div className="hidden md:flex items-center gap-2 sm:gap-3 ml-auto shrink-0 pl-2">
+            <div className="relative group max-w-[20ch] lg:max-w-[25ch] truncate">
+              <span className="text-xs sm:text-sm font-medium text-white/80 truncate whitespace-nowrap" title={user.user_metadata?.full_name || user.email}>
+                Welcome, <span className="font-semibold text-white">{user.user_metadata?.full_name || user.email}</span>
               </span>
             </div>
             <button
               onClick={handleSignOut}
-              className="group relative bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:scale-105 active:scale-95"
+              className="group relative bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:scale-105 active:scale-95 whitespace-nowrap"
             >
               <span className="relative z-10">Sign Out</span>
               <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-rose-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>

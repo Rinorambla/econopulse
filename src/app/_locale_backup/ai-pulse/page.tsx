@@ -15,6 +15,7 @@ const ETFLineChartLazy = dynamic(() => import('@/components/charts/ETFLineChartL
 // Calendars
 const EconomicCalendar = dynamic(() => import('@/components/analytics/EconomicCalendar').then(m=>m.EconomicCalendar), { ssr:false })
 const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m=>m.EarningsCalendar), { ssr:false })
+const ThirteenFExplorer = dynamic(() => import('@/components/analytics/ThirteenFExplorer').then(m=>m.ThirteenFExplorer), { ssr:false })
 
 // Types
 interface SectorPerformance { sector:string; daily:number; weekly:number; monthly:number; quarterly:number; yearly:number; marketCap:number; volume:number; topStocks:string[] }
@@ -85,6 +86,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [sparkLoading, setSparkLoading] = useState(false);
   const [showCountryMatrix, setShowCountryMatrix] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+
+  // --- 13F: no client state needed; component does its own fetches ---
 
   // UX state
   const [loading, setLoading] = useState(true);
@@ -1003,6 +1006,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
         </div>
 
   {/* Data Sources & Integrity section removed per request */}
+
+          {/* 13F Institutional Holdings Explorer */}
+          <div className="mt-10">
+            <h2 className="text-2xl font-bold mb-3 flex items-center gap-3"><Briefcase className="w-7 h-7 text-amber-400" /> 13F Institutional Holdings (Professional)</h2>
+            <p className="text-sm text-gray-300 mb-4">Search a manager by CIK (or pick a preset) to view their latest Form 13F holdings. Export to CSV for deeper analysis.</p>
+            <ThirteenFExplorer />
+          </div>
 
         <Footer />
       </div>

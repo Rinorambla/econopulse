@@ -16,6 +16,7 @@ type APIMetrics = {
   optionsSentiment?: string;
   unusualAtm?: 'Low'|'Medium'|'High';
   unusualOtm?: 'Low'|'Medium'|'High';
+  unusualCombo?: string | null;
 };
 
 function classifyOptionsSentiment(pcVolRatio: number | null, totalVol: number, gex: number | null): string {
@@ -53,11 +54,20 @@ export async function GET(req: NextRequest) {
 
     const out: Record<string, APIMetrics> = {};
     for (const sym of symbols) {
-      const m = await getOptionsMetrics(sym, 2);
+      const m = await getOptionsMetrics(sym, 3);
       if (!m) { out[sym] = { symbol: sym }; continue; }
       const pcVol = m.putCallVolumeRatio;
       const pcOI = m.putCallOIRatio;
       const sentiment = classifyOptionsSentiment(pcVol, (m.totalCallVolume + m.totalPutVolume), m.gex);
+      // Build unusual combo once here (client no longer needs to reconstruct)
+      let unusualCombo: string | null = null;
+      const atmShare = m.atmVolumeShare;
+      const otmShare = m.otmVolumeShare;
+      if (atmShare != null || otmShare != null) {
+        const atmLevel = levelFromShare(atmShare);
+        const otmLevel = levelFromShare(otmShare);
+        unusualCombo = `${atmLevel} / ${otmLevel}`;
+      }
       out[sym] = {
         symbol: sym,
         putCallRatioVol: pcVol == null ? null : pcVol.toFixed(2),
@@ -67,7 +77,8 @@ export async function GET(req: NextRequest) {
         callSkew: m.callSkew,
         optionsSentiment: sentiment,
         unusualAtm: levelFromShare(m.atmVolumeShare),
-        unusualOtm: levelFromShare(m.otmVolumeShare)
+        unusualOtm: levelFromShare(m.otmVolumeShare),
+        unusualCombo
       };
     }
 

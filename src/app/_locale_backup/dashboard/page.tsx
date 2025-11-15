@@ -349,6 +349,15 @@ export default function DashboardPage() {
 		if (sortKey === key) setSortDir(d=> d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('desc'); }
 	};
 
+	const getPCRClass = (val: string | null | undefined) => {
+		if (!val) return 'text-gray-300';
+		const num = parseFloat(val);
+		if (!isFinite(num)) return 'text-gray-300';
+		if (num < 0.8) return 'text-emerald-400';
+		if (num > 1.3) return 'text-red-400';
+		return 'text-yellow-300';
+	};
+
 	// export CSV removed per request
 
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
@@ -490,9 +499,13 @@ export default function DashboardPage() {
 																				</span>
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
-																			<td className="px-2 py-1 text-gray-300">
-																				<span className="relative group inline-flex">
-																					{opt ? (opt.putCallRatioVol ?? '—') : item.putCallRatio}
+																			<td className="px-2 py-1">
+																				<span className="relative group inline-flex font-semibold tabular-nums">
+																					{(() => {
+																						if (!opt) return <span className="text-gray-300">{item.putCallRatio}</span>;
+																						const display = opt.putCallRatioVol ?? opt.putCallRatioOI;
+																						return <span className={getPCRClass(display)}>{display ?? '—'}</span>;
+																					})()}
 																					{opt && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[
@@ -504,11 +517,13 @@ export default function DashboardPage() {
 																				</span>
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">
-																				{opt?.unusualCombo || (
-																					opt
-																						? (opt.unusualAtm || opt.unusualOtm ? `${opt.unusualAtm || '—'} / ${opt.unusualOtm || '—'}` : '—')
-																						: (item.unusualAtm || item.unusualOtm ? `${item.unusualAtm || '—'} / ${item.unusualOtm || '—'}` : '—')
-																				)}
+																				{(() => {
+																					const combo = opt?.unusualCombo;
+																					if (combo) return combo;
+																					const a = opt?.unusualAtm || item.unusualAtm;
+																					const b = opt?.unusualOtm || item.unusualOtm;
+																					return (a || b) ? `${a || '—'} / ${b || '—'}` : '—';
+																				})()}
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualOtm || item.unusualOtm}</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.callSkew || item.otmSkew}</td>

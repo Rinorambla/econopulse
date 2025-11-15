@@ -22,6 +22,7 @@ interface MarketData {
 	gammaRisk: string;
 	unusualAtm: string;
 	unusualOtm: string;
+			unusualCombo?: string|null;
 	otmSkew: string;
 	intradayFlow: string;
 	putCallRatio: string;
@@ -115,6 +116,7 @@ export default function DashboardPage() {
 		optionsSentiment?: string;
 		unusualAtm?: 'Low'|'Medium'|'High';
 		unusualOtm?: 'Low'|'Medium'|'High';
+		unusualCombo?: string|null;
 	}>>({});
 	useEffect(() => {
 		if (chartsReady) return;
@@ -322,7 +324,16 @@ export default function DashboardPage() {
 					if (abort) return;
 					const out: Record<string, any> = {};
 					const m = js?.data || {};
-					Object.keys(m).forEach(k => { out[k] = m[k]; });
+					Object.keys(m).forEach(k => {
+						const v = m[k];
+						// Build combined unusual options indicator if both ATM/OTM present
+						let combo: string | null = null;
+						const atm = v?.unusualAtm; const otm = v?.unusualOtm;
+						if (atm || otm) {
+							combo = `${atm || '—'} / ${otm || '—'}`;
+						}
+						out[k] = { ...v, unusualCombo: combo };
+					});
 					setOptsByTicker(prev => ({ ...prev, ...out }));
 					// gentle pacing to avoid bursts
 					if (i + 20 < missing.length) await sleep(300);
@@ -423,6 +434,7 @@ export default function DashboardPage() {
 															{k:'optionsSentiment', l:'Opt Sent'},
 															{k:'gammaRisk', l:'Gamma'},
 															{k:'putCallRatio', l:'P/C'},
+															{k:'unusualCombo', l:'Unusual'},
 															{k:'unusualOtm', l:'OTM'},
 															{k:'otmSkew', l:'Skew'},
 															{k:'intradayFlow', l:'Intra'},
@@ -490,6 +502,13 @@ export default function DashboardPage() {
 																						</div>
 																					)}
 																				</span>
+																			</td>
+																			<td className="px-2 py-1 text-gray-300">
+																				{opt?.unusualCombo || (
+																					opt
+																						? (opt.unusualAtm || opt.unusualOtm ? `${opt.unusualAtm || '—'} / ${opt.unusualOtm || '—'}` : '—')
+																						: (item.unusualAtm || item.unusualOtm ? `${item.unusualAtm || '—'} / ${item.unusualOtm || '—'}` : '—')
+																				)}
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualOtm || item.unusualOtm}</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.callSkew || item.otmSkew}</td>

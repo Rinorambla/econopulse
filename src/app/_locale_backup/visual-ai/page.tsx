@@ -1719,7 +1719,7 @@ export default function VisualAIPage() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #059669', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1788,7 +1788,7 @@ export default function VisualAIPage() {
             <YAxis domain={[40, 60]} stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #dc2626', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1862,7 +1862,7 @@ export default function VisualAIPage() {
                     <XAxis dataKey="bank" stroke="#9ca3af" fontSize={11} angle={-30} textAnchor="end" height={60} />
                     <YAxis stroke="#9ca3af" fontSize={11} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #334155', borderRadius: '10px' }}
+                      contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #334155', borderRadius: '10px' }}
                       labelStyle={{ color: '#e5e7eb', fontWeight: 700 }}
                       formatter={(v:any, _n:any, p:any) => [ `${Number(v).toFixed(2)}%`, p?.payload?.bank ]}
                     />
@@ -1918,7 +1918,7 @@ export default function VisualAIPage() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #10b981', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1981,7 +1981,7 @@ export default function VisualAIPage() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #8b5cf6', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -2038,7 +2038,7 @@ export default function VisualAIPage() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #f59e0b', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -2713,7 +2713,7 @@ export default function VisualAIPage() {
                         <YAxis dataKey="dividendYield" stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #3b82f6', 
                             borderRadius: '16px',
                             boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -2832,7 +2832,7 @@ export default function VisualAIPage() {
                         <YAxis stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #059669', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
@@ -2900,7 +2900,7 @@ export default function VisualAIPage() {
                         <YAxis domain={[40, 60]} stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #dc2626', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
@@ -2966,7 +2966,7 @@ export default function VisualAIPage() {
                         <YAxis stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #f59e0b', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
@@ -3014,7 +3014,7 @@ export default function VisualAIPage() {
                         <YAxis stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #10b981', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
@@ -3052,7 +3052,7 @@ export default function VisualAIPage() {
                         <YAxis stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #8b5cf6', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
@@ -3093,7 +3093,7 @@ export default function VisualAIPage() {
                         <YAxis stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#0f172a', 
+                            backgroundColor: '#1e293b', 
                             border: '3px solid #22c55e', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',

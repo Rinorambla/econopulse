@@ -491,8 +491,8 @@ export default function DashboardPage() {
 																					{opt && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[
-																								`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
-																								`OI P/C: ${opt.putCallRatioOI ?? '—'}`
+																								`Vol P/C: ${opt.putCallRatioVol ?? '0.00'}`,
+																								`OI P/C: ${opt.putCallRatioOI ?? '0.00'}`
 																							]} />
 																						</div>
 																					)}
@@ -502,15 +502,15 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1">
 																				<span className="relative group inline-flex font-semibold tabular-nums">
 																					{(() => {
-																						if (!opt) return <span className="text-gray-300">{item.putCallRatio}</span>;
-																						const display = opt.putCallRatioVol ?? opt.putCallRatioOI;
-																						return <span className={getPCRClass(display)}>{display ?? '—'}</span>;
+																						if (!opt) return <span className="text-gray-300">{item.putCallRatio && item.putCallRatio !== '—' ? item.putCallRatio : '0.00'}</span>;
+																						const display = opt.putCallRatioVol || opt.putCallRatioOI || '0.00';
+																						return <span className={getPCRClass(display)}>{display}</span>;
 																					})()}
 																					{opt && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[
-																								`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
-																								`OI P/C: ${opt.putCallRatioOI ?? '—'}`
+																								`Vol P/C: ${opt.putCallRatioVol ?? '0.00'}`,
+																								`OI P/C: ${opt.putCallRatioOI ?? '0.00'}`
 																							]} />
 																						</div>
 																					)}

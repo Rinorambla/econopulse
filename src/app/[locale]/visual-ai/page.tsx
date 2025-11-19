@@ -1719,7 +1719,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #059669', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1788,7 +1788,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
             <YAxis domain={[40, 60]} stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #dc2626', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1862,7 +1862,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
                     <XAxis dataKey="bank" stroke="#9ca3af" fontSize={11} angle={-30} textAnchor="end" height={60} />
                     <YAxis stroke="#9ca3af" fontSize={11} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #334155', borderRadius: '10px' }}
+                      contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #334155', borderRadius: '10px' }}
                       labelStyle={{ color: '#e5e7eb', fontWeight: 700 }}
                       formatter={(v:any, _n:any, p:any) => [ `${Number(v).toFixed(2)}%`, p?.payload?.bank ]}
                     />
@@ -1918,7 +1918,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #10b981', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -1981,7 +1981,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #8b5cf6', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -2038,7 +2038,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#0f172a', 
+                backgroundColor: '#1e293b', 
                 border: '3px solid #f59e0b', 
                 borderRadius: '16px',
                 boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
@@ -2169,7 +2169,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
               <XAxis type="category" dataKey="label" stroke="#9ca3af" allowDuplicatedCategory={false} />
               <YAxis type="number" dataKey="y" stroke="#9ca3af" unit="%" domain={[0, 'auto']} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #374151', borderRadius: '12px' }}
+                contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #374151', borderRadius: '12px' }}
                 labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
                 formatter={(value, _name, props:any) => {
                   const p = props?.payload || {};
@@ -2315,7 +2315,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
                   <XAxis dataKey="rate" stroke="#9ca3af" fontSize={12} />
                   <YAxis stroke="#9ca3af" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #374151', borderRadius: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #374151', borderRadius: '12px' }}
                     labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
                     formatter={(value, name, props) => [ `${value}%`, `${props.payload.meeting}` ]}
                   />
@@ -2353,7 +2353,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
                   <XAxis dataKey="symbol" stroke="#9ca3af" fontSize={12} />
                   <YAxis stroke="#9ca3af" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #374151', borderRadius: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #374151', borderRadius: '12px' }}
                     labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
                     formatter={(value, name, props) => [ `${value}${name==='net'?'':' pts'}`, name==='net'?'Non-Comm Net': name==='z' ? 'Z-Score' : 'Weekly Δ' ]}
                   />
@@ -2399,7 +2399,7 @@ export default function VisualAIPage({ params }: { params: Promise<{ locale: str
                   <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
                   <YAxis stroke="#9ca3af" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', border: '2px solid #374151', borderRadius: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #374151', borderRadius: '12px' }}
                     labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
                     formatter={(v, n, p:any) => [`${v}`, p.payload.regime.toUpperCase()]} />
                   <Line type="monotone" dataKey="gpr" stroke="#fbbf24" strokeWidth={3} dot={false} />

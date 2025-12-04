@@ -197,6 +197,7 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     const needFallback = totalCallVolume===0 && totalPutVolume===0 && expiriesAll.length>1;
     // Fallback: if no volume collected, try second expiry index if available
     if (needFallback) {
+      console.warn('Options metrics: zero primary volume, triggering fallback scan', { symbol, expiriesTried: blocks.map(b=>b.expirationDate) });
       // Iterate through up to first 4 expiries until we find non-zero volume
       for (let ei = 1; ei < Math.min(expiriesAll.length, 10) && totalCallVolume===0 && totalPutVolume===0; ei++) {
         const tryExp = expiriesAll[ei];
@@ -236,6 +237,9 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
             }
           }
         }
+      }
+      if (totalCallVolume===0 && totalPutVolume===0) {
+        console.warn('Options metrics: still zero after fallback scan', { symbol, expiriesAllCount: expiriesAll.length });
       }
     }
 

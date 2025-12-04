@@ -149,6 +149,7 @@ export default function MarketDNAPage() {
   const correlationMatrix = data?.correlationMatrix || [];
 
   const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
+  const extremes = (data as any)?.extremes || null;
   const RISK_COLORS = {
     CRITICAL: '#dc2626',
     HIGH: '#ea580c', 
@@ -362,6 +363,36 @@ export default function MarketDNAPage() {
   return (
     <RequirePlan min="premium">
   <div className="min-h-screen bg-[var(--background)] text-white">
+        {/* Market Extremes: FLAME vs BOTTOM */}
+        <div className="max-w-7xl mx-auto px-4 pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-xl p-4 bg-red-950/30 ring-1 ring-red-500/20">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-rose-600 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">FL</span>
+                </div>
+                <div>
+                  <p className="text-white text-sm font-semibold">FLAME • Euforia</p>
+                  <p className="text-red-300 text-xs">SPHB/SPLV, XLY/XLP, IWD/IWF, HYG/IEF</p>
+                </div>
+              </div>
+              <div className="text-3xl font-extrabold text-red-300">{typeof extremes?.flame === 'number' ? extremes.flame.toFixed(2) : '—'}</div>
+              {extremes?.asOf && <div className="text-[10px] text-white/40 mt-1">{new Date(extremes.asOf).toLocaleString()}</div>}
+            </div>
+            <div className="rounded-xl p-4 bg-amber-950/30 ring-1 ring-amber-500/20">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
+                  <span className="text-slate-900 text-xs font-bold">BT</span>
+                </div>
+                <div>
+                  <p className="text-white text-sm font-semibold">BOTTOM • Panico</p>
+                  <p className="text-amber-300 text-xs">MOVE, SKEW + ratio tilt</p>
+                </div>
+              </div>
+              <div className="text-3xl font-extrabold text-amber-300">{typeof extremes?.bottom === 'number' ? extremes.bottom.toFixed(2) : '—'}</div>
+            </div>
+          </div>
+        </div>
         {/* Header */}
         <div className="bg-slate-800 border-b border-slate-700">
           <div className="max-w-7xl mx-auto px-4 py-3">

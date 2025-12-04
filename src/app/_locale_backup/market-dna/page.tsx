@@ -194,20 +194,29 @@ export default function MarketDNAPage() {
       setIsFetching(true);
       setRefreshing(true);
       
-      // Add cache busting to force fresh data
-  const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 12000);
+        // Add cache busting to force fresh data
+        const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 12000);
+        // Fetch market extremes indicator (FLAME vs BOTTOM)
+        const extremesRes = await fetchT(`/api/market-extremes?t=${Date.now()}`, 12000);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-  const result: MarketDNAData = await response.json();
-  const normalized = normalizeMarketDNA(result);
-  setData(normalized);
+      const result: MarketDNAData = await response.json();
+      const normalized = normalizeMarketDNA(result);
+      // Attach extremes scores for display blocks
+      try {
+        const exJson = extremesRes && extremesRes.ok ? await extremesRes.json() : null;
+        const flame = exJson?.data?.flameScore ?? null;
+        const bottom = exJson?.data?.bottomScore ?? null;
+        (normalized as any).extremes = { flame, bottom, asOf: exJson?.data?.asOf };
+      } catch {}
+      setData(normalized);
     } catch (error) {
       console.error('Error fetching Market DNA data:', error);
       // Fallback data for development
-      setData({
+      const fallback: MarketDNAData = {
         currentDNAScore: 87,
         dominantPattern: 'Pre-Crisis Formation',
         topHistoricalMatch: {
@@ -274,7 +283,10 @@ export default function MarketDNAPage() {
         ],
         aiInsight: 'The current market DNA shows 91% similarity to July 2007, just before the financial crisis. Key warning signals include the breakdown of traditional bond-equity negative correlation, rising credit spreads, and sector rotation patterns consistent with late-cycle behavior. The AI model suggests heightened caution, particularly in financial and real estate sectors.',
         lastUpdated: new Date().toISOString()
-      });
+      };
+      // Also set a minimal extremes fallback
+      (fallback as any).extremes = { flame: 0.5, bottom: 0.5, asOf: new Date().toISOString() };
+      setData(fallback);
     } finally {
       setLoading(false);
       setRefreshing(false);

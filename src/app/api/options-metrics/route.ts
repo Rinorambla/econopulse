@@ -68,10 +68,13 @@ export async function GET(req: NextRequest) {
         const otmLevel = levelFromShare(otmShare);
         unusualCombo = `${atmLevel} / ${otmLevel}`;
       }
+      // Coerce ratios to string with 2 decimals; if zero or null show 0.00 (ensures dashboard shows numeric values)
+      const pcVolStr = pcVol == null ? '0.00' : pcVol.toFixed(2);
+      const pcOIStr = pcOI == null ? '0.00' : pcOI.toFixed(2);
       out[sym] = {
         symbol: sym,
-        putCallRatioVol: pcVol == null ? null : pcVol.toFixed(2),
-        putCallRatioOI: pcOI == null ? null : pcOI.toFixed(2),
+        putCallRatioVol: pcVolStr,
+        putCallRatioOI: pcOIStr,
         gammaExposure: m.gex,
         gammaLabel: m.gexLabel,
         callSkew: m.callSkew,

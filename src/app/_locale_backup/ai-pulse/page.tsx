@@ -928,43 +928,60 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               )}
 
-              {/* Composite Risk Regime & Ratios (moved here) */}
+              {/* Simplified Risk & Recession Badges */}
               {(riskSummary || recessionIndex) && (
                 <div className="mt-6">
-                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-white font-semibold">Composite Risk Regime</h4>
-                      {riskSummary && (
-                        <span className={`px-2 py-1 rounded-full text-[11px] font-bold ${riskSummary.regime==='Risk-On'?'bg-emerald-900/30 text-emerald-300': riskSummary.regime==='Risk-Off'?'bg-red-900/30 text-red-300':'bg-slate-700/60 text-slate-200'}`}>
-                          {riskSummary.regime}
-                        </span>
-                      )}
-                    </div>
-                    {/* Only show Recession Index inside this panel */}
-                    {recessionIndex ? (
-                      <div className="flex items-start justify-between bg-slate-800/60 rounded-md p-3 border border-white/10">
-                        <div className="pr-3">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold text-slate-100">Recession Index (mspred)</div>
-                            {mspredRisk && (
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${mspredRisk.badge}`}>{mspredRisk.level} risk</span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400">TB3MS / BAMLH0A0HYM2 • lower = higher recession risk (HY stress); higher = lower risk</div>
-                        </div>
-                        <div className="text-right min-w-[90px]">
-                          <div className="font-bold text-slate-100">{recessionIndex.value.toFixed(3)}</div>
-                          <div className="text-[10px] text-slate-500">last {new Date(recessionIndex.date).toLocaleDateString()}</div>
-                          {mspredDelta && (
-                            <div className={`text-[10px] ${mspredDelta.diff>=0? 'text-emerald-300':'text-red-300'}`}>
-                              {mspredDelta.diff>=0? '+' : ''}{(mspredDelta.diff).toFixed(3)} vs 20M avg
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10 flex flex-col sm:flex-row items-stretch gap-4">
+                    {riskSummary ? (
+                      <div className="flex-1 flex items-center justify-center">
+                        {(() => {
+                          const base = 'w-32 h-32 rounded-full flex flex-col items-center justify-center border-4 font-bold tracking-tight relative shadow';
+                          const regime = riskSummary.regime;
+                          const score = riskSummary.score;
+                          const color = regime==='Risk-On' ? 'border-emerald-500 text-emerald-300 bg-emerald-950/30' : regime==='Risk-Off' ? 'border-red-500 text-red-300 bg-red-950/30' : 'border-slate-500 text-slate-200 bg-slate-900/40';
+                          return (
+                            <div className="text-center">
+                              <div className={`${base} ${color}`}> 
+                                <span className="text-xs uppercase font-semibold mb-1">Regime</span>
+                                <span className="text-xl">{score}</span>
+                                <span className="text-[11px] font-medium mt-1">{regime}</span>
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          );
+                        })()}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-400">Loading recession index…</p>
+                      <div className="flex-1 flex items-center justify-center"><div className="text-xs text-gray-400">Loading regime…</div></div>
                     )}
+                    {recessionIndex ? (
+                      <div className="flex-1 flex items-center justify-center">
+                        {(() => {
+                          const val = recessionIndex.value;
+                          const level = mspredRisk?.level || '—';
+                          const riskColor = mspredRisk?.badge || 'bg-slate-700/40 text-slate-200';
+                          const base = 'w-32 h-32 rounded-full flex flex-col items-center justify-center border-4 font-bold tracking-tight relative shadow';
+                          const dynamicBorder = level==='Low' ? 'border-emerald-500' : level==='Moderate' ? 'border-yellow-400' : level==='Elevated' ? 'border-orange-400' : level==='High' ? 'border-red-500' : 'border-slate-500';
+                          return (
+                            <div className="text-center">
+                              <div className={`${base} ${dynamicBorder} ${riskColor}`}> 
+                                <span className="text-xs uppercase font-semibold mb-1">Recession</span>
+                                <span className="text-xl">{val.toFixed(3)}</span>
+                                <span className="text-[11px] font-medium mt-1">{level} risk</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center"><div className="text-xs text-gray-400">Loading recession…</div></div>
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-gray-400">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Risk-On bias</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Risk-Off bias</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Moderate recession</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Elevated recession</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" /> Neutral state</span>
                   </div>
                 </div>
               )}

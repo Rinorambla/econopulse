@@ -28,6 +28,7 @@ export default function EconoAIPage() {
   const [error, setError] = useState('')
   const [online, setOnline] = useState(true)
   const [openaiConfigured, setOpenaiConfigured] = useState(false)
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
 
   // Demo questions that cycle
   const demoQuestions = [
@@ -83,6 +84,7 @@ export default function EconoAIPage() {
     setUserAnswer('')
     setTyping(true)
 
+    const start = performance.now()
     try {
       console.log('🚀 Sending question to EconoAI:', userQuestion)
       
@@ -161,6 +163,7 @@ export default function EconoAIPage() {
         throw new Error('No answer received from AI')
       }
       setTyping(false)
+      setLatencyMs(Math.round(performance.now() - start))
     } catch (err: any) {
       console.error('❌ EconoAI error:', err)
       // Show a soft inline answer instead of only an error banner
@@ -168,6 +171,7 @@ export default function EconoAIPage() {
       setError('')
       setTyping(false)
       setOnline(false)
+      setLatencyMs(Math.round(performance.now() - start))
     } finally {
       setIsAsking(false)
     }
@@ -262,7 +266,7 @@ export default function EconoAIPage() {
                     {online ? (
                       <p className="text-xs text-emerald-400 flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Online • Real-time data
+                        Online • Real-time data {latencyMs!=null && <span className="text-white/40 ml-1">({latencyMs}ms)</span>}
                       </p>
                     ) : (
                       <p className="text-xs text-amber-300 flex items-center gap-1">

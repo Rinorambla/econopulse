@@ -240,7 +240,7 @@ export default function WatchlistPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full text-sm min-w-[900px]">
+        <table className="w-full text-sm min-w-[760px]">
           <thead className="bg-white/5">
             <tr className="border-b border-white/10 text-[11px] text-gray-400 uppercase tracking-wide">
               <th className="text-left py-2 px-2">{header('symbol', 'Symbol')}</th>
@@ -248,18 +248,18 @@ export default function WatchlistPanel() {
               <th className="text-right py-2 px-2">{header('price', 'Price')}</th>
               <th className="text-right py-2 px-2">{header('changePercent', '%Chg')}</th>
               <th className="text-right py-2 px-2">{header('volume', 'Vol')}</th>
-              <th className="text-right py-2 px-2">Hold.</th>
-              <th className="text-right py-2 px-2">Div.Y</th>
-              <th className="text-right py-2 px-2">Fwd PE</th>
+              <th className="text-right py-2 px-2">Hold</th>
+              <th className="text-right py-2 px-2">Div%</th>
+              <th className="text-right py-2 px-2">FwdPE</th>
               <th className="text-right py-2 px-2">Earnings</th>
               <th className="py-2 px-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {loading ? (
-              <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={6}>Loading quotes…</td></tr>
+              <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={10}>Loading quotes…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={6}>Add symbols to start your watchlist.</td></tr>
+              <tr><td className="py-6 px-2 text-center text-gray-400" colSpan={10}>Add symbols to start your watchlist.</td></tr>
             ) : (
               filtered.map(row => (
                 <tr key={row.symbol}>
@@ -278,7 +278,8 @@ export default function WatchlistPanel() {
                   <td className="py-2 px-2 text-right text-gray-300">{Number.isFinite(row.volume) ? row.volume.toLocaleString() : '—'}</td>
                   {(() => {
                     const f = funds[row.symbol] || {} as FundRow
-                    const dy = typeof f.dividendYield === 'number' ? (f.dividendYield * (f.dividendYield > 1 ? 1 : 100)) : null // Yahoo sometimes returns decimal (0.015) or %; normalize best-effort
+                    const dyRaw = typeof f.dividendYield === 'number' ? f.dividendYield : null
+                    const dy = dyRaw != null ? (dyRaw > 1 ? dyRaw : dyRaw * 100) : null
                     const fpe = typeof f.forwardPE === 'number' ? f.forwardPE : null
                     const hold = typeof f.holdingsCount === 'number' ? f.holdingsCount : null
                     const ed = f.earningsDate ? new Date(f.earningsDate).toLocaleDateString() : null
@@ -294,6 +295,9 @@ export default function WatchlistPanel() {
                   <td className="py-2 px-2 text-right"><button onClick={() => removeSymbol(row.symbol)} className="text-xs text-gray-400 hover:text-white">Remove</button></td>
                 </tr>
               ))
+            )}
+            {!loading && rows.length>0 && Object.keys(funds).length===0 && (
+              <tr><td colSpan={10} className="py-4 px-2 text-center text-[11px] text-gray-500">Loading fundamentals…</td></tr>
             )}
           </tbody>
         </table>

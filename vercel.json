@@ -51,6 +51,10 @@
   ],
   "rewrites": [
     {
+      "source": "/favicon.ico",
+      "destination": "/icons/icon-192x192.png"
+    },
+    {
       "source": "/stripe/webhook",
       "destination": "/api/stripe/webhook"
     }

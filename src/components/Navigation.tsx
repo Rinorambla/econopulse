@@ -5,6 +5,7 @@ import React, { startTransition, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import Logo from './Logo';
+import { PowerIcon } from '@heroicons/react/24/outline';
 
 interface NavigationLinkProps {
   href: string;
@@ -127,20 +128,30 @@ export function Navigation({ className }: NavigationProps) {
 
       {/* Right: Auth (desktop) */}
     {user ? (
-      <div className="hidden md:flex items-center gap-2 sm:gap-3 ml-auto shrink-0 pl-2">
-            <div className="relative group max-w-[20ch] lg:max-w-[25ch] truncate">
-              <span className="text-xs sm:text-sm font-medium text-white/80 truncate whitespace-nowrap" title={user.user_metadata?.full_name || user.email}>
-                Welcome, <span className="font-semibold text-white">{user.user_metadata?.full_name || user.email}</span>
-              </span>
+      <div className="hidden md:flex items-center gap-2 ml-auto shrink-0 pl-2">
+        {(() => {
+          const fullName = (user.user_metadata?.full_name as string) || '';
+          const email = (user.email as string) || '';
+          const shortName = fullName ? fullName.split(' ')[0] : (email.split('@')[0] || 'User');
+          const initial = (shortName[0] || 'U').toUpperCase();
+          return (
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+              <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold">
+                {initial}
+              </div>
+              <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[10ch]" title={fullName || email}>{shortName}</span>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="group relative bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:scale-105 active:scale-95 whitespace-nowrap"
-            >
-              <span className="relative z-10">Sign Out</span>
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-rose-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </button>
-          </div>
+          );
+        })()}
+        <button
+          onClick={handleSignOut}
+          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-colors"
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <PowerIcon className="h-5 w-5" />
+        </button>
+      </div>
       ) : (
         <div className="ml-auto hidden md:flex items-center gap-2 shrink-0">
           <NavigationLink href="/signup" className="group relative text-white/90 hover:text-white px-3 py-2 rounded-lg text-[13px] sm:text-sm font-semibold transition-all duration-300 hover:bg-white/10">

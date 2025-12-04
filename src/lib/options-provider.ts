@@ -131,8 +131,20 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     // Select nearest expirations (non-expired)
     const expiriesAll = (chain.expirationDates || []).filter(ts => ts * 1000 > now);
     const expiries = expiriesAll.slice(0, Math.max(1, expirationsToUse));
-    // If no future expiry chosen, fallback to first available option block
-    const blocks = (chain.options || []).filter(b => expiries.includes(b.expirationDate) || expiries.length === 0).slice(0, Math.max(1, expirationsToUse));
+    // Build blocks across the first N expiries (Yahoo returns only the nearest in `options` by default)
+    const blocks: Array<{ expirationDate: number; calls: YahooOption[]; puts: YahooOption[] }> = [];
+    const nearestBlocks = (chain.options || []).slice(0, 1);
+    for (const b of nearestBlocks) blocks.push({ expirationDate: b.expirationDate, calls: b.calls || [], puts: b.puts || [] });
+    // Proactively fetch additional expiries to improve non-zero coverage
+    for (let ei = 1; ei < Math.min(expiries.length, 3); ei++) {
+      try {
+        const d = expiries[ei];
+        if (!d) break;
+        const extra = await fetchYahooOptions(symbol, d);
+        const extraBlock = (extra?.options || []).find(o => o.expirationDate === d);
+        if (extraBlock) blocks.push({ expirationDate: extraBlock.expirationDate, calls: extraBlock.calls || [], puts: extraBlock.puts || [] });
+      } catch {}
+    }
 
     let totalCallVolume = 0, totalPutVolume = 0, totalCallOI = 0, totalPutOI = 0;
     let gex = 0;
@@ -185,11 +197,13 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     const needFallback = totalCallVolume===0 && totalPutVolume===0 && expiriesAll.length>1;
     // Fallback: if no volume collected, try second expiry index if available
     if (needFallback) {
-      const secondExpiry = expiriesAll[1];
-      if (secondExpiry) {
-        const fallbackChain = await fetchYahooOptions(symbol, secondExpiry);
+      // Iterate through up to first 4 expiries until we find non-zero volume
+      for (let ei = 1; ei < Math.min(expiriesAll.length, 10) && totalCallVolume===0 && totalPutVolume===0; ei++) {
+        const tryExp = expiriesAll[ei];
+        if (!tryExp) break;
+        const fallbackChain = await fetchYahooOptions(symbol, tryExp);
         if (fallbackChain) {
-          const blocksFb = (fallbackChain.options||[]).filter(b=> b.expirationDate===secondExpiry);
+          const blocksFb = (fallbackChain.options||[]).filter(b=> b.expirationDate===tryExp);
           for (const blk of blocksFb) {
             const T = toYearFraction(blk.expirationDate * 1000 - now);
             for (const c of blk.calls||[]) {
@@ -226,21 +240,21 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     }
 
     // Primary ratios
-    let putCallVolumeRatio = (totalCallVolume + totalPutVolume) > 0 ? totalPutVolume / Math.max(1, totalCallVolume) : null;
-    let putCallOIRatio = (totalCallOI + totalPutOI) > 0 ? totalPutOI / Math.max(1, totalCallOI) : null;
+    let putCallVolumeRatio = (totalCallVolume + totalPutVolume) > 0 ? totalPutVolume / Math.max(1, totalCallVolume) : 0;
+    let putCallOIRatio = (totalCallOI + totalPutOI) > 0 ? totalPutOI / Math.max(1, totalCallOI) : 0;
 
     // Fallback recomputation: if upstream chain misses volume or OI for one side causing null, attempt a second pass using raw arrays
-    if (putCallVolumeRatio === null || putCallOIRatio === null) {
+    if (!isFinite(putCallVolumeRatio) || !isFinite(putCallOIRatio) || (putCallVolumeRatio===0 && putCallOIRatio===0)) {
       try {
         let altCallVol = 0, altPutVol = 0, altCallOI = 0, altPutOI = 0;
         for (const blk of blocks) {
           for (const c of blk.calls || []) { altCallVol += c.volume || 0; altCallOI += c.openInterest || 0; }
           for (const p of blk.puts || []) { altPutVol += p.volume || 0; altPutOI += p.openInterest || 0; }
         }
-        if ((altCallVol + altPutVol) > 0 && putCallVolumeRatio === null) {
+        if ((altCallVol + altPutVol) > 0 && (putCallVolumeRatio===0 || !isFinite(putCallVolumeRatio))) {
           putCallVolumeRatio = altPutVol / Math.max(1, altCallVol);
         }
-        if ((altCallOI + altPutOI) > 0 && putCallOIRatio === null) {
+        if ((altCallOI + altPutOI) > 0 && (putCallOIRatio===0 || !isFinite(putCallOIRatio))) {
           putCallOIRatio = altPutOI / Math.max(1, altCallOI);
         }
       } catch {}
@@ -267,8 +281,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       totalPutVolume,
       totalCallOI,
       totalPutOI,
-      putCallVolumeRatio,
-      putCallOIRatio,
+      putCallVolumeRatio: isFinite(putCallVolumeRatio) ? putCallVolumeRatio : 0,
+      putCallOIRatio: isFinite(putCallOIRatio) ? putCallOIRatio : 0,
       gex: isFinite(gex) ? gex : null,
       gexLabel: gex === null || !isFinite(gex) ? 'Unknown' : gexLabel,
       ivCall25d,

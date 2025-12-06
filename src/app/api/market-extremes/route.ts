@@ -29,12 +29,40 @@ async function fetchRatios(origin?: string): Promise<Record<string, number>> {
     const s = map[sym]||[]
     return s.length ? s[s.length-1].close : NaN
   }
-  const vvix = latest('^VVIX'); const vix = latest('^VIX')
-  const spHB = latest('SPHB'); const spLV = latest('SPLV')
-  const xly = latest('XLY'); const xlp = latest('XLP')
-  const iwd = latest('IWD'); const iwf = latest('IWF')
-  const hyg = latest('HYG'); const ief = latest('IEF')
-  const move = latest('^MOVE'); const skew = latest('^SKEW')
+  let vvix = latest('^VVIX'); let vix = latest('^VIX')
+  let spHB = latest('SPHB'); let spLV = latest('SPLV')
+  let xly = latest('XLY'); let xlp = latest('XLP')
+  let iwd = latest('IWD'); let iwf = latest('IWF')
+  let hyg = latest('HYG'); let ief = latest('IEF')
+  let move = latest('^MOVE'); let skew = latest('^SKEW')
+
+  // Fallback to quotes if history is missing or NaN
+  const needFallback = [vvix,vix,spHB,spLV,xly,xlp,iwd,iwf,hyg,ief,move,skew].some(v=> !Number.isFinite(v))
+  if (needFallback) {
+    const qRes = await fetch(`${base}/api/yahoo-quotes?symbols=${encodeURIComponent(symbols.join(','))}`, { cache:'no-store', signal: AbortSignal.timeout(7000) })
+    if (qRes.ok) {
+      const qJs = await qRes.json()
+      const qArr: Array<{ symbol:string; quote?:{ regularMarketPrice?:number } }> = qJs.data || []
+      const qMap: Record<string, number> = {}
+      for (const q of qArr) {
+        const p = q?.quote?.regularMarketPrice
+        if (Number.isFinite(p as number)) qMap[q.symbol] = p as number
+      }
+      vvix = Number.isFinite(vvix) ? vvix : qMap['^VVIX']
+      vix = Number.isFinite(vix) ? vix : qMap['^VIX']
+      spHB = Number.isFinite(spHB) ? spHB : qMap['SPHB']
+      spLV = Number.isFinite(spLV) ? spLV : qMap['SPLV']
+      xly = Number.isFinite(xly) ? xly : qMap['XLY']
+      xlp = Number.isFinite(xlp) ? xlp : qMap['XLP']
+      iwd = Number.isFinite(iwd) ? iwd : qMap['IWD']
+      iwf = Number.isFinite(iwf) ? iwf : qMap['IWF']
+      hyg = Number.isFinite(hyg) ? hyg : qMap['HYG']
+      ief = Number.isFinite(ief) ? ief : qMap['IEF']
+      // MOVE and SKEW are often unavailable on Yahoo; keep optional
+      move = Number.isFinite(move) ? move : (qMap['^MOVE'] ?? NaN)
+      skew = Number.isFinite(skew) ? skew : (qMap['^SKEW'] ?? NaN)
+    }
+  }
   const ratios: Record<string, number> = {}
   const safe = (a:number,b:number)=> (Number.isFinite(a)&&Number.isFinite(b)&&b!==0) ? a/b : NaN
   ratios['VVIX/VIX'] = safe(vvix,vix)

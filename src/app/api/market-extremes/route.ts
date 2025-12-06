@@ -15,10 +15,11 @@ type Extremes = {
 }
 
 // Build ratios using yahoo-history endpoint already present
-async function fetchRatios(): Promise<Record<string, number>> {
+async function fetchRatios(origin?: string): Promise<Record<string, number>> {
   const symbols = ['^VVIX','^VIX','SPHB','SPLV','XLY','XLP','IWD','IWF','HYG','IEF','^MOVE','^SKEW']
   const qs = new URLSearchParams({ symbols: symbols.join(','), range:'6mo', interval:'1d' })
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL||''}/api/yahoo-history?${qs.toString()}`, { cache:'no-store', signal: AbortSignal.timeout(9000) })
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : origin || 'http://localhost:3000'
+  const res = await fetch(`${base}/api/yahoo-history?${qs.toString()}`, { cache:'no-store', signal: AbortSignal.timeout(9000) })
   if (!res.ok) return {}
   const js = await res.json()
   const arr: Array<{ symbol:string; bars:Array<{time:number; close:number}> }> = js.data || []
@@ -86,7 +87,8 @@ export async function GET(req: NextRequest) {
     return new NextResponse(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { ...rateLimitHeaders(rl) } })
   }
   try {
-    const ratios = await fetchRatios()
+    const origin = (() => { try { const u = new URL(req.url); return `${u.protocol}//${u.host}` } catch { return undefined } })()
+    const ratios = await fetchRatios(origin)
     const out = scoreExtremes(ratios)
     const res = NextResponse.json({ success:true, data: out })
     const headers = rateLimitHeaders(rl)

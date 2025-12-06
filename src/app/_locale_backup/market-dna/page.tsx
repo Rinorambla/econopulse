@@ -372,7 +372,7 @@ export default function MarketDNAPage() {
                   <span className="text-white text-xs font-bold">FL</span>
                 </div>
                 <div>
-                  <p className="text-white text-sm font-semibold">FLAME • Euforia</p>
+                  <p className="text-white text-sm font-semibold">FLAME • Euphoria</p>
                   <p className="text-red-300 text-xs">SPHB/SPLV, XLY/XLP, IWD/IWF, HYG/IEF</p>
                 </div>
               </div>
@@ -385,7 +385,7 @@ export default function MarketDNAPage() {
                   <span className="text-slate-900 text-xs font-bold">BT</span>
                 </div>
                 <div>
-                  <p className="text-white text-sm font-semibold">BOTTOM • Panico</p>
+                  <p className="text-white text-sm font-semibold">BOTTOM • Panic</p>
                   <p className="text-amber-300 text-xs">MOVE, SKEW + ratio tilt</p>
                 </div>
               </div>

@@ -82,7 +82,8 @@ export async function GET(request: Request) {
     });
     
     const historicalResults = await Promise.all(historicalPromises);
-    const needsYahooHistory = historicalResults.some(r => !r.historical || (Array.isArray(r.historical) && r.historical.length < 2));
+    const needYahooForFocus = Boolean(focusPeriod && focusPeriod !== 'daily');
+    const needsYahooHistory = needYahooForFocus || historicalResults.some(r => !r.historical || (Array.isArray(r.historical) && r.historical.length < 2));
     let yahooHistMap: Map<string, YahooHistory> | null = null;
     if (needsYahooHistory) {
       try {
@@ -186,12 +187,36 @@ export async function GET(request: Request) {
           daily = 0;
         }
       }
-      const weekly = calculatePerformance(currentPrice, weeklyPrice);
-      const monthly = calculatePerformance(currentPrice, monthlyPrice);
-      const quarterly = calculatePerformance(currentPrice, quarterlyPrice);
-      const sixMonth = calculatePerformance(currentPrice, sixMonthPrice);
-      const fiftyTwoWeek = calculatePerformance(currentPrice, fiftyTwoWeekPrice);
-      const ytd = calculatePerformance(currentPrice, ytdBasePrice);
+      let weekly = calculatePerformance(currentPrice, weeklyPrice);
+      let monthly = calculatePerformance(currentPrice, monthlyPrice);
+      let quarterly = calculatePerformance(currentPrice, quarterlyPrice);
+      let sixMonth = calculatePerformance(currentPrice, sixMonthPrice);
+      let fiftyTwoWeek = calculatePerformance(currentPrice, fiftyTwoWeekPrice);
+      let ytd = calculatePerformance(currentPrice, ytdBasePrice);
+
+      // If focusing on a specific period and Yahoo history is available, override that period from Yahoo
+      if (yBars && focusPeriod) {
+        const yGet = (d: number) => {
+          const idx = Math.max(0, yBars.length - 1 - d);
+          const ref = (yBars as any)[idx];
+          return typeof ref?.close === 'number' ? ref.close : null;
+        };
+        if (focusPeriod === 'weekly') weekly = calculatePerformance(currentPrice, yGet(5));
+        if (focusPeriod === 'monthly') monthly = calculatePerformance(currentPrice, yGet(22));
+        if (focusPeriod === 'quarterly') quarterly = calculatePerformance(currentPrice, yGet(66));
+        if (focusPeriod === 'sixmonth') sixMonth = calculatePerformance(currentPrice, yGet(126));
+        if (focusPeriod === 'fiftytwoweek') fiftyTwoWeek = calculatePerformance(currentPrice, yGet(252));
+        if (focusPeriod === 'ytd') {
+          const now = new Date();
+          const ts = new Date(`${now.getFullYear()}-01-01`).getTime();
+          let base: number | null = null;
+          for (let i = 0; i < yBars.length; i++) {
+            const b = (yBars as any)[i];
+            if (typeof b?.time === 'number' && b.time >= ts) { base = typeof b.close === 'number' ? b.close : null; break; }
+          }
+          ytd = calculatePerformance(currentPrice, base);
+        }
+      }
 
       let status: 'positive' | 'negative' | 'neutral';
       if (daily > 0.5) {

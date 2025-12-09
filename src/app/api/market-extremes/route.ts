@@ -84,19 +84,20 @@ function scoreExtremes(r: Record<string, number>): Extremes {
   add('VVIX/VIX'); add('SPHB/SPLV'); add('XLY/XLP'); add('IWD/IWF'); add('HYG/IEF')
   const move = get('MOVE'); const skew = get('SKEW')
   const norm = (v:number|null, lo:number, hi:number)=> v==null?0: Math.max(0, Math.min(1, (v-lo)/(hi-lo)))
+  // Slightly tighter bands to avoid flat 0.00 on normal days
   const eup = (
-    norm(get('SPHB/SPLV'), 0.8, 1.2) +
-    norm(get('XLY/XLP'), 0.9, 1.3) +
-    norm(get('IWD/IWF'), 0.8, 1.2) +
-    norm(get('HYG/IEF'), 0.6, 1.1)
+    norm(get('SPHB/SPLV'), 0.9, 1.15) +
+    norm(get('XLY/XLP'), 0.95, 1.25) +
+    norm(get('IWD/IWF'), 0.9, 1.15) +
+    norm(get('HYG/IEF'), 0.7, 1.05)
   )
   const panic = (
-    norm(get('SPHB/SPLV'), 1.2, 0.8) +
-    norm(get('XLY/XLP'), 1.3, 0.9) +
-    norm(get('IWD/IWF'), 1.2, 0.8) +
-    norm(get('HYG/IEF'), 1.1, 0.6) +
-    (move!=null ? (move>120?1: move>90?0.5:0) : 0) +
-    (skew!=null ? (skew>135?1: skew>120?0.5:0) : 0)
+    norm(get('SPHB/SPLV'), 1.1, 0.9) +
+    norm(get('XLY/XLP'), 1.2, 0.95) +
+    norm(get('IWD/IWF'), 1.1, 0.9) +
+    norm(get('HYG/IEF'), 1.0, 0.7) +
+    (move!=null ? (move>120?1: move>90?0.5:0.1) : 0.1) +
+    (skew!=null ? (skew>135?1: skew>120?0.5:0.1) : 0.1)
   )
   return {
     flameScore: Number(eup.toFixed(2)),

@@ -269,8 +269,12 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     let callSkew: OptionsMetrics['callSkew'] = 'Neutral';
     if (ivCall25d != null && ivPut25d != null) {
       const diff = ivCall25d - ivPut25d;
-      if (diff > 0.02) callSkew = 'Call Skew';
-      else if (diff < -0.02) callSkew = 'Put Skew';
+            let putCallVolumeRatio: number | null = (totalCallVolume + totalPutVolume) > 0
+              ? totalPutVolume / Math.max(1, totalCallVolume)
+              : null;
+            let putCallOIRatio: number | null = (totalCallOI + totalPutOI) > 0
+              ? totalPutOI / Math.max(1, totalCallOI)
+              : null;
       else callSkew = 'Neutral';
     }
 

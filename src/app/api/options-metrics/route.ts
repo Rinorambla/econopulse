@@ -68,9 +68,9 @@ export async function GET(req: NextRequest) {
         const otmLevel = levelFromShare(otmShare);
         unusualCombo = `${atmLevel} / ${otmLevel}`;
       }
-      // Coerce ratios to string with 2 decimals; if zero or null show 0.00 (ensures dashboard shows numeric values)
-      const pcVolStr = pcVol == null ? '0.00' : pcVol.toFixed(2);
-      const pcOIStr = pcOI == null ? '0.00' : pcOI.toFixed(2);
+      // Coerce ratios to string with 2 decimals; if null treat as N/A for thin markets
+      const pcVolStr = pcVol == null ? null : pcVol.toFixed(2);
+      const pcOIStr = pcOI == null ? null : pcOI.toFixed(2);
       out[sym] = {
         symbol: sym,
         putCallRatioVol: pcVolStr,

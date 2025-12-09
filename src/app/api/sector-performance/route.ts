@@ -30,11 +30,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
     }
     
-    // Read optional timeframe query (daily|weekly|monthly|quarterly|yearly)
+    // Read optional timeframe query
     const url = new URL(request.url);
-    const period = (url.searchParams.get('period') || '').toLowerCase();
-    const validPeriods = new Set(['daily','weekly','monthly','quarterly','yearly']);
-    const focusPeriod = validPeriods.has(period) ? period : '';
+    const rawPeriod = (url.searchParams.get('period') || '').toLowerCase();
+    // Support both canonical names and UI short-hands
+    const periodMap: Record<string, string> = {
+      '1d': 'daily', 'daily': 'daily',
+      '1w': 'weekly', 'weekly': 'weekly',
+      '1m': 'monthly', 'monthly': 'monthly',
+      '3m': 'quarterly', 'quarterly': 'quarterly',
+      '6m': 'sixmonth', 'sixmonth': 'sixmonth', 'halfyear': 'sixmonth',
+      'ytd': 'ytd',
+      '52w': 'fiftytwoweek', '1y': 'fiftytwoweek', 'yearly': 'fiftytwoweek', 'fiftytwoweek': 'fiftytwoweek'
+    };
+    const mapped = periodMap[rawPeriod] || '';
+    const validPeriods = new Set(['daily','weekly','monthly','quarterly','sixmonth','ytd','fiftytwoweek']);
+    const focusPeriod = validPeriods.has(mapped) ? mapped : '';
 
     const symbols = Object.values(SECTOR_ETFS);
     console.log(`📊 Requesting data for ${symbols.length} sector ETFs:`, symbols);
@@ -74,7 +85,7 @@ export async function GET(request: Request) {
     console.log(`✅ Retrieved historical data for multi-period analysis`);
 
     // Helper function to calculate performance between two prices
-    const calculatePerformance = (currentPrice: number, pastPrice: number) => {
+    const calculatePerformance = (currentPrice: number, pastPrice: number | null) => {
       if (!pastPrice || pastPrice === 0) return 0;
       return ((currentPrice - pastPrice) / pastPrice) * 100;
     };
@@ -84,6 +95,19 @@ export async function GET(request: Request) {
       if (!historical || historical.length === 0) return null;
       const targetIndex = Math.min(daysBack, historical.length - 1);
       return historical[historical.length - 1 - targetIndex]?.close || null;
+    };
+    // Helper: ensure historical is sorted by date ascending (YYYY-MM-DD or ISO)
+    const sortHistoricalAsc = (historical: any[] | null) => {
+      if (!historical) return [] as any[];
+      return [...historical].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    };
+    // Helper: get close on or after a specific date (for YTD)
+    const getCloseOnOrAfter = (historical: any[] | null, isoDate: string): number | null => {
+      if (!historical || historical.length === 0) return null;
+      const sorted = sortHistoricalAsc(historical);
+      const targetTs = new Date(isoDate).getTime();
+      const rec = sorted.find(r => new Date(r.date).getTime() >= targetTs);
+      return rec && typeof rec.close === 'number' ? rec.close : null;
     };
 
     // Transform data for sector performance display with multi-period analysis
@@ -115,7 +139,12 @@ export async function GET(request: Request) {
       const weeklyPrice = getHistoricalPrice(historicalData, 5);
       const monthlyPrice = getHistoricalPrice(historicalData, 22);
       const quarterlyPrice = getHistoricalPrice(historicalData, 66);
-      const yearlyPrice = getHistoricalPrice(historicalData, 252);
+      const sixMonthPrice = getHistoricalPrice(historicalData, 126);
+      const fiftyTwoWeekPrice = getHistoricalPrice(historicalData, 252);
+      // YTD: price at first trading day of current year
+      const now = new Date();
+      const startOfYearIso = `${now.getFullYear()}-01-01`;
+      const ytdBasePrice = getCloseOnOrAfter(historicalData, startOfYearIso);
 
       let daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
       if (daily === undefined || daily === null) {
@@ -131,7 +160,9 @@ export async function GET(request: Request) {
       const weekly = calculatePerformance(currentPrice, weeklyPrice);
       const monthly = calculatePerformance(currentPrice, monthlyPrice);
       const quarterly = calculatePerformance(currentPrice, quarterlyPrice);
-      const yearly = calculatePerformance(currentPrice, yearlyPrice);
+      const sixMonth = calculatePerformance(currentPrice, sixMonthPrice);
+      const fiftyTwoWeek = calculatePerformance(currentPrice, fiftyTwoWeekPrice);
+      const ytd = calculatePerformance(currentPrice, ytdBasePrice);
 
       let status: 'positive' | 'negative' | 'neutral';
       if (daily > 0.5) {
@@ -149,7 +180,11 @@ export async function GET(request: Request) {
         weekly: Number(weekly.toFixed(2)),
         monthly: Number(monthly.toFixed(2)),
         quarterly: Number(quarterly.toFixed(2)),
-        yearly: Number(yearly.toFixed(2)),
+        sixMonth: Number((Number.isFinite(sixMonth) ? sixMonth : 0).toFixed(2)),
+        ytd: Number((Number.isFinite(ytd) ? ytd : 0).toFixed(2)),
+        fiftyTwoWeek: Number((Number.isFinite(fiftyTwoWeek) ? fiftyTwoWeek : 0).toFixed(2)),
+        // Back-compat: yearly mirrors 52W
+        yearly: Number((Number.isFinite(fiftyTwoWeek) ? fiftyTwoWeek : 0).toFixed(2)),
         marketCap: 0,
         volume: hasData ? (currentData as any).data.volume : (currentData as any).volume,
         topStocks: [currentData.symbol]
@@ -157,11 +192,13 @@ export async function GET(request: Request) {
 
       // If a specific period is requested, override non-focused fields to 0 for clarity
       switch (focusPeriod) {
-        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, yearly: 0 };
-        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, yearly: 0 };
-        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, yearly: 0 };
-        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, yearly: 0 };
-        case 'yearly': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0 };
+        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'sixmonth': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'ytd': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, fiftyTwoWeek: 0, yearly: 0 };
+        case 'fiftytwoweek': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0 };
         default: return perf;
       }
     });
@@ -223,7 +260,10 @@ type SectorPerf = {
   weekly: number;
   monthly: number;
   quarterly: number;
-  yearly: number;
+  sixMonth: number;
+  ytd: number;
+  fiftyTwoWeek: number;
+  yearly: number; // mirrors 52W for compatibility
   marketCap: number;
   volume: number;
   topStocks: string[];
@@ -277,6 +317,19 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
       const ref = bars[idx];
       return typeof ref?.close === 'number' ? ref.close : null;
     };
+    const getCloseOnOrAfter = (h: YahooHistory | undefined, isoDate: string): number | null => {
+      if (!h || !h.bars || h.bars.length === 0) return null;
+      const ts = new Date(isoDate).getTime();
+      const bars = h.bars;
+      for (let i = 0; i < bars.length; i++) {
+        const b = bars[i];
+        if (typeof b?.time === 'number' && b.time >= ts) {
+          const v = b.close;
+          return typeof v === 'number' ? v : null;
+        }
+      }
+      return null;
+    };
 
     const calcPerf = (current: number, past: number | null) => {
       if (!current || !past || past === 0) return 0;
@@ -291,7 +344,11 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
       const weekly = calcPerf(current, getCloseNDaysAgo(h, 5));
       const monthly = calcPerf(current, getCloseNDaysAgo(h, 22));
       const quarterly = calcPerf(current, getCloseNDaysAgo(h, 66));
-      const yearly = calcPerf(current, getCloseNDaysAgo(h, 252));
+      const sixMonth = calcPerf(current, getCloseNDaysAgo(h, 126));
+      const fiftyTwoWeek = calcPerf(current, getCloseNDaysAgo(h, 252));
+      const now = new Date();
+      const ytdBase = getCloseOnOrAfter(h, `${now.getFullYear()}-01-01`);
+      const ytd = calcPerf(current, ytdBase);
 
       const perf = {
         sector: sectorName,
@@ -300,18 +357,23 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
         weekly: Number(weekly.toFixed(2)),
         monthly: Number(monthly.toFixed(2)),
         quarterly: Number(quarterly.toFixed(2)),
-        yearly: Number(yearly.toFixed(2)),
+        sixMonth: Number((Number.isFinite(sixMonth) ? sixMonth : 0).toFixed(2)),
+        ytd: Number((Number.isFinite(ytd) ? ytd : 0).toFixed(2)),
+        fiftyTwoWeek: Number((Number.isFinite(fiftyTwoWeek) ? fiftyTwoWeek : 0).toFixed(2)),
+        yearly: Number((Number.isFinite(fiftyTwoWeek) ? fiftyTwoWeek : 0).toFixed(2)),
         marketCap: 0,
         volume: q?.volume || 0,
         topStocks: [symbol]
       };
 
       switch (focusPeriod) {
-        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, yearly: 0 };
-        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, yearly: 0 };
-        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, yearly: 0 };
-        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, yearly: 0 };
-        case 'yearly': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0 };
+        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'sixmonth': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'ytd': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
+        case 'fiftytwoweek': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0 } as SectorPerf;
         default: return perf as SectorPerf;
       }
     });

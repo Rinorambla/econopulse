@@ -18,7 +18,7 @@ const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCa
 // 13F explorer removed per request
 
 // Types
-interface SectorPerformance { sector:string; daily:number; weekly:number; monthly:number; quarterly:number; yearly:number; marketCap:number; volume:number; topStocks:string[] }
+interface SectorPerformance { sector:string; daily:number; weekly:number; monthly:number; quarterly:number; sixMonth?:number; ytd?:number; fiftyTwoWeek?:number; yearly:number; marketCap:number; volume:number; topStocks:string[] }
 interface CountryIndicators { country:string; countryCode:string; gdp:{value:number;growth:number;date:string}; inflation:{value:number;date:string}; unemployment:{value:number;date:string}; interestRate:{value:number;date:string}; currency:{code:string;usdRate:number}; marketCap:number; population:number; creditRating:string }
 interface CountryData { countries:CountryIndicators[]; global:{ totalGdp:number; averageGrowth:number; averageInflation:number; averageUnemployment:number; totalCountries:number }; lastUpdated:string }
 interface EconomicCycle { current:{cycle:string;growth:string;inflation:string;confidence:number}; indicators:{ gdp:{value:number;date:string}; inflation:{value:number;date:string}; unemployment:{value:number;date:string}; fedRate:{value:number;date:string} }; analysis:string; lastUpdated:string }
@@ -94,8 +94,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'>('daily');
-  // Nuova barra timeframe: 1D,1W,1M,3M,6M,YTD,52W (le ultime tre mappano provvisoriamente su 'yearly')
+  const [selectedPeriod, setSelectedPeriod] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'sixMonth'|'ytd'|'fiftyTwoWeek'|'yearly'>('daily');
+  // Timeframe bar: 1D,1W,1M,3M,6M,YTD,52W
   type TimeframeKey = '1D'|'1W'|'1M'|'3M'|'6M'|'YTD'|'52W';
   const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeKey>('1D');
   const timeframeToPeriod: Record<TimeframeKey, typeof selectedPeriod> = {
@@ -103,9 +103,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     '1W':'weekly',
     '1M':'monthly',
     '3M':'quarterly',
-    '6M':'yearly',
-    'YTD':'yearly',
-    '52W':'yearly'
+    '6M':'sixMonth',
+    'YTD':'ytd',
+    '52W':'fiftyTwoWeek'
   };
   useEffect(()=> { setSelectedPeriod(timeframeToPeriod[selectedTimeframe]); }, [selectedTimeframe]);
   const [selectedSector, setSelectedSector] = useState<string>('');
@@ -365,8 +365,26 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [etfRange, etfSpreadType, selectedComparison]);
 
   // Helpers
-  const getPerformanceValue = (s:SectorPerformance) => ({ daily:s.daily, weekly:s.weekly, monthly:s.monthly, quarterly:s.quarterly, yearly:s.yearly }[selectedPeriod]);
-  const getPeriodLabel = () => ({ daily:'Today', weekly:'This Week', monthly:'This Month', quarterly:'This Quarter', yearly:'This Year' }[selectedPeriod]);
+  const getPerformanceValue = (s:SectorPerformance) => ({
+    daily: s.daily,
+    weekly: s.weekly,
+    monthly: s.monthly,
+    quarterly: s.quarterly,
+    sixMonth: s.sixMonth ?? 0,
+    ytd: s.ytd ?? 0,
+    fiftyTwoWeek: s.fiftyTwoWeek ?? s.yearly,
+    yearly: s.yearly,
+  } as any)[selectedPeriod] as number;
+  const getPeriodLabel = () => ({
+    daily:'Today',
+    weekly:'This Week',
+    monthly:'This Month',
+    quarterly:'This Quarter',
+    sixMonth:'Last 6 Months',
+    ytd:'Year-To-Date',
+    fiftyTwoWeek:'Last 52 Weeks',
+    yearly:'Last 52 Weeks'
+  } as const)[selectedPeriod];
   const getEconomicCycleColor = (c:string) => { const l=c.toLowerCase(); if(l==='expansion') return 'text-green-400 bg-green-900/20 border-green-500/30'; if(l==='peak') return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30'; if(l==='contraction'||l==='recession') return 'text-red-400 bg-red-900/20 border-red-500/30'; if(l==='trough') return 'text-blue-400 bg-blue-900/20 border-blue-500/30'; return 'text-gray-400 bg-gray-900/20 border-gray-500/30'; };
   const getPerformanceColor = (v:number) => v>2?'text-emerald-400':v>1?'text-green-400':v>0?'text-lime-400':v>-1?'text-yellow-400':v>-2?'text-orange-400':'text-red-400';
   const getAIDirectionDisplay = (d:string) => { const dir=d.toLowerCase(); if(dir==='bullish') return {color:'text-green-400', icon:<TrendingUp className="w-5 h-5" />, bg:'bg-green-900/20 border-green-500/30'}; if(dir==='bearish') return {color:'text-red-400', icon:<TrendingDown className="w-5 h-5" />, bg:'bg-red-900/20 border-red-500/30'}; if(dir==='mixed') return {color:'text-yellow-400', icon:<BarChart3 className="w-5 h-5" />, bg:'bg-yellow-900/20 border-yellow-500/30'}; return {color:'text-gray-400', icon:<Target className="w-5 h-5" />, bg:'bg-gray-900/20 border-gray-500/30'}; };
@@ -809,7 +827,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 {lastUpdated && <div className="flex items-center gap-2 text-gray-400 text-sm"><Clock className="w-4 h-4" /> {new Date(lastUpdated).toLocaleTimeString()}</div>}
               </div>
             </div>
-            <p className="-mt-3 mb-4 text-[10px] text-gray-500">6M, YTD e 52W attualmente riutilizzano l'aggregazione Yearly finché non saranno disponibili metriche dedicate.</p>
+            {/* Info note removed: 6M, YTD, 52W now computed natively */}
             {sectorData.length>0 && <div className="space-y-6">
               <div className="bg-white/5 rounded-lg p-4">
                 <h4 className="text-white font-semibold mb-3 flex items-center justify-between">

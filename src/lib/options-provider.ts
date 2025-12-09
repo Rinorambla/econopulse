@@ -244,21 +244,21 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     }
 
     // Primary ratios
-    let putCallVolumeRatio = (totalCallVolume + totalPutVolume) > 0 ? totalPutVolume / Math.max(1, totalCallVolume) : 0;
-    let putCallOIRatio = (totalCallOI + totalPutOI) > 0 ? totalPutOI / Math.max(1, totalCallOI) : 0;
+    let putCallVolumeRatio: number | null = (totalCallVolume + totalPutVolume) > 0 ? (totalPutVolume / Math.max(1, totalCallVolume)) : null;
+    let putCallOIRatio: number | null = (totalCallOI + totalPutOI) > 0 ? (totalPutOI / Math.max(1, totalCallOI)) : null;
 
     // Fallback recomputation: if upstream chain misses volume or OI for one side causing null, attempt a second pass using raw arrays
-    if (!isFinite(putCallVolumeRatio) || !isFinite(putCallOIRatio) || (putCallVolumeRatio===0 && putCallOIRatio===0)) {
+    if ((putCallVolumeRatio==null || !isFinite(putCallVolumeRatio)) || (putCallOIRatio==null || !isFinite(putCallOIRatio)) || (putCallVolumeRatio===0 && putCallOIRatio===0)) {
       try {
         let altCallVol = 0, altPutVol = 0, altCallOI = 0, altPutOI = 0;
         for (const blk of blocks) {
           for (const c of blk.calls || []) { altCallVol += c.volume || 0; altCallOI += c.openInterest || 0; }
           for (const p of blk.puts || []) { altPutVol += p.volume || 0; altPutOI += p.openInterest || 0; }
         }
-        if ((altCallVol + altPutVol) > 0 && (putCallVolumeRatio===0 || !isFinite(putCallVolumeRatio))) {
+        if ((altCallVol + altPutVol) > 0 && (putCallVolumeRatio==null || putCallVolumeRatio===0 || !isFinite(putCallVolumeRatio))) {
           putCallVolumeRatio = altPutVol / Math.max(1, altCallVol);
         }
-        if ((altCallOI + altPutOI) > 0 && (putCallOIRatio===0 || !isFinite(putCallOIRatio))) {
+        if ((altCallOI + altPutOI) > 0 && (putCallOIRatio==null || putCallOIRatio===0 || !isFinite(putCallOIRatio))) {
           putCallOIRatio = altPutOI / Math.max(1, altCallOI);
         }
       } catch {}
@@ -269,12 +269,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     let callSkew: OptionsMetrics['callSkew'] = 'Neutral';
     if (ivCall25d != null && ivPut25d != null) {
       const diff = ivCall25d - ivPut25d;
-            let putCallVolumeRatio: number | null = (totalCallVolume + totalPutVolume) > 0
-              ? totalPutVolume / Math.max(1, totalCallVolume)
-              : null;
-            let putCallOIRatio: number | null = (totalCallOI + totalPutOI) > 0
-              ? totalPutOI / Math.max(1, totalCallOI)
-              : null;
+      if (diff > 0.02) callSkew = 'Call Skew';
+      else if (diff < -0.02) callSkew = 'Put Skew';
       else callSkew = 'Neutral';
     }
 
@@ -289,8 +285,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       totalPutVolume,
       totalCallOI,
       totalPutOI,
-      putCallVolumeRatio: isFinite(putCallVolumeRatio) ? putCallVolumeRatio : 0,
-      putCallOIRatio: isFinite(putCallOIRatio) ? putCallOIRatio : 0,
+      putCallVolumeRatio,
+      putCallOIRatio,
       gex: isFinite(gex) ? gex : null,
       gexLabel: gex === null || !isFinite(gex) ? 'Unknown' : gexLabel,
       ivCall25d,

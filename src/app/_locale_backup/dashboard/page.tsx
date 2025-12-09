@@ -147,6 +147,11 @@ export default function DashboardPage() {
 			const ctrl = new AbortController();
 			const t = setTimeout(() => ctrl.abort(), 15000);
 			const response = await fetch('/api/dashboard-data?scope=full&limit=600&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
+			// Also refresh sector snapshots for weekly/monthly panels
+			await Promise.all([
+				fetch('/api/sector-performance?period=weekly', { cache:'no-store' }),
+				fetch('/api/sector-performance?period=monthly', { cache:'no-store' })
+			]);
 			clearTimeout(t);
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 			const result: DashboardResponse = await response.json();

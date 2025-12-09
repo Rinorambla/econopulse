@@ -82,6 +82,17 @@ export async function GET(request: Request) {
     });
     
     const historicalResults = await Promise.all(historicalPromises);
+    const needsYahooHistory = historicalResults.some(r => !r.historical || (Array.isArray(r.historical) && r.historical.length < 2));
+    let yahooHistMap: Map<string, YahooHistory> | null = null;
+    if (needsYahooHistory) {
+      try {
+        const yh = await fetchMultipleHistory(symbols, '1y', '1d');
+        yahooHistMap = new Map(yh.map(h => [h.symbol.toUpperCase(), h]));
+        console.log(`✅ Yahoo history fallback ready for sectors`);
+      } catch (e) {
+        console.warn('⚠️ Yahoo history fallback failed:', e);
+      }
+    }
     console.log(`✅ Retrieved historical data for multi-period analysis`);
 
     // Helper function to calculate performance between two prices
@@ -136,21 +147,39 @@ export async function GET(request: Request) {
       const currentPrice = hasData ? (currentData as any).data.price : (currentData as any).price;
       
       // Calculate multi-period performance using trading-day approximations
-      const weeklyPrice = getHistoricalPrice(historicalData, 5);
-      const monthlyPrice = getHistoricalPrice(historicalData, 22);
-      const quarterlyPrice = getHistoricalPrice(historicalData, 66);
-      const sixMonthPrice = getHistoricalPrice(historicalData, 126);
-      const fiftyTwoWeekPrice = getHistoricalPrice(historicalData, 252);
+      const fromYahoo = (!historicalData || historicalData.length < 2) && yahooHistMap ? yahooHistMap.get(symbol) : null;
+      const yBars = fromYahoo?.bars;
+      const getYahooCloseNDaysAgo = (approxDays: number): number | null => {
+        if (!yBars || yBars.length < 2) return null;
+        const idx = Math.max(0, yBars.length - 1 - approxDays);
+        const ref = yBars[idx];
+        return typeof (ref as any)?.close === 'number' ? (ref as any).close : null;
+      };
+      const weeklyPrice = fromYahoo ? getYahooCloseNDaysAgo(5) : getHistoricalPrice(historicalData, 5);
+      const monthlyPrice = fromYahoo ? getYahooCloseNDaysAgo(22) : getHistoricalPrice(historicalData, 22);
+      const quarterlyPrice = fromYahoo ? getYahooCloseNDaysAgo(66) : getHistoricalPrice(historicalData, 66);
+      const sixMonthPrice = fromYahoo ? getYahooCloseNDaysAgo(126) : getHistoricalPrice(historicalData, 126);
+      const fiftyTwoWeekPrice = fromYahoo ? getYahooCloseNDaysAgo(252) : getHistoricalPrice(historicalData, 252);
       // YTD: price at first trading day of current year
       const now = new Date();
       const startOfYearIso = `${now.getFullYear()}-01-01`;
-      const ytdBasePrice = getCloseOnOrAfter(historicalData, startOfYearIso);
+      const ytdBasePrice = fromYahoo ? (() => {
+        if (!yBars || yBars.length === 0) return null;
+        const targetTs = new Date(startOfYearIso).getTime();
+        for (let i = 0; i < yBars.length; i++) {
+          const b = (yBars as any)[i];
+          if (typeof b?.time === 'number' && b.time >= targetTs) {
+            return typeof b.close === 'number' ? b.close : null;
+          }
+        }
+        return null;
+      })() : getCloseOnOrAfter(historicalData, startOfYearIso);
 
       let daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
       if (daily === undefined || daily === null) {
-        // Fallback: compute daily change from last two closes if available
-        const lastClose = getHistoricalPrice(historicalData, 0);
-        const prevClose = getHistoricalPrice(historicalData, 1);
+        // Fallback: compute daily change from last two closes if available (Tiingo or Yahoo)
+        const lastClose = fromYahoo ? getYahooCloseNDaysAgo(0) : getHistoricalPrice(historicalData, 0);
+        const prevClose = fromYahoo ? getYahooCloseNDaysAgo(1) : getHistoricalPrice(historicalData, 1);
         if (typeof lastClose === 'number' && typeof prevClose === 'number' && prevClose !== 0) {
           daily = ((lastClose - prevClose) / prevClose) * 100;
         } else {

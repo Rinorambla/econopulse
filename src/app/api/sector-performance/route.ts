@@ -30,6 +30,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
     }
     
+    // Read optional timeframe query (daily|weekly|monthly|quarterly|yearly)
+    const url = new URL(request.url);
+    const period = (url.searchParams.get('period') || '').toLowerCase();
+    const validPeriods = new Set(['daily','weekly','monthly','quarterly','yearly']);
+    const focusPeriod = validPeriods.has(period) ? period : '';
+
     const symbols = Object.values(SECTOR_ETFS);
     console.log(`📊 Requesting data for ${symbols.length} sector ETFs:`, symbols);
     
@@ -38,7 +44,7 @@ export async function GET(request: Request) {
     
     if (!sectorData || sectorData.length === 0) {
       console.warn('⚠️ Tiingo returned no data (missing key or upstream issue). Falling back to Yahoo.');
-      const fallback = await buildYahooFallback(symbols);
+      const fallback = await buildYahooFallback(symbols, focusPeriod);
       if (fallback) {
         const res = NextResponse.json(fallback.body, { status: 200 });
         applyCacheHeaders(res, 300);
@@ -102,16 +108,26 @@ export async function GET(request: Request) {
         };
       }
 
-      const hasData = 'data' in currentData && currentData.data;
+      const hasData = 'data' in currentData && (currentData as any).data;
       const currentPrice = hasData ? (currentData as any).data.price : (currentData as any).price;
       
-      // Calculate multi-period performance
-      const weeklyPrice = getHistoricalPrice(historicalData, 7);
-      const monthlyPrice = getHistoricalPrice(historicalData, 30);
-      const quarterlyPrice = getHistoricalPrice(historicalData, 90);
-      const yearlyPrice = getHistoricalPrice(historicalData, 365);
+      // Calculate multi-period performance using trading-day approximations
+      const weeklyPrice = getHistoricalPrice(historicalData, 5);
+      const monthlyPrice = getHistoricalPrice(historicalData, 22);
+      const quarterlyPrice = getHistoricalPrice(historicalData, 66);
+      const yearlyPrice = getHistoricalPrice(historicalData, 252);
 
-      const daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
+      let daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
+      if (daily === undefined || daily === null) {
+        // Fallback: compute daily change from last two closes if available
+        const lastClose = getHistoricalPrice(historicalData, 0);
+        const prevClose = getHistoricalPrice(historicalData, 1);
+        if (typeof lastClose === 'number' && typeof prevClose === 'number' && prevClose !== 0) {
+          daily = ((lastClose - prevClose) / prevClose) * 100;
+        } else {
+          daily = 0;
+        }
+      }
       const weekly = calculatePerformance(currentPrice, weeklyPrice);
       const monthly = calculatePerformance(currentPrice, monthlyPrice);
       const quarterly = calculatePerformance(currentPrice, quarterlyPrice);
@@ -126,17 +142,28 @@ export async function GET(request: Request) {
         status = 'neutral';
       }
 
-      return {
-        sector: sectorName, // Match frontend interface
+      const perf = {
+        sector: sectorName,
+        name: sectorName,
         daily: Number(daily.toFixed(2)),
         weekly: Number(weekly.toFixed(2)),
         monthly: Number(monthly.toFixed(2)),
         quarterly: Number(quarterly.toFixed(2)),
         yearly: Number(yearly.toFixed(2)),
-        marketCap: 0, // Unknown from this endpoint; avoid synthetic values
+        marketCap: 0,
         volume: hasData ? (currentData as any).data.volume : (currentData as any).volume,
-        topStocks: [currentData.symbol] // Only include real symbol if needed
-      };
+        topStocks: [currentData.symbol]
+      } as const;
+
+      // If a specific period is requested, override non-focused fields to 0 for clarity
+      switch (focusPeriod) {
+        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, yearly: 0 };
+        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, yearly: 0 };
+        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, yearly: 0 };
+        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+        case 'yearly': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0 };
+        default: return perf;
+      }
     });
 
     // Sort by daily performance
@@ -164,7 +191,12 @@ export async function GET(request: Request) {
     };
 
     const res = NextResponse.json(body, { status: 200 });
-    applyCacheHeaders(res, 300);
+    if (focusPeriod) {
+      // Specific period requested: prefer fresh data
+      res.headers.set('Cache-Control', 'no-store');
+    } else {
+      applyCacheHeaders(res, 300);
+    }
     applyRateLimitHeaders(res, rl);
     return res;
 
@@ -173,7 +205,7 @@ export async function GET(request: Request) {
     // Last-resort: try Yahoo fallback without Tiingo
     try {
       const symbols = Object.values(SECTOR_ETFS);
-      const fallback = await buildYahooFallback(symbols);
+      const fallback = await buildYahooFallback(symbols, '');
       if (fallback) {
         const res = NextResponse.json(fallback.body, { status: 200 });
         applyCacheHeaders(res, 300);
@@ -223,7 +255,7 @@ function applyRateLimitHeaders(res: NextResponse, rl: ReturnType<typeof rateLimi
   Object.entries(hdrs).forEach(([k, v]) => res.headers.set(k, v));
 }
 
-async function buildYahooFallback(symbols: string[]): Promise<{ body: SectorResponse } | null> {
+async function buildYahooFallback(symbols: string[], focusPeriod: string): Promise<{ body: SectorResponse } | null> {
   try {
     // Serve cached if fresh (< 5 minutes)
     if (CACHE.data && Date.now() - CACHE.ts < 5 * 60_000) {
@@ -261,8 +293,9 @@ async function buildYahooFallback(symbols: string[]): Promise<{ body: SectorResp
       const quarterly = calcPerf(current, getCloseNDaysAgo(h, 66));
       const yearly = calcPerf(current, getCloseNDaysAgo(h, 252));
 
-      return {
+      const perf = {
         sector: sectorName,
+        name: sectorName,
         daily: Number(daily.toFixed(2)),
         weekly: Number(weekly.toFixed(2)),
         monthly: Number(monthly.toFixed(2)),
@@ -272,6 +305,15 @@ async function buildYahooFallback(symbols: string[]): Promise<{ body: SectorResp
         volume: q?.volume || 0,
         topStocks: [symbol]
       };
+
+      switch (focusPeriod) {
+        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, yearly: 0 };
+        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, yearly: 0 };
+        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, yearly: 0 };
+        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+        case 'yearly': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0 };
+        default: return perf as SectorPerf;
+      }
     });
 
     sectors.sort((a, b) => b.daily - a.daily);

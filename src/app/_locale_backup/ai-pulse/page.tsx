@@ -802,116 +802,68 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
 
 
-          {/* Sector Performance Analysis moved up right after Economic Cycle/Matrix */}
+          {/* Sector Performance simplified: only Best/Worst Stocks */}
           <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold flex items-center gap-3"><PieChart className="w-7 h-7 text-emerald-400" /> Sector Performance Analysis</h2>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">{(['bar','multi'] as const).map(v=>
-                  <button key={v} onClick={()=>setSectorView(v)} className={`px-3 py-1 text-xs rounded-md transition-colors ${sectorView===v?'bg-blue-600 text-white':'text-gray-300 hover:text-white'}`}>{v==='bar'?'Single':'Multi TF'}</button>
-                )}</div>
-                <button onClick={()=>setShowHeatmap(s=>!s)} className={`px-3 py-1 rounded-lg text-xs border ${showHeatmap?'bg-emerald-600/30 border-emerald-500/40 text-emerald-300':'bg-white/5 border-white/10 text-gray-300 hover:text-white'}`}>Heatmap {showHeatmap?'On':'Off'}</button>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-sm">Timeframe:</span>
-                  <div className="flex flex-wrap gap-1 bg-white/5 border border-white/10 rounded-md p-1">
-                    {(['1D','1W','1M','3M','6M','YTD','52W'] as TimeframeKey[]).map(tf => (
-                      <button
-                        key={tf}
-                        onClick={()=> setSelectedTimeframe(tf)}
-                        className={`px-2.5 py-1 text-[11px] rounded-md transition-colors tracking-wide ${selectedTimeframe===tf ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
-                      >{tf}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2"><span className="text-gray-400 text-sm">Sort:</span><select value={sectorSort} onChange={e=>setSectorSort(e.target.value as any)} className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white text-sm"><option value="performance">Performance</option><option value="volume">Volume</option><option value="marketCap">Market Cap</option></select></div>
-                {lastUpdated && <div className="flex items-center gap-2 text-gray-400 text-sm"><Clock className="w-4 h-4" /> {new Date(lastUpdated).toLocaleTimeString()}</div>}
-              </div>
-            </div>
-            {/* Info note removed: 6M, YTD, 52W now computed natively */}
-            {sectorData.length>0 && <div className="space-y-6">
+            {(topMovers.length>0 || bottomMovers.length>0) ? (
               <div className="bg-white/5 rounded-lg p-4">
-                <h4 className="text-white font-semibold mb-3 flex items-center justify-between">
-                  Sector Performance - {getPeriodLabel()} <span className="text-[10px] uppercase tracking-wide text-gray-400">Real Data</span>
-                </h4>
-                <div className="h-80">
-                  <SectorPerformanceLazy
-                    data={sortedSectors.map(s => {
-                      const yearlyForMulti = selectedPeriod==='sixMonth' ? (s.sixMonth ?? 0)
-                        : selectedPeriod==='ytd' ? (s.ytd ?? 0)
-                        : selectedPeriod==='fiftyTwoWeek' ? (s.fiftyTwoWeek ?? s.yearly)
-                        : s.yearly;
-                      return ({
-                        sector: s.sector,
-                        daily: s.daily,
-                        weekly: s.weekly,
-                        monthly: s.monthly,
-                        quarterly: s.quarterly,
-                        yearly: yearlyForMulti,
-                        value: getPerformanceValue(s)
-                      });
-                    })}
-                    view={sectorView}
-                  />
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-white font-semibold">Best/Worst Stocks {syncMoversWithPeriod ? getPeriodLabel() : 'Today'}</h4>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                      <input type="checkbox" className="form-checkbox rounded border-white/20 bg-white/10" checked={syncMoversWithPeriod} onChange={(e)=> setSyncMoversWithPeriod(e.target.checked)} />
+                      Sync with period
+                    </label>
+                    <span className="text-[10px] uppercase tracking-wide text-gray-400">Universe: {selectedSector? `${selectedSector} (S&P 500)`:'S&P 500'}</span>
+                  </div>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-emerald-300 text-xs font-semibold mb-2">Top Gainers</p>
+                    <ul className="space-y-1">
+                      {topMovers.slice(0,10).map(m => {
+                        const bars = sparks[m.symbol] || [];
+                        const color = '#34d399';
+                        return (
+                          <li key={m.symbol} className="flex items-center justify-between text-sm gap-3">
+                            <span className="font-medium w-14 shrink-0">{m.symbol}</span>
+                            {sparkLoading && !bars.length ? <div className="w-20 h-5 bg-white/5 rounded animate-pulse" /> : <MiniSparkline bars={bars} color={color} />}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-300 tabular-nums">${m.price.toFixed(2)}</span>
+                              <span className="font-semibold text-emerald-400">+{m.changePercent.toFixed(2)}%</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-red-300 text-xs font-semibold mb-2">Top Losers</p>
+                    <ul className="space-y-1">
+                      {bottomMovers.slice(0,10).map(m => {
+                        const bars = sparks[m.symbol] || [];
+                        const color = '#f87171';
+                        return (
+                          <li key={m.symbol} className="flex items-center justify-between text-sm gap-3">
+                            <span className="font-medium w-14 shrink-0">{m.symbol}</span>
+                            {sparkLoading && !bars.length ? <div className="w-20 h-5 bg-white/5 rounded animate-pulse" /> : <MiniSparkline bars={bars} color={color} />}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-300 tabular-nums">${m.price.toFixed(2)}</span>
+                              <span className="font-semibold text-red-400">{m.changePercent.toFixed(2)}%</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-gray-500">{syncMoversWithPeriod ? `${getPeriodLabel()} % change.` : 'Daily % change.'}</p>
               </div>
-              {showHeatmap && <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3 flex items-center justify-between">Performance Heatmap <span className="text-[10px] uppercase tracking-wide text-gray-400">Tap a sector to filter movers</span></h4><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">{sortedSectors.map(sec=> { const val=getPerformanceValue(sec); const active = selectedSector && selectedSector.toLowerCase()===sec.sector.toLowerCase(); return <button key={sec.sector} onClick={()=> setSelectedSector(active? '': sec.sector)} className={`rounded-lg p-3 text-center border backdrop-blur-sm hover:scale-[1.03] transition-transform w-full ${active? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900':''}`} style={{background:performanceToGradient(val), borderColor:'rgba(255,255,255,0.1)'}}><p className="text-xs font-medium truncate mb-1">{sec.sector}</p><p className={`text-sm font-bold ${getPerformanceColor(val)}`}>{val>=0?'+':''}{val.toFixed(2)}%</p></button>; })}</div></div>}
-              {(topMovers.length>0 || bottomMovers.length>0) && (
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-white font-semibold">Best/Worst Stocks {syncMoversWithPeriod ? getPeriodLabel() : 'Today'}</h4>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
-                        <input type="checkbox" className="form-checkbox rounded border-white/20 bg-white/10" checked={syncMoversWithPeriod} onChange={(e)=> setSyncMoversWithPeriod(e.target.checked)} />
-                        Sync with period
-                      </label>
-                      <span className="text-[10px] uppercase tracking-wide text-gray-400">Universe: {selectedSector? `${selectedSector} (S&P 500)`:'S&P 500'}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-emerald-300 text-xs font-semibold mb-2">Top Gainers</p>
-            <ul className="space-y-1">
-                        {topMovers.slice(0,10).map(m => {
-              const bars = sparks[m.symbol] || [];
-              const color = '#34d399';
-                          return (
-                            <li key={m.symbol} className="flex items-center justify-between text-sm gap-3">
-                              <span className="font-medium w-14 shrink-0">{m.symbol}</span>
-                {sparkLoading && !bars.length ? <div className="w-20 h-5 bg-white/5 rounded animate-pulse" /> : <MiniSparkline bars={bars} color={color} />}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-xs text-gray-300 tabular-nums">${m.price.toFixed(2)}</span>
-                                <span className="font-semibold text-emerald-400">+{m.changePercent.toFixed(2)}%</span>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-red-300 text-xs font-semibold mb-2">Top Losers</p>
-            <ul className="space-y-1">
-                        {bottomMovers.slice(0,10).map(m => {
-              const bars = sparks[m.symbol] || [];
-              const color = '#f87171';
-                          return (
-                            <li key={m.symbol} className="flex items-center justify-between text-sm gap-3">
-                              <span className="font-medium w-14 shrink-0">{m.symbol}</span>
-                {sparkLoading && !bars.length ? <div className="w-20 h-5 bg-white/5 rounded animate-pulse" /> : <MiniSparkline bars={bars} color={color} />}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-xs text-gray-300 tabular-nums">${m.price.toFixed(2)}</span>
-                                <span className="font-semibold text-red-400">{m.changePercent.toFixed(2)}%</span>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-gray-500">{syncMoversWithPeriod ? `${getPeriodLabel()} % change.` : 'Daily % change.'}</p>
-                </div>
-              )}
-              {/* Detailed Sector Analysis table removed per request for a cleaner UI */}
-            </div>}
+            ) : (
+              <div className="bg-white/5 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-3">Best/Worst Stocks</h4>
+                <div className="w-full h-20 animate-pulse bg-white/5 rounded" />
+              </div>
+            )}
           </div>
 
           {/* Symbol/Index Comparison removed per request */}

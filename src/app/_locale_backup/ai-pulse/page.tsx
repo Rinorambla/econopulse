@@ -835,15 +835,21 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </h4>
                 <div className="h-80">
                   <SectorPerformanceLazy
-                    data={sortedSectors.map(s => ({
-                      sector: s.sector,
-                      daily: s.daily,
-                      weekly: s.weekly,
-                      monthly: s.monthly,
-                      quarterly: s.quarterly,
-                      yearly: s.yearly,
-                      value: getPerformanceValue(s)
-                    }))}
+                    data={sortedSectors.map(s => {
+                      const yearlyForMulti = selectedPeriod==='sixMonth' ? (s.sixMonth ?? 0)
+                        : selectedPeriod==='ytd' ? (s.ytd ?? 0)
+                        : selectedPeriod==='fiftyTwoWeek' ? (s.fiftyTwoWeek ?? s.yearly)
+                        : s.yearly;
+                      return ({
+                        sector: s.sector,
+                        daily: s.daily,
+                        weekly: s.weekly,
+                        monthly: s.monthly,
+                        quarterly: s.quarterly,
+                        yearly: yearlyForMulti,
+                        value: getPerformanceValue(s)
+                      });
+                    })}
                     view={sectorView}
                   />
                 </div>

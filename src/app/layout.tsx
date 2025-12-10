@@ -28,9 +28,16 @@ export const metadata: Metadata = {
     siteName: 'EconoPulse',
     title: 'EconoPulse - AI Economic Analysis',
     description: 'Professional AI-powered economic analysis and market insights platform',
+    url: 'https://econopulse.ai',
     images: [
-      { url: '/icons/icon-512x512.png', width: 512, height: 512, alt: 'EconoPulse' },
+      { url: 'https://econopulse.ai/icons/icon-512x512.png', width: 512, height: 512, alt: 'EconoPulse Logo' },
     ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'EconoPulse - AI Economic Analysis',
+    description: 'Professional AI-powered economic analysis and market insights platform',
+    images: ['https://econopulse.ai/icons/icon-512x512.png'],
   },
   icons: {
     // Explicit favicon for Google SERP favicon discovery
@@ -59,11 +66,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'EconoPulse',
+              alternateName: 'Econopulse.ai',
               url: 'https://econopulse.ai',
-              logo: 'https://econopulse.ai/icons/icon-512x512.png',
-              sameAs: [
-                // Add social profiles when available
-              ],
+              logo: {
+                '@type': 'ImageObject',
+                url: 'https://econopulse.ai/icons/icon-512x512.png',
+                width: 512,
+                height: 512,
+              },
+              description: 'Professional AI-powered economic analysis and market insights platform',
+              sameAs: [],
             }),
           }}
         />

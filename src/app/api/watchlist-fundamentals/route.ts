@@ -59,9 +59,11 @@ export async function GET(req: NextRequest) {
       } catch {}
       let hc: number | null = null;
       try {
-        const h = r.topHoldings?.holdings || r.topHoldings?.stockHoldings || r.topHoldings?.equityHoldings;
-        if (Array.isArray(h)) hc = h.length;
-        else if (typeof r.topHoldings?.maxAge === 'number') hc = r.topHoldings?.maxAge || null; // fallback meaningless but avoids undefined
+        const th = r.topHoldings;
+        if (th) {
+          const holdings = th.holdings || th.stockHoldings || th.equityHoldings;
+          if (Array.isArray(holdings) && holdings.length > 0) hc = holdings.length;
+        }
       } catch {}
       out[sym] = {
         symbol: sym,

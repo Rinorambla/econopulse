@@ -244,17 +244,8 @@ export async function GET(request: Request) {
         topStocks: [currentData.symbol]
       } as const;
 
-      // If a specific period is requested, override non-focused fields to 0 for clarity
-      switch (focusPeriod) {
-        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'sixmonth': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'ytd': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, fiftyTwoWeek: 0, yearly: 0 };
-        case 'fiftytwoweek': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0 };
-        default: return perf;
-      }
+      // Return all periods regardless of focus (frontend will select which to display)
+      return perf;
     });
 
     // Sort by daily performance

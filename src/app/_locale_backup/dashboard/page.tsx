@@ -427,28 +427,56 @@ export default function DashboardPage() {
 								</h3>
 								<span className="text-[9px] text-gray-500">{new Date(extremes.asOf).toLocaleTimeString()}</span>
 							</div>
-							<div className="grid grid-cols-2 gap-3">
-								{/* FLAME */}
-								<div>
-									<div className="flex items-center justify-between mb-1">
-										<span className="text-[10px] text-gray-400">🔥 FLAME</span>
-										<span className={`text-xs font-bold ${flameLevel.color}`}>{flameLevel.label}</span>
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								{/* FLAME - Euphoria */}
+								<div className="space-y-1.5">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-1.5">
+											<span className="text-base">🔥</span>
+											<div>
+												<div className="text-[11px] font-semibold text-white">FLAME</div>
+												<div className="text-[9px] text-gray-500">Euphoria Level</div>
+											</div>
+										</div>
+										<div className="text-right">
+											<div className="text-sm font-bold font-mono text-gray-200">{flameScore.toFixed(2)}</div>
+											<div className={`text-[10px] font-medium ${flameLevel.color}`}>{flameLevel.label}</div>
+										</div>
 									</div>
-									<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
 										<div className={`absolute inset-y-0 left-0 ${flameLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(flameScore * 100, 100)}%` }} />
 									</div>
-									<div className="text-[10px] text-right mt-0.5 font-mono text-gray-300">{flameScore.toFixed(2)}</div>
+									<p className="text-[9px] text-gray-400 leading-tight">
+										{flameScore >= 0.75 && "Extreme bullish sentiment. High-beta outperforming."}
+										{flameScore >= 0.50 && flameScore < 0.75 && "Strong risk-on. Cyclicals leading."}
+										{flameScore >= 0.25 && flameScore < 0.50 && "Moderate optimism. Balanced rotation."}
+										{flameScore < 0.25 && "Subdued risk appetite. Defensive positioning."}
+									</p>
 								</div>
-								{/* BOTTOM */}
-								<div>
-									<div className="flex items-center justify-between mb-1">
-										<span className="text-[10px] text-gray-400">⚠️ BOTTOM</span>
-										<span className={`text-xs font-bold ${bottomLevel.color}`}>{bottomLevel.label}</span>
+								{/* BOTTOM - Panic */}
+								<div className="space-y-1.5">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-1.5">
+											<span className="text-base">⚠️</span>
+											<div>
+												<div className="text-[11px] font-semibold text-white">BOTTOM</div>
+												<div className="text-[9px] text-gray-500">Panic Level</div>
+											</div>
+										</div>
+										<div className="text-right">
+											<div className="text-sm font-bold font-mono text-gray-200">{bottomScore.toFixed(2)}</div>
+											<div className={`text-[10px] font-medium ${bottomLevel.color}`}>{bottomLevel.label}</div>
+										</div>
 									</div>
-									<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
 										<div className={`absolute inset-y-0 left-0 ${bottomLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(bottomScore * 100, 100)}%` }} />
 									</div>
-									<div className="text-[10px] text-right mt-0.5 font-mono text-gray-300">{bottomScore.toFixed(2)}</div>
+									<p className="text-[9px] text-gray-400 leading-tight">
+										{bottomScore >= 0.75 && "Extreme fear. Flight to safety, credit frozen."}
+										{bottomScore >= 0.50 && bottomScore < 0.75 && "High stress. Defensives outperforming."}
+										{bottomScore >= 0.25 && bottomScore < 0.50 && "Moderate caution. Quality over growth."}
+										{bottomScore < 0.25 && "Low fear. Market functioning normally."}
+									</p>
 								</div>
 							</div>
 						</div>

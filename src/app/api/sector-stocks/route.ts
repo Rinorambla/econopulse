@@ -166,6 +166,16 @@ const SECTOR_STOCKS: Record<string, Array<{ ticker: string; name: string; weight
 
 // Map portfolio names to sector keys
 const PORTFOLIO_TO_SECTOR: Record<string, string> = {
+  // Economic cycle portfolios - map to their dominant sector
+  'Goldilocks Economy': 'Technology',
+  'Recession': 'Utilities', 
+  'Stagflation': 'Energy',
+  'Deflation': 'Consumer Staples',
+  'Reflation': 'Industrials',
+  'Disinflation Soft Landing': 'Technology',
+  'Dollar Weakness & Global Rebalancing': 'Industrials',
+  
+  // Direct sector portfolio names
   'Tech-Heavy Portfolio': 'Technology',
   'Technology Portfolio': 'Technology',
   'Healthcare Portfolio': 'Healthcare',
@@ -183,6 +193,10 @@ const PORTFOLIO_TO_SECTOR: Record<string, string> = {
   'Real Estate Portfolio': 'Real Estate',
   'Communication Services Portfolio': 'Communication Services',
   'Telecom Portfolio': 'Communication Services',
+  
+  // Regional/theme portfolios - map to diversified sectors
+  'Europe Portfolio': 'Industrials',
+  'Emerging Markets Portfolio': 'Industrials',
 };
 
 export async function GET(request: NextRequest) {

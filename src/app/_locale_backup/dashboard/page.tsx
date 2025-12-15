@@ -365,12 +365,95 @@ export default function DashboardPage() {
 
 	// export CSV removed per request
 
+	// Market Extremes state
+	const [extremes, setExtremes] = useState<{ flame: number; bottom: number; asOf: string } | null>(null);
+
+	// Fetch market extremes on mount
+	useEffect(() => {
+		const fetchExtremes = async () => {
+			try {
+				const res = await fetch('/api/market-extremes', { cache: 'no-store' });
+				if (res.ok) {
+					const json = await res.json();
+					if (json.success && json.data) {
+						setExtremes({
+							flame: json.data.flameScore ?? 0,
+							bottom: json.data.bottomScore ?? 0,
+							asOf: json.data.asOf ?? new Date().toISOString()
+						});
+					}
+				}
+			} catch (e) {
+				console.error('Failed to fetch market extremes:', e);
+			}
+		};
+		fetchExtremes();
+	}, []);
+
+	// Helper functions for FLAME/BOTTOM interpretation
+	const getFlameLevel = (score: number) => {
+		if (score >= 0.75) return { label: 'Extreme', color: 'text-red-400', bg: 'bg-red-500' };
+		if (score >= 0.50) return { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500' };
+		if (score >= 0.25) return { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-500' };
+		return { label: 'Low', color: 'text-green-400', bg: 'bg-green-500' };
+	};
+
+	const getBottomLevel = (score: number) => {
+		if (score >= 0.75) return { label: 'Extreme', color: 'text-red-400', bg: 'bg-red-500' };
+		if (score >= 0.50) return { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500' };
+		if (score >= 0.25) return { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-500' };
+		return { label: 'Low', color: 'text-green-400', bg: 'bg-green-500' };
+	};
+
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
+
+	const flameScore = extremes?.flame ?? 0;
+	const bottomScore = extremes?.bottom ?? 0;
+	const flameLevel = getFlameLevel(flameScore);
+	const bottomLevel = getBottomLevel(bottomScore);
 
 	return (
 		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
 				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1></div></div>
+				
+				{/* Market Sentiment Extremes - Compact Version */}
+				{extremes && (
+					<div className="max-w-7xl mx-auto px-3 pt-3 pb-2">
+						<div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 rounded-xl p-4 ring-1 ring-white/10">
+							<div className="flex items-center justify-between mb-3">
+								<h3 className="text-xs font-bold text-gray-300 flex items-center gap-1">
+									<span>📊</span> Market Sentiment Extremes
+								</h3>
+								<span className="text-[9px] text-gray-500">{new Date(extremes.asOf).toLocaleTimeString()}</span>
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								{/* FLAME */}
+								<div>
+									<div className="flex items-center justify-between mb-1">
+										<span className="text-[10px] text-gray-400">🔥 FLAME</span>
+										<span className={`text-xs font-bold ${flameLevel.color}`}>{flameLevel.label}</span>
+									</div>
+									<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+										<div className={`absolute inset-y-0 left-0 ${flameLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(flameScore * 100, 100)}%` }} />
+									</div>
+									<div className="text-[10px] text-right mt-0.5 font-mono text-gray-300">{flameScore.toFixed(2)}</div>
+								</div>
+								{/* BOTTOM */}
+								<div>
+									<div className="flex items-center justify-between mb-1">
+										<span className="text-[10px] text-gray-400">⚠️ BOTTOM</span>
+										<span className={`text-xs font-bold ${bottomLevel.color}`}>{bottomLevel.label}</span>
+									</div>
+									<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+										<div className={`absolute inset-y-0 left-0 ${bottomLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(bottomScore * 100, 100)}%` }} />
+									</div>
+									<div className="text-[10px] text-right mt-0.5 font-mono text-gray-300">{bottomScore.toFixed(2)}</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
 						{/* Toolbar */}
 						<div className="bg-slate-800 border-b border-slate-700">
 							<div className="max-w-7xl mx-auto px-3 py-3 flex flex-wrap items-center gap-3 text-xs">

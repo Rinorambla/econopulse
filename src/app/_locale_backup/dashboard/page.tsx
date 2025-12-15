@@ -492,30 +492,30 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">
 																				<span className="relative group inline-flex items-center gap-1">
 																					{opt?.optionsSentiment || item.optionsSentiment}
-																					{opt && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
-																					{opt && (
-																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
-																							<SmallTooltip lines={[
-																								`Vol P/C: ${opt.putCallRatioVol ?? '0.00'}`,
-																								`OI P/C: ${opt.putCallRatioOI ?? '0.00'}`
-																							]} />
-																						</div>
-																					)}
-																				</span>
+																			{opt && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
+																			{opt && (
+																				<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
+																					<SmallTooltip lines={[
+																						`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
+																						`OI P/C: ${opt.putCallRatioOI ?? '—'}`
+																					]} />
+																				</div>
+																			)}
+																		</span>
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
 																			<td className="px-2 py-1">
 																				<span className="relative group inline-flex font-semibold tabular-nums">
 																					{(() => {
-																						if (!opt) return <span className="text-gray-300">{item.putCallRatio && item.putCallRatio !== '—' ? item.putCallRatio : '0.00'}</span>;
-																						const display = opt.putCallRatioVol || opt.putCallRatioOI || '0.00';
+																						if (!opt) return <span className="text-gray-300">{item.putCallRatio && item.putCallRatio !== '—' ? item.putCallRatio : '—'}</span>;
+																						const display = opt.putCallRatioVol || opt.putCallRatioOI || '—';
 																						return <span className={getPCRClass(display)}>{display}</span>;
 																					})()}
 																					{opt && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[
-																								`Vol P/C: ${opt.putCallRatioVol ?? '0.00'}`,
-																								`OI P/C: ${opt.putCallRatioOI ?? '0.00'}`
+																								`Vol P/C: ${opt.putCallRatioVol ?? '—'}`,
+																								`OI P/C: ${opt.putCallRatioOI ?? '—'}`
 																							]} />
 																						</div>
 																					)}

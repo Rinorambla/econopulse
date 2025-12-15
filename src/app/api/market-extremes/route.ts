@@ -76,32 +76,50 @@ async function fetchRatios(origin?: string): Promise<Record<string, number>> {
 }
 
 function scoreExtremes(r: Record<string, number>): Extremes {
-  // Heuristics: higher SPHB/SPLV, XLY/XLP, IWD/IWF => euphoria; low values => panic
-  // High MOVE/SKEW => panic tilt
+  // FLAME (Euphoria): High Beta outperforms, Cyclicals strong, Credit spreads tight, Low vol complacency
+  // BOTTOM (Panic): Low Vol outperforms, Defensives strong, Flight to safety, High MOVE/SKEW
   const pairs: Pair[] = []
   const get = (k:string)=> (Number.isFinite(r[k]) ? r[k] : null)
   const add = (k:string)=> pairs.push({ label:k, value: get(k) })
   add('VVIX/VIX'); add('SPHB/SPLV'); add('XLY/XLP'); add('IWD/IWF'); add('HYG/IEF')
   const move = get('MOVE'); const skew = get('SKEW')
+  
+  // Normalize with proper direction: v goes from lo to hi => output 0 to 1
   const norm = (v:number|null, lo:number, hi:number)=> v==null?0: Math.max(0, Math.min(1, (v-lo)/(hi-lo)))
-  // Slightly tighter bands to avoid flat 0.00 on normal days
-  const eup = (
-    norm(get('SPHB/SPLV'), 0.9, 1.15) +
-    norm(get('XLY/XLP'), 0.95, 1.25) +
-    norm(get('IWD/IWF'), 0.9, 1.15) +
-    norm(get('HYG/IEF'), 0.7, 1.05)
-  )
-  const panic = (
-    norm(get('SPHB/SPLV'), 1.1, 0.9) +
-    norm(get('XLY/XLP'), 1.2, 0.95) +
-    norm(get('IWD/IWF'), 1.1, 0.9) +
-    norm(get('HYG/IEF'), 1.0, 0.7) +
-    (move!=null ? (move>120?1: move>90?0.5:0.1) : 0.1) +
-    (skew!=null ? (skew>135?1: skew>120?0.5:0.1) : 0.1)
-  )
+  
+  // FLAME (Euphoria): Elevated when risk-on ratios are HIGH, vol metrics are LOW
+  const sphbSplv = get('SPHB/SPLV') ?? 1.0
+  const xlyXlp = get('XLY/XLP') ?? 1.0
+  const iwdIwf = get('IWD/IWF') ?? 1.0
+  const hygIef = get('HYG/IEF') ?? 0.85
+  
+  const euphoriaSignals = [
+    norm(sphbSplv, 0.95, 1.20),    // SPHB/SPLV: 0.95=neutral, 1.20=euphoria
+    norm(xlyXlp, 1.00, 1.30),      // XLY/XLP: 1.00=neutral, 1.30=euphoria
+    norm(iwdIwf, 0.95, 1.15),      // IWD/IWF: 0.95=neutral, 1.15=euphoria
+    norm(hygIef, 0.80, 1.10),      // HYG/IEF: 0.80=neutral, 1.10=euphoria (tight spreads)
+    // Low MOVE/SKEW = complacency = euphoria
+    move!=null ? (move<80?1: move<100?0.5:0) : 0,
+    skew!=null ? (skew<115?1: skew<120?0.5:0) : 0
+  ]
+  
+  // BOTTOM (Panic): Elevated when defensive ratios dominate (risk-off), vol metrics spike
+  const panicSignals = [
+    norm(sphbSplv, 1.05, 0.80),    // SPHB/SPLV: 1.05=neutral, 0.80=panic (SPLV dominates)
+    norm(xlyXlp, 1.20, 0.85),      // XLY/XLP: 1.20=neutral, 0.85=panic (XLP dominates)
+    norm(iwdIwf, 1.05, 0.85),      // IWD/IWF: 1.05=neutral, 0.85=panic
+    norm(hygIef, 0.95, 0.60),      // HYG/IEF: 0.95=neutral, 0.60=panic (flight to safety)
+    // High MOVE/SKEW = stress = panic
+    move!=null ? (move>130?1.5: move>110?1: move>90?0.5:0) : 0,
+    skew!=null ? (skew>140?1.5: skew>125?1: skew>115?0.5:0) : 0
+  ]
+  
+  const flameScore = euphoriaSignals.reduce((a,b)=>a+b, 0) / euphoriaSignals.length
+  const bottomScore = panicSignals.reduce((a,b)=>a+b, 0) / panicSignals.length
+  
   return {
-    flameScore: Number(eup.toFixed(2)),
-    bottomScore: Number(panic.toFixed(2)),
+    flameScore: Number(flameScore.toFixed(2)),
+    bottomScore: Number(bottomScore.toFixed(2)),
     pairs,
     move: move,
     skew: skew,

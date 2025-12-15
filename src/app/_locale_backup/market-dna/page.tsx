@@ -149,7 +149,6 @@ export default function MarketDNAPage() {
   const correlationMatrix = data?.correlationMatrix || [];
 
   const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
-  const extremes = (data as any)?.extremes || null;
   const RISK_COLORS = {
     CRITICAL: '#dc2626',
     HIGH: '#ea580c', 
@@ -197,8 +196,6 @@ export default function MarketDNAPage() {
       
         // Add cache busting to force fresh data
         const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 12000);
-        // Fetch market extremes indicator (FLAME vs BOTTOM)
-        const extremesRes = await fetchT(`/api/market-extremes?t=${Date.now()}`, 12000);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -206,13 +203,6 @@ export default function MarketDNAPage() {
       
       const result: MarketDNAData = await response.json();
       const normalized = normalizeMarketDNA(result);
-      // Attach extremes scores for display blocks
-      try {
-        const exJson = extremesRes && extremesRes.ok ? await extremesRes.json() : null;
-        const flame = exJson?.data?.flameScore ?? null;
-        const bottom = exJson?.data?.bottomScore ?? null;
-        (normalized as any).extremes = { flame, bottom, asOf: exJson?.data?.asOf };
-      } catch {}
       setData(normalized);
     } catch (error) {
       console.error('Error fetching Market DNA data:', error);
@@ -285,8 +275,6 @@ export default function MarketDNAPage() {
         aiInsight: 'The current market DNA shows 91% similarity to July 2007, just before the financial crisis. Key warning signals include the breakdown of traditional bond-equity negative correlation, rising credit spreads, and sector rotation patterns consistent with late-cycle behavior. The AI model suggests heightened caution, particularly in financial and real estate sectors.',
         lastUpdated: new Date().toISOString()
       };
-      // Also set a minimal extremes fallback
-      (fallback as any).extremes = { flame: 0.5, bottom: 0.5, asOf: new Date().toISOString() };
       setData(fallback);
     } finally {
       setLoading(false);
@@ -360,124 +348,9 @@ export default function MarketDNAPage() {
     );
   }
 
-  // Helper functions for FLAME/BOTTOM interpretation
-  const getFlameLevel = (score: number) => {
-    if (score >= 0.75) return { label: 'Extreme Euphoria', color: 'text-red-400', bg: 'bg-red-500' };
-    if (score >= 0.50) return { label: 'High Euphoria', color: 'text-orange-400', bg: 'bg-orange-500' };
-    if (score >= 0.25) return { label: 'Moderate Risk-On', color: 'text-yellow-400', bg: 'bg-yellow-500' };
-    return { label: 'Low Risk Appetite', color: 'text-green-400', bg: 'bg-green-500' };
-  };
-
-  const getBottomLevel = (score: number) => {
-    if (score >= 0.75) return { label: 'Extreme Panic', color: 'text-red-400', bg: 'bg-red-500' };
-    if (score >= 0.50) return { label: 'High Stress', color: 'text-orange-400', bg: 'bg-orange-500' };
-    if (score >= 0.25) return { label: 'Moderate Fear', color: 'text-yellow-400', bg: 'bg-yellow-500' };
-    return { label: 'Low Fear', color: 'text-green-400', bg: 'bg-green-500' };
-  };
-
-  const flameScore = typeof extremes?.flame === 'number' ? extremes.flame : 0;
-  const bottomScore = typeof extremes?.bottom === 'number' ? extremes.bottom : 0;
-  const flameLevel = getFlameLevel(flameScore);
-  const bottomLevel = getBottomLevel(bottomScore);
-
   return (
     <RequirePlan min="premium">
   <div className="min-h-screen bg-[var(--background)] text-white">
-        {/* Market Extremes: FLAME vs BOTTOM - Professional View */}
-        <div className="max-w-7xl mx-auto px-4 pt-6 pb-4">
-          <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 rounded-2xl p-6 ring-1 ring-white/10 shadow-2xl">
-            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <span className="text-2xl">📊</span>
-              Market Sentiment Extremes
-            </h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* FLAME Indicator */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-rose-600 flex items-center justify-center shadow-lg">
-                      <span className="text-white text-sm font-bold">🔥</span>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-semibold text-sm">FLAME Indicator</h3>
-                      <p className="text-xs text-gray-400">Market Euphoria Level</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-red-300">{flameScore.toFixed(2)}</div>
-                    <div className={`text-xs font-medium ${flameLevel.color}`}>{flameLevel.label}</div>
-                  </div>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative h-3 bg-slate-700/50 rounded-full overflow-hidden">
-                  <div 
-                    className={`absolute inset-y-0 left-0 ${flameLevel.bg} rounded-full transition-all duration-500 shadow-lg`}
-                    style={{ width: `${Math.min(flameScore * 100, 100)}%` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  {flameScore >= 0.75 && "Extreme bullish sentiment. High-beta assets outperforming, credit spreads tight, volatility compressed. Caution advised."}
-                  {flameScore >= 0.50 && flameScore < 0.75 && "Strong risk-on behavior. Cyclicals leading, credit flowing freely. Watch for reversal signals."}
-                  {flameScore >= 0.25 && flameScore < 0.50 && "Moderate optimism. Balanced rotation between growth and value. Healthy market environment."}
-                  {flameScore < 0.25 && "Subdued risk appetite. Defensive positioning, quality bias. Market awaiting catalysts."}
-                </p>
-              </div>
-
-              {/* BOTTOM Indicator */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-lg">
-                      <span className="text-slate-900 text-sm font-bold">⚠️</span>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-semibold text-sm">BOTTOM Indicator</h3>
-                      <p className="text-xs text-gray-400">Market Panic Level</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-amber-300">{bottomScore.toFixed(2)}</div>
-                    <div className={`text-xs font-medium ${bottomLevel.color}`}>{bottomLevel.label}</div>
-                  </div>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative h-3 bg-slate-700/50 rounded-full overflow-hidden">
-                  <div 
-                    className={`absolute inset-y-0 left-0 ${bottomLevel.bg} rounded-full transition-all duration-500 shadow-lg`}
-                    style={{ width: `${Math.min(bottomScore * 100, 100)}%` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  {bottomScore >= 0.75 && "Extreme fear. Flight to safety, credit frozen, volatility spiking. Potential capitulation opportunity."}
-                  {bottomScore >= 0.50 && bottomScore < 0.75 && "High stress levels. Defensives outperforming, risk assets under pressure. Monitor for stabilization."}
-                  {bottomScore >= 0.25 && bottomScore < 0.50 && "Moderate caution. Investors favoring quality over growth. Normal market correction behavior."}
-                  {bottomScore < 0.25 && "Low fear levels. Market functioning normally, risk appetite intact. Constructive environment."}
-                </p>
-              </div>
-            </div>
-
-            {/* Timestamp */}
-            {extremes?.asOf && (
-              <div className="mt-4 pt-4 border-t border-white/5 text-center">
-                <p className="text-[10px] text-gray-500">
-                  Last updated: {new Date(extremes.asOf).toLocaleString('en-US', { 
-                    month: 'short', day: 'numeric', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                  })}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
         {/* Header */}
         <div className="bg-slate-800 border-b border-slate-700">
           <div className="max-w-7xl mx-auto px-4 py-3">

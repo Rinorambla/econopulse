@@ -174,6 +174,14 @@ export default function AIPortfolioPage() {
   const [activePeriods, setActivePeriods] = useState<string[]>(['daily','weekly','monthly','yearly']);
   const [barPeriod, setBarPeriod] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'>('monthly');
   const [barSort, setBarSort] = useState<'name'|'performance'>('performance');
+  // Stock picker modal state
+  const [stocksModal, setStocksModal] = useState<{ open: boolean; portfolio: string; sector: string; stocks: any[] }>({
+    open: false,
+    portfolio: '',
+    sector: '',
+    stocks: [],
+  });
+  const [loadingStocks, setLoadingStocks] = useState(false);
   // Regime sync (shared with MarketInteractiveChart)
   const [currentRegime, setCurrentRegime] = useState<RegimeKey>('goldilocks')
   useEffect(() => {
@@ -448,6 +456,31 @@ export default function AIPortfolioPage() {
     return sorted;
   };
 
+  // Fetch individual stocks for a portfolio/sector
+  const viewIndividualStocks = async (portfolioName: string) => {
+    setLoadingStocks(true);
+    try {
+      const response = await fetch(`/api/sector-stocks?portfolio=${encodeURIComponent(portfolioName)}&limit=12`);
+      const data = await response.json();
+      
+      if (data.stocks) {
+        setStocksModal({
+          open: true,
+          portfolio: portfolioName,
+          sector: data.sector,
+          stocks: data.stocks,
+        });
+      } else {
+        alert('No individual stocks available for this portfolio');
+      }
+    } catch (error) {
+      console.error('Error fetching stocks:', error);
+      alert('Failed to load individual stocks');
+    } finally {
+      setLoadingStocks(false);
+    }
+  };
+
   // Map portfolio name to economic regime key used by MarketInteractiveChart
   type RegimeKey = 'goldilocks' | 'recession' | 'stagflation' | 'reflation' | 'deflation' | 'disinflation' | 'dollarWeakness'
   const friendlyRegimeLabel = (reg: RegimeKey) => ({
@@ -630,7 +663,16 @@ export default function AIPortfolioPage() {
 
         {/* Holdings */}
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-300 border-b border-slate-600 pb-1">Holdings</h4>
+          <div className="flex items-center justify-between border-b border-slate-600 pb-1 mb-3">
+            <h4 className="text-sm font-semibold text-gray-300">Holdings (ETFs)</h4>
+            <button
+              onClick={() => viewIndividualStocks(portfolioData.name)}
+              disabled={loadingStocks}
+              className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white rounded transition-colors"
+            >
+              {loadingStocks ? 'Loading...' : '📊 View Stocks'}
+            </button>
+          </div>
           {portfolioData.holdings?.slice(0, 5).map((stock: any, index: number) => (
             <div key={index} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg gap-3 overflow-hidden">
               <div className="min-w-0 flex-1">
@@ -1018,6 +1060,106 @@ export default function AIPortfolioPage() {
       </div>
 
       <Footer />
+
+      {/* Individual Stocks Modal */}
+      {stocksModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setStocksModal({ ...stocksModal, open: false })}>
+          <div className="bg-slate-800 rounded-lg max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-600 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-4 border-b border-slate-700 bg-slate-900/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-1">
+                    📊 Individual Stocks - {stocksModal.sector}
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    Top performing stocks from {stocksModal.portfolio}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStocksModal({ ...stocksModal, open: false })}
+                  className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-slate-700 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {stocksModal.stocks.map((stock, index) => (
+                  <div key={index} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600 hover:border-blue-500/50 transition-all">
+                    {/* Stock Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-white text-base mb-1">{stock.ticker}</div>
+                        <div className="text-xs text-gray-400 line-clamp-2 leading-tight">{stock.name}</div>
+                      </div>
+                      <div className="ml-2 text-right shrink-0">
+                        <div className="text-sm font-bold text-white">${stock.price.toFixed(2)}</div>
+                        <div className={`text-xs font-medium ${getPerformanceColor(stock.changePercent)}`}>
+                          {stock.change}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Weight Badge */}
+                    <div className="mb-3">
+                      <span className="inline-block px-2 py-0.5 bg-blue-600/20 text-blue-400 text-xs rounded-full font-medium">
+                        Suggested: {stock.weight}%
+                      </span>
+                    </div>
+
+                    {/* Performance Grid */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-800/50 rounded p-2">
+                        <div className="text-gray-500 text-[10px] mb-0.5">1W</div>
+                        <div className={`font-semibold ${getPerformanceColor(stock.performance.weekly)}`}>
+                          {stock.performance.weekly}
+                        </div>
+                      </div>
+                      <div className="bg-slate-800/50 rounded p-2">
+                        <div className="text-gray-500 text-[10px] mb-0.5">1M</div>
+                        <div className={`font-semibold ${getPerformanceColor(stock.performance.monthly)}`}>
+                          {stock.performance.monthly}
+                        </div>
+                      </div>
+                      <div className="bg-slate-800/50 rounded p-2">
+                        <div className="text-gray-500 text-[10px] mb-0.5">3M</div>
+                        <div className={`font-semibold ${getPerformanceColor(stock.performance.quarterly)}`}>
+                          {stock.performance.quarterly}
+                        </div>
+                      </div>
+                      <div className="bg-slate-800/50 rounded p-2">
+                        <div className="text-gray-500 text-[10px] mb-0.5">1Y</div>
+                        <div className={`font-semibold ${getPerformanceColor(stock.performance.yearly)}`}>
+                          {stock.performance.yearly}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-700 bg-slate-900/50">
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>
+                  <strong className="text-gray-400">Note:</strong> These are suggested individual stocks you can invest in instead of ETFs. 
+                  Suggested weights are indicative only and should be adjusted based on your risk tolerance and investment strategy.
+                </p>
+                <p className="text-gray-600">
+                  Always perform your own due diligence before investing in individual securities.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </RequirePlan>
   );

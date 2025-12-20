@@ -61,6 +61,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [riskSummary, setRiskSummary] = useState<null | { regime:'Risk-On'|'Risk-Off'|'Neutral'; votes:{ on:number; off:number; neutral:number }; score:number; signals:RiskSignal[] }>(null);
   const [recessionIndex, setRecessionIndex] = useState<null | { date:string; value:number }>(null);
   const [recessionSeries, setRecessionSeries] = useState<Array<{ date:string; value:number }>>([]);
+  // Market extremes (FLAME/BOTTOM indicators)
+  const [marketExtremes, setMarketExtremes] = useState<null | { flameScore:number; bottomScore:number; asOf:string }>(null);
   const mspredRisk = React.useMemo(()=>{
     if (!recessionIndex) return null;
     const v = recessionIndex.value;
@@ -139,6 +141,24 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       console.error(e);
       setRecessionIndex(null);
       setRecessionSeries([]);
+    }
+  };
+  // Fetch market extremes (FLAME euphoria + BOTTOM panic indicators)
+  const fetchMarketExtremes = async () => {
+    try {
+      const r = await fetchT('/api/market-extremes', 8000, { cache:'no-store' });
+      if (!r.ok) throw new Error('market-extremes');
+      const j = await r.json();
+      if (j?.success && j?.data) {
+        setMarketExtremes({
+          flameScore: j.data.flameScore ?? 0,
+          bottomScore: j.data.bottomScore ?? 0,
+          asOf: j.data.asOf ?? new Date().toISOString()
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      setMarketExtremes(null);
     }
   };
   // Risk ratios fetcher: compute pair ratios + MOVE/SKEW levels and derive composite regime
@@ -263,7 +283,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     }
   };
 
-  useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
+  useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); fetchMarketExtremes(); }, []);
   // Auto-refresh with visibility guard to avoid hidden-tab work
   useEffect(()=>{
     let stopped = false;
@@ -276,6 +296,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       fetchETFData();
       fetchRiskRatios();
       fetchRecessionIndex();
+      fetchMarketExtremes();
       fetchTopMovers();
     };
     const heavy = setInterval(()=>{ if (!stopped) tick(); }, 600000); // 10 min
@@ -289,8 +310,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
   // Refetch movers on sector/period/sync changes
   useEffect(()=>{ fetchTopMovers(); }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
-  // Initial load for risk ratios
-  useEffect(()=>{ fetchRiskRatios(); fetchRecessionIndex(); }, []);
+  // Initial load for risk ratios and market extremes
+  useEffect(()=>{ fetchRiskRatios(); fetchRecessionIndex(); fetchMarketExtremes(); }, []);
 
   // When movers change, fetch their sparklines
   useEffect(() => {
@@ -926,6 +947,74 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <p className="mt-2 text-[10px] text-gray-500">Spread defined as {etfSpreadType==='percent'? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
                   </div>
                   <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3">Detailed Comparison</h4><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-white/10"><th className="text-left py-2 text-gray-300">Symbol</th><th className="text-right py-2 text-gray-300">Price</th><th className="text-right py-2 text-gray-300">Change</th><th className="text-right py-2 text-gray-300">Volume</th><th className="text-right py-2 text-gray-300">High</th><th className="text-right py-2 text-gray-300">Low</th><th className="text-right py-2 text-gray-300">YTD</th><th className="text-right py-2 text-gray-300">Exp%</th><th className="text-right py-2 text-gray-300">Vol%</th></tr></thead><tbody>{currentComparison.map(etf => <tr key={etf.symbol} className="border-b border-white/5"><td className="py-3 font-medium">{etf.symbol}</td><td className="py-3 text-right">{typeof etf.price==='number'?`$${etf.price.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.change)}`}>{typeof etf.change==='number'?(etf.change>=0?'+':'')+etf.change.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volume==='number'?etf.volume.toLocaleString():'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.high==='number'?`$${etf.high.toFixed(2)}`:'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.low==='number'?`$${etf.low.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.ytdReturn)}`}>{typeof etf.ytdReturn==='number'?(etf.ytdReturn>=0?'+':'')+etf.ytdReturn.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.expense==='number'?etf.expense.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volatility==='number'?etf.volatility.toFixed(2)+'%':'—'}</td></tr>)}</tbody></table></div></div>
+                </div>
+              )}
+
+              {/* Market Sentiment Extremes: FLAME & BOTTOM */}
+              {marketExtremes && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <span>📊</span> Market Sentiment Extremes
+                  </h3>
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* FLAME - Euphoria */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🔥</span>
+                            <div>
+                              <div className="text-xs font-semibold text-white">FLAME</div>
+                              <div className="text-[10px] text-gray-500">Euphoria Level</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold font-mono text-gray-200">{marketExtremes.flameScore.toFixed(2)}</div>
+                            <div className={`text-[10px] font-medium ${marketExtremes.flameScore >= 0.75 ? 'text-red-400' : marketExtremes.flameScore >= 0.50 ? 'text-orange-400' : marketExtremes.flameScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                              {marketExtremes.flameScore >= 0.75 ? 'Extreme' : marketExtremes.flameScore >= 0.50 ? 'High' : marketExtremes.flameScore >= 0.25 ? 'Moderate' : 'Low'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${marketExtremes.flameScore >= 0.75 ? 'bg-red-500' : marketExtremes.flameScore >= 0.50 ? 'bg-orange-500' : marketExtremes.flameScore >= 0.25 ? 'bg-yellow-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(marketExtremes.flameScore * 100, 100)}%` }} />
+                        </div>
+                        <p className="text-[9px] text-gray-400 leading-tight">
+                          {marketExtremes.flameScore >= 0.75 && "Extreme bullish sentiment. High-beta outperforming."}
+                          {marketExtremes.flameScore >= 0.50 && marketExtremes.flameScore < 0.75 && "Strong risk-on. Cyclicals leading."}
+                          {marketExtremes.flameScore >= 0.25 && marketExtremes.flameScore < 0.50 && "Moderate optimism. Balanced rotation."}
+                          {marketExtremes.flameScore < 0.25 && "Subdued risk appetite. Defensive positioning."}
+                        </p>
+                      </div>
+                      {/* BOTTOM - Panic */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">⚠️</span>
+                            <div>
+                              <div className="text-xs font-semibold text-white">BOTTOM</div>
+                              <div className="text-[10px] text-gray-500">Panic Level</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold font-mono text-gray-200">{marketExtremes.bottomScore.toFixed(2)}</div>
+                            <div className={`text-[10px] font-medium ${marketExtremes.bottomScore >= 0.75 ? 'text-red-400' : marketExtremes.bottomScore >= 0.50 ? 'text-orange-400' : marketExtremes.bottomScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                              {marketExtremes.bottomScore >= 0.75 ? 'Extreme' : marketExtremes.bottomScore >= 0.50 ? 'High' : marketExtremes.bottomScore >= 0.25 ? 'Moderate' : 'Low'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${marketExtremes.bottomScore >= 0.75 ? 'bg-red-500' : marketExtremes.bottomScore >= 0.50 ? 'bg-orange-500' : marketExtremes.bottomScore >= 0.25 ? 'bg-yellow-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(marketExtremes.bottomScore * 100, 100)}%` }} />
+                        </div>
+                        <p className="text-[9px] text-gray-400 leading-tight">
+                          {marketExtremes.bottomScore >= 0.75 && "Extreme fear. Flight to safety, credit frozen."}
+                          {marketExtremes.bottomScore >= 0.50 && marketExtremes.bottomScore < 0.75 && "High stress. Defensives outperforming."}
+                          {marketExtremes.bottomScore >= 0.25 && marketExtremes.bottomScore < 0.50 && "Moderate caution. Quality over growth."}
+                          {marketExtremes.bottomScore < 0.25 && "Low fear. Market functioning normally."}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[9px] text-gray-500">Updated: {new Date(marketExtremes.asOf).toLocaleTimeString()}</p>
+                  </div>
                 </div>
               )}
 

@@ -105,8 +105,9 @@ export async function GET(request: Request) {
     // Helper function to get historical price for specific days back
     const getHistoricalPrice = (historical: any[], daysBack: number) => {
       if (!historical || historical.length === 0) return null;
-      const targetIndex = Math.min(daysBack, historical.length - 1);
-      return historical[historical.length - 1 - targetIndex]?.close || null;
+      // Get from oldest data (index 0 is oldest, length-1 is newest)
+      const targetIndex = Math.max(0, historical.length - 1 - daysBack);
+      return historical[targetIndex]?.close || null;
     };
     // Helper: ensure historical is sorted by date ascending (YYYY-MM-DD or ISO)
     const sortHistoricalAsc = (historical: any[] | null) => {

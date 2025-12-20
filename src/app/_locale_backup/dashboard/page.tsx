@@ -418,6 +418,12 @@ export default function DashboardPage() {
 		};
 		fetchExtremes();
 		fetchRecession();
+		// Refresh these metrics periodically (independent from dashboard universe refresh)
+		const id = setInterval(() => {
+			fetchExtremes();
+			fetchRecession();
+		}, 5 * 60 * 1000);
+		return () => clearInterval(id);
 	}, []);
 
 	// Helper functions for FLAME/BOTTOM interpretation
@@ -441,21 +447,33 @@ export default function DashboardPage() {
 	const bottomScore = extremes?.bottom ?? 0;
 	const flameLevel = getFlameLevel(flameScore);
 	const bottomLevel = getBottomLevel(bottomScore);
+	const regimeLabel = riskRegime?.regime || '—';
+	const regimeScore = typeof riskRegime?.score === 'number' ? riskRegime.score : null;
+	const regimeColor = regimeLabel === 'Risk-On' ? 'text-emerald-400' : regimeLabel === 'Risk-Off' ? 'text-red-400' : 'text-gray-300';
+	const recessionValue = typeof recessionIndex?.value === 'number' ? recessionIndex.value : null;
+	const recessionRisk = (() => {
+		if (recessionValue === null) return { label: '—', color: 'text-gray-300' };
+		// Keep same heuristic used in AI Pulse for consistency
+		if (recessionValue < 0.15) return { label: 'High', color: 'text-red-400' };
+		if (recessionValue < 0.25) return { label: 'Elevated', color: 'text-orange-300' };
+		if (recessionValue < 0.4) return { label: 'Moderate', color: 'text-yellow-300' };
+		return { label: 'Low', color: 'text-emerald-400' };
+	})();
 
 	return (
 		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
 				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1></div></div>
 				
-				{/* Market Sentiment Extremes - Compact Version */}
-				{extremes && (
+				{/* Market Sentiment & Risk Metrics (Top) */}
+				{(extremes || riskRegime || recessionIndex) && (
 					<div className="max-w-7xl mx-auto px-3 pt-3 pb-2">
 						<div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 rounded-xl p-4 ring-1 ring-white/10">
 							<div className="flex items-center justify-between mb-3">
 								<h3 className="text-xs font-bold text-gray-300 flex items-center gap-1">
 									<span>📊</span> Market Sentiment & Risk Dashboard
 								</h3>
-								<span className="text-[9px] text-gray-500">{new Date(extremes.asOf).toLocaleTimeString()}</span>
+								<span className="text-[9px] text-gray-500">Updated: {new Date((extremes?.asOf || new Date().toISOString())).toLocaleTimeString()}</span>
 							</div>
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 								{/* FLAME - Euphoria */}
@@ -506,6 +524,62 @@ export default function DashboardPage() {
 										{bottomScore >= 0.50 && bottomScore < 0.75 && "High stress. Defensives outperforming."}
 										{bottomScore >= 0.25 && bottomScore < 0.50 && "Moderate caution. Quality over growth."}
 										{bottomScore < 0.25 && "Low fear. Market functioning normally."}
+									</p>
+								</div>
+								{/* REGIME */}
+								<div className="space-y-1.5">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-1.5">
+											<span className="text-base">🎯</span>
+											<div>
+												<div className="text-[11px] font-semibold text-white">Regime</div>
+												<div className="text-[9px] text-gray-500">Risk-on / off</div>
+											</div>
+										</div>
+										<div className="text-right">
+											<div className="text-sm font-bold font-mono text-gray-200">{regimeScore === null ? '—' : regimeScore}</div>
+											<div className={`text-[10px] font-medium ${regimeColor}`}>{regimeLabel}</div>
+										</div>
+									</div>
+									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
+										<div
+											className={`absolute inset-y-0 left-1/2 bg-white/10 rounded-full transition-all duration-500`}
+											style={{
+												width: `${Math.min(Math.abs((regimeScore ?? 0)) * 25, 50)}%`,
+												transform: `translateX(${(regimeScore ?? 0) >= 0 ? '-50%' : '-50%'})`
+											}}
+										/>
+									</div>
+									<p className="text-[9px] text-gray-400 leading-tight">
+										{regimeLabel === 'Risk-On' && 'Breadth + cyclicals supportive.'}
+										{regimeLabel === 'Risk-Off' && 'Defensives + credit caution.'}
+										{regimeLabel === 'Neutral' && 'Mixed signals. Wait for confirmation.'}
+										{regimeLabel === '—' && 'Regime data unavailable.'}
+									</p>
+								</div>
+								{/* RECESSION */}
+								<div className="space-y-1.5">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-1.5">
+											<span className="text-base">📉</span>
+											<div>
+												<div className="text-[11px] font-semibold text-white">Recession</div>
+												<div className="text-[9px] text-gray-500">Signal index</div>
+											</div>
+										</div>
+										<div className="text-right">
+											<div className="text-sm font-bold font-mono text-gray-200">{recessionValue === null ? '—' : recessionValue.toFixed(3)}</div>
+											<div className={`text-[10px] font-medium ${recessionRisk.color}`}>{recessionRisk.label} risk</div>
+										</div>
+									</div>
+									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
+										<div
+											className={`absolute inset-y-0 left-0 ${recessionRisk.label === 'Low' ? 'bg-green-500' : recessionRisk.label === 'Moderate' ? 'bg-yellow-500' : recessionRisk.label === 'Elevated' ? 'bg-orange-500' : recessionRisk.label === 'High' ? 'bg-red-500' : 'bg-slate-600'} rounded-full transition-all duration-500`}
+											style={{ width: `${recessionValue === null ? 0 : Math.min((1 - recessionValue) * 100, 100)}%` }}
+										/>
+									</div>
+									<p className="text-[9px] text-gray-400 leading-tight">
+										Signal based on credit + rates composite.
 									</p>
 								</div>
 							</div>

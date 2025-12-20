@@ -57,31 +57,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [bottomMovers, setBottomMovers] = useState<Array<{symbol:string;price:number;changePercent:number}>>([]);
   // Risk regime & ratios (moved here from Market DNA)
   type RiskSignal = { key:string; label:string; dir:'risk-on'|'risk-off'|'neutral'; note?:string };
-  const [riskRatios, setRiskRatios] = useState<Record<string, number>>({});
-  const [riskSummary, setRiskSummary] = useState<null | { regime:'Risk-On'|'Risk-Off'|'Neutral'; votes:{ on:number; off:number; neutral:number }; score:number; signals:RiskSignal[] }>(null);
-  const [recessionIndex, setRecessionIndex] = useState<null | { date:string; value:number }>(null);
-  const [recessionSeries, setRecessionSeries] = useState<Array<{ date:string; value:number }>>([]);
-  // Market extremes (FLAME/BOTTOM indicators)
-  const [marketExtremes, setMarketExtremes] = useState<null | { flameScore:number; bottomScore:number; asOf:string }>(null);
-  const mspredRisk = React.useMemo(()=>{
-    if (!recessionIndex) return null;
-    const v = recessionIndex.value;
-    // Heuristic: lower ratio => higher recession risk (HY OAS spikes widen denominator)
-    if (v < 0.15) return { level:'High', badge:'bg-red-900/30 text-red-300', text:'text-red-300' };
-    if (v < 0.25) return { level:'Elevated', badge:'bg-orange-900/30 text-orange-300', text:'text-orange-300' };
-    if (v < 0.4) return { level:'Moderate', badge:'bg-yellow-900/30 text-yellow-300', text:'text-yellow-300' };
-    return { level:'Low', badge:'bg-emerald-900/30 text-emerald-300', text:'text-emerald-300' };
-  }, [recessionIndex]);
-  const mspredDelta = React.useMemo(()=>{
-    if (!recessionIndex || recessionSeries.length < 5) return null;
-    const last = recessionIndex.value;
-    const len = recessionSeries.length;
-    const window = Math.min(20, len);
-    let sum = 0; for (let i=len-window; i<len; i++) sum += recessionSeries[i].value;
-    const sma = sum / window;
-    const diff = last - sma; // positive = improving (lower risk)
-    return { sma, diff };
-  }, [recessionIndex, recessionSeries]);
+  // Market Sentiment & Risk Metrics moved to Dashboard (removed from AI Pulse)
   // Sparkline state (compact history for movers)
   type SparkBar = { time:number; close:number };
   const [sparks, setSparks] = useState<Record<string, SparkBar[]>>({});
@@ -130,127 +106,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const fetchEconomicData = async () => { try { const r = await fetchT('/api/economic-data', 10000); if(!r.ok) { console.warn('economic-data unavailable'); return; } const j = await r.json(); setEconomicData(j.data); setDataHealth(h=>({...h,economic:!!j.data})); } catch(e){ console.error(e);} };
   const fetchAIAnalysis = async () => { try { setAiLoading(true); const r = await fetchT('/api/ai-economic-analysis', 12000); if(!r.ok) { console.warn('ai-economic-analysis unavailable'); setAiMeta(null); setAiAnalysis(null); return; } const j = await r.json(); const analysis = j.data?.analysis || j; setAiAnalysis(analysis); setAiMeta(j ? { realtime: !!j.realtime, dataSource: j.data?.dataSource||'N/A', fallback: !!j.data?.fallback } : null); setDataHealth(h=>({...h,ai:!!analysis})); } catch(e){ console.error(e);} finally { setAiLoading(false);} };
   const fetchETFData = async () => { try { const r = await fetchT('/api/etf-comparison', 10000); if(!r.ok) throw new Error('etf'); const j = await r.json(); const etfs = j.etfs || []; setEtfData(etfs); setDataHealth(h=>({...h,etf:etfs.length>0})); } catch(e){ console.error(e);} };
-  const fetchRecessionIndex = async () => {
-    try {
-  const r = await fetchT('/api/recession-index?limit=180', 8000, { cache:'no-store' });
-      if (!r.ok) throw new Error('recession-index');
-      const j = await r.json();
-      if (Array.isArray(j?.series)) setRecessionSeries(j.series);
-      if (j?.latest && typeof j.latest.value === 'number') setRecessionIndex(j.latest);
-    } catch (e) {
-      console.error(e);
-      setRecessionIndex(null);
-      setRecessionSeries([]);
-    }
-  };
-  // Fetch market extremes (FLAME euphoria + BOTTOM panic indicators)
-  const fetchMarketExtremes = async () => {
-    try {
-      const r = await fetchT('/api/market-extremes', 8000, { cache:'no-store' });
-      if (!r.ok) throw new Error('market-extremes');
-      const j = await r.json();
-      if (j?.success && j?.data) {
-        setMarketExtremes({
-          flameScore: j.data.flameScore ?? 0,
-          bottomScore: j.data.bottomScore ?? 0,
-          asOf: j.data.asOf ?? new Date().toISOString()
-        });
-      }
-    } catch (e) {
-      console.error(e);
-      setMarketExtremes(null);
-    }
-  };
-  // Risk ratios fetcher: compute pair ratios + MOVE/SKEW levels and derive composite regime
-  const fetchRiskRatios = async () => {
-    try {
-      const symbols = ['^VVIX','^VIX','SPHB','SPLV','XLY','XLP','IWD','IWF','HYG','IEF','HG=F','GC=F','^MOVE','^SKEW'];
-      const qs = new URLSearchParams({ symbols: symbols.join(','), range:'6mo', interval:'1d' });
-  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 10000, { cache:'no-store' });
-      if (!res.ok) throw new Error('risk-ratios');
-      const js = await res.json();
-      const arr: Array<{ symbol:string; bars:Array<{time:number; close:number}> }> = js.data || [];
-      const bySym: Record<string, Array<{time:number; close:number}>> = {};
-      for (const h of arr) {
-        const s = String(h.symbol||'');
-        const bars = (h.bars||[]).map((b:any)=>({ time:Number(b.time)||0, close:Number(b.close)||0 })).filter(b=>Number.isFinite(b.time)&&Number.isFinite(b.close));
-        if (s && bars.length) bySym[s] = bars;
-      }
-
-      // Helper to align two series by time and compute ratio series
-      const buildRatio = (aSym:string, bSym:string) => {
-        const a = bySym[aSym]||[]; const b = bySym[bSym]||[]; if (!a.length || !b.length) return [] as number[];
-        const bMap = new Map<number, number>(b.map(x=> [x.time, x.close] as const));
-        const r: number[] = [];
-        for (const bar of a) {
-          const bv = bMap.get(bar.time);
-          if (typeof bv === 'number' && bv !== 0) r.push(bar.close / bv);
-        }
-        return r;
-      };
-      const sma = (arr:number[], n:number) => {
-        if (arr.length===0) return 0; const k = Math.min(n, arr.length);
-        let s = 0; for(let i=arr.length-k;i<arr.length;i++) s += arr[i];
-        return s / k;
-      };
-      const classifyRatio = (series:number[]): 'risk-on'|'risk-off'|'neutral' => {
-        if (series.length < 5) return 'neutral';
-        const last = series[series.length-1];
-        const ma20 = sma(series, 20);
-        const ma60 = sma(series, 60);
-        if (last >= ma20 && ma20 >= ma60) return 'risk-on';
-        if (last <= ma20 && ma20 <= ma60) return 'risk-off';
-        return 'neutral';
-      };
-
-      const pairs: Array<[string,string,string,string]> = [
-        ['^VVIX','^VIX','VVIX/VIX','Vol-of-Vol vs VIX'],
-        ['SPHB','SPLV','SPHB/SPLV','High beta vs Low vol'],
-        ['XLY','XLP','XLY/XLP','Discretionary vs Staples'],
-        ['IWD','IWF','IWD/IWF','Value vs Growth'],
-        ['HYG','IEF','HYG/IEF','High yield vs Treasuries'],
-        ['HG=F','GC=F','HG/GC','Copper vs Gold']
-      ];
-
-      const outRatios: Record<string, number> = {};
-      const signals: RiskSignal[] = [];
-      for (const [a,b,label,desc] of pairs) {
-        const series = buildRatio(a,b);
-        const last = series.length ? series[series.length-1] : NaN;
-        if (Number.isFinite(last)) outRatios[label] = last;
-        const dir = classifyRatio(series);
-        const ma20 = sma(series, 20); const ma60 = sma(series, 60);
-        const note = Number.isFinite(ma20) && Number.isFinite(ma60) ? (`SMA20${ma20>=ma60?'>=':'<'}SMA60`) : undefined;
-        signals.push({ key:label, label: `${label}`, dir, note });
-      }
-
-      // MOVE index (bond vol) and SKEW (tail risk)
-      const moveSeries = bySym['^MOVE']||[]; const skewSeries = bySym['^SKEW']||[];
-      const moveLast = moveSeries.length? moveSeries[moveSeries.length-1].close : NaN;
-      const skewLast = skewSeries.length? skewSeries[skewSeries.length-1].close : NaN;
-      if (Number.isFinite(moveLast)) outRatios['MOVE'] = moveLast;
-      if (Number.isFinite(skewLast)) outRatios['SKEW'] = skewLast;
-      if (Number.isFinite(moveLast)) {
-        const dir = moveLast > 120 ? 'risk-off' : moveLast < 90 ? 'risk-on' : 'neutral';
-        signals.push({ key:'MOVE', label:'MOVE Index', dir, note: moveLast.toFixed(0) });
-      }
-      if (Number.isFinite(skewLast)) {
-        const dir = skewLast > 135 ? 'risk-off' : skewLast < 120 ? 'risk-on' : 'neutral';
-        signals.push({ key:'SKEW', label:'CBOE SKEW', dir, note: skewLast.toFixed(0) });
-      }
-
-      const votes = signals.reduce((acc, s)=> { acc[s.dir] = (acc as any)[s.dir] + 1; return acc; }, { 'risk-on':0, 'risk-off':0, 'neutral':0 } as any);
-      const score = (votes['risk-on']||0) - (votes['risk-off']||0);
-      const regime: 'Risk-On'|'Risk-Off'|'Neutral' = score >= 2 ? 'Risk-On' : score <= -2 ? 'Risk-Off' : 'Neutral';
-
-      setRiskRatios(outRatios);
-      setRiskSummary({ regime, votes: { on:votes['risk-on']||0, off:votes['risk-off']||0, neutral:votes['neutral']||0 }, score, signals });
-    } catch (e) {
-      console.error(e);
-      setRiskRatios({});
-      setRiskSummary(null);
-    }
-  };
+  // Risk metrics fetchers removed from AI Pulse
   // Oil seasonality fetch removed
   // Movers are strictly DAILY % change; always fetch period=daily and refresh with page data.
   const fetchTopMovers = async (sectorOverride?: string) => { try { const s = sectorOverride ?? selectedSector; const p = syncMoversWithPeriod ? selectedPeriod : 'daily'; const qs = new URLSearchParams({ limit:'10', period:p }); if (s) qs.set('sector', s); const r = await fetchT(`/api/top-movers?${qs.toString()}`, 8000, { cache:'no-store' }); if(!r.ok) throw new Error('movers'); const j = await r.json(); setTopMovers((j.top||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); setBottomMovers((j.bottom||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); } catch(e){ console.error(e);} };
@@ -283,7 +139,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     }
   };
 
-  useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); fetchMarketExtremes(); }, []);
+  useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
   // Auto-refresh with visibility guard to avoid hidden-tab work
   useEffect(()=>{
     let stopped = false;
@@ -294,9 +150,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       fetchCountryData();
       fetchAIAnalysis();
       fetchETFData();
-      fetchRiskRatios();
-      fetchRecessionIndex();
-      fetchMarketExtremes();
       fetchTopMovers();
     };
     const heavy = setInterval(()=>{ if (!stopped) tick(); }, 600000); // 10 min
@@ -310,16 +163,10 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
   // Refetch movers on sector/period/sync changes
   useEffect(()=>{ fetchTopMovers(); }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
-  // Initial load for risk ratios and market extremes
-  useEffect(()=>{ fetchRiskRatios(); fetchRecessionIndex(); fetchMarketExtremes(); }, []);
+  // Risk metrics moved to Dashboard
 
   // When movers change, fetch their sparklines
-  useEffect(() => {
-    const syms = [...topMovers.map(m=>m.symbol), ...bottomMovers.map(m=>m.symbol)];
-    if (syms.length > 0) fetchSparkHistory(syms);
-  }, [topMovers, bottomMovers]);
-  useEffect(()=> { if(etfData.length>0 && !selectedComparison) setSelectedComparison('QQQ-SPY'); }, [etfData, selectedComparison]);
-  const handleRefresh = () => { /* manual refresh removed per request; auto-refresh enabled */ };
+  // Risk metrics removed from AI Pulse
 
   // Fetch ETF historical series for spread mode
   const fetchEtfComparisonSeries = async () => {
@@ -950,65 +797,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               )}
 
-              {/* Market Sentiment & Risk Metrics */}
-              {(riskSummary || recessionIndex || marketExtremes) && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    <span>📊</span> Market Sentiment & Risk Metrics
-                  </h3>
-                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* FLAME */}
-                    {marketExtremes && (
-                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-2xl mb-2">🔥</span>
-                        <div className="text-xs text-gray-400 mb-1">FLAME</div>
-                        <div className="text-2xl font-bold mb-1">{marketExtremes.flameScore.toFixed(2)}</div>
-                        <div className={`text-xs font-medium ${marketExtremes.flameScore >= 0.75 ? 'text-red-400' : marketExtremes.flameScore >= 0.50 ? 'text-orange-400' : marketExtremes.flameScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                          {marketExtremes.flameScore >= 0.75 ? 'Extreme' : marketExtremes.flameScore >= 0.50 ? 'High' : marketExtremes.flameScore >= 0.25 ? 'Moderate' : 'Low'}
-                        </div>
-                      </div>
-                    )}
-                    {/* BOTTOM */}
-                    {marketExtremes && (
-                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-2xl mb-2">⚠️</span>
-                        <div className="text-xs text-gray-400 mb-1">BOTTOM</div>
-                        <div className="text-2xl font-bold mb-1">{marketExtremes.bottomScore.toFixed(2)}</div>
-                        <div className={`text-xs font-medium ${marketExtremes.bottomScore >= 0.75 ? 'text-red-400' : marketExtremes.bottomScore >= 0.50 ? 'text-orange-400' : marketExtremes.bottomScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                          {marketExtremes.bottomScore >= 0.75 ? 'Extreme' : marketExtremes.bottomScore >= 0.50 ? 'High' : marketExtremes.bottomScore >= 0.25 ? 'Moderate' : 'Low'}
-                        </div>
-                      </div>
-                    )}
-                    {/* REGIME */}
-                    {riskSummary ? (
-                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-2xl mb-2">🎯</span>
-                        <div className="text-xs text-gray-400 mb-1">Regime</div>
-                        <div className="text-2xl font-bold mb-1">{riskSummary.score}</div>
-                        <div className={`text-xs font-medium ${riskSummary.regime==='Risk-On' ? 'text-emerald-400' : riskSummary.regime==='Risk-Off' ? 'text-red-400' : 'text-gray-400'}`}>
-                          {riskSummary.regime}
-                        </div>
-                      </div>
-                    ) : null}
-                    {/* RECESSION */}
-                    {recessionIndex ? (
-                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-2xl mb-2">📉</span>
-                        <div className="text-xs text-gray-400 mb-1">Recession</div>
-                        <div className="text-2xl font-bold mb-1">{recessionIndex.value.toFixed(3)}</div>
-                        <div className={`text-xs font-medium ${mspredRisk?.level === 'Low' ? 'text-emerald-400' : mspredRisk?.level === 'Moderate' ? 'text-yellow-400' : mspredRisk?.level === 'Elevated' ? 'text-orange-400' : 'text-red-400'}`}>
-                          {mspredRisk?.level || 'Unknown'} risk
-                        </div>
-                      </div>
-                    ) : null}
-                    </div>
-                    {marketExtremes && (
-                      <p className="mt-3 text-[10px] text-gray-500 text-center">Updated: {new Date(marketExtremes.asOf).toLocaleTimeString()}</p>
-                    )}
-                  </div>
-                </div>
-              )}
+              {/* Market Sentiment & Risk Metrics moved to Dashboard */}
               {/* New extended comparison tool (synthetic demo). Real data already powering snapshot above. */}
               {/* Extended ETFComparisonTool removed per request */}
             </div>

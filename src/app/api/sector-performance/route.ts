@@ -51,6 +51,8 @@ export async function GET(request: Request) {
     console.log(`📊 Requesting data for ${symbols.length} sector ETFs:`, symbols);
     
     // Fetch current day data
+    // IMPORTANT: do not trust Tiingo IEX bulk quote fields for ETFs (can be inconsistent vs daily closes).
+    // We will derive the "current" close from the latest daily bar to keep it consistent with historical closes.
     const sectorData = await getTiingoMarketData(symbols);
     
     if (!sectorData || sectorData.length === 0) {
@@ -153,9 +155,41 @@ export async function GET(request: Request) {
       }
 
       const hasData = 'data' in currentData && (currentData as any).data;
-      const currentPriceRaw = hasData ? (currentData as any).data.price : (currentData as any).price;
-      const currentPrice = Number(currentPriceRaw);
       const historicalSorted = sortHistoricalAsc(Array.isArray(historicalData) ? historicalData : null);
+
+      // Prefer latest daily close (same scale as historical closes)
+      const latestTiingoClose = getHistoricalPrice(historicalSorted, 0);
+
+      // Optional Yahoo fallback for current close if Tiingo daily bars unavailable
+      const fromYahooAny = yahooHistMap ? yahooHistMap.get(symbol) : null;
+      const yBarsAny = fromYahooAny?.bars;
+      const latestYahooClose = (() => {
+        if (!yBarsAny || yBarsAny.length === 0) return null;
+        const last = (yBarsAny as any)[yBarsAny.length - 1];
+        return typeof last?.close === 'number' ? last.close : null;
+      })();
+
+      // As a last resort, fall back to quote price
+      const quotePriceRaw = hasData ? (currentData as any).data.price : (currentData as any).price;
+      const quotePrice = Number(quotePriceRaw);
+      const currentPrice = (typeof latestTiingoClose === 'number' && latestTiingoClose > 0)
+        ? latestTiingoClose
+        : (typeof latestYahooClose === 'number' && latestYahooClose > 0)
+          ? latestYahooClose
+          : (Number.isFinite(quotePrice) ? quotePrice : 0);
+
+      // Tiingo IEX bulk quotes can occasionally be stale/inconsistent for ETFs.
+      // Prefer the most recent close from the same historical series when the quote deviates too much.
+      const lastHistCloseRaw = historicalSorted.length ? historicalSorted[historicalSorted.length - 1]?.close : null;
+      const lastHistClose = typeof lastHistCloseRaw === 'number' ? lastHistCloseRaw : null;
+      const useHistAsCurrent = (() => {
+        if (lastHistClose === null) return false;
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) return true;
+        // If quote is off by >20% vs last close, treat it as unreliable.
+        const rel = Math.abs(currentPrice - lastHistClose) / (lastHistClose || 1);
+        return rel > 0.20;
+      })();
+      const currentPriceEffective = useHistAsCurrent ? (lastHistClose ?? 0) : currentPrice;
       
       // Calculate multi-period performance using trading-day approximations
       const fromYahoo = (!historicalSorted || historicalSorted.length < 2) && yahooHistMap ? yahooHistMap.get(symbol) : null;
@@ -197,12 +231,33 @@ export async function GET(request: Request) {
           daily = 0;
         }
       }
-      let weekly = calculatePerformance(currentPrice, weeklyPrice);
-      let monthly = calculatePerformance(currentPrice, monthlyPrice);
-      let quarterly = calculatePerformance(currentPrice, quarterlyPrice);
-      let sixMonth = calculatePerformance(currentPrice, sixMonthPrice);
-      let fiftyTwoWeek = calculatePerformance(currentPrice, fiftyTwoWeekPrice);
-      let ytd = calculatePerformance(currentPrice, ytdBasePrice);
+
+      // If quote-based daily looks suspicious, compute from closes to keep consistent.
+      if (!Number.isFinite(Number(daily)) || Math.abs(Number(daily)) > 25) {
+        const lastClose = fromYahoo ? getYahooCloseNDaysAgo(0) : getHistoricalPrice(historicalSorted, 0);
+        const prevClose = fromYahoo ? getYahooCloseNDaysAgo(1) : getHistoricalPrice(historicalSorted, 1);
+        if (typeof lastClose === 'number' && typeof prevClose === 'number' && prevClose !== 0) {
+          daily = ((lastClose - prevClose) / prevClose) * 100;
+        } else {
+          daily = 0;
+        }
+      }
+
+      // If we used historical close as current, recompute daily from that same series for consistency.
+      if (useHistAsCurrent) {
+        const lastClose = fromYahoo ? getYahooCloseNDaysAgo(0) : getHistoricalPrice(historicalSorted, 0);
+        const prevClose = fromYahoo ? getYahooCloseNDaysAgo(1) : getHistoricalPrice(historicalSorted, 1);
+        if (typeof lastClose === 'number' && typeof prevClose === 'number' && prevClose !== 0) {
+          daily = ((lastClose - prevClose) / prevClose) * 100;
+        }
+      }
+
+      let weekly = calculatePerformance(currentPriceEffective, weeklyPrice);
+      let monthly = calculatePerformance(currentPriceEffective, monthlyPrice);
+      let quarterly = calculatePerformance(currentPriceEffective, quarterlyPrice);
+      let sixMonth = calculatePerformance(currentPriceEffective, sixMonthPrice);
+      let fiftyTwoWeek = calculatePerformance(currentPriceEffective, fiftyTwoWeekPrice);
+      let ytd = calculatePerformance(currentPriceEffective, ytdBasePrice);
 
       // If focusing on a specific period and Yahoo history is available, override that period from Yahoo
       if (yBars && focusPeriod) {
@@ -211,11 +266,11 @@ export async function GET(request: Request) {
           const ref = (yBars as any)[idx];
           return typeof ref?.close === 'number' ? ref.close : null;
         };
-        if (focusPeriod === 'weekly') weekly = calculatePerformance(currentPrice, yGet(5));
-        if (focusPeriod === 'monthly') monthly = calculatePerformance(currentPrice, yGet(22));
-        if (focusPeriod === 'quarterly') quarterly = calculatePerformance(currentPrice, yGet(66));
-        if (focusPeriod === 'sixmonth') sixMonth = calculatePerformance(currentPrice, yGet(126));
-        if (focusPeriod === 'fiftytwoweek') fiftyTwoWeek = calculatePerformance(currentPrice, yGet(252));
+        if (focusPeriod === 'weekly') weekly = calculatePerformance(currentPriceEffective, yGet(5));
+        if (focusPeriod === 'monthly') monthly = calculatePerformance(currentPriceEffective, yGet(22));
+        if (focusPeriod === 'quarterly') quarterly = calculatePerformance(currentPriceEffective, yGet(66));
+        if (focusPeriod === 'sixmonth') sixMonth = calculatePerformance(currentPriceEffective, yGet(126));
+        if (focusPeriod === 'fiftytwoweek') fiftyTwoWeek = calculatePerformance(currentPriceEffective, yGet(252));
         if (focusPeriod === 'ytd') {
           const now = new Date();
           const ts = new Date(`${now.getFullYear()}-01-01`).getTime();
@@ -224,7 +279,7 @@ export async function GET(request: Request) {
             const b = (yBars as any)[i];
             if (typeof b?.time === 'number' && b.time >= ts) { base = typeof b.close === 'number' ? b.close : null; break; }
           }
-          ytd = calculatePerformance(currentPrice, base);
+          ytd = calculatePerformance(currentPriceEffective, base);
         }
       }
 

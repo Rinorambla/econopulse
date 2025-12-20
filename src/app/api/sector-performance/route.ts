@@ -196,15 +196,28 @@ export async function GET(request: Request) {
       const yBars = fromYahoo?.bars;
       const getYahooCloseNDaysAgo = (approxDays: number): number | null => {
         if (!yBars || yBars.length < 2) return null;
-        const idx = Math.max(0, yBars.length - 1 - approxDays);
-        const ref = yBars[idx];
-        return typeof (ref as any)?.close === 'number' ? (ref as any).close : null;
+        // Find the bar closest to N calendar days ago from the latest bar
+        const latestBar = yBars[yBars.length - 1] as any;
+        if (!latestBar || typeof latestBar.time !== 'number') return null;
+        const targetTs = latestBar.time - (approxDays * 24 * 60 * 60 * 1000);
+        let closestBar: any = null;
+        let minDiff = Infinity;
+        for (let i = 0; i < yBars.length; i++) {
+          const bar = yBars[i] as any;
+          if (typeof bar?.time !== 'number') continue;
+          const diff = Math.abs(bar.time - targetTs);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestBar = bar;
+          }
+        }
+        return closestBar && typeof closestBar.close === 'number' ? closestBar.close : null;
       };
-      const weeklyPrice = fromYahoo ? getYahooCloseNDaysAgo(5) : getHistoricalPrice(historicalSorted, 5);
-      const monthlyPrice = fromYahoo ? getYahooCloseNDaysAgo(22) : getHistoricalPrice(historicalSorted, 22);
-      const quarterlyPrice = fromYahoo ? getYahooCloseNDaysAgo(66) : getHistoricalPrice(historicalSorted, 66);
-      const sixMonthPrice = fromYahoo ? getYahooCloseNDaysAgo(126) : getHistoricalPrice(historicalSorted, 126);
-      const fiftyTwoWeekPrice = fromYahoo ? getYahooCloseNDaysAgo(252) : getHistoricalPrice(historicalSorted, 252);
+      const weeklyPrice = fromYahoo ? getYahooCloseNDaysAgo(7) : getHistoricalPrice(historicalSorted, 5);
+      const monthlyPrice = fromYahoo ? getYahooCloseNDaysAgo(30) : getHistoricalPrice(historicalSorted, 22);
+      const quarterlyPrice = fromYahoo ? getYahooCloseNDaysAgo(90) : getHistoricalPrice(historicalSorted, 66);
+      const sixMonthPrice = fromYahoo ? getYahooCloseNDaysAgo(180) : getHistoricalPrice(historicalSorted, 126);
+      const fiftyTwoWeekPrice = fromYahoo ? getYahooCloseNDaysAgo(365) : getHistoricalPrice(historicalSorted, 252);
       // YTD: price at first trading day of current year
       const now = new Date();
       const startOfYearIso = `${now.getFullYear()}-01-01`;
@@ -423,9 +436,22 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
     const getCloseNDaysAgo = (h: YahooHistory | undefined, approxDays: number): number | null => {
       if (!h || !h.bars || h.bars.length < 2) return null;
       const bars = h.bars;
-      const idx = Math.max(0, bars.length - 1 - approxDays);
-      const ref = bars[idx];
-      return typeof ref?.close === 'number' ? ref.close : null;
+      // Find bar closest to N calendar days ago from latest bar
+      const latestBar = bars[bars.length - 1];
+      if (!latestBar || typeof latestBar.time !== 'number') return null;
+      const targetTs = latestBar.time - (approxDays * 24 * 60 * 60 * 1000);
+      let closestBar: typeof bars[0] | null = null;
+      let minDiff = Infinity;
+      for (let i = 0; i < bars.length; i++) {
+        const bar = bars[i];
+        if (typeof bar?.time !== 'number') continue;
+        const diff = Math.abs(bar.time - targetTs);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestBar = bar;
+        }
+      }
+      return closestBar && typeof closestBar.close === 'number' ? closestBar.close : null;
     };
     const getCloseOnOrAfter = (h: YahooHistory | undefined, isoDate: string): number | null => {
       if (!h || !h.bars || h.bars.length === 0) return null;
@@ -451,11 +477,11 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
       const h = histMap.get(symbol);
       const current = q?.price || 0;
       const daily = q?.changePercent ?? 0;
-      const weekly = calcPerf(current, getCloseNDaysAgo(h, 5));
-      const monthly = calcPerf(current, getCloseNDaysAgo(h, 22));
-      const quarterly = calcPerf(current, getCloseNDaysAgo(h, 66));
-      const sixMonth = calcPerf(current, getCloseNDaysAgo(h, 126));
-      const fiftyTwoWeek = calcPerf(current, getCloseNDaysAgo(h, 252));
+      const weekly = calcPerf(current, getCloseNDaysAgo(h, 7));
+      const monthly = calcPerf(current, getCloseNDaysAgo(h, 30));
+      const quarterly = calcPerf(current, getCloseNDaysAgo(h, 90));
+      const sixMonth = calcPerf(current, getCloseNDaysAgo(h, 180));
+      const fiftyTwoWeek = calcPerf(current, getCloseNDaysAgo(h, 365));
       const now = new Date();
       const ytdBase = getCloseOnOrAfter(h, `${now.getFullYear()}-01-01`);
       const ytd = calcPerf(current, ytdBase);

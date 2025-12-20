@@ -476,16 +476,8 @@ async function buildYahooFallback(symbols: string[], focusPeriod: string): Promi
         topStocks: [symbol]
       };
 
-      switch (focusPeriod) {
-        case 'daily': return { ...perf, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'weekly': return { ...perf, daily: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'monthly': return { ...perf, daily: 0, weekly: 0, quarterly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'quarterly': return { ...perf, daily: 0, weekly: 0, monthly: 0, sixMonth: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'sixmonth': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, ytd: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'ytd': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, fiftyTwoWeek: 0, yearly: 0 } as SectorPerf;
-        case 'fiftytwoweek': return { ...perf, daily: 0, weekly: 0, monthly: 0, quarterly: 0, sixMonth: 0, ytd: 0 } as SectorPerf;
-        default: return perf as SectorPerf;
-      }
+      // Always return all periods; frontend chooses which to display
+      return perf as SectorPerf;
     });
 
     sectors.sort((a, b) => b.daily - a.daily);

@@ -542,13 +542,17 @@ export default function DashboardPage() {
 										</div>
 									</div>
 									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-										<div
-											className={`absolute inset-y-0 left-1/2 bg-white/10 rounded-full transition-all duration-500`}
-											style={{
-												width: `${Math.min(Math.abs((regimeScore ?? 0)) * 25, 50)}%`,
-												transform: `translateX(${(regimeScore ?? 0) >= 0 ? '-50%' : '-50%'})`
-											}}
-										/>
+										{/* Center-based gradient bar: on=green right, off=red left */}
+										{regimeScore !== null && (
+											<div
+												className={`absolute inset-y-0 ${regimeLabel === 'Risk-On' ? 'bg-emerald-500' : regimeLabel === 'Risk-Off' ? 'bg-red-500' : 'bg-gray-500'} rounded-full transition-all duration-500`}
+												style={{
+													left: '50%',
+													width: `${Math.min(Math.abs(regimeScore) * 20, 50)}%`,
+													transform: `translateX(${regimeScore >= 0 ? '0%' : '-100%'})`
+												}}
+											/>
+										)}
 									</div>
 									<p className="text-[9px] text-gray-400 leading-tight">
 										{regimeLabel === 'Risk-On' && 'Breadth + cyclicals supportive.'}
@@ -574,12 +578,16 @@ export default function DashboardPage() {
 									</div>
 									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
 										<div
-											className={`absolute inset-y-0 left-0 ${recessionRisk.label === 'Low' ? 'bg-green-500' : recessionRisk.label === 'Moderate' ? 'bg-yellow-500' : recessionRisk.label === 'Elevated' ? 'bg-orange-500' : recessionRisk.label === 'High' ? 'bg-red-500' : 'bg-slate-600'} rounded-full transition-all duration-500`}
+											className={`absolute inset-y-0 left-0 ${recessionRisk.label === 'Low' ? 'bg-emerald-500' : recessionRisk.label === 'Moderate' ? 'bg-yellow-500' : recessionRisk.label === 'Elevated' ? 'bg-orange-500' : recessionRisk.label === 'High' ? 'bg-red-500' : 'bg-slate-600'} rounded-full transition-all duration-500`}
 											style={{ width: `${recessionValue === null ? 0 : Math.min((1 - recessionValue) * 100, 100)}%` }}
 										/>
 									</div>
 									<p className="text-[9px] text-gray-400 leading-tight">
-										Signal based on credit + rates composite.
+										{recessionRisk.label === 'High' && 'Credit/rates signaling near-term contraction risk.'}
+										{recessionRisk.label === 'Elevated' && 'Leading indicators show modest stress.'}
+										{recessionRisk.label === 'Moderate' && 'Neutral signals; growth still positive.'}
+										{recessionRisk.label === 'Low' && 'Solid macro backdrop, low recession odds.'}
+										{recessionRisk.label === '—' && 'Index unavailable.'}
 									</p>
 								</div>
 							</div>

@@ -86,6 +86,8 @@ function scoreExtremes(r: Record<string, number>): Extremes {
   
   // Normalize with proper direction: v goes from lo to hi => output 0 to 1
   const norm = (v:number|null, lo:number, hi:number)=> v==null?0: Math.max(0, Math.min(1, (v-lo)/(hi-lo)))
+  // Inverse norm for panic indicators (higher v → higher panic)
+  const normInv = (v:number|null, hi:number, lo:number)=> v==null?0: Math.max(0, Math.min(1, (hi-v)/(hi-lo)))
   
   // FLAME (Euphoria): Elevated when risk-on ratios are HIGH, vol metrics are LOW
   const sphbSplv = get('SPHB/SPLV') ?? 1.0
@@ -94,24 +96,24 @@ function scoreExtremes(r: Record<string, number>): Extremes {
   const hygIef = get('HYG/IEF') ?? 0.85
   
   const euphoriaSignals = [
-    norm(sphbSplv, 0.95, 1.20),    // SPHB/SPLV: 0.95=neutral, 1.20=euphoria
-    norm(xlyXlp, 1.00, 1.30),      // XLY/XLP: 1.00=neutral, 1.30=euphoria
-    norm(iwdIwf, 0.95, 1.15),      // IWD/IWF: 0.95=neutral, 1.15=euphoria
-    norm(hygIef, 0.80, 1.10),      // HYG/IEF: 0.80=neutral, 1.10=euphoria (tight spreads)
+    norm(sphbSplv, 0.98, 1.15),    // SPHB/SPLV: 0.98=neutral, 1.15=euphoria
+    norm(xlyXlp, 1.05, 1.25),      // XLY/XLP: 1.05=neutral, 1.25=euphoria
+    norm(iwdIwf, 0.98, 1.12),      // IWD/IWF: 0.98=neutral, 1.12=euphoria
+    norm(hygIef, 0.85, 1.05),      // HYG/IEF: 0.85=neutral, 1.05=euphoria (tight spreads)
     // Low MOVE/SKEW = complacency = euphoria
-    move!=null ? (move<80?1: move<100?0.5:0) : 0,
-    skew!=null ? (skew<115?1: skew<120?0.5:0) : 0
+    move!=null ? (move<85?0.8: move<100?0.4:0) : 0,
+    skew!=null ? (skew<118?0.8: skew<125?0.4:0) : 0
   ]
   
   // BOTTOM (Panic): Elevated when defensive ratios dominate (risk-off), vol metrics spike
   const panicSignals = [
-    norm(sphbSplv, 1.05, 0.80),    // SPHB/SPLV: 1.05=neutral, 0.80=panic (SPLV dominates)
-    norm(xlyXlp, 1.20, 0.85),      // XLY/XLP: 1.20=neutral, 0.85=panic (XLP dominates)
-    norm(iwdIwf, 1.05, 0.85),      // IWD/IWF: 1.05=neutral, 0.85=panic
-    norm(hygIef, 0.95, 0.60),      // HYG/IEF: 0.95=neutral, 0.60=panic (flight to safety)
+    normInv(sphbSplv, 1.05, 0.82),    // SPHB/SPLV: 1.05=neutral, 0.82=panic (SPLV dominates)
+    normInv(xlyXlp, 1.20, 0.88),      // XLY/XLP: 1.20=neutral, 0.88=panic (XLP dominates)
+    normInv(iwdIwf, 1.05, 0.88),      // IWD/IWF: 1.05=neutral, 0.88=panic
+    normInv(hygIef, 0.95, 0.65),      // HYG/IEF: 0.95=neutral, 0.65=panic (flight to safety)
     // High MOVE/SKEW = stress = panic
-    move!=null ? (move>130?1.5: move>110?1: move>90?0.5:0) : 0,
-    skew!=null ? (skew>140?1.5: skew>125?1: skew>115?0.5:0) : 0
+    move!=null ? (move>130?1.2: move>110?0.8: move>95?0.4:0) : 0,
+    skew!=null ? (skew>140?1.2: skew>128?0.8: skew>120?0.4:0) : 0
   ]
   
   const flameScore = euphoriaSignals.reduce((a,b)=>a+b, 0) / euphoriaSignals.length

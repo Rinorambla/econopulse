@@ -460,7 +460,7 @@ export default function AIPortfolioPage() {
   const viewIndividualStocks = async (portfolioName: string) => {
     setLoadingStocks(true);
     try {
-      const response = await fetch(`/api/sector-stocks?portfolio=${encodeURIComponent(portfolioName)}&limit=12`);
+      const response = await fetch(`/api/sector-stocks?portfolio=${encodeURIComponent(portfolioName)}&limit=30`);
       const data = await response.json();
       
       if (data.stocks) {

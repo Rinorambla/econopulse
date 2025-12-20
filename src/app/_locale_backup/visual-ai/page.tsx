@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
 import Link from 'next/link';
-import VisualAIPageV8 from './page_v8';
 import { 
   ArrowLeft,
   Globe,
@@ -3673,4 +3672,4 @@ function VisualAIPageLegacy() {
   );
 }
 
-export default VisualAIPageV8;
+export default VisualAIPageLegacy;

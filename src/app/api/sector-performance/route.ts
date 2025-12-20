@@ -102,24 +102,31 @@ export async function GET(request: Request) {
       return ((currentPrice - pastPrice) / pastPrice) * 100;
     };
 
-    // Helper function to get historical price for specific days back
-    const getHistoricalPrice = (historical: any[], daysBack: number) => {
-      if (!historical || historical.length === 0) return null;
-      // Get from oldest data (index 0 is oldest, length-1 is newest)
-      const targetIndex = Math.max(0, historical.length - 1 - daysBack);
-      return historical[targetIndex]?.close || null;
-    };
     // Helper: ensure historical is sorted by date ascending (YYYY-MM-DD or ISO)
     const sortHistoricalAsc = (historical: any[] | null) => {
       if (!historical) return [] as any[];
-      return [...historical].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return [...historical].sort((a, b) => {
+        const ta = new Date(a?.date ?? 0).getTime();
+        const tb = new Date(b?.date ?? 0).getTime();
+        return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+      });
     };
+
+    // Helper function to get historical close for specific trading-days back.
+    // Expects `historicalSortedAsc` sorted oldest -> newest.
+    const getHistoricalPrice = (historicalSortedAsc: any[] | null, daysBack: number) => {
+      if (!historicalSortedAsc || historicalSortedAsc.length === 0) return null;
+      const targetIndex = Math.max(0, historicalSortedAsc.length - 1 - daysBack);
+      const v = historicalSortedAsc[targetIndex]?.close;
+      return typeof v === 'number' ? v : null;
+    };
+
     // Helper: get close on or after a specific date (for YTD)
-    const getCloseOnOrAfter = (historical: any[] | null, isoDate: string): number | null => {
-      if (!historical || historical.length === 0) return null;
-      const sorted = sortHistoricalAsc(historical);
+    // Expects `historicalSortedAsc` sorted oldest -> newest.
+    const getCloseOnOrAfter = (historicalSortedAsc: any[] | null, isoDate: string): number | null => {
+      if (!historicalSortedAsc || historicalSortedAsc.length === 0) return null;
       const targetTs = new Date(isoDate).getTime();
-      const rec = sorted.find(r => new Date(r.date).getTime() >= targetTs);
+      const rec = historicalSortedAsc.find(r => new Date(r?.date ?? 0).getTime() >= targetTs);
       return rec && typeof rec.close === 'number' ? rec.close : null;
     };
 
@@ -146,10 +153,12 @@ export async function GET(request: Request) {
       }
 
       const hasData = 'data' in currentData && (currentData as any).data;
-      const currentPrice = hasData ? (currentData as any).data.price : (currentData as any).price;
+      const currentPriceRaw = hasData ? (currentData as any).data.price : (currentData as any).price;
+      const currentPrice = Number(currentPriceRaw);
+      const historicalSorted = sortHistoricalAsc(Array.isArray(historicalData) ? historicalData : null);
       
       // Calculate multi-period performance using trading-day approximations
-      const fromYahoo = (!historicalData || historicalData.length < 2) && yahooHistMap ? yahooHistMap.get(symbol) : null;
+      const fromYahoo = (!historicalSorted || historicalSorted.length < 2) && yahooHistMap ? yahooHistMap.get(symbol) : null;
       const yBars = fromYahoo?.bars;
       const getYahooCloseNDaysAgo = (approxDays: number): number | null => {
         if (!yBars || yBars.length < 2) return null;
@@ -157,11 +166,11 @@ export async function GET(request: Request) {
         const ref = yBars[idx];
         return typeof (ref as any)?.close === 'number' ? (ref as any).close : null;
       };
-      const weeklyPrice = fromYahoo ? getYahooCloseNDaysAgo(5) : getHistoricalPrice(historicalData, 5);
-      const monthlyPrice = fromYahoo ? getYahooCloseNDaysAgo(22) : getHistoricalPrice(historicalData, 22);
-      const quarterlyPrice = fromYahoo ? getYahooCloseNDaysAgo(66) : getHistoricalPrice(historicalData, 66);
-      const sixMonthPrice = fromYahoo ? getYahooCloseNDaysAgo(126) : getHistoricalPrice(historicalData, 126);
-      const fiftyTwoWeekPrice = fromYahoo ? getYahooCloseNDaysAgo(252) : getHistoricalPrice(historicalData, 252);
+      const weeklyPrice = fromYahoo ? getYahooCloseNDaysAgo(5) : getHistoricalPrice(historicalSorted, 5);
+      const monthlyPrice = fromYahoo ? getYahooCloseNDaysAgo(22) : getHistoricalPrice(historicalSorted, 22);
+      const quarterlyPrice = fromYahoo ? getYahooCloseNDaysAgo(66) : getHistoricalPrice(historicalSorted, 66);
+      const sixMonthPrice = fromYahoo ? getYahooCloseNDaysAgo(126) : getHistoricalPrice(historicalSorted, 126);
+      const fiftyTwoWeekPrice = fromYahoo ? getYahooCloseNDaysAgo(252) : getHistoricalPrice(historicalSorted, 252);
       // YTD: price at first trading day of current year
       const now = new Date();
       const startOfYearIso = `${now.getFullYear()}-01-01`;
@@ -175,13 +184,13 @@ export async function GET(request: Request) {
           }
         }
         return null;
-      })() : getCloseOnOrAfter(historicalData, startOfYearIso);
+      })() : getCloseOnOrAfter(historicalSorted, startOfYearIso);
 
       let daily = hasData ? (currentData as any).data.changePercent : (currentData as any).changePercent;
       if (daily === undefined || daily === null) {
         // Fallback: compute daily change from last two closes if available (Tiingo or Yahoo)
-        const lastClose = fromYahoo ? getYahooCloseNDaysAgo(0) : getHistoricalPrice(historicalData, 0);
-        const prevClose = fromYahoo ? getYahooCloseNDaysAgo(1) : getHistoricalPrice(historicalData, 1);
+        const lastClose = fromYahoo ? getYahooCloseNDaysAgo(0) : getHistoricalPrice(historicalSorted, 0);
+        const prevClose = fromYahoo ? getYahooCloseNDaysAgo(1) : getHistoricalPrice(historicalSorted, 1);
         if (typeof lastClose === 'number' && typeof prevClose === 'number' && prevClose !== 0) {
           daily = ((lastClose - prevClose) / prevClose) * 100;
         } else {

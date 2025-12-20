@@ -367,6 +367,8 @@ export default function DashboardPage() {
 
 	// Market Extremes state
 	const [extremes, setExtremes] = useState<{ flame: number; bottom: number; asOf: string } | null>(null);
+	const [riskRegime, setRiskRegime] = useState<{ regime: string; score: number } | null>(null);
+	const [recessionIndex, setRecessionIndex] = useState<{ value: number; date: string } | null>(null);
 
 	// Fetch market extremes on mount
 	useEffect(() => {
@@ -381,13 +383,41 @@ export default function DashboardPage() {
 							bottom: json.data.bottomScore ?? 0,
 							asOf: json.data.asOf ?? new Date().toISOString()
 						});
+						// Calculate simple regime from pairs
+						if (json.data.pairs && Array.isArray(json.data.pairs)) {
+							const pairs = json.data.pairs.filter((p: any) => p.value != null);
+							let onCount = 0, offCount = 0;
+							pairs.forEach((p: any) => {
+								if (p.label === 'SPHB/SPLV' && p.value > 1.05) onCount++;
+								else if (p.label === 'SPHB/SPLV' && p.value < 0.95) offCount++;
+								if (p.label === 'XLY/XLP' && p.value > 1.15) onCount++;
+								else if (p.label === 'XLY/XLP' && p.value < 1.0) offCount++;
+								if (p.label === 'HYG/IEF' && p.value > 0.90) onCount++;
+								else if (p.label === 'HYG/IEF' && p.value < 0.75) offCount++;
+							});
+							const score = onCount - offCount;
+							const regime = score >= 2 ? 'Risk-On' : score <= -2 ? 'Risk-Off' : 'Neutral';
+							setRiskRegime({ regime, score });
+						}
 					}
 				}
 			} catch (e) {
 				console.error('Failed to fetch market extremes:', e);
 			}
 		};
+		const fetchRecession = async () => {
+			try {
+				const res = await fetch('/api/recession-index?limit=1', { cache: 'no-store' });
+				if (res.ok) {
+					const json = await res.json();
+					if (json.latest) setRecessionIndex(json.latest);
+				}
+			} catch (e) {
+				console.error('Failed to fetch recession index:', e);
+			}
+		};
 		fetchExtremes();
+		fetchRecession();
 	}, []);
 
 	// Helper functions for FLAME/BOTTOM interpretation
@@ -423,11 +453,11 @@ export default function DashboardPage() {
 						<div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 rounded-xl p-4 ring-1 ring-white/10">
 							<div className="flex items-center justify-between mb-3">
 								<h3 className="text-xs font-bold text-gray-300 flex items-center gap-1">
-									<span>📊</span> Market Sentiment Extremes
+									<span>📊</span> Market Sentiment & Risk Dashboard
 								</h3>
 								<span className="text-[9px] text-gray-500">{new Date(extremes.asOf).toLocaleTimeString()}</span>
 							</div>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 								{/* FLAME - Euphoria */}
 								<div className="space-y-1.5">
 									<div className="flex items-center justify-between">

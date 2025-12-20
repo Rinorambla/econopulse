@@ -950,128 +950,62 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               )}
 
-              {/* Market Sentiment Extremes: FLAME & BOTTOM */}
-              {marketExtremes && (
+              {/* Market Sentiment & Risk Metrics */}
+              {(riskSummary || recessionIndex || marketExtremes) && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    <span>📊</span> Market Sentiment Extremes
+                    <span>📊</span> Market Sentiment & Risk Metrics
                   </h3>
-                  <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* FLAME - Euphoria */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🔥</span>
-                            <div>
-                              <div className="text-xs font-semibold text-white">FLAME</div>
-                              <div className="text-[10px] text-gray-500">Euphoria Level</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-bold font-mono text-gray-200">{marketExtremes.flameScore.toFixed(2)}</div>
-                            <div className={`text-[10px] font-medium ${marketExtremes.flameScore >= 0.75 ? 'text-red-400' : marketExtremes.flameScore >= 0.50 ? 'text-orange-400' : marketExtremes.flameScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                              {marketExtremes.flameScore >= 0.75 ? 'Extreme' : marketExtremes.flameScore >= 0.50 ? 'High' : marketExtremes.flameScore >= 0.25 ? 'Moderate' : 'Low'}
-                            </div>
-                          </div>
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* FLAME */}
+                    {marketExtremes && (
+                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-2xl mb-2">🔥</span>
+                        <div className="text-xs text-gray-400 mb-1">FLAME</div>
+                        <div className="text-2xl font-bold mb-1">{marketExtremes.flameScore.toFixed(2)}</div>
+                        <div className={`text-xs font-medium ${marketExtremes.flameScore >= 0.75 ? 'text-red-400' : marketExtremes.flameScore >= 0.50 ? 'text-orange-400' : marketExtremes.flameScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                          {marketExtremes.flameScore >= 0.75 ? 'Extreme' : marketExtremes.flameScore >= 0.50 ? 'High' : marketExtremes.flameScore >= 0.25 ? 'Moderate' : 'Low'}
                         </div>
-                        <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
-                          <div className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${marketExtremes.flameScore >= 0.75 ? 'bg-red-500' : marketExtremes.flameScore >= 0.50 ? 'bg-orange-500' : marketExtremes.flameScore >= 0.25 ? 'bg-yellow-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(marketExtremes.flameScore * 100, 100)}%` }} />
-                        </div>
-                        <p className="text-[9px] text-gray-400 leading-tight">
-                          {marketExtremes.flameScore >= 0.75 && "Extreme bullish sentiment. High-beta outperforming."}
-                          {marketExtremes.flameScore >= 0.50 && marketExtremes.flameScore < 0.75 && "Strong risk-on. Cyclicals leading."}
-                          {marketExtremes.flameScore >= 0.25 && marketExtremes.flameScore < 0.50 && "Moderate optimism. Balanced rotation."}
-                          {marketExtremes.flameScore < 0.25 && "Subdued risk appetite. Defensive positioning."}
-                        </p>
                       </div>
-                      {/* BOTTOM - Panic */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">⚠️</span>
-                            <div>
-                              <div className="text-xs font-semibold text-white">BOTTOM</div>
-                              <div className="text-[10px] text-gray-500">Panic Level</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-bold font-mono text-gray-200">{marketExtremes.bottomScore.toFixed(2)}</div>
-                            <div className={`text-[10px] font-medium ${marketExtremes.bottomScore >= 0.75 ? 'text-red-400' : marketExtremes.bottomScore >= 0.50 ? 'text-orange-400' : marketExtremes.bottomScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                              {marketExtremes.bottomScore >= 0.75 ? 'Extreme' : marketExtremes.bottomScore >= 0.50 ? 'High' : marketExtremes.bottomScore >= 0.25 ? 'Moderate' : 'Low'}
-                            </div>
-                          </div>
+                    )}
+                    {/* BOTTOM */}
+                    {marketExtremes && (
+                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-2xl mb-2">⚠️</span>
+                        <div className="text-xs text-gray-400 mb-1">BOTTOM</div>
+                        <div className="text-2xl font-bold mb-1">{marketExtremes.bottomScore.toFixed(2)}</div>
+                        <div className={`text-xs font-medium ${marketExtremes.bottomScore >= 0.75 ? 'text-red-400' : marketExtremes.bottomScore >= 0.50 ? 'text-orange-400' : marketExtremes.bottomScore >= 0.25 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                          {marketExtremes.bottomScore >= 0.75 ? 'Extreme' : marketExtremes.bottomScore >= 0.50 ? 'High' : marketExtremes.bottomScore >= 0.25 ? 'Moderate' : 'Low'}
                         </div>
-                        <div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
-                          <div className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${marketExtremes.bottomScore >= 0.75 ? 'bg-red-500' : marketExtremes.bottomScore >= 0.50 ? 'bg-orange-500' : marketExtremes.bottomScore >= 0.25 ? 'bg-yellow-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(marketExtremes.bottomScore * 100, 100)}%` }} />
-                        </div>
-                        <p className="text-[9px] text-gray-400 leading-tight">
-                          {marketExtremes.bottomScore >= 0.75 && "Extreme fear. Flight to safety, credit frozen."}
-                          {marketExtremes.bottomScore >= 0.50 && marketExtremes.bottomScore < 0.75 && "High stress. Defensives outperforming."}
-                          {marketExtremes.bottomScore >= 0.25 && marketExtremes.bottomScore < 0.50 && "Moderate caution. Quality over growth."}
-                          {marketExtremes.bottomScore < 0.25 && "Low fear. Market functioning normally."}
-                        </p>
                       </div>
-                    </div>
-                    <p className="mt-3 text-[9px] text-gray-500">Updated: {new Date(marketExtremes.asOf).toLocaleTimeString()}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Simplified Risk & Recession Badges */}
-              {(riskSummary || recessionIndex) && (
-                <div className="mt-6">
-                  <div className="bg-white/5 rounded-lg p-4 border border-white/10 flex flex-col sm:flex-row items-stretch gap-4">
+                    )}
+                    {/* REGIME */}
                     {riskSummary ? (
-                      <div className="flex-1 flex items-center justify-center">
-                        {(() => {
-                          const base = 'w-32 h-32 rounded-full flex flex-col items-center justify-center border-4 font-bold tracking-tight relative shadow';
-                          const regime = riskSummary.regime;
-                          const score = riskSummary.score;
-                          const color = regime==='Risk-On' ? 'border-emerald-500 text-emerald-300 bg-emerald-950/30' : regime==='Risk-Off' ? 'border-red-500 text-red-300 bg-red-950/30' : 'border-slate-500 text-slate-200 bg-slate-900/40';
-                          return (
-                            <div className="text-center">
-                              <div className={`${base} ${color}`}> 
-                                <span className="text-xs uppercase font-semibold mb-1">Regime</span>
-                                <span className="text-xl">{score}</span>
-                                <span className="text-[11px] font-medium mt-1">{regime}</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-2xl mb-2">🎯</span>
+                        <div className="text-xs text-gray-400 mb-1">Regime</div>
+                        <div className="text-2xl font-bold mb-1">{riskSummary.score}</div>
+                        <div className={`text-xs font-medium ${riskSummary.regime==='Risk-On' ? 'text-emerald-400' : riskSummary.regime==='Risk-Off' ? 'text-red-400' : 'text-gray-400'}`}>
+                          {riskSummary.regime}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center"><div className="text-xs text-gray-400">Loading regime…</div></div>
-                    )}
+                    ) : null}
+                    {/* RECESSION */}
                     {recessionIndex ? (
-                      <div className="flex-1 flex items-center justify-center">
-                        {(() => {
-                          const val = recessionIndex.value;
-                          const level = mspredRisk?.level || '—';
-                          const riskColor = mspredRisk?.badge || 'bg-slate-700/40 text-slate-200';
-                          const base = 'w-32 h-32 rounded-full flex flex-col items-center justify-center border-4 font-bold tracking-tight relative shadow';
-                          const dynamicBorder = level==='Low' ? 'border-emerald-500' : level==='Moderate' ? 'border-yellow-400' : level==='Elevated' ? 'border-orange-400' : level==='High' ? 'border-red-500' : 'border-slate-500';
-                          return (
-                            <div className="text-center">
-                              <div className={`${base} ${dynamicBorder} ${riskColor}`}> 
-                                <span className="text-xs uppercase font-semibold mb-1">Recession</span>
-                                <span className="text-xl">{val.toFixed(3)}</span>
-                                <span className="text-[11px] font-medium mt-1">{level} risk</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                      <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-2xl mb-2">📉</span>
+                        <div className="text-xs text-gray-400 mb-1">Recession</div>
+                        <div className="text-2xl font-bold mb-1">{recessionIndex.value.toFixed(3)}</div>
+                        <div className={`text-xs font-medium ${mspredRisk?.level === 'Low' ? 'text-emerald-400' : mspredRisk?.level === 'Moderate' ? 'text-yellow-400' : mspredRisk?.level === 'Elevated' ? 'text-orange-400' : 'text-red-400'}`}>
+                          {mspredRisk?.level || 'Unknown'} risk
+                        </div>
                       </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center"><div className="text-xs text-gray-400">Loading recession…</div></div>
+                    ) : null}
+                    </div>
+                    {marketExtremes && (
+                      <p className="mt-3 text-[10px] text-gray-500 text-center">Updated: {new Date(marketExtremes.asOf).toLocaleTimeString()}</p>
                     )}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-gray-400">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Risk-On bias</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Risk-Off bias</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Moderate recession</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Elevated recession</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" /> Neutral state</span>
                   </div>
                 </div>
               )}

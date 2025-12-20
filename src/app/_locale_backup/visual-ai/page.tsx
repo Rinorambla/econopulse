@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
 import Link from 'next/link';
+import VisualAIPageV8 from './page_v8';
 import { 
   ArrowLeft,
   Globe,
@@ -671,7 +672,7 @@ const generateOilSeasonalityData = (): OilSeasonalityData[] => [
 ];
 
 // ===== MAIN COMPONENT =====
-export default function VisualAIPage() {
+function VisualAIPageLegacy() {
   const [widgets, setWidgets] = useState<WidgetData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWidget, setSelectedWidget] = useState<WidgetData | null>(null);
@@ -3671,3 +3672,5 @@ export default function VisualAIPage() {
     </RequirePlan>
   );
 }
+
+export default VisualAIPageV8;

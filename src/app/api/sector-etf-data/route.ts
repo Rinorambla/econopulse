@@ -165,7 +165,15 @@ async function calculatePeriodPerformance(symbol: string, period: string, curren
   const historical = await getTiingoHistorical(symbol, daysBack + 5); // Get extra days for safety
   
   if (historical && historical.length >= 2) {
-    // Get the oldest price in the range (first element is oldest)
+    // Ensure chronological order (oldest first)
+    try {
+      historical.sort((a: any, b: any) => {
+        const da = new Date(a.date || a.datetime || a.time || a.timestamp || 0).getTime();
+        const db = new Date(b.date || b.datetime || b.time || b.timestamp || 0).getTime();
+        return da - db;
+      });
+    } catch {}
+    // Get the oldest price in the range (first element after sort)
     const oldestData = historical[0];
     const oldPrice = oldestData.close || oldestData.adjClose || 0;
     
@@ -178,6 +186,58 @@ async function calculatePeriodPerformance(symbol: string, period: string, curren
   
   // Fallback: no change
   return null;
+}
+
+// Try to fetch full ETF holdings from SPDR (SSGA) API
+async function fetchSPDRHoldings(etf: string): Promise<Array<{ ticker: string; name: string; weight: number }>> {
+  try {
+    const url = `https://www.ssga.com/api/etf/v1/data/holdings?fund=${encodeURIComponent(etf)}&region=us&locale=en`;
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)'
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const js = await res.json();
+    const rows = js?.holdings || js?.fund?.holdings || js?.data || [];
+    if (!Array.isArray(rows) || !rows.length) return [];
+    return rows.map((r: any) => ({
+      ticker: (r.ticker || r.identifier || r.securityTicker || '').toUpperCase(),
+      name: r.name || r.securityName || r.holdingName || '',
+      weight: Number(r.weight || r.weightPercent || r.portfolioPercent || 0)
+    })).filter(h => h.ticker && h.name);
+  } catch {
+    return [];
+  }
+}
+
+// Yahoo Finance quoteSummary topHoldings fallback (may return partial list)
+async function fetchYahooTopHoldings(etf: string): Promise<Array<{ ticker: string; name: string; weight: number }>> {
+  try {
+    const modules = ['topHoldings','fundProfile'].join(',');
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(etf)}?modules=${modules}`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!res.ok) return [];
+    const js = await res.json();
+    const r = js?.quoteSummary?.result?.[0];
+    const th = r?.topHoldings || {};
+    const list = th.holdings || th.stockHoldings || th.equityHoldings || [];
+    if (!Array.isArray(list) || !list.length) return [];
+    return list.map((h: any) => ({
+      ticker: (h.symbol || h.ticker || '').toUpperCase(),
+      name: h.holdingName || h.holding || h.name || h.shortName || '',
+      weight: Number(h.holdingPercent || h.weight || 0)
+    })).filter(h => h.ticker && h.name);
+  } catch {
+    return [];
+  }
 }
 
 export async function GET(request: Request) {
@@ -193,7 +253,16 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'ETF not found' }, { status: 404 });
       }
 
-      const holdings = MOCK_HOLDINGS[ticker] || [];
+      // Fetch full holdings: SPDR first, Yahoo fallback, then mock if all else fails
+      let holdings = await fetchSPDRHoldings(ticker);
+      if (!holdings.length) {
+        holdings = await fetchYahooTopHoldings(ticker);
+      }
+      // Final fallback to existing mock snippet to avoid empty responses
+      if (!holdings.length) {
+        holdings = (MOCK_HOLDINGS[ticker] || []).slice();
+      }
+
       const holdingTickers = holdings.map(h => h.ticker);
       
       // Fetch real-time quotes for holdings using Tiingo first, then Yahoo as fallback

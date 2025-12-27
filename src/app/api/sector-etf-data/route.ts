@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getYahooQuotes } from '@/lib/yahooFinance';
+import { fetchYahooHistory } from '@/lib/yahoo-history';
 import { env } from '@/lib/env';
 
 // Helper function to fetch from Tiingo
@@ -188,6 +189,35 @@ async function calculatePeriodPerformance(symbol: string, period: string, curren
   return null;
 }
 
+function getYahooRange(period: string): string {
+  const map: Record<string, string> = {
+    '1D': '2d',
+    '5D': '5d',
+    '1M': '1mo',
+    '3M': '3mo',
+    '6M': '6mo',
+    'YTD': 'ytd',
+    '1Y': '1y',
+    '5Y': '5y',
+  };
+  return map[period] || '5d';
+}
+
+async function calculatePeriodPerformanceYahoo(symbol: string, period: string, currentPriceHint?: number) {
+  if (period === '1D') return null;
+  const range = getYahooRange(period);
+  const h = await fetchYahooHistory(symbol, range, '1d');
+  if (!h || !Array.isArray(h.bars) || h.bars.length < 2) return null;
+  const firstValid = h.bars.find(b => typeof b.close === 'number');
+  const lastValid = [...h.bars].reverse().find(b => typeof b.close === 'number');
+  if (!firstValid || !lastValid) return null;
+  const lastPrice = firstValid.close;
+  const current = typeof currentPriceHint === 'number' && currentPriceHint > 0 ? currentPriceHint : lastValid.close;
+  const change = current - lastPrice;
+  const changePercent = lastPrice > 0 ? (change / lastPrice) * 100 : 0;
+  return { lastPrice, change, changePercent };
+}
+
 // Try to fetch full ETF holdings from SPDR (SSGA) API
 async function fetchSPDRHoldings(etf: string): Promise<Array<{ ticker: string; name: string; weight: number }>> {
   try {
@@ -279,29 +309,24 @@ export async function GET(request: Request) {
       if (holdingTickers.length > 0) {
         // Try Tiingo first for each holding
         const quotesPromises = holdingTickers.map(async (t) => {
-          const tiingoQuote = await getTiingoQuote(t);
-          if (tiingoQuote) {
-            // For 1D, use daily change
-            if (period === '1D') {
+            const tiingoQuote = await getTiingoQuote(t);
+            if (tiingoQuote) {
+              if (period === '1D') return tiingoQuote;
+              const yahooPerf = await calculatePeriodPerformanceYahoo(t, period, tiingoQuote.price);
+              if (yahooPerf) return { ...tiingoQuote, lastPrice: yahooPerf.lastPrice, change: yahooPerf.change, changePercent: yahooPerf.changePercent };
+              const periodPerf = await calculatePeriodPerformance(t, period, tiingoQuote.price);
+              if (periodPerf) return { ...tiingoQuote, lastPrice: periodPerf.lastPrice, change: periodPerf.change, changePercent: periodPerf.changePercent };
               return tiingoQuote;
             }
-            
-            // For other periods, calculate period performance
-            const periodPerf = await calculatePeriodPerformance(t, period, tiingoQuote.price);
-            if (periodPerf) {
-              return {
-                ...tiingoQuote,
-                lastPrice: periodPerf.lastPrice,
-                change: periodPerf.change,
-                changePercent: periodPerf.changePercent,
-              };
-            }
-            return tiingoQuote;
-          }
-          
-          // Fallback to Yahoo
-          const yahooQuotes = await getYahooQuotes([t]);
-          return yahooQuotes[0] || null;
+
+            // Fallback to Yahoo quote + compute period performance from Yahoo history when needed
+            const yahooQuotes = await getYahooQuotes([t]);
+            const yq = yahooQuotes[0] || null;
+            if (!yq) return null;
+            if (period === '1D') return yq;
+            const yPerf = await calculatePeriodPerformanceYahoo(t, period, yq.price);
+            if (yPerf) return { ...yq, lastPrice: yPerf.lastPrice, change: yPerf.change, changePercent: yPerf.changePercent } as any;
+            return yq;
         });
         
         const quotes = await Promise.all(quotesPromises);
@@ -353,28 +378,22 @@ export async function GET(request: Request) {
     const quotesPromises = symbols.map(async (symbol) => {
       const tiingoQuote = await getTiingoQuote(symbol);
       if (tiingoQuote) {
-        // For 1D, use the quote's own daily change
-        if (period === '1D') {
+          if (period === '1D') return tiingoQuote;
+          const yahooPerf = await calculatePeriodPerformanceYahoo(symbol, period, tiingoQuote.price);
+          if (yahooPerf) return { ...tiingoQuote, lastPrice: yahooPerf.lastPrice, change: yahooPerf.change, changePercent: yahooPerf.changePercent };
+          const periodPerf = await calculatePeriodPerformance(symbol, period, tiingoQuote.price);
+          if (periodPerf) return { ...tiingoQuote, lastPrice: periodPerf.lastPrice, change: periodPerf.change, changePercent: periodPerf.changePercent };
           return tiingoQuote;
         }
-        
-        // For other periods, calculate period-specific performance
-        const periodPerf = await calculatePeriodPerformance(symbol, period, tiingoQuote.price);
-        if (periodPerf) {
-          return {
-            ...tiingoQuote,
-            lastPrice: periodPerf.lastPrice,
-            change: periodPerf.change,
-            changePercent: periodPerf.changePercent,
-          };
-        }
-        // If period calc fails, use daily change
-        return tiingoQuote;
-      }
-      
-      // Fallback to Yahoo
+
+      // Fallback to Yahoo quote + compute period performance from Yahoo history when needed
       const yahooQuotes = await getYahooQuotes([symbol]);
-      return yahooQuotes[0] || null;
+      const yq = yahooQuotes[0] || null;
+      if (!yq) return null;
+      if (period === '1D') return yq;
+      const yPerf = await calculatePeriodPerformanceYahoo(symbol, period, yq.price);
+      if (yPerf) return { ...yq, lastPrice: yPerf.lastPrice, change: yPerf.change, changePercent: yPerf.changePercent } as any;
+      return yq;
     });
     
     const quotes = await Promise.all(quotesPromises);

@@ -158,7 +158,7 @@ export async function GET(request: Request) {
         change,
         changePercent,
         volume: quote?.volume || 0,
-        marketCap: quote?.marketCap || 0,
+        marketCap: 0, // Market cap not available from Yahoo Finance basic quotes
       };
     });
 

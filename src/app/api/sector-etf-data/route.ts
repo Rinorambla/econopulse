@@ -156,11 +156,19 @@ function getPeriodDays(period: string): number {
 }
 
 async function calculatePeriodPerformance(symbol: string, period: string, currentPrice: number) {
-  const daysBack = getPeriodDays(period);
-  const historical = await getTiingoHistorical(symbol, daysBack);
+  // For 1D, use simple daily change (already included in quote)
+  if (period === '1D') {
+    return null; // Use the quote's built-in daily change
+  }
   
-  if (historical && historical.length > 0) {
-    const oldPrice = historical[0].close || historical[0].adjClose || 0;
+  const daysBack = getPeriodDays(period);
+  const historical = await getTiingoHistorical(symbol, daysBack + 5); // Get extra days for safety
+  
+  if (historical && historical.length >= 2) {
+    // Get the oldest price in the range (first element is oldest)
+    const oldestData = historical[0];
+    const oldPrice = oldestData.close || oldestData.adjClose || 0;
+    
     if (oldPrice > 0) {
       const change = currentPrice - oldPrice;
       const changePercent = (change / oldPrice) * 100;
@@ -168,8 +176,8 @@ async function calculatePeriodPerformance(symbol: string, period: string, curren
     }
   }
   
-  // Fallback to current day change
-  return { lastPrice: currentPrice, change: 0, changePercent: 0 };
+  // Fallback: no change
+  return null;
 }
 
 export async function GET(request: Request) {
@@ -203,7 +211,24 @@ export async function GET(request: Request) {
         // Try Tiingo first for each holding
         const quotesPromises = holdingTickers.map(async (t) => {
           const tiingoQuote = await getTiingoQuote(t);
-          if (tiingoQuote) return tiingoQuote;
+          if (tiingoQuote) {
+            // For 1D, use daily change
+            if (period === '1D') {
+              return tiingoQuote;
+            }
+            
+            // For other periods, calculate period performance
+            const periodPerf = await calculatePeriodPerformance(t, period, tiingoQuote.price);
+            if (periodPerf) {
+              return {
+                ...tiingoQuote,
+                lastPrice: periodPerf.lastPrice,
+                change: periodPerf.change,
+                changePercent: periodPerf.changePercent,
+              };
+            }
+            return tiingoQuote;
+          }
           
           // Fallback to Yahoo
           const yahooQuotes = await getYahooQuotes([t]);
@@ -214,12 +239,22 @@ export async function GET(request: Request) {
         
         holdingsData = holdings.map((h, idx) => {
           const quote = quotes[idx];
-          const currentPrice = quote?.price || 0;
-          const changePercent = quote?.changePercent || 0;
-          const change = quote?.change || 0;
+          if (!quote) {
+            return {
+              ticker: h.ticker,
+              name: h.name,
+              weight: h.weight,
+              closingPrice: 0,
+              lastPrice: 0,
+              change: 0,
+              changePercent: 0,
+            };
+          }
           
-          // Calculate last price
-          const lastPrice = currentPrice - change;
+          const currentPrice = quote.price || 0;
+          const changePercent = quote.changePercent || 0;
+          const change = quote.change || 0;
+          const lastPrice = 'lastPrice' in quote ? quote.lastPrice : (currentPrice - change);
           
           return {
             ticker: h.ticker,
@@ -249,14 +284,23 @@ export async function GET(request: Request) {
     const quotesPromises = symbols.map(async (symbol) => {
       const tiingoQuote = await getTiingoQuote(symbol);
       if (tiingoQuote) {
-        // Calculate period-specific performance
+        // For 1D, use the quote's own daily change
+        if (period === '1D') {
+          return tiingoQuote;
+        }
+        
+        // For other periods, calculate period-specific performance
         const periodPerf = await calculatePeriodPerformance(symbol, period, tiingoQuote.price);
-        return {
-          ...tiingoQuote,
-          lastPrice: periodPerf.lastPrice,
-          change: periodPerf.change,
-          changePercent: periodPerf.changePercent,
-        };
+        if (periodPerf) {
+          return {
+            ...tiingoQuote,
+            lastPrice: periodPerf.lastPrice,
+            change: periodPerf.change,
+            changePercent: periodPerf.changePercent,
+          };
+        }
+        // If period calc fails, use daily change
+        return tiingoQuote;
       }
       
       // Fallback to Yahoo

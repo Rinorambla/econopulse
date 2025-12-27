@@ -219,29 +219,72 @@ async function calculatePeriodPerformanceYahoo(symbol: string, period: string, c
 }
 
 // Try to fetch full ETF holdings from SPDR (SSGA) API
+const SPDR_SLUGS: Record<string, string> = {
+  XLB: 'materials-select-sector-spdr-fund',
+  XLE: 'energy-select-sector-spdr-fund',
+  XLF: 'financial-select-sector-spdr-fund',
+  XLI: 'industrial-select-sector-spdr-fund',
+  XLK: 'technology-select-sector-spdr-fund',
+  XLP: 'consumer-staples-select-sector-spdr-fund',
+  XLU: 'utilities-select-sector-spdr-fund',
+  XLV: 'health-care-select-sector-spdr-fund',
+  XLY: 'consumer-discretionary-select-sector-spdr-fund',
+  XLRE: 'real-estate-select-sector-spdr-fund',
+  XLC: 'communication-services-select-sector-spdr-fund',
+};
+
 async function fetchSPDRHoldings(etf: string): Promise<Array<{ ticker: string; name: string; weight: number }>> {
+  const headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)'
+  } as const;
+
+  const tryHoldings = async (fundKey: string): Promise<any[]> => {
+    try {
+      const url = `https://www.ssga.com/api/etf/v1/data/holdings?fund=${encodeURIComponent(fundKey)}&region=us&locale=en`;
+      const res = await fetch(url, { headers, cache: 'no-store', signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return [];
+      const js = await res.json();
+      const rows = js?.holdings || js?.fund?.holdings || js?.data || [];
+      return Array.isArray(rows) ? rows : [];
+    } catch { return []; }
+  };
+
+  // Try a few fund keys: ticker (upper/lower), known slug
+  const candidates: string[] = [etf.toUpperCase(), etf.toLowerCase()];
+  const slug = SPDR_SLUGS[etf.toUpperCase()];
+  if (slug) candidates.push(slug);
+
+  // Also try resolving via funds directory
   try {
-    const url = `https://www.ssga.com/api/etf/v1/data/holdings?fund=${encodeURIComponent(etf)}&region=us&locale=en`;
-    const res = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)'
-      },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const js = await res.json();
-    const rows = js?.holdings || js?.fund?.holdings || js?.data || [];
-    if (!Array.isArray(rows) || !rows.length) return [];
-    return rows.map((r: any) => ({
-      ticker: (r.ticker || r.identifier || r.securityTicker || '').toUpperCase(),
-      name: r.name || r.securityName || r.holdingName || '',
-      weight: Number(r.weight || r.weightPercent || r.portfolioPercent || 0)
-    })).filter(h => h.ticker && h.name);
-  } catch {
-    return [];
+    const dirUrl = `https://www.ssga.com/api/etf/v1/data/funds?region=us&locale=en`;
+    const dirRes = await fetch(dirUrl, { headers, cache: 'no-store', signal: AbortSignal.timeout(8000) });
+    if (dirRes.ok) {
+      const list = await dirRes.json();
+      const items = Array.isArray(list?.funds) ? list.funds : Array.isArray(list) ? list : [];
+      const match = items.find((f: any) => String(f.symbol || f.ticker || '').toUpperCase() === etf.toUpperCase());
+      if (match) {
+        const possible = [match.fund, match.slug, match.productCode, match.code, match.id]
+          .map((v: any) => String(v || '').trim())
+          .filter(Boolean);
+        candidates.push(...possible);
+      }
+    }
+  } catch {}
+
+  // Try candidates until we get data
+  for (const key of candidates) {
+    const rows = await tryHoldings(key);
+    if (rows.length) {
+      return rows.map((r: any) => ({
+        ticker: (r.ticker || r.identifier || r.securityTicker || '').toUpperCase(),
+        name: r.name || r.securityName || r.holdingName || '',
+        weight: Number(r.weight || r.weightPercent || r.portfolioPercent || r.portfolioWeight || 0)
+      })).filter(h => h.ticker && h.name);
+    }
   }
+
+  return [];
 }
 
 // Yahoo Finance quoteSummary topHoldings fallback (may return partial list)

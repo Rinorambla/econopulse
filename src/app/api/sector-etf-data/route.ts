@@ -1,5 +1,74 @@
 import { NextResponse } from 'next/server';
 import { getYahooQuotes } from '@/lib/yahooFinance';
+import { env } from '@/lib/env';
+
+// Helper function to fetch from Tiingo
+async function getTiingoQuote(symbol: string) {
+  const apiKey = env.TIINGO_API_KEY;
+  if (!apiKey) return null;
+  
+  try {
+    const response = await fetch(
+      `https://api.tiingo.com/tiingo/daily/${symbol}/prices?token=${apiKey}`,
+      { 
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+        cache: 'no-store'
+      }
+    );
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data && data.length > 0) {
+      const quote = data[0];
+      return {
+        ticker: symbol,
+        price: quote.close || quote.adjClose || 0,
+        change: (quote.close - quote.prevClose) || 0,
+        changePercent: quote.prevClose ? ((quote.close - quote.prevClose) / quote.prevClose) * 100 : 0,
+        volume: quote.volume || 0,
+        high: quote.high || 0,
+        low: quote.low || 0,
+        open: quote.open || 0,
+        prevClose: quote.prevClose || 0,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.warn(`Tiingo fetch error for ${symbol}:`, error);
+    return null;
+  }
+}
+
+// Helper to fetch historical data for period calculations
+async function getTiingoHistorical(symbol: string, daysBack: number) {
+  const apiKey = env.TIINGO_API_KEY;
+  if (!apiKey) return null;
+  
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - daysBack);
+    
+    const response = await fetch(
+      `https://api.tiingo.com/tiingo/daily/${symbol}/prices?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&token=${apiKey}`,
+      { 
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+        cache: 'no-store'
+      }
+    );
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.warn(`Tiingo historical error for ${symbol}:`, error);
+    return null;
+  }
+}
 
 // Sector SPDR ETFs with metadata
 const SECTOR_ETFS = [
@@ -72,11 +141,35 @@ const MOCK_HOLDINGS: Record<string, Array<{ ticker: string; name: string; weight
 };
 
 // Helper to calculate historical prices for different periods
-function calculateHistoricalPrice(currentPrice: number, changePercent: number, period: '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y'): number {
-  // For demo: use current price and change% to back-calculate
-  // In production, fetch actual historical data
-  const multiplier = 1 + (changePercent / 100);
-  return currentPrice / multiplier;
+function getPeriodDays(period: string): number {
+  const periodMap: Record<string, number> = {
+    '1D': 2,
+    '5D': 7,
+    '1M': 30,
+    '3M': 90,
+    '6M': 180,
+    'YTD': Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / (1000 * 60 * 60 * 24)),
+    '1Y': 365,
+    '5Y': 1825,
+  };
+  return periodMap[period] || 2;
+}
+
+async function calculatePeriodPerformance(symbol: string, period: string, currentPrice: number) {
+  const daysBack = getPeriodDays(period);
+  const historical = await getTiingoHistorical(symbol, daysBack);
+  
+  if (historical && historical.length > 0) {
+    const oldPrice = historical[0].close || historical[0].adjClose || 0;
+    if (oldPrice > 0) {
+      const change = currentPrice - oldPrice;
+      const changePercent = (change / oldPrice) * 100;
+      return { lastPrice: oldPrice, change, changePercent };
+    }
+  }
+  
+  // Fallback to current day change
+  return { lastPrice: currentPrice, change: 0, changePercent: 0 };
 }
 
 export async function GET(request: Request) {
@@ -95,7 +188,7 @@ export async function GET(request: Request) {
       const holdings = MOCK_HOLDINGS[ticker] || [];
       const holdingTickers = holdings.map(h => h.ticker);
       
-      // Fetch real-time quotes for holdings
+      // Fetch real-time quotes for holdings using Tiingo first, then Yahoo as fallback
       let holdingsData: Array<{
         ticker: string;
         name: string;
@@ -105,15 +198,27 @@ export async function GET(request: Request) {
         change: number;
         changePercent: number;
       }> = [];
+      
       if (holdingTickers.length > 0) {
-        const quotes = await getYahooQuotes(holdingTickers);
-        holdingsData = holdings.map(h => {
-          const quote = quotes.find(q => q.ticker === h.ticker);
+        // Try Tiingo first for each holding
+        const quotesPromises = holdingTickers.map(async (t) => {
+          const tiingoQuote = await getTiingoQuote(t);
+          if (tiingoQuote) return tiingoQuote;
+          
+          // Fallback to Yahoo
+          const yahooQuotes = await getYahooQuotes([t]);
+          return yahooQuotes[0] || null;
+        });
+        
+        const quotes = await Promise.all(quotesPromises);
+        
+        holdingsData = holdings.map((h, idx) => {
+          const quote = quotes[idx];
           const currentPrice = quote?.price || 0;
           const changePercent = quote?.changePercent || 0;
           const change = quote?.change || 0;
           
-          // Calculate last price based on period (simplified for demo)
+          // Calculate last price
           const lastPrice = currentPrice - change;
           
           return {
@@ -137,18 +242,49 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch ETF overview data
+    // Fetch ETF overview data with proper period performance
     const symbols = SECTOR_ETFS.map(e => e.ticker);
-    const quotes = await getYahooQuotes(symbols);
-
-    const etfData = SECTOR_ETFS.map(etf => {
-      const quote = quotes.find(q => q.ticker === etf.ticker);
-      const currentPrice = quote?.price || 0;
-      const changePercent = quote?.changePercent || 0;
-      const change = quote?.change || 0;
+    
+    // Fetch quotes with Tiingo first, Yahoo as fallback
+    const quotesPromises = symbols.map(async (symbol) => {
+      const tiingoQuote = await getTiingoQuote(symbol);
+      if (tiingoQuote) {
+        // Calculate period-specific performance
+        const periodPerf = await calculatePeriodPerformance(symbol, period, tiingoQuote.price);
+        return {
+          ...tiingoQuote,
+          lastPrice: periodPerf.lastPrice,
+          change: periodPerf.change,
+          changePercent: periodPerf.changePercent,
+        };
+      }
       
-      // Calculate last price based on period
-      const lastPrice = currentPrice - change;
+      // Fallback to Yahoo
+      const yahooQuotes = await getYahooQuotes([symbol]);
+      return yahooQuotes[0] || null;
+    });
+    
+    const quotes = await Promise.all(quotesPromises);
+
+    const etfData = SECTOR_ETFS.map((etf, idx) => {
+      const quote = quotes[idx];
+      if (!quote) {
+        return {
+          ticker: etf.ticker,
+          sector: etf.sector,
+          closingPrice: 0,
+          lastPrice: 0,
+          change: 0,
+          changePercent: 0,
+          volume: 0,
+          marketCap: 0,
+        };
+      }
+      
+      const currentPrice = quote.price || 0;
+      const changePercent = quote.changePercent || 0;
+      const change = quote.change || 0;
+      const lastPrice = 'lastPrice' in quote ? quote.lastPrice : (currentPrice - change);
 
       return {
         ticker: etf.ticker,
@@ -157,8 +293,8 @@ export async function GET(request: Request) {
         lastPrice,
         change,
         changePercent,
-        volume: quote?.volume || 0,
-        marketCap: 0, // Market cap not available from Yahoo Finance basic quotes
+        volume: quote.volume || 0,
+        marketCap: 0,
       };
     });
 

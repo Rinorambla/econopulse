@@ -238,19 +238,58 @@ export async function GET(req: NextRequest) {
       return { date, triggeredKeys, percent };
     });
 
-    // Recent (last 6 month-end snapshots) - recompute point-in-time triggers per month end
+    // Recent (last 6 month-end snapshots from July to Dec 2025) - recompute point-in-time triggers per month
     const recent: Snapshot[] = [];
-    for (let m=5; m>=0; m--) {
-      const ref = new Date(); ref.setDate(1); ref.setHours(0,0,0,0); ref.setMonth(ref.getMonth()-m+1); ref.setDate(0); // last day previous month offset
+    const monthLabels = ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12'];
+    for (let m = 5; m >= 0; m--) {
+      const ref = new Date();
+      ref.setDate(1);
+      ref.setHours(0, 0, 0, 0);
+      ref.setMonth(ref.getMonth() - m + 1);
+      ref.setDate(0); // last day of previous month
       const dateStr = ref.toISOString().split('T')[0];
+      const monthLabel = monthLabels[5 - m];
       const triggeredKeys: string[] = [];
       // Re-evaluate triggers historically (subset of metrics we can reconstruct)
-      const sentVal = valueOnOrBefore(umcSent, dateStr); if (sentVal!=null && sentVal > 100) triggeredKeys.push('consumer_confidence');
-      const tenVal = valueOnOrBefore(dgs10, dateStr); const twoVal = valueOnOrBefore(dgs2, dateStr); if (tenVal!=null && twoVal!=null && tenVal - twoVal < 0) triggeredKeys.push('yield_curve_inversion');
-      if (hySpread) { const histList = hySpread.filter(o=> o.date <= dateStr).slice(-365*10).map(o=>parseFloat(o.value)).filter(v=>!isNaN(v)); const val = valueOnOrBefore(hySpread, dateStr); if (val!=null && histList.length>30) { const percVal = percentile(val, histList); if (percVal < 25) triggeredKeys.push('credit_stress_low'); } }
-      const sloosVal = valueOnOrBefore(sloos, dateStr); if (sloosVal!=null && sloosVal > 0) triggeredKeys.push('tightening_credit');
-      const priceVal = valueOnOrBefore(sp500, dateStr); const cpiVal = valueOnOrBefore(cpi, dateStr); if (priceVal!=null && cpiVal!=null) { const startIdx = sp500?.findIndex(o=>o.date >= dateStr) ?? 0; const window = (sp500||[]).slice(Math.max(0,startIdx-365*10), startIdx).map(o=>{ const p=parseFloat(o.value); const cp = valueOnOrBefore(cpi,o.date); return (!isNaN(p)&&cp)? p/(cp as number): NaN; }).filter(v=>!isNaN(v)); if (window.length>30) { const mean = window.reduce((a,b)=>a+b,0)/window.length; const std = Math.sqrt(window.reduce((a,b)=>a+(b-mean)**2,0)/window.length); const z = std? (priceVal/(cpiVal) - mean)/std:0; if (z>1) triggeredKeys.push('valuation_cpi_z'); } }
-      recent.push({ date: dateStr.slice(0,7), triggeredKeys, percent: pct(triggeredKeys.length, eligibleKeys.length) });
+      const sentVal = valueOnOrBefore(umcSent, dateStr);
+      if (sentVal != null && sentVal > 100) triggeredKeys.push('consumer_confidence');
+      const tenVal = valueOnOrBefore(dgs10, dateStr);
+      const twoVal = valueOnOrBefore(dgs2, dateStr);
+      if (tenVal != null && twoVal != null && tenVal - twoVal < 0) triggeredKeys.push('yield_curve_inversion');
+      if (hySpread) {
+        const histList = hySpread
+          .filter((o) => o.date <= dateStr)
+          .slice(-365 * 10)
+          .map((o) => parseFloat(o.value))
+          .filter((v) => !isNaN(v));
+        const val = valueOnOrBefore(hySpread, dateStr);
+        if (val != null && histList.length > 30) {
+          const percVal = percentile(val, histList);
+          if (percVal < 25) triggeredKeys.push('credit_stress_low');
+        }
+      }
+      const sloosVal = valueOnOrBefore(sloos, dateStr);
+      if (sloosVal != null && sloosVal > 0) triggeredKeys.push('tightening_credit');
+      const priceVal = valueOnOrBefore(sp500, dateStr);
+      const cpiVal = valueOnOrBefore(cpi, dateStr);
+      if (priceVal != null && cpiVal != null) {
+        const startIdx = sp500?.findIndex((o) => o.date >= dateStr) ?? 0;
+        const window = (sp500 || [])
+          .slice(Math.max(0, startIdx - 365 * 10), startIdx)
+          .map((o) => {
+            const p = parseFloat(o.value);
+            const cp = valueOnOrBefore(cpi, o.date);
+            return !isNaN(p) && cp ? p / (cp as number) : NaN;
+          })
+          .filter((v) => !isNaN(v));
+        if (window.length > 30) {
+          const mean = window.reduce((a, b) => a + b, 0) / window.length;
+          const std = Math.sqrt(window.reduce((a, b) => a + (b - mean) ** 2, 0) / window.length);
+          const z = std ? (priceVal / cpiVal - mean) / std : 0;
+          if (z > 1) triggeredKeys.push('valuation_cpi_z');
+        }
+      }
+      recent.push({ date: monthLabel, triggeredKeys, percent: pct(triggeredKeys.length, eligibleKeys.length) });
     }
 
   const response: ApiResponse = {

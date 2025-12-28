@@ -42,16 +42,20 @@ export const metadata: Metadata = {
   icons: {
     // Explicit favicon for Google SERP favicon discovery
     icon: [
-      { url: '/favicon.ico', rel: 'icon', sizes: 'any' },
+      { url: '/favicon.ico', rel: 'icon', sizes: '32x32' },
       { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
       { url: '/icon.svg', type: 'image/svg+xml' },
     ],
-    shortcut: '/icons/icon-192x192.png',
+    shortcut: '/favicon.ico',
     apple: [
       { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
     ],
   },
+};
+
+export const viewport = {
+  themeColor: '#0f172a',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -68,14 +72,37 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               name: 'EconoPulse',
               alternateName: 'Econopulse.ai',
               url: 'https://econopulse.ai',
-              logo: {
-                '@type': 'ImageObject',
-                url: 'https://econopulse.ai/icons/icon-512x512.png',
-                width: 512,
-                height: 512,
-              },
+              logo: [
+                {
+                  '@type': 'ImageObject',
+                  url: 'https://econopulse.ai/icons/icon-512x512.png',
+                  width: 512,
+                  height: 512,
+                },
+                {
+                  '@type': 'ImageObject',
+                  url: 'https://econopulse.ai/icon.svg',
+                  contentUrl: 'https://econopulse.ai/icon.svg',
+                }
+              ],
               description: 'Professional AI-powered economic analysis and market insights platform',
               sameAs: [],
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'EconoPulse',
+              url: 'https://econopulse.ai',
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: 'https://econopulse.ai/search?q={search_term_string}',
+                'query-input': 'required name=search_term_string',
+              },
             }),
           }}
         />

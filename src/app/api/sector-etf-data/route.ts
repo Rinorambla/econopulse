@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getYahooQuotes } from '@/lib/yahooFinance';
 import { fetchYahooHistory } from '@/lib/yahoo-history';
 import { env } from '@/lib/env';
+import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import fs from 'fs';
+import path from 'path';
 
 // Helper function to fetch from Tiingo
 async function getTiingoQuote(symbol: string) {
@@ -313,8 +316,53 @@ async function fetchYahooTopHoldings(etf: string): Promise<Array<{ ticker: strin
   }
 }
 
+// Snapshot cache for ETF holdings (daily)
+function getHoldingsSnapshotPath(ticker: string) {
+  const dir = path.join(process.cwd(), 'data-snapshots', 'etf-holdings');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return { dir, file: path.join(dir, `${ticker.toUpperCase()}.json`) };
+}
+
+function isSameDay(isoA: string, isoB: string) {
+  const a = new Date(isoA); const b = new Date(isoB);
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+}
+
+async function loadCachedHoldings(ticker: string): Promise<Array<{ ticker: string; name: string; weight: number }> | null> {
+  try {
+    const { file } = getHoldingsSnapshotPath(ticker);
+    if (!fs.existsSync(file)) return null;
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const ts = raw?.timestamp || '';
+    if (!ts || !isSameDay(ts, new Date().toISOString())) return null;
+    const list = raw?.holdings;
+    if (Array.isArray(list) && list.length > 0) return list;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveCachedHoldings(ticker: string, holdings: Array<{ ticker: string; name: string; weight: number }>, source: string) {
+  try {
+    const { file } = getHoldingsSnapshotPath(ticker);
+    const payload = { timestamp: new Date().toISOString(), ticker: ticker.toUpperCase(), source, count: holdings.length, holdings };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+  } catch {}
+}
+
 export async function GET(request: Request) {
   try {
+    // Basic rate limiting per client IP
+    const ip = getClientIp(request);
+    const rl = rateLimit(`sector-etf-data:${ip}`, 60, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '1D';
     const ticker = searchParams.get('ticker'); // If provided, return holdings for this ETF
@@ -325,15 +373,23 @@ export async function GET(request: Request) {
       if (!etf) {
         return NextResponse.json({ error: 'ETF not found' }, { status: 404 });
       }
-
-      // Fetch full holdings: SPDR first, Yahoo fallback, then mock if all else fails
-      let holdings = await fetchSPDRHoldings(ticker);
+      // Try snapshot cache first (daily)
+      let holdings = await loadCachedHoldings(ticker) || [];
+      let source = 'cache';
       if (!holdings.length) {
-        holdings = await fetchYahooTopHoldings(ticker);
-      }
-      // Final fallback to existing mock snippet to avoid empty responses
-      if (!holdings.length) {
-        holdings = (MOCK_HOLDINGS[ticker] || []).slice();
+        // Fetch full holdings: SPDR first, Yahoo fallback, then mock if all else fails
+        holdings = await fetchSPDRHoldings(ticker);
+        source = holdings.length ? 'spdr' : 'unknown';
+        if (!holdings.length) {
+          holdings = await fetchYahooTopHoldings(ticker);
+          source = holdings.length ? 'yahoo' : 'unknown';
+        }
+        if (!holdings.length) {
+          holdings = (MOCK_HOLDINGS[ticker] || []).slice();
+          source = 'mock';
+        }
+        // Save snapshot for the day (even partial lists help avoid repeated calls)
+        await saveCachedHoldings(ticker, holdings, source);
       }
 
       const holdingTickers = holdings.map(h => h.ticker);
@@ -411,7 +467,8 @@ export async function GET(request: Request) {
         holdings: holdingsData,
         totalHoldings: holdings.length,
         lastUpdated: new Date().toISOString(),
-      });
+        snapshotSource: source,
+      }, { headers: rateLimitHeaders(rl) });
     }
 
     // Fetch ETF overview data with proper period performance
@@ -480,7 +537,7 @@ export async function GET(request: Request) {
       etfs: etfData,
       period,
       lastUpdated: new Date().toISOString(),
-    });
+    }, { headers: rateLimitHeaders(rl) });
   } catch (error) {
     console.error('Sector ETF data error:', error);
     return NextResponse.json(

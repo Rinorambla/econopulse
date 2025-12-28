@@ -669,12 +669,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           )}
 
 
-
-          {/* Sector Tracker */}
-          <div className="mb-8">
-            {React.createElement(dynamic(()=> import('@/components/analytics/SectorTracker'), { ssr:false }))}
-          </div>
-
           {/* Symbol/Index Comparison removed per request */}
 
 

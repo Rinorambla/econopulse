@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowLeft, Building2, PieChart, Activity, Target } from 'lucide-react'
+import { ArrowLeft, Building2, PieChart, Activity, Target, TrendingUp, TrendingDown, Flame, Table, Grid3x3 } from 'lucide-react'
 
 // Reuse existing analytics widgets
 const MarketInteractiveChart = dynamic(() => import('@/components/analytics/MarketInteractiveChart'), { ssr: false })
@@ -33,6 +33,8 @@ export function MarketCategoriesEmbed() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeKey>('d1')
   const [timeframePerf, setTimeframePerf] = useState<Record<string, any>>({})
+  const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table')
+  const [moverCategory, setMoverCategory] = useState<'most-active' | 'trending' | 'top-gainers' | 'top-losers' | '52w-gainers' | '52w-losers' | null>(null)
   // Symbol used for chart analytics (TradingView shows AMEX:SPY; use SPY for Yahoo history)
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY')
   const [symbolInput, setSymbolInput] = useState<string>('SPY')
@@ -393,6 +395,39 @@ export function MarketCategoriesEmbed() {
     return out.sort((a,b)=> b.avgPerformance - a.avgPerformance)
   }, [assets, groupedAssets, timeframePerf, selectedTimeframe])
 
+  // Market Movers Categories
+  const marketMovers = useMemo(() => {
+    if (!moverCategory) return []
+    
+    const enrichedAssets = assets.map(a => {
+      const tf = timeframePerf[a.symbol]?.[selectedTimeframe]
+      const perf = (typeof tf === 'number' && isFinite(tf)) ? tf : a.performance
+      const w52Perf = timeframePerf[a.symbol]?.['w52']
+      return { ...a, performance: perf, w52Performance: (typeof w52Perf === 'number' && isFinite(w52Perf)) ? w52Perf : 0 }
+    })
+
+    switch (moverCategory) {
+      case 'most-active':
+        return [...enrichedAssets].sort((a, b) => b.volume - a.volume).slice(0, 50)
+      case 'trending':
+        // Trending: positive momentum with above-average volume
+        return [...enrichedAssets]
+          .filter(a => a.performance > 0 && a.volume > 0)
+          .sort((a, b) => (b.performance * Math.log(b.volume + 1)) - (a.performance * Math.log(a.volume + 1)))
+          .slice(0, 50)
+      case 'top-gainers':
+        return [...enrichedAssets].sort((a, b) => b.performance - a.performance).slice(0, 50)
+      case 'top-losers':
+        return [...enrichedAssets].sort((a, b) => a.performance - b.performance).slice(0, 50)
+      case '52w-gainers':
+        return [...enrichedAssets].sort((a, b) => b.w52Performance - a.w52Performance).slice(0, 50)
+      case '52w-losers':
+        return [...enrichedAssets].sort((a, b) => a.w52Performance - b.w52Performance).slice(0, 50)
+      default:
+        return []
+    }
+  }, [assets, timeframePerf, selectedTimeframe, moverCategory])
+
   if (loading && !assets.length) {
     return (
       <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 border border-white/10 rounded-xl p-6">
@@ -405,6 +440,181 @@ export function MarketCategoriesEmbed() {
   <section id="market-categories" className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold flex items-center gap-3"><PieChart className="w-6 h-6 text-emerald-400" /> Market Categories</h2>
+      </div>
+
+      {/* Market Movers Section */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+            <Flame className="w-5 h-5 text-orange-400" />
+            Market Movers
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-lg border transition-colors ${
+                viewMode === 'table' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+              }`}
+              title="Table View"
+            >
+              <Table className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('heatmap')}
+              className={`p-2 rounded-lg border transition-colors ${
+                viewMode === 'heatmap' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+              }`}
+              title="Heatmap View"
+            >
+              <Grid3x3 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+          <button
+            onClick={() => setMoverCategory(moverCategory === 'most-active' ? null : 'most-active')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === 'most-active' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <Activity className="w-4 h-4 inline mr-1" />
+            Most Active
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === 'trending' ? null : 'trending')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === 'trending' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <Flame className="w-4 h-4 inline mr-1" />
+            Trending Now
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === 'top-gainers' ? null : 'top-gainers')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === 'top-gainers' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 inline mr-1" />
+            Top Gainers
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === 'top-losers' ? null : 'top-losers')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === 'top-losers' ? 'bg-red-600 border-red-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <TrendingDown className="w-4 h-4 inline mr-1" />
+            Top Losers
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === '52w-gainers' ? null : '52w-gainers')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === '52w-gainers' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 inline mr-1" />
+            52W Gainers
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === '52w-losers' ? null : '52w-losers')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === '52w-losers' ? 'bg-red-600 border-red-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <TrendingDown className="w-4 h-4 inline mr-1" />
+            52W Losers
+          </button>
+        </div>
+
+        {moverCategory && (
+          <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+            {viewMode === 'table' ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400 text-xs uppercase tracking-wide">
+                      <th className="text-left px-2 py-2">#</th>
+                      <th className="text-left px-2 py-2">Symbol</th>
+                      <th className="text-left px-2 py-2">Name</th>
+                      <th className="text-right px-2 py-2">Price</th>
+                      <th className="text-right px-2 py-2">Change%</th>
+                      <th className="text-right px-2 py-2">Volume</th>
+                      {(moverCategory === '52w-gainers' || moverCategory === '52w-losers') && (
+                        <th className="text-right px-2 py-2">52W %</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketMovers.map((asset, idx) => {
+                      const perf = moverCategory === '52w-gainers' || moverCategory === '52w-losers' ? asset.w52Performance : asset.performance
+                      const color = perf > 0 ? 'text-emerald-400' : perf < 0 ? 'text-red-400' : 'text-gray-300'
+                      return (
+                        <tr key={asset.symbol} className="border-t border-white/10 hover:bg-white/5">
+                          <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
+                          <td className="px-2 py-2 font-medium text-cyan-400">{asset.symbol}</td>
+                          <td className="px-2 py-2 text-gray-300 truncate max-w-[200px]">{asset.name || asset.symbol}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-gray-200">{asset.price ? asset.price.toFixed(2) : '-'}</td>
+                          <td className={`px-2 py-2 text-right tabular-nums font-semibold ${color}`}>
+                            {Number.isFinite(asset.performance) ? (asset.performance > 0 ? '+' : '') + asset.performance.toFixed(2) + '%' : '-'}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums text-gray-400">
+                            {asset.volume ? asset.volume.toLocaleString() : '-'}
+                          </td>
+                          {(moverCategory === '52w-gainers' || moverCategory === '52w-losers') && (
+                            <td className={`px-2 py-2 text-right tabular-nums font-semibold ${color}`}>
+                              {Number.isFinite(asset.w52Performance) ? (asset.w52Performance > 0 ? '+' : '') + asset.w52Performance.toFixed(2) + '%' : '-'}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2">
+                {marketMovers.slice(0, 40).map(asset => {
+                  const perf = moverCategory === '52w-gainers' || moverCategory === '52w-losers' ? asset.w52Performance : asset.performance
+                  const absPerf = Math.abs(perf)
+                  const maxPerf = Math.max(...marketMovers.map(a => Math.abs(moverCategory === '52w-gainers' || moverCategory === '52w-losers' ? a.w52Performance : a.performance)))
+                  const intensity = maxPerf > 0 ? (absPerf / maxPerf) * 100 : 0
+                  const bgColor = perf > 0 
+                    ? `rgba(16, 185, 129, ${Math.max(0.2, intensity / 100)})` 
+                    : perf < 0 
+                    ? `rgba(239, 68, 68, ${Math.max(0.2, intensity / 100)})` 
+                    : 'rgba(100, 116, 139, 0.3)'
+                  
+                  return (
+                    <div
+                      key={asset.symbol}
+                      className="relative p-3 rounded-lg border border-white/10 hover:border-white/30 transition-all cursor-pointer group"
+                      style={{ backgroundColor: bgColor }}
+                      title={`${asset.name} - ${asset.price?.toFixed(2)} (${perf > 0 ? '+' : ''}${perf.toFixed(2)}%)`}
+                    >
+                      <div className="text-white font-semibold text-sm truncate">{asset.symbol}</div>
+                      <div className={`text-xs font-bold mt-1 ${perf > 0 ? 'text-emerald-100' : perf < 0 ? 'text-red-100' : 'text-gray-200'}`}>
+                        {perf > 0 ? '+' : ''}{perf.toFixed(1)}%
+                      </div>
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center p-2">
+                        <div className="text-white text-xs font-semibold text-center truncate w-full">{asset.name}</div>
+                        <div className="text-white text-xs mt-1">${asset.price?.toFixed(2)}</div>
+                        <div className="text-gray-300 text-[10px] mt-0.5">Vol: {asset.volume ? (asset.volume / 1000000).toFixed(1) + 'M' : '-'}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!moverCategory && (
+          <div className="bg-white/5 rounded-lg p-8 border border-white/10 text-center">
+            <p className="text-gray-400">Select a market mover category above to view data</p>
+          </div>
+        )}
       </div>
 
       {/* Symbol selector synced with TradingView + analysis */}

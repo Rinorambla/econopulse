@@ -32,6 +32,20 @@ interface PortfolioData {
         yearly: string;
       };
     }>;
+    underlyingStocks?: Array<{
+      ticker: string;
+      name: string;
+      weight: number;
+      price: number;
+      change: string;
+      performance: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+        quarterly: string;
+        yearly: string;
+      };
+    }>;
   aiScore?: number;
   };
 }
@@ -292,26 +306,67 @@ function augmentWithRegional(base: PortfolioData): PortfolioData {
     return list.map(h => ({ ...h, weight: w }));
   };
 
+  // ETF-based holdings for regional portfolios (what user sees in Holdings list)
+  const EUROPE_ETFS = [
+    { ticker: 'VGK', name: 'Vanguard FTSE Europe ETF', weight: 25 },
+    { ticker: 'EWG', name: 'iShares MSCI Germany ETF', weight: 15 },
+    { ticker: 'EWU', name: 'iShares MSCI United Kingdom ETF', weight: 12 },
+    { ticker: 'EWQ', name: 'iShares MSCI France ETF', weight: 10 },
+    { ticker: 'EWL', name: 'iShares MSCI Switzerland ETF', weight: 10 },
+    { ticker: 'EWN', name: 'iShares MSCI Netherlands ETF', weight: 8 },
+    { ticker: 'EWI', name: 'iShares MSCI Italy ETF', weight: 8 },
+    { ticker: 'EWP', name: 'iShares MSCI Spain ETF', weight: 6 },
+    { ticker: 'EWD', name: 'iShares MSCI Sweden ETF', weight: 6 },
+  ];
+  const EM_ETFS = [
+    { ticker: 'VWO', name: 'Vanguard FTSE Emerging Markets ETF', weight: 25 },
+    { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF', weight: 20 },
+    { ticker: 'IEMG', name: 'iShares Core MSCI Emerging Markets ETF', weight: 15 },
+    { ticker: 'FXI', name: 'iShares China Large-Cap ETF', weight: 10 },
+    { ticker: 'EWZ', name: 'iShares MSCI Brazil ETF', weight: 8 },
+    { ticker: 'INDA', name: 'iShares MSCI India ETF', weight: 8 },
+    { ticker: 'EWT', name: 'iShares MSCI Taiwan ETF', weight: 7 },
+    { ticker: 'EWY', name: 'iShares MSCI South Korea ETF', weight: 7 },
+  ];
+
   if (!alreadyEurope && europeHoldings.length) {
-    const weighted = buildWeights(europeHoldings);
+    const weightedStocks = buildWeights(europeHoldings);
+    const etfHoldings = EUROPE_ETFS.map(e => ({
+      ticker: e.ticker,
+      name: e.name,
+      weight: e.weight,
+      price: 0,
+      change: '0.00%',
+      performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
+    }));
     clone['europe'] = {
       name: 'Europe Portfolio',
-      description: 'Major European equities via US-listed ADRs and ETFs.',
-      performance: aggregatePerf(weighted),
-      holdings: weighted.slice(0, 35) // cap to 35 for UI
+      description: 'Major European equities via regional ETFs. Click "View Stocks" to see underlying ADRs.',
+      performance: aggregatePerf(weightedStocks),
+      holdings: etfHoldings,
+      underlyingStocks: weightedStocks.slice(0, 35) // ADR stocks shown on "View Stocks" click
     };
-    console.log('[SyntheticPortfolio] Added Europe Portfolio', { count: weighted.length });
+    console.log('[SyntheticPortfolio] Added Europe Portfolio', { etfs: etfHoldings.length, stocks: weightedStocks.length });
   }
 
   if (!alreadyEmerging && emergingHoldings.length) {
-    const weighted = buildWeights(emergingHoldings);
+    const weightedStocks = buildWeights(emergingHoldings);
+    const etfHoldings = EM_ETFS.map(e => ({
+      ticker: e.ticker,
+      name: e.name,
+      weight: e.weight,
+      price: 0,
+      change: '0.00%',
+      performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
+    }));
     clone['emerging_markets'] = {
       name: 'Emerging Markets Portfolio',
-      description: 'Major Emerging Markets equities via US-listed ADRs and ETFs.',
-      performance: aggregatePerf(weighted),
-      holdings: weighted.slice(0, 35) // cap to 35 for UI
+      description: 'Major EM equities via regional ETFs. Click "View Stocks" to see underlying ADRs.',
+      performance: aggregatePerf(weightedStocks),
+      holdings: etfHoldings,
+      underlyingStocks: weightedStocks.slice(0, 35) // ADR stocks shown on "View Stocks" click
     };
-    console.log('[SyntheticPortfolio] Added Emerging Markets Portfolio', { count: weighted.length });
+    console.log('[SyntheticPortfolio] Added Emerging Markets Portfolio', { etfs: etfHoldings.length, stocks: weightedStocks.length });
   }
   return clone;
 }
@@ -408,8 +463,13 @@ export default function AIPortfolioPage() {
       if (data.economicPortfolios) {
         // Augment with regional synthetic portfolios (no duplication)
         const augmented = augmentWithRegional(data.economicPortfolios);
-        // After augmentation fetch real quotes for every holding (deduped)
-        const allSymbols = Array.from(new Set(Object.values(augmented).flatMap(p => p.holdings?.map(h => h.ticker) || [])));
+        // After augmentation fetch real quotes for every holding AND underlying stocks (deduped)
+        const allSymbols = Array.from(new Set(
+          Object.values(augmented).flatMap(p => [
+            ...(p.holdings?.map(h => h.ticker) || []),
+            ...(p.underlyingStocks?.map(h => h.ticker) || [])
+          ])
+        ));
         let quotes: Record<string, any> = {};
         if (allSymbols.length) {
           try {
@@ -420,17 +480,30 @@ export default function AIPortfolioPage() {
             console.warn('Quotes fetch failed', e);
           }
         }
-        // Merge real data into holdings and recompute portfolio performance as weighted average of daily
+        // Merge real data into holdings and underlyingStocks
         const merged: PortfolioData = {};
         Object.entries(augmented).forEach(([key, p]) => {
           const newHoldings = p.holdings.map(h => {
             const q = quotes[h.ticker];
-            if (!q) return h; // keep existing
+            if (!q) return h;
             return {
               ...h,
               name: q.name || h.name,
               price: q.price ?? h.price,
               change: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
+              performance: q.performance || h.performance
+            };
+          });
+          // Also update underlyingStocks if present
+          const newUnderlyingStocks = p.underlyingStocks?.map(h => {
+            const q = quotes[h.ticker];
+            if (!q) return h;
+            return {
+              ...h,
+              name: q.name || h.name,
+              price: q.price ?? h.price,
+              change: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
+              changePercent: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
               performance: q.performance || h.performance
             };
           });
@@ -452,6 +525,7 @@ export default function AIPortfolioPage() {
             ...p,
             performance: perfObj,
             holdings: newHoldings,
+            underlyingStocks: newUnderlyingStocks,
             aiScore: computeAIScore(perfObj)
           };
         });
@@ -844,15 +918,32 @@ export default function AIPortfolioPage() {
         {/* Holdings */}
         <div className="space-y-3">
           <div className="flex items-center justify-between border-b border-slate-600 pb-1 mb-3">
-            <h4 className="text-sm font-semibold text-gray-300">Holdings ({portfolioData.holdings?.length || 0})</h4>
-            {portfolioData.holdings?.length > 5 && (
-              <button
-                onClick={() => toggleHoldingsExpanded(portfolioKey)}
-                className="text-xs px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded transition-colors"
-              >
-                {expandedHoldings.has(portfolioKey) ? '▲ Show Less' : `▼ Show All (${portfolioData.holdings.length})`}
-              </button>
-            )}
+            <h4 className="text-sm font-semibold text-gray-300">Holdings (ETFs)</h4>
+            <div className="flex gap-2">
+              {portfolioData.underlyingStocks?.length > 0 && (
+                <button
+                  onClick={() => {
+                    setStocksModal({
+                      open: true,
+                      portfolio: portfolioData.name,
+                      sector: 'Underlying Stocks',
+                      stocks: portfolioData.underlyingStocks
+                    });
+                  }}
+                  className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                >
+                  📊 View Stocks ({portfolioData.underlyingStocks.length})
+                </button>
+              )}
+              {portfolioData.holdings?.length > 5 && (
+                <button
+                  onClick={() => toggleHoldingsExpanded(portfolioKey)}
+                  className="text-xs px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded transition-colors"
+                >
+                  {expandedHoldings.has(portfolioKey) ? '▲ Less' : `▼ All`}
+                </button>
+              )}
+            </div>
           </div>
           {portfolioData.holdings?.slice(0, expandedHoldings.has(portfolioKey) ? portfolioData.holdings.length : 5).map((stock: any, index: number) => (
             <div key={index} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg gap-3 overflow-hidden">

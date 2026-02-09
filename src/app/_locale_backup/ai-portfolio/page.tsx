@@ -353,6 +353,15 @@ export default function AIPortfolioPage() {
     stocks: [],
   });
   const [loadingStocks, setLoadingStocks] = useState(false);
+  // Track which portfolios have expanded holdings view
+  const [expandedHoldings, setExpandedHoldings] = useState<Set<string>>(new Set());
+  const toggleHoldingsExpanded = (key: string) => {
+    setExpandedHoldings(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   // Regime sync (shared with MarketInteractiveChart)
   const [currentRegime, setCurrentRegime] = useState<RegimeKey>('goldilocks')
   useEffect(() => {
@@ -835,16 +844,17 @@ export default function AIPortfolioPage() {
         {/* Holdings */}
         <div className="space-y-3">
           <div className="flex items-center justify-between border-b border-slate-600 pb-1 mb-3">
-            <h4 className="text-sm font-semibold text-gray-300">Holdings (ETFs)</h4>
-            <button
-              onClick={() => viewIndividualStocks(portfolioData.name)}
-              disabled={loadingStocks}
-              className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white rounded transition-colors"
-            >
-              {loadingStocks ? 'Loading...' : '📊 View Stocks'}
-            </button>
+            <h4 className="text-sm font-semibold text-gray-300">Holdings ({portfolioData.holdings?.length || 0})</h4>
+            {portfolioData.holdings?.length > 5 && (
+              <button
+                onClick={() => toggleHoldingsExpanded(portfolioKey)}
+                className="text-xs px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded transition-colors"
+              >
+                {expandedHoldings.has(portfolioKey) ? '▲ Show Less' : `▼ Show All (${portfolioData.holdings.length})`}
+              </button>
+            )}
           </div>
-          {portfolioData.holdings?.slice(0, 5).map((stock: any, index: number) => (
+          {portfolioData.holdings?.slice(0, expandedHoldings.has(portfolioKey) ? portfolioData.holdings.length : 5).map((stock: any, index: number) => (
             <div key={index} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg gap-3 overflow-hidden">
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-sm text-white">{stock.ticker}</div>

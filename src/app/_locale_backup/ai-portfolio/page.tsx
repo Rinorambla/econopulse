@@ -491,8 +491,6 @@ export default function AIPortfolioPage() {
             console.warn('Quotes fetch failed', e);
           }
         }
-          }
-        }
         // Merge real data into holdings and underlyingStocks
         const merged: PortfolioData = {};
         Object.entries(augmented).forEach(([key, p]: [string, any]) => {

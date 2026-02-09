@@ -57,6 +57,195 @@ const parsePct = (v?: string) => {
   return isNaN(n) ? 0 : n;
 };
 
+// =============================================================================
+// UNDERLYING STOCKS FOR EACH REGIME PORTFOLIO
+// Each portfolio ETF maps to representative individual stocks
+// =============================================================================
+
+// Goldilocks: Tech growth + Consumer discretionary
+const GOLDILOCKS_STOCKS = [
+  { ticker: 'AAPL', name: 'Apple Inc. (Tech)' },
+  { ticker: 'MSFT', name: 'Microsoft Corporation (Tech)' },
+  { ticker: 'GOOGL', name: 'Alphabet Inc. (Tech)' },
+  { ticker: 'NVDA', name: 'NVIDIA Corporation (Tech)' },
+  { ticker: 'META', name: 'Meta Platforms Inc. (Tech)' },
+  { ticker: 'AMZN', name: 'Amazon.com Inc. (Consumer)' },
+  { ticker: 'TSLA', name: 'Tesla Inc. (Consumer)' },
+  { ticker: 'AMD', name: 'Advanced Micro Devices (Semis)' },
+  { ticker: 'AVGO', name: 'Broadcom Inc. (Semis)' },
+  { ticker: 'NFLX', name: 'Netflix Inc. (Consumer)' },
+  { ticker: 'CRM', name: 'Salesforce Inc. (Tech)' },
+  { ticker: 'ADBE', name: 'Adobe Inc. (Tech)' },
+  { ticker: 'ORCL', name: 'Oracle Corporation (Tech)' },
+  { ticker: 'CSCO', name: 'Cisco Systems Inc. (Tech)' },
+  { ticker: 'INTC', name: 'Intel Corporation (Semis)' },
+  { ticker: 'MU', name: 'Micron Technology (Semis)' },
+  { ticker: 'HD', name: 'Home Depot Inc. (Consumer)' },
+  { ticker: 'LOW', name: "Lowe's Companies (Consumer)" },
+  { ticker: 'NKE', name: 'Nike Inc. (Consumer)' },
+  { ticker: 'SBUX', name: 'Starbucks Corporation (Consumer)' },
+];
+
+// Recession: Defensive - Utilities, Staples, Bonds
+const RECESSION_STOCKS = [
+  { ticker: 'NEE', name: 'NextEra Energy (Utilities)' },
+  { ticker: 'DUK', name: 'Duke Energy Corp. (Utilities)' },
+  { ticker: 'SO', name: 'Southern Company (Utilities)' },
+  { ticker: 'AEP', name: 'American Electric Power (Utilities)' },
+  { ticker: 'EXC', name: 'Exelon Corporation (Utilities)' },
+  { ticker: 'D', name: 'Dominion Energy (Utilities)' },
+  { ticker: 'PG', name: 'Procter & Gamble (Staples)' },
+  { ticker: 'KO', name: 'Coca-Cola Company (Staples)' },
+  { ticker: 'PEP', name: 'PepsiCo Inc. (Staples)' },
+  { ticker: 'WMT', name: 'Walmart Inc. (Staples)' },
+  { ticker: 'COST', name: 'Costco Wholesale (Staples)' },
+  { ticker: 'MO', name: 'Altria Group (Staples)' },
+  { ticker: 'PM', name: 'Philip Morris Intl (Staples)' },
+  { ticker: 'CL', name: 'Colgate-Palmolive (Staples)' },
+  { ticker: 'GIS', name: 'General Mills (Staples)' },
+  { ticker: 'K', name: 'Kellanova (Staples)' },
+  { ticker: 'ABT', name: 'Abbott Laboratories (Healthcare)' },
+  { ticker: 'JNJ', name: 'Johnson & Johnson (Healthcare)' },
+  { ticker: 'NEM', name: 'Newmont Corporation (Gold)' },
+  { ticker: 'GOLD', name: 'Barrick Gold (Gold)' },
+];
+
+// Stagflation: Commodities, Energy, Inflation protection
+const STAGFLATION_STOCKS = [
+  { ticker: 'XOM', name: 'Exxon Mobil Corp. (Energy)' },
+  { ticker: 'CVX', name: 'Chevron Corporation (Energy)' },
+  { ticker: 'COP', name: 'ConocoPhillips (Energy)' },
+  { ticker: 'EOG', name: 'EOG Resources Inc. (Energy)' },
+  { ticker: 'OXY', name: 'Occidental Petroleum (Energy)' },
+  { ticker: 'SLB', name: 'Schlumberger Ltd. (Energy)' },
+  { ticker: 'HAL', name: 'Halliburton Company (Energy)' },
+  { ticker: 'PSX', name: 'Phillips 66 (Energy)' },
+  { ticker: 'VLO', name: 'Valero Energy (Energy)' },
+  { ticker: 'MPC', name: 'Marathon Petroleum (Energy)' },
+  { ticker: 'NEM', name: 'Newmont Corporation (Gold)' },
+  { ticker: 'GOLD', name: 'Barrick Gold Corp. (Gold)' },
+  { ticker: 'FCX', name: 'Freeport-McMoRan (Copper)' },
+  { ticker: 'BHP', name: 'BHP Group (Mining)' },
+  { ticker: 'RIO', name: 'Rio Tinto PLC (Mining)' },
+  { ticker: 'VALE', name: 'Vale SA (Mining)' },
+  { ticker: 'ADM', name: 'Archer-Daniels-Midland (Agri)' },
+  { ticker: 'BG', name: 'Bunge Limited (Agri)' },
+  { ticker: 'MOS', name: 'Mosaic Company (Fertilizer)' },
+  { ticker: 'CF', name: 'CF Industries (Fertilizer)' },
+];
+
+// Reflation: Industrials, Financials, Cyclicals
+const REFLATION_STOCKS = [
+  { ticker: 'CAT', name: 'Caterpillar Inc. (Industrial)' },
+  { ticker: 'DE', name: 'Deere & Company (Industrial)' },
+  { ticker: 'UNP', name: 'Union Pacific Corp. (Industrial)' },
+  { ticker: 'GE', name: 'GE Aerospace (Industrial)' },
+  { ticker: 'HON', name: 'Honeywell Intl (Industrial)' },
+  { ticker: 'BA', name: 'Boeing Company (Industrial)' },
+  { ticker: 'RTX', name: 'RTX Corporation (Defense)' },
+  { ticker: 'LMT', name: 'Lockheed Martin (Defense)' },
+  { ticker: 'JPM', name: 'JPMorgan Chase (Financial)' },
+  { ticker: 'BAC', name: 'Bank of America (Financial)' },
+  { ticker: 'WFC', name: 'Wells Fargo & Co. (Financial)' },
+  { ticker: 'GS', name: 'Goldman Sachs (Financial)' },
+  { ticker: 'MS', name: 'Morgan Stanley (Financial)' },
+  { ticker: 'C', name: 'Citigroup Inc. (Financial)' },
+  { ticker: 'BLK', name: 'BlackRock Inc. (Financial)' },
+  { ticker: 'SCHW', name: 'Charles Schwab (Financial)' },
+  { ticker: 'AXP', name: 'American Express (Financial)' },
+  { ticker: 'PNC', name: 'PNC Financial (Financial)' },
+  { ticker: 'USB', name: 'U.S. Bancorp (Financial)' },
+  { ticker: 'FCX', name: 'Freeport-McMoRan (Cyclical)' },
+];
+
+// Deflation: Utilities, Quality bonds, Low volatility
+const DEFLATION_STOCKS = [
+  { ticker: 'NEE', name: 'NextEra Energy (Utilities)' },
+  { ticker: 'DUK', name: 'Duke Energy Corp. (Utilities)' },
+  { ticker: 'SO', name: 'Southern Company (Utilities)' },
+  { ticker: 'AEP', name: 'American Electric Power (Utilities)' },
+  { ticker: 'EXC', name: 'Exelon Corporation (Utilities)' },
+  { ticker: 'D', name: 'Dominion Energy (Utilities)' },
+  { ticker: 'WEC', name: 'WEC Energy Group (Utilities)' },
+  { ticker: 'ED', name: 'Consolidated Edison (Utilities)' },
+  { ticker: 'XEL', name: 'Xcel Energy Inc. (Utilities)' },
+  { ticker: 'ES', name: 'Eversource Energy (Utilities)' },
+  { ticker: 'JNJ', name: 'Johnson & Johnson (Quality)' },
+  { ticker: 'PG', name: 'Procter & Gamble (Quality)' },
+  { ticker: 'KO', name: 'Coca-Cola Company (Quality)' },
+  { ticker: 'WMT', name: 'Walmart Inc. (Quality)' },
+  { ticker: 'UNH', name: 'UnitedHealth Group (Healthcare)' },
+  { ticker: 'ABT', name: 'Abbott Laboratories (Healthcare)' },
+  { ticker: 'PFE', name: 'Pfizer Inc. (Healthcare)' },
+  { ticker: 'MRK', name: 'Merck & Co. (Healthcare)' },
+  { ticker: 'LLY', name: 'Eli Lilly & Co. (Healthcare)' },
+  { ticker: 'TMO', name: 'Thermo Fisher Scientific (Healthcare)' },
+];
+
+// Disinflation Soft Landing: Balanced - Quality growth
+const DISINFLATION_STOCKS = [
+  { ticker: 'AAPL', name: 'Apple Inc. (Quality Growth)' },
+  { ticker: 'MSFT', name: 'Microsoft Corporation (Quality Growth)' },
+  { ticker: 'GOOGL', name: 'Alphabet Inc. (Quality Growth)' },
+  { ticker: 'V', name: 'Visa Inc. (Quality Growth)' },
+  { ticker: 'MA', name: 'Mastercard Inc. (Quality Growth)' },
+  { ticker: 'JNJ', name: 'Johnson & Johnson (Quality)' },
+  { ticker: 'PG', name: 'Procter & Gamble (Quality)' },
+  { ticker: 'UNH', name: 'UnitedHealth Group (Quality)' },
+  { ticker: 'HD', name: 'Home Depot Inc. (Quality)' },
+  { ticker: 'MCD', name: "McDonald's Corporation (Quality)" },
+  { ticker: 'NKE', name: 'Nike Inc. (Quality Growth)' },
+  { ticker: 'ACN', name: 'Accenture PLC (Quality)' },
+  { ticker: 'LIN', name: 'Linde PLC (Quality)' },
+  { ticker: 'SPGI', name: 'S&P Global Inc. (Quality)' },
+  { ticker: 'BRK-B', name: 'Berkshire Hathaway (Quality)' },
+  { ticker: 'NESN', name: 'Nestlé SA (International)' },
+  { ticker: 'ASML', name: 'ASML Holding (International)' },
+  { ticker: 'NVO', name: 'Novo Nordisk (International)' },
+  { ticker: 'TM', name: 'Toyota Motor Corp. (International)' },
+  { ticker: 'SAP', name: 'SAP SE (International)' },
+];
+
+// Dollar Weakness: International, EM, Commodities
+const DOLLAR_WEAKNESS_STOCKS = [
+  { ticker: 'TSM', name: 'Taiwan Semiconductor (EM)' },
+  { ticker: 'BABA', name: 'Alibaba Group (EM China)' },
+  { ticker: 'TCEHY', name: 'Tencent Holdings (EM China)' },
+  { ticker: 'INFY', name: 'Infosys Limited (EM India)' },
+  { ticker: 'HDB', name: 'HDFC Bank (EM India)' },
+  { ticker: 'VALE', name: 'Vale SA (EM Brazil)' },
+  { ticker: 'PBR', name: 'Petrobras (EM Brazil)' },
+  { ticker: 'ITUB', name: 'Itaú Unibanco (EM Brazil)' },
+  { ticker: 'NEM', name: 'Newmont Corporation (Gold)' },
+  { ticker: 'GOLD', name: 'Barrick Gold Corp. (Gold)' },
+  { ticker: 'FCX', name: 'Freeport-McMoRan (Commodities)' },
+  { ticker: 'BHP', name: 'BHP Group (Commodities)' },
+  { ticker: 'RIO', name: 'Rio Tinto PLC (Commodities)' },
+  { ticker: 'NESN', name: 'Nestlé SA (Switzerland)' },
+  { ticker: 'NVS', name: 'Novartis AG (Switzerland)' },
+  { ticker: 'UBS', name: 'UBS Group AG (Switzerland)' },
+  { ticker: 'ASML', name: 'ASML Holding (Netherlands)' },
+  { ticker: 'SAP', name: 'SAP SE (Germany)' },
+  { ticker: 'TM', name: 'Toyota Motor Corp. (Japan)' },
+  { ticker: 'SONY', name: 'Sony Group Corp. (Japan)' },
+];
+
+// Map portfolio names to their underlying stocks
+const REGIME_UNDERLYING_STOCKS: Record<string, typeof GOLDILOCKS_STOCKS> = {
+  'goldilocks': GOLDILOCKS_STOCKS,
+  'goldilocks_economy': GOLDILOCKS_STOCKS,
+  'recession': RECESSION_STOCKS,
+  'stagflation': STAGFLATION_STOCKS,
+  'reflation': REFLATION_STOCKS,
+  'deflation': DEFLATION_STOCKS,
+  'disinflation': DISINFLATION_STOCKS,
+  'disinflation_soft_landing': DISINFLATION_STOCKS,
+  'dollar_weakness': DOLLAR_WEAKNESS_STOCKS,
+  'dollar_weakness_global_rebalancing': DOLLAR_WEAKNESS_STOCKS,
+};
+
+// =============================================================================
+
 // Build regional synthetic portfolios (Europe & Emerging Markets) preventing duplicates
 function augmentWithRegional(base: PortfolioData): PortfolioData {
   const clone: PortfolioData = { ...base };
@@ -463,13 +652,28 @@ export default function AIPortfolioPage() {
       if (data.economicPortfolios) {
         // Augment with regional synthetic portfolios (no duplication)
         const augmented = augmentWithRegional(data.economicPortfolios) as any;
-        // After augmentation fetch real quotes for every holding AND underlying stocks (deduped)
-        const allSymbols = Array.from(new Set(
-          Object.values(augmented).flatMap((p: any) => [
-            ...(p.holdings?.map((h: any) => h.ticker) || []),
-            ...(p.underlyingStocks?.map((h: any) => h.ticker) || [])
-          ])
-        ));
+        
+        // Collect all symbols including:
+        // 1. Holdings from all portfolios
+        // 2. Existing underlyingStocks (from Europe/EM)
+        // 3. Regime-based underlying stocks for portfolios that don't have them yet
+        const symbolsToFetch: string[] = [];
+        Object.entries(augmented).forEach(([key, p]: [string, any]) => {
+          // Add holding tickers
+          p.holdings?.forEach((h: any) => symbolsToFetch.push(h.ticker));
+          // Add existing underlying stocks
+          p.underlyingStocks?.forEach((h: any) => symbolsToFetch.push(h.ticker));
+          // Check if this portfolio needs regime underlying stocks
+          if (!p.underlyingStocks || p.underlyingStocks.length === 0) {
+            const keyLower = key.toLowerCase().replace(/[-_]/g, '_');
+            const regimeStocks = REGIME_UNDERLYING_STOCKS[keyLower];
+            if (regimeStocks) {
+              regimeStocks.forEach((s: any) => symbolsToFetch.push(s.ticker));
+            }
+          }
+        });
+        const allSymbols = Array.from(new Set(symbolsToFetch));
+        
         console.log('[Portfolio] Fetching quotes for', allSymbols.length, 'symbols including underlying stocks');
         let quotes: Record<string, any> = {};
         if (allSymbols.length) {
@@ -505,8 +709,27 @@ export default function AIPortfolioPage() {
               performance: q.performance || h.performance
             };
           });
-          // Also update underlyingStocks if present
-          const newUnderlyingStocks = p.underlyingStocks?.map((h: any) => {
+          
+          // Determine underlying stocks: use existing if present, otherwise look up by regime
+          let underlyingStocksBase = p.underlyingStocks;
+          if (!underlyingStocksBase || underlyingStocksBase.length === 0) {
+            // Try to match portfolio to a regime and get underlying stocks
+            const keyLower = key.toLowerCase().replace(/[-_]/g, '_');
+            const regimeStocks = REGIME_UNDERLYING_STOCKS[keyLower];
+            if (regimeStocks) {
+              underlyingStocksBase = regimeStocks.map((s: any) => ({
+                ticker: s.ticker,
+                name: s.name,
+                weight: +(100 / regimeStocks.length).toFixed(2),
+                price: 0,
+                change: '0.00%',
+                performance: { daily: '0.00%', weekly: '0.00%', monthly: '0.00%', quarterly: '0.00%', yearly: '0.00%' }
+              }));
+            }
+          }
+          
+          // Update underlyingStocks with real quotes if present
+          const newUnderlyingStocks = underlyingStocksBase?.map((h: any) => {
             const q = quotes[h.ticker];
             if (!q) {
               console.log('[Portfolio] No quote for underlying stock:', h.ticker);

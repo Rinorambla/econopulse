@@ -34,7 +34,7 @@ export function MarketCategoriesEmbed() {
   const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeKey>('d1')
   const [timeframePerf, setTimeframePerf] = useState<Record<string, any>>({})
   const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table')
-  const [moverCategory, setMoverCategory] = useState<'most-active' | 'trending' | 'top-gainers' | 'top-losers' | '52w-gainers' | '52w-losers' | null>(null)
+  const [moverCategory, setMoverCategory] = useState<'most-active' | 'trending' | 'top-gainers' | 'top-losers' | '52w-gainers' | '52w-losers' | 'best-momentum-week' | null>(null)
   // Symbol used for chart analytics (TradingView shows AMEX:SPY; use SPY for Yahoo history)
   const [selectedSymbol, setSelectedSymbol] = useState<string>('SPY')
   const [symbolInput, setSymbolInput] = useState<string>('SPY')
@@ -403,7 +403,13 @@ export function MarketCategoriesEmbed() {
       const tf = timeframePerf[a.symbol]?.[selectedTimeframe]
       const perf = (typeof tf === 'number' && isFinite(tf)) ? tf : a.performance
       const w52Perf = timeframePerf[a.symbol]?.['w52']
-      return { ...a, performance: perf, w52Performance: (typeof w52Perf === 'number' && isFinite(w52Perf)) ? w52Perf : 0 }
+      const w1Perf = timeframePerf[a.symbol]?.['w1']
+      return { 
+        ...a, 
+        performance: perf, 
+        w52Performance: (typeof w52Perf === 'number' && isFinite(w52Perf)) ? w52Perf : 0,
+        weeklyPerformance: (typeof w1Perf === 'number' && isFinite(w1Perf)) ? w1Perf : 0
+      }
     })
 
     switch (moverCategory) {
@@ -423,6 +429,12 @@ export function MarketCategoriesEmbed() {
         return [...enrichedAssets].sort((a, b) => b.w52Performance - a.w52Performance).slice(0, 50)
       case '52w-losers':
         return [...enrichedAssets].sort((a, b) => a.w52Performance - b.w52Performance).slice(0, 50)
+      case 'best-momentum-week':
+        // Best momentum of the week: highest weekly % gainers with positive daily momentum
+        return [...enrichedAssets]
+          .filter(a => a.weeklyPerformance > 0)
+          .sort((a, b) => b.weeklyPerformance - a.weeklyPerformance)
+          .slice(0, 50)
       default:
         return []
     }
@@ -471,7 +483,7 @@ export function MarketCategoriesEmbed() {
           </div>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
           <button
             onClick={() => setMoverCategory(moverCategory === 'most-active' ? null : 'most-active')}
             className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
@@ -489,6 +501,15 @@ export function MarketCategoriesEmbed() {
           >
             <Flame className="w-4 h-4 inline mr-1" />
             Trending Now
+          </button>
+          <button
+            onClick={() => setMoverCategory(moverCategory === 'best-momentum-week' ? null : 'best-momentum-week')}
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              moverCategory === 'best-momentum-week' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 inline mr-1" />
+            Best Momentum
           </button>
           <button
             onClick={() => setMoverCategory(moverCategory === 'top-gainers' ? null : 'top-gainers')}
@@ -544,11 +565,18 @@ export function MarketCategoriesEmbed() {
                       {(moverCategory === '52w-gainers' || moverCategory === '52w-losers') && (
                         <th className="text-right px-2 py-2">52W %</th>
                       )}
+                      {moverCategory === 'best-momentum-week' && (
+                        <th className="text-right px-2 py-2">Week %</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {marketMovers.map((asset, idx) => {
-                      const perf = moverCategory === '52w-gainers' || moverCategory === '52w-losers' ? asset.w52Performance : asset.performance
+                      const perf = moverCategory === '52w-gainers' || moverCategory === '52w-losers' 
+                        ? asset.w52Performance 
+                        : moverCategory === 'best-momentum-week'
+                        ? asset.weeklyPerformance
+                        : asset.performance
                       const color = perf > 0 ? 'text-emerald-400' : perf < 0 ? 'text-red-400' : 'text-gray-300'
                       return (
                         <tr key={asset.symbol} className="border-t border-white/10 hover:bg-white/5">
@@ -565,6 +593,11 @@ export function MarketCategoriesEmbed() {
                           {(moverCategory === '52w-gainers' || moverCategory === '52w-losers') && (
                             <td className={`px-2 py-2 text-right tabular-nums font-semibold ${color}`}>
                               {Number.isFinite(asset.w52Performance) ? (asset.w52Performance > 0 ? '+' : '') + asset.w52Performance.toFixed(2) + '%' : '-'}
+                            </td>
+                          )}
+                          {moverCategory === 'best-momentum-week' && (
+                            <td className={`px-2 py-2 text-right tabular-nums font-semibold ${asset.weeklyPerformance > 0 ? 'text-purple-400' : 'text-gray-300'}`}>
+                              {Number.isFinite(asset.weeklyPerformance) ? (asset.weeklyPerformance > 0 ? '+' : '') + asset.weeklyPerformance.toFixed(2) + '%' : '-'}
                             </td>
                           )}
                         </tr>

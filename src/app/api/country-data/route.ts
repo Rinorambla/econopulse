@@ -36,7 +36,12 @@ const COUNTRIES:CountryMacroConfig[] = [
   { code:'FR', name:'France', currency:'EUR', creditRating:'AA' },
   { code:'CA', name:'Canada', currency:'CAD', creditRating:'AAA' },
   { code:'IT', name:'Italy', currency:'EUR', creditRating:'BBB' },
-  { code:'AU', name:'Australia', currency:'AUD', creditRating:'AAA' }
+  { code:'AU', name:'Australia', currency:'AUD', creditRating:'AAA' },
+  { code:'BR', name:'Brazil', currency:'BRL', creditRating:'BB-' },
+  { code:'KR', name:'South Korea', currency:'KRW', creditRating:'AA' },
+  { code:'ES', name:'Spain', currency:'EUR', creditRating:'A' },
+  { code:'NL', name:'Netherlands', currency:'EUR', creditRating:'AAA' },
+  { code:'CH', name:'Switzerland', currency:'CHF', creditRating:'AAA' }
 ];
 
 // Simple in-memory cache (server runtime) to avoid hammering public APIs

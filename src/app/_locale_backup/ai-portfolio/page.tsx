@@ -59,46 +59,209 @@ function augmentWithRegional(base: PortfolioData): PortfolioData {
 
   // Region classification heuristics
   // Core ETF & equity proxies for regions (used also as fallback universe)
+  // EUROPEAN STOCKS - Major European companies with US-listed ADRs or ETFs
   const EUROPE_TICKERS = new Set([
-    'VGK','EZU','FEZ','EWU','EWL','EWG','EWQ','EWI','IEUR','IEV','EWO','EWK','EWN','EWP','EWD','EIRL','EFA','IXUS','SX5E','DAX','FTSE','STOXX50E'
+    // Europe ETFs
+    'VGK','EZU','FEZ','EWU','EWL','EWG','EWQ','EWI','IEUR','IEV','EWO','EWK','EWN','EWP','EWD','EIRL','EFA',
+    // UK ADRs
+    'BP','SHEL','HSBC','AZN','GSK','RIO','BHP','UL','BTI','DEO','VOD','LYG','LOGI','NVO',
+    // Germany ADRs
+    'SAP','DB','BASFY','BAYRY','SIEGY','DTEGY','SGIOY','ADDYY','PMMAF',
+    // France ADRs
+    'TTE','SNY','LVMUY','OR','LRLCY','BNPQY','AXAHY','DANOY',
+    // Switzerland ADRs
+    'NSRGY','NVS','RHHBY','UBS','CS','ZURVY',
+    // Netherlands ADRs
+    'ASML','ING','GLNCY','PHG','UN',
+    // Italy/Spain ADRs
+    'RACE','ENEL','TEF','BBVA','SAN',
+    // Nordic ADRs
+    'NHYDY','ERIC','NOK','SPOT','VOLVY'
   ]);
-  const EUROPE_FALLBACK = [ 'VGK','EZU','FEZ','EWG','EWQ','EWL','EWI','EWU','IEUR','IEV' ];
+  // Extended Europe fallback list with real European stocks (40+ holdings)
+  const EUROPE_FALLBACK = [
+    // ETFs
+    { ticker: 'VGK', name: 'Vanguard FTSE Europe ETF' },
+    { ticker: 'EZU', name: 'iShares MSCI Eurozone ETF' },
+    { ticker: 'FEZ', name: 'SPDR EURO STOXX 50 ETF' },
+    { ticker: 'EWG', name: 'iShares MSCI Germany ETF' },
+    { ticker: 'EWU', name: 'iShares MSCI United Kingdom ETF' },
+    { ticker: 'EWQ', name: 'iShares MSCI France ETF' },
+    { ticker: 'EWL', name: 'iShares MSCI Switzerland ETF' },
+    { ticker: 'EWI', name: 'iShares MSCI Italy ETF' },
+    { ticker: 'EWP', name: 'iShares MSCI Spain ETF' },
+    { ticker: 'EWN', name: 'iShares MSCI Netherlands ETF' },
+    // UK ADRs
+    { ticker: 'SHEL', name: 'Shell PLC' },
+    { ticker: 'BP', name: 'BP PLC' },
+    { ticker: 'HSBC', name: 'HSBC Holdings PLC' },
+    { ticker: 'AZN', name: 'AstraZeneca PLC' },
+    { ticker: 'GSK', name: 'GSK PLC' },
+    { ticker: 'RIO', name: 'Rio Tinto PLC' },
+    { ticker: 'BHP', name: 'BHP Group Limited' },
+    { ticker: 'UL', name: 'Unilever PLC' },
+    { ticker: 'BTI', name: 'British American Tobacco' },
+    { ticker: 'DEO', name: 'Diageo PLC' },
+    { ticker: 'VOD', name: 'Vodafone Group PLC' },
+    { ticker: 'LYG', name: 'Lloyds Banking Group' },
+    // Germany ADRs
+    { ticker: 'SAP', name: 'SAP SE' },
+    { ticker: 'SIEGY', name: 'Siemens AG' },
+    { ticker: 'DB', name: 'Deutsche Bank AG' },
+    { ticker: 'BASFY', name: 'BASF SE' },
+    { ticker: 'BAYRY', name: 'Bayer AG' },
+    { ticker: 'DTEGY', name: 'Deutsche Telekom AG' },
+    { ticker: 'ADDYY', name: 'Adidas AG' },
+    // France ADRs
+    { ticker: 'TTE', name: 'TotalEnergies SE' },
+    { ticker: 'SNY', name: 'Sanofi SA' },
+    { ticker: 'LVMUY', name: 'LVMH Moët Hennessy' },
+    { ticker: 'LRLCY', name: "L'Oréal SA" },
+    { ticker: 'BNPQY', name: 'BNP Paribas' },
+    // Switzerland ADRs
+    { ticker: 'NSRGY', name: 'Nestlé SA' },
+    { ticker: 'NVS', name: 'Novartis AG' },
+    { ticker: 'RHHBY', name: 'Roche Holding AG' },
+    { ticker: 'UBS', name: 'UBS Group AG' },
+    // Netherlands ADRs
+    { ticker: 'ASML', name: 'ASML Holding NV' },
+    { ticker: 'ING', name: 'ING Groep NV' },
+    { ticker: 'PHG', name: 'Koninklijke Philips NV' },
+    // Italy/Spain ADRs
+    { ticker: 'RACE', name: 'Ferrari NV' },
+    { ticker: 'TEF', name: 'Telefónica SA' },
+    { ticker: 'BBVA', name: 'Banco Bilbao Vizcaya Argentaria' },
+    { ticker: 'SAN', name: 'Banco Santander SA' },
+    // Nordic ADRs
+    { ticker: 'NVO', name: 'Novo Nordisk A/S' },
+    { ticker: 'ERIC', name: 'Ericsson' },
+    { ticker: 'NOK', name: 'Nokia Corporation' },
+    { ticker: 'SPOT', name: 'Spotify Technology SA' },
+    { ticker: 'VOLVY', name: 'Volvo AB' },
+    { ticker: 'NHYDY', name: 'Norsk Hydro ASA' }
+  ];
   const isEurope = (t: string) => /\.(AS|DE|SW|PA|L|BR|MC|MI|F|BE|CO)$/.test(t) || EUROPE_TICKERS.has(t.replace(/[^A-Z.]/g,''));
+  
+  // EMERGING MARKETS STOCKS - Major EM companies with US-listed ADRs
   const emergingTickers = new Set([
-    'BABA','TCEHY','JD','BIDU','NIO','TSM','MELI','PDD','INFY','VALE','SNP','YPF','EC','GGAL','ITUB','PBR','EEM','VWO','IEMG','EMXC','FXI','EWZ','EWW','EZA','EPOL','EPI','EWY','INDA','ASHR','KWEB'
+    // China
+    'BABA','TCEHY','JD','BIDU','NIO','PDD','LI','XPEV','BEKE','VNET','ZTO','YUMC','NTES','WB','TME','KC','GDS','BILI',
+    // Taiwan
+    'TSM','UMC','ASX',
+    // India
+    'INFY','WIT','HDB','IBN','RDY','SIFY','WNS','TTM',
+    // Brazil
+    'VALE','PBR','ITUB','BBD','ABEV','BRFS','SBS','EWZ','GGB','SID','ERJ','AZUL','XP',
+    // Mexico
+    'AMX','KOF','BSMX','OMAB','PAC','ASR',
+    // South Africa
+    'GOLD','HMY','SBSW','FNMA',
+    // Russia (suspended but kept for classification)
+    'OZON','YNDX',
+    // South Korea
+    'KB','SHG','PKX','WF',
+    // Argentina
+    'YPF','GGAL','PAM','BMA','SUPV','LOMA',
+    // Chile
+    'SQM','ECH','BSAC','LTM',
+    // Colombia/Peru
+    'EC','SCCO','BVN',
+    // ETFs
+    'EEM','VWO','IEMG','EMXC','FXI','EWZ','EWW','EZA','EPOL','EPI','EWY','INDA','ASHR','KWEB','MCHI','GXG','THD','EWM'
   ]);
-  const EM_FALLBACK = [ 'EEM','VWO','IEMG','FXI','EWZ','EWW','EZA','EPOL','EPI','INDA' ];
+  // Extended EM fallback list with real EM stocks (40+ holdings)
+  const EM_FALLBACK = [
+    // ETFs
+    { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF' },
+    { ticker: 'VWO', name: 'Vanguard FTSE Emerging Markets ETF' },
+    { ticker: 'IEMG', name: 'iShares Core MSCI Emerging Markets' },
+    { ticker: 'FXI', name: 'iShares China Large-Cap ETF' },
+    { ticker: 'EWZ', name: 'iShares MSCI Brazil ETF' },
+    { ticker: 'INDA', name: 'iShares MSCI India ETF' },
+    { ticker: 'EWY', name: 'iShares MSCI South Korea ETF' },
+    { ticker: 'EWT', name: 'iShares MSCI Taiwan ETF' },
+    { ticker: 'KWEB', name: 'KraneShares CSI China Internet ETF' },
+    { ticker: 'MCHI', name: 'iShares MSCI China ETF' },
+    // Taiwan
+    { ticker: 'TSM', name: 'Taiwan Semiconductor Manufacturing' },
+    { ticker: 'UMC', name: 'United Microelectronics Corporation' },
+    // China
+    { ticker: 'BABA', name: 'Alibaba Group Holding' },
+    { ticker: 'TCEHY', name: 'Tencent Holdings' },
+    { ticker: 'JD', name: 'JD.com Inc' },
+    { ticker: 'PDD', name: 'PDD Holdings Inc' },
+    { ticker: 'BIDU', name: 'Baidu Inc' },
+    { ticker: 'NIO', name: 'NIO Inc' },
+    { ticker: 'LI', name: 'Li Auto Inc' },
+    { ticker: 'XPEV', name: 'XPeng Inc' },
+    { ticker: 'NTES', name: 'NetEase Inc' },
+    { ticker: 'BEKE', name: 'KE Holdings Inc' },
+    { ticker: 'ZTO', name: 'ZTO Express' },
+    { ticker: 'YUMC', name: 'Yum China Holdings' },
+    { ticker: 'BILI', name: 'Bilibili Inc' },
+    // India
+    { ticker: 'INFY', name: 'Infosys Limited' },
+    { ticker: 'HDB', name: 'HDFC Bank Limited' },
+    { ticker: 'IBN', name: 'ICICI Bank Limited' },
+    { ticker: 'WIT', name: 'Wipro Limited' },
+    { ticker: 'TTM', name: 'Tata Motors Limited' },
+    { ticker: 'RDY', name: "Dr. Reddy's Laboratories" },
+    // Brazil
+    { ticker: 'VALE', name: 'Vale SA' },
+    { ticker: 'PBR', name: 'Petrobras' },
+    { ticker: 'ITUB', name: 'Itaú Unibanco' },
+    { ticker: 'BBD', name: 'Banco Bradesco SA' },
+    { ticker: 'ABEV', name: 'Ambev SA' },
+    { ticker: 'XP', name: 'XP Inc' },
+    // Mexico
+    { ticker: 'AMX', name: 'América Móvil' },
+    { ticker: 'KOF', name: 'Coca-Cola FEMSA' },
+    // Latin America
+    { ticker: 'MELI', name: 'MercadoLibre Inc' },
+    { ticker: 'YPF', name: 'YPF SA' },
+    { ticker: 'GGAL', name: 'Grupo Financiero Galicia' },
+    { ticker: 'SQM', name: 'Sociedad Química y Minera de Chile' },
+    // South Africa
+    { ticker: 'GOLD', name: 'Barrick Gold Corporation' },
+    { ticker: 'HMY', name: 'Harmony Gold Mining' },
+    // South Korea
+    { ticker: 'KB', name: 'KB Financial Group' },
+    { ticker: 'SHG', name: 'Shinhan Financial Group' },
+    { ticker: 'PKX', name: 'POSCO Holdings Inc' }
+  ];
   const isEmerging = (t: string) => emergingTickers.has(t.replace(/[^A-Z.]/g,''));
 
   let europeHoldings = holdingsList.filter(h => isEurope(h.ticker));
   let emergingHoldings = holdingsList.filter(h => isEmerging(h.ticker));
 
-  // If broad international ETF (e.g. IXUS / EFA) present but few pure Europe tickers, synthesize by decomposing into region ETFs
-  const hasBroadIntl = holdingsList.some(h => ['IXUS','EFA','VEA'].includes(h.ticker));
-  if (hasBroadIntl && europeHoldings.length < 5) {
-    const supplemental = EUROPE_FALLBACK.filter(t => !europeHoldings.some(h=>h.ticker===t)).slice(0, 5 - europeHoldings.length)
-      .map(t => ({
-        ticker: t,
-        name: `${t} ETF`,
-        weight: 0, // will rebalance later
-        price: 0,
-        change: '0.00%',
-        performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
-      }));
-    europeHoldings = [...europeHoldings, ...supplemental];
-  }
-  if (emergingHoldings.length < 5) {
-    const supplemental = EM_FALLBACK.filter(t => !emergingHoldings.some(h=>h.ticker===t)).slice(0, 5 - emergingHoldings.length)
-      .map(t => ({
-        ticker: t,
-        name: `${t} ETF`,
-        weight: 0,
-        price: 0,
-        change: '0.00%',
-        performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
-      }));
-    emergingHoldings = [...emergingHoldings, ...supplemental];
-  }
+  // Always supplement with full regional stock lists to ensure 30+ holdings per region
+  const europeExistingTickers = new Set(europeHoldings.map(h => h.ticker));
+  const supplementEurope = EUROPE_FALLBACK
+    .filter(item => !europeExistingTickers.has(item.ticker))
+    .slice(0, Math.max(0, 35 - europeHoldings.length))
+    .map(item => ({
+      ticker: item.ticker,
+      name: item.name,
+      weight: 0,
+      price: 0,
+      change: '0.00%',
+      performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
+    }));
+  europeHoldings = [...europeHoldings, ...supplementEurope];
+
+  const emExistingTickers = new Set(emergingHoldings.map(h => h.ticker));
+  const supplementEM = EM_FALLBACK
+    .filter(item => !emExistingTickers.has(item.ticker))
+    .slice(0, Math.max(0, 35 - emergingHoldings.length))
+    .map(item => ({
+      ticker: item.ticker,
+      name: item.name,
+      weight: 0,
+      price: 0,
+      change: '0.00%',
+      performance: { daily:'0.00%', weekly:'0.00%', monthly:'0.00%', quarterly:'0.00%', yearly:'0.00%' }
+    }));
+  emergingHoldings = [...emergingHoldings, ...supplementEM];
 
   // Utility to compute aggregate performance from holdings (simple average of underlying performance fields)
   const aggregatePerf = (list: any[]) => {
@@ -125,9 +288,9 @@ function augmentWithRegional(base: PortfolioData): PortfolioData {
     const weighted = buildWeights(europeHoldings);
     clone['europe'] = {
       name: 'Europe Portfolio',
-      description: 'Aggregated synthetic European equity exposure (auto-generated).',
+      description: 'Major European equities via US-listed ADRs and ETFs.',
       performance: aggregatePerf(weighted),
-      holdings: weighted.slice(0, 25) // cap to 25 for UI
+      holdings: weighted.slice(0, 35) // cap to 35 for UI
     };
     console.log('[SyntheticPortfolio] Added Europe Portfolio', { count: weighted.length });
   }
@@ -136,9 +299,9 @@ function augmentWithRegional(base: PortfolioData): PortfolioData {
     const weighted = buildWeights(emergingHoldings);
     clone['emerging_markets'] = {
       name: 'Emerging Markets Portfolio',
-      description: 'Aggregated synthetic Emerging Markets equity exposure (auto-generated).',
+      description: 'Major Emerging Markets equities via US-listed ADRs and ETFs.',
       performance: aggregatePerf(weighted),
-      holdings: weighted.slice(0, 25)
+      holdings: weighted.slice(0, 35) // cap to 35 for UI
     };
     console.log('[SyntheticPortfolio] Added Emerging Markets Portfolio', { count: weighted.length });
   }

@@ -462,28 +462,41 @@ export default function AIPortfolioPage() {
       const data = await response.json();
       if (data.economicPortfolios) {
         // Augment with regional synthetic portfolios (no duplication)
-        const augmented = augmentWithRegional(data.economicPortfolios);
+        const augmented = augmentWithRegional(data.economicPortfolios) as any;
         // After augmentation fetch real quotes for every holding AND underlying stocks (deduped)
         const allSymbols = Array.from(new Set(
-          Object.values(augmented).flatMap(p => [
-            ...(p.holdings?.map(h => h.ticker) || []),
-            ...(p.underlyingStocks?.map(h => h.ticker) || [])
+          Object.values(augmented).flatMap((p: any) => [
+            ...(p.holdings?.map((h: any) => h.ticker) || []),
+            ...(p.underlyingStocks?.map((h: any) => h.ticker) || [])
           ])
         ));
+        console.log('[Portfolio] Fetching quotes for', allSymbols.length, 'symbols including underlying stocks');
         let quotes: Record<string, any> = {};
         if (allSymbols.length) {
           try {
-            const qres = await fetch(`/api/quotes?symbols=${encodeURIComponent(allSymbols.join(','))}`);
-            const qjson = await qres.json();
-            if (qjson.ok) quotes = qjson.data || {};
+            // Split into batches of 50 to avoid URL length limits
+            const batches: string[][] = [];
+            for (let i = 0; i < allSymbols.length; i += 50) {
+              batches.push(allSymbols.slice(i, i + 50));
+            }
+            for (const batch of batches) {
+              const qres = await fetch(`/api/quotes?symbols=${encodeURIComponent(batch.join(','))}`);
+              const qjson = await qres.json();
+              if (qjson.ok) {
+                quotes = { ...quotes, ...(qjson.data || {}) };
+              }
+            }
+            console.log('[Portfolio] Received quotes for', Object.keys(quotes).length, 'symbols');
           } catch (e) {
             console.warn('Quotes fetch failed', e);
           }
         }
+          }
+        }
         // Merge real data into holdings and underlyingStocks
         const merged: PortfolioData = {};
-        Object.entries(augmented).forEach(([key, p]) => {
-          const newHoldings = p.holdings.map(h => {
+        Object.entries(augmented).forEach(([key, p]: [string, any]) => {
+          const newHoldings = p.holdings.map((h: any) => {
             const q = quotes[h.ticker];
             if (!q) return h;
             return {
@@ -495,9 +508,12 @@ export default function AIPortfolioPage() {
             };
           });
           // Also update underlyingStocks if present
-          const newUnderlyingStocks = p.underlyingStocks?.map(h => {
+          const newUnderlyingStocks = p.underlyingStocks?.map((h: any) => {
             const q = quotes[h.ticker];
-            if (!q) return h;
+            if (!q) {
+              console.log('[Portfolio] No quote for underlying stock:', h.ticker);
+              return h;
+            }
             return {
               ...h,
               name: q.name || h.name,

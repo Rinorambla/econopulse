@@ -58,176 +58,184 @@ function augmentWithRegional(base: PortfolioData): PortfolioData {
   const holdingsList = Object.values(allHoldings);
 
   // Region classification heuristics
-  // Core ETF & equity proxies for regions (used also as fallback universe)
-  // EUROPEAN STOCKS - Major European companies with US-listed ADRs or ETFs
+  // EUROPEAN STOCKS - Only real European companies (ADRs of EU companies, NO US ETFs)
   const EUROPE_TICKERS = new Set([
-    // Europe ETFs
-    'VGK','EZU','FEZ','EWU','EWL','EWG','EWQ','EWI','IEUR','IEV','EWO','EWK','EWN','EWP','EWD','EIRL','EFA',
     // UK ADRs
-    'BP','SHEL','HSBC','AZN','GSK','RIO','BHP','UL','BTI','DEO','VOD','LYG','LOGI','NVO',
+    'BP','SHEL','HSBC','AZN','GSK','RIO','BHP','UL','BTI','DEO','VOD','LYG','LOGI','NVO','ARM','RELX','NGG','WPP','PCRFY',
     // Germany ADRs
-    'SAP','DB','BASFY','BAYRY','SIEGY','DTEGY','SGIOY','ADDYY','PMMAF',
+    'SAP','DB','BASFY','BAYRY','SIEGY','DTEGY','SGIOY','ADDYY','PMMAF','DBOEY','VOWDRY','MBGYY',
     // France ADRs
-    'TTE','SNY','LVMUY','OR','LRLCY','BNPQY','AXAHY','DANOY',
+    'TTE','SNY','LVMUY','OR','LRLCY','BNPQY','AXAHY','DANOY','STLA','CODYY',
     // Switzerland ADRs
-    'NSRGY','NVS','RHHBY','UBS','CS','ZURVY',
+    'NSRGY','NVS','RHHBY','UBS','ZURVY','SWDBY','CSGKF',
     // Netherlands ADRs
-    'ASML','ING','GLNCY','PHG','UN',
+    'ASML','ING','GLNCY','PHG','UN','STMPY',
     // Italy/Spain ADRs
-    'RACE','ENEL','TEF','BBVA','SAN',
-    // Nordic ADRs
-    'NHYDY','ERIC','NOK','SPOT','VOLVY'
+    'RACE','ENEL','TEF','BBVA','SAN','ENIAY','FINMY','BPIRY',
+    // Nordic ADRs (Denmark, Sweden, Norway, Finland)
+    'NVO','NHYDY','ERIC','NOK','SPOT','VOLVY','EQNR','TRMD','TELIA','ATLCY'
   ]);
-  // Extended Europe fallback list with real European stocks (40+ holdings)
+  // Extended Europe fallback list - ONLY real European companies (NO US ETFs)
   const EUROPE_FALLBACK = [
-    // ETFs
-    { ticker: 'VGK', name: 'Vanguard FTSE Europe ETF' },
-    { ticker: 'EZU', name: 'iShares MSCI Eurozone ETF' },
-    { ticker: 'FEZ', name: 'SPDR EURO STOXX 50 ETF' },
-    { ticker: 'EWG', name: 'iShares MSCI Germany ETF' },
-    { ticker: 'EWU', name: 'iShares MSCI United Kingdom ETF' },
-    { ticker: 'EWQ', name: 'iShares MSCI France ETF' },
-    { ticker: 'EWL', name: 'iShares MSCI Switzerland ETF' },
-    { ticker: 'EWI', name: 'iShares MSCI Italy ETF' },
-    { ticker: 'EWP', name: 'iShares MSCI Spain ETF' },
-    { ticker: 'EWN', name: 'iShares MSCI Netherlands ETF' },
-    // UK ADRs
-    { ticker: 'SHEL', name: 'Shell PLC' },
-    { ticker: 'BP', name: 'BP PLC' },
-    { ticker: 'HSBC', name: 'HSBC Holdings PLC' },
-    { ticker: 'AZN', name: 'AstraZeneca PLC' },
-    { ticker: 'GSK', name: 'GSK PLC' },
-    { ticker: 'RIO', name: 'Rio Tinto PLC' },
-    { ticker: 'BHP', name: 'BHP Group Limited' },
-    { ticker: 'UL', name: 'Unilever PLC' },
-    { ticker: 'BTI', name: 'British American Tobacco' },
-    { ticker: 'DEO', name: 'Diageo PLC' },
-    { ticker: 'VOD', name: 'Vodafone Group PLC' },
-    { ticker: 'LYG', name: 'Lloyds Banking Group' },
-    // Germany ADRs
-    { ticker: 'SAP', name: 'SAP SE' },
-    { ticker: 'SIEGY', name: 'Siemens AG' },
-    { ticker: 'DB', name: 'Deutsche Bank AG' },
-    { ticker: 'BASFY', name: 'BASF SE' },
-    { ticker: 'BAYRY', name: 'Bayer AG' },
-    { ticker: 'DTEGY', name: 'Deutsche Telekom AG' },
-    { ticker: 'ADDYY', name: 'Adidas AG' },
-    // France ADRs
-    { ticker: 'TTE', name: 'TotalEnergies SE' },
-    { ticker: 'SNY', name: 'Sanofi SA' },
-    { ticker: 'LVMUY', name: 'LVMH Moët Hennessy' },
-    { ticker: 'LRLCY', name: "L'Oréal SA" },
-    { ticker: 'BNPQY', name: 'BNP Paribas' },
-    // Switzerland ADRs
-    { ticker: 'NSRGY', name: 'Nestlé SA' },
-    { ticker: 'NVS', name: 'Novartis AG' },
-    { ticker: 'RHHBY', name: 'Roche Holding AG' },
-    { ticker: 'UBS', name: 'UBS Group AG' },
-    // Netherlands ADRs
-    { ticker: 'ASML', name: 'ASML Holding NV' },
-    { ticker: 'ING', name: 'ING Groep NV' },
-    { ticker: 'PHG', name: 'Koninklijke Philips NV' },
-    // Italy/Spain ADRs
-    { ticker: 'RACE', name: 'Ferrari NV' },
-    { ticker: 'TEF', name: 'Telefónica SA' },
-    { ticker: 'BBVA', name: 'Banco Bilbao Vizcaya Argentaria' },
-    { ticker: 'SAN', name: 'Banco Santander SA' },
-    // Nordic ADRs
-    { ticker: 'NVO', name: 'Novo Nordisk A/S' },
-    { ticker: 'ERIC', name: 'Ericsson' },
-    { ticker: 'NOK', name: 'Nokia Corporation' },
-    { ticker: 'SPOT', name: 'Spotify Technology SA' },
-    { ticker: 'VOLVY', name: 'Volvo AB' },
-    { ticker: 'NHYDY', name: 'Norsk Hydro ASA' }
+    // UK Companies
+    { ticker: 'SHEL', name: 'Shell PLC (UK)' },
+    { ticker: 'BP', name: 'BP PLC (UK)' },
+    { ticker: 'HSBC', name: 'HSBC Holdings PLC (UK)' },
+    { ticker: 'AZN', name: 'AstraZeneca PLC (UK)' },
+    { ticker: 'GSK', name: 'GSK PLC (UK)' },
+    { ticker: 'RIO', name: 'Rio Tinto PLC (UK)' },
+    { ticker: 'UL', name: 'Unilever PLC (UK/NL)' },
+    { ticker: 'BTI', name: 'British American Tobacco (UK)' },
+    { ticker: 'DEO', name: 'Diageo PLC (UK)' },
+    { ticker: 'VOD', name: 'Vodafone Group PLC (UK)' },
+    { ticker: 'LYG', name: 'Lloyds Banking Group (UK)' },
+    { ticker: 'ARM', name: 'Arm Holdings PLC (UK)' },
+    { ticker: 'RELX', name: 'RELX PLC (UK)' },
+    { ticker: 'NGG', name: 'National Grid PLC (UK)' },
+    { ticker: 'WPP', name: 'WPP PLC (UK)' },
+    // Germany Companies
+    { ticker: 'SAP', name: 'SAP SE (Germany)' },
+    { ticker: 'SIEGY', name: 'Siemens AG (Germany)' },
+    { ticker: 'DB', name: 'Deutsche Bank AG (Germany)' },
+    { ticker: 'BASFY', name: 'BASF SE (Germany)' },
+    { ticker: 'BAYRY', name: 'Bayer AG (Germany)' },
+    { ticker: 'DTEGY', name: 'Deutsche Telekom AG (Germany)' },
+    { ticker: 'ADDYY', name: 'Adidas AG (Germany)' },
+    { ticker: 'MBGYY', name: 'Mercedes-Benz Group AG (Germany)' },
+    { ticker: 'VOWDRY', name: 'Volkswagen AG (Germany)' },
+    { ticker: 'DBOEY', name: 'Deutsche Börse AG (Germany)' },
+    // France Companies
+    { ticker: 'TTE', name: 'TotalEnergies SE (France)' },
+    { ticker: 'SNY', name: 'Sanofi SA (France)' },
+    { ticker: 'LVMUY', name: 'LVMH Moët Hennessy (France)' },
+    { ticker: 'LRLCY', name: "L'Oréal SA (France)" },
+    { ticker: 'BNPQY', name: 'BNP Paribas (France)' },
+    { ticker: 'STLA', name: 'Stellantis NV (France/Italy)' },
+    { ticker: 'AXAHY', name: 'AXA SA (France)' },
+    { ticker: 'DANOY', name: 'Danone SA (France)' },
+    // Switzerland Companies
+    { ticker: 'NSRGY', name: 'Nestlé SA (Switzerland)' },
+    { ticker: 'NVS', name: 'Novartis AG (Switzerland)' },
+    { ticker: 'RHHBY', name: 'Roche Holding AG (Switzerland)' },
+    { ticker: 'UBS', name: 'UBS Group AG (Switzerland)' },
+    { ticker: 'ZURVY', name: 'Zurich Insurance Group (Switzerland)' },
+    // Netherlands Companies
+    { ticker: 'ASML', name: 'ASML Holding NV (Netherlands)' },
+    { ticker: 'ING', name: 'ING Groep NV (Netherlands)' },
+    { ticker: 'PHG', name: 'Koninklijke Philips NV (Netherlands)' },
+    { ticker: 'STMPY', name: 'STMicroelectronics NV (Netherlands)' },
+    // Italy Companies
+    { ticker: 'RACE', name: 'Ferrari NV (Italy)' },
+    { ticker: 'ENIAY', name: 'ENI SpA (Italy)' },
+    // Spain Companies
+    { ticker: 'TEF', name: 'Telefónica SA (Spain)' },
+    { ticker: 'BBVA', name: 'Banco Bilbao Vizcaya Argentaria (Spain)' },
+    { ticker: 'SAN', name: 'Banco Santander SA (Spain)' },
+    // Nordic Companies (Denmark, Sweden, Norway, Finland)
+    { ticker: 'NVO', name: 'Novo Nordisk A/S (Denmark)' },
+    { ticker: 'ERIC', name: 'Ericsson (Sweden)' },
+    { ticker: 'NOK', name: 'Nokia Corporation (Finland)' },
+    { ticker: 'SPOT', name: 'Spotify Technology SA (Sweden)' },
+    { ticker: 'VOLVY', name: 'Volvo AB (Sweden)' },
+    { ticker: 'NHYDY', name: 'Norsk Hydro ASA (Norway)' },
+    { ticker: 'EQNR', name: 'Equinor ASA (Norway)' },
+    { ticker: 'ATLCY', name: 'Atlas Copco AB (Sweden)' }
   ];
   const isEurope = (t: string) => /\.(AS|DE|SW|PA|L|BR|MC|MI|F|BE|CO)$/.test(t) || EUROPE_TICKERS.has(t.replace(/[^A-Z.]/g,''));
   
-  // EMERGING MARKETS STOCKS - Major EM companies with US-listed ADRs
+  // EMERGING MARKETS STOCKS - Only real EM companies (ADRs, NO US ETFs)
   const emergingTickers = new Set([
     // China
-    'BABA','TCEHY','JD','BIDU','NIO','PDD','LI','XPEV','BEKE','VNET','ZTO','YUMC','NTES','WB','TME','KC','GDS','BILI',
+    'BABA','TCEHY','JD','BIDU','NIO','PDD','LI','XPEV','BEKE','VNET','ZTO','YUMC','NTES','WB','TME','KC','GDS','BILI','MPNGY','CIHKY',
     // Taiwan
-    'TSM','UMC','ASX',
+    'TSM','UMC','ASX','HIMX','CHT',
     // India
-    'INFY','WIT','HDB','IBN','RDY','SIFY','WNS','TTM',
+    'INFY','WIT','HDB','IBN','RDY','SIFY','WNS','TTM','VEDL','RELIANCE',
     // Brazil
-    'VALE','PBR','ITUB','BBD','ABEV','BRFS','SBS','EWZ','GGB','SID','ERJ','AZUL','XP',
+    'VALE','PBR','ITUB','BBD','ABEV','BRFS','SBS','GGB','SID','ERJ','AZUL','XP','PAGS','STNE','NU',
     // Mexico
-    'AMX','KOF','BSMX','OMAB','PAC','ASR',
+    'AMX','KOF','BSMX','OMAB','PAC','ASR','CX','TV',
     // South Africa
-    'GOLD','HMY','SBSW','FNMA',
-    // Russia (suspended but kept for classification)
-    'OZON','YNDX',
+    'GOLD','HMY','SBSW','ANGPY','SIGY','NPSNY',
     // South Korea
-    'KB','SHG','PKX','WF',
+    'KB','SHG','PKX','WF','SSNLF','HYMTF',
     // Argentina
     'YPF','GGAL','PAM','BMA','SUPV','LOMA',
     // Chile
-    'SQM','ECH','BSAC','LTM',
+    'SQM','BSAC','LTM',
     // Colombia/Peru
     'EC','SCCO','BVN',
-    // ETFs
-    'EEM','VWO','IEMG','EMXC','FXI','EWZ','EWW','EZA','EPOL','EPI','EWY','INDA','ASHR','KWEB','MCHI','GXG','THD','EWM'
+    // Indonesia/Malaysia/Thailand/Philippines
+    'TLK','IFS','BNPQY'
   ]);
-  // Extended EM fallback list with real EM stocks (40+ holdings)
+  // Extended EM fallback list - ONLY real EM companies (NO US ETFs)
   const EM_FALLBACK = [
-    // ETFs
-    { ticker: 'EEM', name: 'iShares MSCI Emerging Markets ETF' },
-    { ticker: 'VWO', name: 'Vanguard FTSE Emerging Markets ETF' },
-    { ticker: 'IEMG', name: 'iShares Core MSCI Emerging Markets' },
-    { ticker: 'FXI', name: 'iShares China Large-Cap ETF' },
-    { ticker: 'EWZ', name: 'iShares MSCI Brazil ETF' },
-    { ticker: 'INDA', name: 'iShares MSCI India ETF' },
-    { ticker: 'EWY', name: 'iShares MSCI South Korea ETF' },
-    { ticker: 'EWT', name: 'iShares MSCI Taiwan ETF' },
-    { ticker: 'KWEB', name: 'KraneShares CSI China Internet ETF' },
-    { ticker: 'MCHI', name: 'iShares MSCI China ETF' },
-    // Taiwan
-    { ticker: 'TSM', name: 'Taiwan Semiconductor Manufacturing' },
-    { ticker: 'UMC', name: 'United Microelectronics Corporation' },
-    // China
-    { ticker: 'BABA', name: 'Alibaba Group Holding' },
-    { ticker: 'TCEHY', name: 'Tencent Holdings' },
-    { ticker: 'JD', name: 'JD.com Inc' },
-    { ticker: 'PDD', name: 'PDD Holdings Inc' },
-    { ticker: 'BIDU', name: 'Baidu Inc' },
-    { ticker: 'NIO', name: 'NIO Inc' },
-    { ticker: 'LI', name: 'Li Auto Inc' },
-    { ticker: 'XPEV', name: 'XPeng Inc' },
-    { ticker: 'NTES', name: 'NetEase Inc' },
-    { ticker: 'BEKE', name: 'KE Holdings Inc' },
-    { ticker: 'ZTO', name: 'ZTO Express' },
-    { ticker: 'YUMC', name: 'Yum China Holdings' },
-    { ticker: 'BILI', name: 'Bilibili Inc' },
-    // India
-    { ticker: 'INFY', name: 'Infosys Limited' },
-    { ticker: 'HDB', name: 'HDFC Bank Limited' },
-    { ticker: 'IBN', name: 'ICICI Bank Limited' },
-    { ticker: 'WIT', name: 'Wipro Limited' },
-    { ticker: 'TTM', name: 'Tata Motors Limited' },
-    { ticker: 'RDY', name: "Dr. Reddy's Laboratories" },
-    // Brazil
-    { ticker: 'VALE', name: 'Vale SA' },
-    { ticker: 'PBR', name: 'Petrobras' },
-    { ticker: 'ITUB', name: 'Itaú Unibanco' },
-    { ticker: 'BBD', name: 'Banco Bradesco SA' },
-    { ticker: 'ABEV', name: 'Ambev SA' },
-    { ticker: 'XP', name: 'XP Inc' },
-    // Mexico
-    { ticker: 'AMX', name: 'América Móvil' },
-    { ticker: 'KOF', name: 'Coca-Cola FEMSA' },
-    // Latin America
-    { ticker: 'MELI', name: 'MercadoLibre Inc' },
-    { ticker: 'YPF', name: 'YPF SA' },
-    { ticker: 'GGAL', name: 'Grupo Financiero Galicia' },
-    { ticker: 'SQM', name: 'Sociedad Química y Minera de Chile' },
-    // South Africa
-    { ticker: 'GOLD', name: 'Barrick Gold Corporation' },
-    { ticker: 'HMY', name: 'Harmony Gold Mining' },
-    // South Korea
-    { ticker: 'KB', name: 'KB Financial Group' },
-    { ticker: 'SHG', name: 'Shinhan Financial Group' },
-    { ticker: 'PKX', name: 'POSCO Holdings Inc' }
+    // Taiwan Companies
+    { ticker: 'TSM', name: 'Taiwan Semiconductor (Taiwan)' },
+    { ticker: 'UMC', name: 'United Microelectronics (Taiwan)' },
+    { ticker: 'ASX', name: 'ASE Technology Holding (Taiwan)' },
+    { ticker: 'HIMX', name: 'Himax Technologies (Taiwan)' },
+    { ticker: 'CHT', name: 'Chunghwa Telecom (Taiwan)' },
+    // China Companies
+    { ticker: 'BABA', name: 'Alibaba Group (China)' },
+    { ticker: 'TCEHY', name: 'Tencent Holdings (China)' },
+    { ticker: 'JD', name: 'JD.com Inc (China)' },
+    { ticker: 'PDD', name: 'PDD Holdings Inc (China)' },
+    { ticker: 'BIDU', name: 'Baidu Inc (China)' },
+    { ticker: 'NIO', name: 'NIO Inc (China)' },
+    { ticker: 'LI', name: 'Li Auto Inc (China)' },
+    { ticker: 'XPEV', name: 'XPeng Inc (China)' },
+    { ticker: 'NTES', name: 'NetEase Inc (China)' },
+    { ticker: 'BEKE', name: 'KE Holdings Inc (China)' },
+    { ticker: 'ZTO', name: 'ZTO Express (China)' },
+    { ticker: 'YUMC', name: 'Yum China Holdings (China)' },
+    { ticker: 'BILI', name: 'Bilibili Inc (China)' },
+    { ticker: 'MPNGY', name: 'Meituan (China)' },
+    { ticker: 'CIHKY', name: 'China Merchants Bank (China)' },
+    // India Companies
+    { ticker: 'INFY', name: 'Infosys Limited (India)' },
+    { ticker: 'HDB', name: 'HDFC Bank Limited (India)' },
+    { ticker: 'IBN', name: 'ICICI Bank Limited (India)' },
+    { ticker: 'WIT', name: 'Wipro Limited (India)' },
+    { ticker: 'TTM', name: 'Tata Motors Limited (India)' },
+    { ticker: 'RDY', name: "Dr. Reddy's Laboratories (India)" },
+    { ticker: 'VEDL', name: 'Vedanta Limited (India)' },
+    // Brazil Companies
+    { ticker: 'VALE', name: 'Vale SA (Brazil)' },
+    { ticker: 'PBR', name: 'Petrobras (Brazil)' },
+    { ticker: 'ITUB', name: 'Itaú Unibanco (Brazil)' },
+    { ticker: 'BBD', name: 'Banco Bradesco SA (Brazil)' },
+    { ticker: 'ABEV', name: 'Ambev SA (Brazil)' },
+    { ticker: 'XP', name: 'XP Inc (Brazil)' },
+    { ticker: 'NU', name: 'Nu Holdings Ltd (Brazil)' },
+    { ticker: 'PAGS', name: 'PagSeguro Digital (Brazil)' },
+    { ticker: 'STNE', name: 'StoneCo Ltd (Brazil)' },
+    { ticker: 'ERJ', name: 'Embraer SA (Brazil)' },
+    // Mexico Companies
+    { ticker: 'AMX', name: 'América Móvil (Mexico)' },
+    { ticker: 'KOF', name: 'Coca-Cola FEMSA (Mexico)' },
+    { ticker: 'CX', name: 'Cemex SAB (Mexico)' },
+    { ticker: 'TV', name: 'Grupo Televisa (Mexico)' },
+    // Argentina Companies
+    { ticker: 'YPF', name: 'YPF SA (Argentina)' },
+    { ticker: 'GGAL', name: 'Grupo Financiero Galicia (Argentina)' },
+    { ticker: 'PAM', name: 'Pampa Energía (Argentina)' },
+    // Chile Companies
+    { ticker: 'SQM', name: 'Sociedad Química y Minera (Chile)' },
+    { ticker: 'BSAC', name: 'Banco Santander Chile (Chile)' },
+    // South Africa Companies
+    { ticker: 'GOLD', name: 'Barrick Gold (South Africa)' },
+    { ticker: 'HMY', name: 'Harmony Gold Mining (South Africa)' },
+    { ticker: 'ANGPY', name: 'Anglo American Platinum (South Africa)' },
+    // South Korea Companies
+    { ticker: 'KB', name: 'KB Financial Group (South Korea)' },
+    { ticker: 'SHG', name: 'Shinhan Financial Group (South Korea)' },
+    { ticker: 'PKX', name: 'POSCO Holdings Inc (South Korea)' },
+    // Peru/Colombia Companies
+    { ticker: 'SCCO', name: 'Southern Copper (Peru)' },
+    { ticker: 'BVN', name: 'Compañía de Minas Buenaventura (Peru)' },
+    // Indonesia
+    { ticker: 'TLK', name: 'Telkom Indonesia (Indonesia)' }
   ];
   const isEmerging = (t: string) => emergingTickers.has(t.replace(/[^A-Z.]/g,''));
 

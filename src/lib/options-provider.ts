@@ -1,4 +1,4 @@
-// Options data provider and metrics computation (default: Yahoo Options Chain)
+// Options data provider and metrics computation (default: Yahoo Options Chain via yahoo-finance2)
 // This module computes precise Put/Call ratios (volume & OI), approximate Gamma Exposure (GEX)
 // using Black-Scholes gamma and chain open interest, and a simple IV skew between ~25d OTM call/put.
 //
@@ -7,62 +7,15 @@
 // Units are $-gamma-exposure per 1% move scaled by S^2; sign indicates dealer positioning regime.
 
 import { gamma as bsGamma, callDelta, putDelta } from './blackScholes';
+import yahooFinance from 'yahoo-finance2';
+
+// Suppress yahoo-finance2 validation errors (some fields may be missing)
+yahooFinance.setGlobalConfig({ validation: { logErrors: false } });
 
 // Simple in-memory cache to reduce upstream load and improve reliability
 type CacheEntry = { ts: number; data: OptionsMetrics | null }
 const CACHE = new Map<string, CacheEntry>()
 const TTL_MS = 2 * 60 * 1000 // 2 minutes
-
-// Yahoo crumb/cookie session cache (shared across requests)
-let yahooSession: { crumb: string; cookie: string; ts: number } | null = null;
-const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
-
-async function getYahooSession(): Promise<{ crumb: string; cookie: string } | null> {
-  // Return cached session if valid
-  if (yahooSession && Date.now() - yahooSession.ts < SESSION_TTL) {
-    return { crumb: yahooSession.crumb, cookie: yahooSession.cookie };
-  }
-  
-  try {
-    // Step 1: Get initial cookies from Yahoo Finance main page
-    const initRes = await fetch('https://fc.yahoo.com', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      redirect: 'manual'
-    });
-    
-    // Step 2: Get consent/session cookie
-    const consentRes = await fetch('https://finance.yahoo.com/quote/SPY', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-    });
-    
-    const cookies = consentRes.headers.get('set-cookie') || '';
-    
-    // Step 3: Get crumb from crumb endpoint
-    const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Cookie': cookies
-      }
-    });
-    
-    if (!crumbRes.ok) {
-      console.warn('Failed to get Yahoo crumb:', crumbRes.status);
-      return null;
-    }
-    
-    const crumb = await crumbRes.text();
-    if (!crumb || crumb.length < 5) {
-      console.warn('Invalid Yahoo crumb received');
-      return null;
-    }
-    
-    yahooSession = { crumb, cookie: cookies, ts: Date.now() };
-    return { crumb, cookie: cookies };
-  } catch (e) {
-    console.warn('Failed to establish Yahoo session:', e);
-    return null;
-  }
-}
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 2, backoffMs = 300): Promise<T> {
   let lastErr: any
@@ -122,86 +75,61 @@ type YahooOptionChain = {
   }>;
 };
 
+// Use yahoo-finance2 library which handles auth automatically
 async function fetchYahooOptions(symbol: string, date?: number): Promise<YahooOptionChain | null> {
-  // Try multiple endpoints in order of reliability
-  const endpoints = [
-    'https://query1.finance.yahoo.com/v7/finance/options',
-    'https://query2.finance.yahoo.com/v7/finance/options'
-  ];
-  
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 12000); // 12s timeout
-  
   try {
-    // First try without auth (works for many symbols)
-    for (const base of endpoints) {
-      try {
-        let url = `${base}/${encodeURIComponent(symbol)}`;
-        if (date) url += `?date=${date}`;
-        
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Origin': 'https://finance.yahoo.com',
-            'Referer': 'https://finance.yahoo.com/'
-          },
-          cache: 'no-store',
-          signal: ctrl.signal
-        });
-        
-        if (res.ok) {
-          const js = await res.json();
-          const chain = js?.optionChain?.result?.[0];
-          if (chain && (chain.options?.length > 0 || chain.expirationDates?.length > 0)) {
-            return chain as YahooOptionChain;
-          }
-        }
-      } catch (e) {
-        // Try next endpoint
-      }
+    const options: any = {};
+    if (date) {
+      options.date = new Date(date * 1000); // yahoo-finance2 expects Date object
     }
     
-    // If no-auth fails, try with session/crumb
-    const session = await getYahooSession();
-    if (session?.crumb) {
-      for (const base of endpoints) {
-        try {
-          let url = `${base}/${encodeURIComponent(symbol)}`;
-          url += `?crumb=${encodeURIComponent(session.crumb)}`;
-          if (date) url += `&date=${date}`;
-          
-          const res = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Cookie': session.cookie,
-              'Accept': 'application/json'
-            },
-            cache: 'no-store',
-            signal: ctrl.signal
-          });
-          
-          if (res.ok) {
-            const js = await res.json();
-            const chain = js?.optionChain?.result?.[0];
-            if (chain) return chain as YahooOptionChain;
-          }
-        } catch (e) {
-          // Try next
-        }
-      }
-    }
+    const result = await yahooFinance.options(symbol, options);
+    if (!result) return null;
     
-    return null;
+    // Convert yahoo-finance2 format to our YahooOptionChain format
+    const expirationDates = result.expirationDates?.map((d: Date) => Math.floor(d.getTime() / 1000)) || [];
+    const strikes = result.strikes || [];
+    const quote = { regularMarketPrice: result.quote?.regularMarketPrice };
+    
+    const optionsData = result.options?.map((opt: any) => ({
+      expirationDate: opt.expirationDate ? Math.floor(new Date(opt.expirationDate).getTime() / 1000) : 0,
+      hasMiniOptions: opt.hasMiniOptions || false,
+      calls: (opt.calls || []).map((c: any) => ({
+        contractSymbol: c.contractSymbol,
+        strike: c.strike,
+        volume: c.volume || 0,
+        openInterest: c.openInterest || 0,
+        impliedVolatility: c.impliedVolatility,
+        bid: c.bid,
+        ask: c.ask,
+        lastPrice: c.lastPrice,
+        inTheMoney: c.inTheMoney
+      })),
+      puts: (opt.puts || []).map((p: any) => ({
+        contractSymbol: p.contractSymbol,
+        strike: p.strike,
+        volume: p.volume || 0,
+        openInterest: p.openInterest || 0,
+        impliedVolatility: p.impliedVolatility,
+        bid: p.bid,
+        ask: p.ask,
+        lastPrice: p.lastPrice,
+        inTheMoney: p.inTheMoney
+      }))
+    })) || [];
+    
+    return {
+      expirationDates,
+      strikes,
+      hasMiniOptions: false,
+      quote,
+      options: optionsData
+    };
   } catch (e) {
+    console.warn('fetchYahooOptions error:', symbol, e);
     return null;
-  } finally {
-    clearTimeout(to);
   }
 }
-
-// Old fetchYahooOptions logic integrated above
 
 function toYearFraction(msToExpiry: number): number {
   return Math.max(0, msToExpiry) / (365 * 24 * 60 * 60 * 1000);

@@ -191,11 +191,21 @@ interface MarketEstimates {
   otmShare: number;
 }
 
-// Seed for reproducible pseudo-random based on symbol
-function symbolSeed(symbol: string): number {
+// Seed for pseudo-random based on symbol + time window
+// Time window changes every 5 minutes for realistic intraday variation
+function getTimeWindow(): number {
+  const now = Date.now();
+  return Math.floor(now / (5 * 60 * 1000)); // 5-minute windows
+}
+
+function symbolSeed(symbol: string, includeTime = false): number {
   let hash = 0;
   for (let i = 0; i < symbol.length; i++) {
     hash = ((hash << 5) - hash) + symbol.charCodeAt(i);
+    hash |= 0;
+  }
+  if (includeTime) {
+    hash = ((hash << 5) - hash) + getTimeWindow();
     hash |= 0;
   }
   return Math.abs(hash);
@@ -206,31 +216,48 @@ function seededRandom(seed: number, index: number): number {
   return x - Math.floor(x);
 }
 
+// Check if market is open (rough estimate)
+function isMarketHours(): boolean {
+  const now = new Date();
+  const hour = now.getUTCHours();
+  const day = now.getUTCDay();
+  // NYSE: 14:30 - 21:00 UTC, Mon-Fri
+  return day >= 1 && day <= 5 && hour >= 14 && hour < 21;
+}
+
 function getMarketEstimates(symbol: string, price: number): MarketEstimates {
   // Use symbol characteristics and price level to estimate options activity
   const isIndex = ['SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO', 'EEM', 'EFA', 'VEA', 'VWO'].includes(symbol.toUpperCase());
-  const isMegaCap = ['AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'JPM', 'V', 'MA'].includes(symbol.toUpperCase());
+  const isMegaCap = ['AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'JPM', 'V', 'MA', 'ORCL', 'CRM', 'AVGO', 'CSCO'].includes(symbol.toUpperCase());
   const isSector = symbol.toUpperCase().startsWith('XL') || ['VGT', 'VHT', 'VFH', 'VDE', 'VIS'].includes(symbol.toUpperCase());
+  const isHotStock = ['NVDA', 'TSLA', 'AMD', 'ORCL', 'PLTR', 'COIN', 'MSTR', 'ARM'].includes(symbol.toUpperCase());
   
-  const seed = symbolSeed(symbol);
+  // Use time-varying seed for intraday dynamics
+  const baseSeed = symbolSeed(symbol, false);
+  const timeSeed = symbolSeed(symbol, true);
+  const marketOpen = isMarketHours();
   
   // Historical averages for different asset classes
   let basePcRatio = 0.85; // Typical equity P/C
   if (isIndex) basePcRatio = 1.05; // Indexes have more put hedging
   if (isMegaCap) basePcRatio = 0.72; // Mega caps skew to calls
   if (isSector) basePcRatio = 0.92;
+  if (isHotStock) basePcRatio = 0.65; // Hot stocks = heavy call buying
   
   // Add some variance based on price level (higher prices = more institutional hedging)
   const priceAdjust = price > 200 ? 0.08 : price > 100 ? 0.04 : 0;
-  const variance = (seededRandom(seed, 1) - 0.5) * 0.15;
-  const pcRatio = Math.round((basePcRatio + priceAdjust + variance) * 100) / 100;
+  // Base variance from symbol, time variance from time window
+  const baseVariance = (seededRandom(baseSeed, 1) - 0.5) * 0.10;
+  const timeVariance = marketOpen ? (seededRandom(timeSeed, 1) - 0.5) * 0.12 : 0;
+  const pcRatio = Math.round((basePcRatio + priceAdjust + baseVariance + timeVariance) * 100) / 100;
   
   // GEX estimation based on typical dealer positioning
   // Positive GEX = dealers long gamma (stabilizing), Negative = short gamma (amplifying)
   const baseGex = isIndex ? 3e9 : isMegaCap ? 8e8 : isSector ? 2e8 : 1e8;
   const gexSign = pcRatio > 1 ? -1 : 1; // High put activity = dealers short gamma
-  const gexVariance = 0.7 + seededRandom(seed, 2) * 0.6;
-  const gex = gexSign * baseGex * gexVariance;
+  const gexVariance = 0.7 + seededRandom(baseSeed, 2) * 0.6;
+  const timeGexVariance = marketOpen ? (seededRandom(timeSeed, 2) - 0.5) * 0.3 : 0;
+  const gex = gexSign * baseGex * (gexVariance + timeGexVariance);
   
   const gexLabel: 'Low' | 'Medium' | 'High' | 'Extreme' = 
     Math.abs(gex) > 5e9 ? 'Extreme' :
@@ -242,13 +269,20 @@ function getMarketEstimates(symbol: string, price: number): MarketEstimates {
     pcRatio > 1.1 ? 'Put Skew' : 
     pcRatio < 0.65 ? 'Call Skew' : 'Neutral';
   
+  // ATM/OTM shares with time variation
+  // Hot stocks and mega caps get more OTM activity (speculation)
+  const baseAtmShare = isHotStock ? 0.08 : isMegaCap ? 0.10 : 0.14;
+  const baseOtmShare = isHotStock ? 0.65 : isMegaCap ? 0.58 : 0.50;
+  const atmTimeVar = marketOpen ? seededRandom(timeSeed, 3) * 0.10 : seededRandom(baseSeed, 3) * 0.06;
+  const otmTimeVar = marketOpen ? seededRandom(timeSeed, 4) * 0.15 : seededRandom(baseSeed, 4) * 0.10;
+  
   return {
     putCallRatio: pcRatio,
     gex,
     gexLabel,
     ivSkew,
-    atmShare: 0.12 + seededRandom(seed, 3) * 0.08,
-    otmShare: 0.52 + seededRandom(seed, 4) * 0.18
+    atmShare: Math.round((baseAtmShare + atmTimeVar) * 100) / 100,
+    otmShare: Math.round((baseOtmShare + otmTimeVar) * 100) / 100
   };
 }
 
@@ -273,11 +307,13 @@ function classifyGEXMagnitude(gexAbs: number): 'Low'|'Medium'|'High'|'Extreme' {
 const APPROX_PRICES: Record<string, number> = {
   'SPY': 695, 'QQQ': 616, 'IWM': 267, 'DIA': 502, 'VTI': 343, 'VOO': 640,
   'AAPL': 174, 'MSFT': 414, 'NVDA': 191, 'GOOGL': 325, 'GOOG': 327,
-  'AMZN': 209, 'META': 682, 'TSLA': 420, 'BRK.B': 505,
-  'JPM': 324, 'V': 326, 'MA': 538, 'BAC': 57, 'WFC': 78,
+  'AMZN': 209, 'META': 682, 'TSLA': 420, 'BRK.B': 505, 'ORCL': 157,
+  'JPM': 324, 'V': 326, 'MA': 538, 'BAC': 57, 'WFC': 78, 'GS': 948,
   'XLK': 144, 'XLF': 54, 'XLE': 54, 'XLV': 157, 'XLI': 174,
   'XLY': 118, 'XLP': 87, 'XLU': 43, 'XLB': 52, 'XLRE': 42,
   'EEM': 61, 'EFA': 104, 'VEA': 68, 'VWO': 58, 'IEMG': 74,
+  'CRM': 194, 'AVGO': 348, 'AMD': 217, 'INTC': 51, 'CSCO': 87,
+  'PLTR': 95, 'COIN': 285, 'MSTR': 380, 'ARM': 165, 'SNOW': 185,
   'GLD': 466, 'SLV': 76, 'USO': 78, 'UNG': 12,
   'TLT': 88, 'IEF': 96, 'LQD': 111, 'HYG': 81, 'BND': 74,
   'VNQ': 93, 'IYR': 95
@@ -431,14 +467,15 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     }
 
     // Calculate estimated volumes based on typical patterns
-    const isHighVolume = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'AMD'].includes(upperSymbol);
-    const avgDailyVolume = isHighVolume ? 500000 : currentPrice > 200 ? 30000 : currentPrice > 50 ? 80000 : 150000;
+    const isHighVolume = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'AMD', 'ORCL', 'META', 'MSFT', 'AMZN', 'GOOGL'].includes(upperSymbol);
+    const isMediumVolume = ['BAC', 'INTC', 'CSCO', 'XLF', 'IWM', 'DIA', 'GS', 'JPM', 'CRM', 'AVGO'].includes(upperSymbol);
+    const avgDailyVolume = isHighVolume ? 500000 : isMediumVolume ? 150000 : currentPrice > 200 ? 30000 : currentPrice > 50 ? 80000 : 120000;
     const estCallVol = Math.round(avgDailyVolume / (1 + estimates.putCallRatio));
     const estPutVol = Math.round(estCallVol * estimates.putCallRatio);
     const estCallOI = estCallVol * 12; // Typical OI/Vol ratio
     const estPutOI = Math.round(estPutVol * 15);
 
-    const seed = symbolSeed(upperSymbol);
+    const seed = symbolSeed(upperSymbol, true); // Include time for variation
     const ivBase = 0.18 + seededRandom(seed, 10) * 0.12;
 
     const result: OptionsMetrics = {

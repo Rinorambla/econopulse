@@ -8,10 +8,14 @@
 import { gamma as bsGamma, callDelta, putDelta } from './blackScholes';
 
 // ========== CONFIGURATION ==========
-// Tradier sandbox API (free, 15-min delayed data)
-// Sign up at https://developer.tradier.com for a free API token
+// Tradier API - supports both sandbox (free, delayed) and production (paid, real-time)
+// Sign up at https://developer.tradier.com for a free sandbox API token
+// Set TRADIER_API_TOKEN and optionally TRADIER_PRODUCTION=true for real-time data
 const TRADIER_TOKEN = process.env.TRADIER_API_TOKEN || '';
-const TRADIER_BASE = 'https://sandbox.tradier.com/v1';
+const TRADIER_PRODUCTION = process.env.TRADIER_PRODUCTION === 'true';
+const TRADIER_BASE = TRADIER_PRODUCTION 
+  ? 'https://api.tradier.com/v1' 
+  : 'https://sandbox.tradier.com/v1';
 
 // Simple in-memory cache to reduce upstream load
 type CacheEntry = { ts: number; data: OptionsMetrics | null }

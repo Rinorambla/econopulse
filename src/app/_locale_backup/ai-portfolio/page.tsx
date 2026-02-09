@@ -522,9 +522,9 @@ export default function AIPortfolioPage() {
             };
           });
           // recompute portfolio performance as average (or weighted) of underlying
-          const totalWeight = newHoldings.reduce((s, h) => s + (h.weight || 0), 0) || 100;
-          const agg = (tf: keyof typeof newHoldings[0]['performance']) => {
-            const sum = newHoldings.reduce((acc, h) => acc + parsePct(h.performance?.[tf]), 0);
+          const totalWeight = newHoldings.reduce((s: number, h: any) => s + (h.weight || 0), 0) || 100;
+          const agg = (tf: string) => {
+            const sum = newHoldings.reduce((acc: number, h: any) => acc + parsePct(h.performance?.[tf]), 0);
             const val = sum / newHoldings.length;
             return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
           };

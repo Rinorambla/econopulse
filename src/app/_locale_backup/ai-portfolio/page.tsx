@@ -1080,53 +1080,197 @@ export default function AIPortfolioPage() {
     yearly:  { label: '1Y', color: '#F59E0B', gradient:['rgba(245,158,11,0.35)','rgba(245,158,11,0)'] }
   };
 
-  // AI signal for a portfolio (heuristic, uses performance and breadth; weighted by regime)
+  // =========================================================================
+  // PRECISE AI SIGNAL CALCULATION FOR PORTFOLIO ENTRY/EXIT
+  // Uses quantitative analysis of momentum, breadth, trend, and risk factors
+  // =========================================================================
   function computePortfolioAISignal(p:any, regime:RegimeKey) {
-    const d = parseFloat(p?.performance?.daily?.replace('%','')||'0')
-    const w = parseFloat(p?.performance?.weekly?.replace('%','')||'0')
-    const m = parseFloat(p?.performance?.monthly?.replace('%','')||'0')
-    const q = parseFloat(p?.performance?.quarterly?.replace('%','')||'0')
-    const y = parseFloat(p?.performance?.yearly?.replace('%','')||'0')
-    const h = Array.isArray(p?.holdings) ? p.holdings : []
-    const breadth = h.length ? (h.filter((x:any)=> parseFloat(x?.performance?.monthly?.replace('%','')||'0')>0).length / h.length) : 0.5
-    const dailyBreadth = h.length ? (h.filter((x:any)=> parseFloat(x?.performance?.daily?.replace('%','')||'0')>0).length / h.length) : 0.5
-    const clamp = (v:number,a=-1,b=1)=> Math.max(a, Math.min(b, v))
-    const tn = (v:number, s:number)=> clamp(Math.tanh(v/Math.max(0.001,s)))
-    const fD = tn(d, 1.2)
-    const fW = tn(w, 3)
-    const fM = tn(m, 6)
-    const fQ = tn(q, 10)
-    const fY = tn(y, 18)
-    const fBr = clamp(breadth*2-1)
-    const fBrD = clamp(dailyBreadth*2-1)
-    const overbought = Math.max(0, (d-1.2)/2) + Math.max(0,(w-4)/6) + Math.max(0,(m-8)/10)
-    const fOB = clamp(Math.tanh(overbought))
-    const crossWarn = (m>0 && d<0) ? 0.6 : 0
-    // Regime weights (trend vs mean reversion tilt)
-    const W: Record<RegimeKey, [number,number,number,number,number,number,number,number]> = {
-      //           D     W     M     Q     Y     Br    BrD   OB
-      goldilocks: [0.10, 0.15, 0.30, 0.15, 0.10, 0.15, 0.05, -0.10],
-      disinflation:[0.10, 0.15, 0.25, 0.15, 0.10, 0.15, 0.10, -0.10],
-      reflation:  [0.10, 0.20, 0.25, 0.10, 0.05, 0.15, 0.05, -0.10],
-      recession:  [0.05, 0.05, 0.10, 0.15, 0.10, 0.20, 0.20, -0.05],
-      stagflation:[0.05, 0.10, 0.10, 0.10, 0.05, 0.25, 0.25, -0.05],
-      deflation:  [0.05, 0.05, 0.10, 0.10, 0.10, 0.25, 0.25, -0.05],
-      dollarWeakness:[0.10,0.20, 0.20, 0.10, 0.05, 0.20, 0.05, -0.10],
+    // Parse performance values (remove % sign and convert to float)
+    const parsePerf = (val: any): number => {
+      if (!val) return 0;
+      const n = parseFloat(String(val).replace(/[%+]/g, '').trim());
+      return isNaN(n) ? 0 : n;
+    };
+    
+    const d = parsePerf(p?.performance?.daily);
+    const w = parsePerf(p?.performance?.weekly);
+    const m = parsePerf(p?.performance?.monthly);
+    const q = parsePerf(p?.performance?.quarterly);
+    const y = parsePerf(p?.performance?.yearly);
+    
+    // Holdings analysis
+    const holdings = Array.isArray(p?.holdings) ? p.holdings : [];
+    const holdingCount = holdings.length || 1;
+    
+    // Calculate holding-level metrics
+    interface HoldingMetric {
+      daily: number;
+      weekly: number;
+      monthly: number;
+      quarterly: number;
+      yearly: number;
     }
-    const wgt = W[regime]
-    const entryS = clamp(
-      wgt[0]*fD + wgt[1]*fW + wgt[2]*fM + wgt[3]*fQ + wgt[4]*fY + wgt[5]*fBr + wgt[6]*fBrD + wgt[7]*(-fOB) - 0.15*crossWarn
-    )
-    const exitS = clamp( 0.45*fOB + 0.25*(fBr<0? -fBr:0) + 0.15*(fM<0? -fM:0) + 0.15*(fD<0? -fD:0) )
-    const toProb = (s:number)=> Math.round(((s + 1) / 2) * 100)
-    const entry = Math.max(1, Math.min(99, toProb(entryS)))
-    const exit = Math.max(1, Math.min(99, toProb(exitS)))
-  const reasons:string[] = []
-  if (fM>0.3) reasons.push('1M momentum positive')
-  if (fBr>0.2) reasons.push('Breadth is favorable')
-  if (fOB>0.4) reasons.push('Overbought risk')
-  if (crossWarn>0.5) reasons.push('Short-term weakness vs 1M')
-    return { entry, exit, reasons }
+    const holdingMetrics: HoldingMetric[] = holdings.map((h: any) => ({
+      daily: parsePerf(h?.performance?.daily),
+      weekly: parsePerf(h?.performance?.weekly),
+      monthly: parsePerf(h?.performance?.monthly),
+      quarterly: parsePerf(h?.performance?.quarterly),
+      yearly: parsePerf(h?.performance?.yearly),
+    }));
+    
+    // ==== BREADTH ANALYSIS (% of holdings with positive performance) ====
+    const dailyBreadth = holdingMetrics.filter((h: HoldingMetric) => h.daily > 0).length / holdingCount;
+    const weeklyBreadth = holdingMetrics.filter((h: HoldingMetric) => h.weekly > 0).length / holdingCount;
+    const monthlyBreadth = holdingMetrics.filter((h: HoldingMetric) => h.monthly > 0).length / holdingCount;
+    const quarterlyBreadth = holdingMetrics.filter((h: HoldingMetric) => h.quarterly > 0).length / holdingCount;
+    
+    // ==== MOMENTUM SCORING (normalized to -1 to +1 scale) ====
+    // Use empirical thresholds for each timeframe
+    const normalizeWithThreshold = (val: number, threshold: number): number => {
+      return Math.max(-1, Math.min(1, val / threshold));
+    };
+    
+    const momDaily = normalizeWithThreshold(d, 2);      // ±2% daily is extreme
+    const momWeekly = normalizeWithThreshold(w, 5);     // ±5% weekly is extreme
+    const momMonthly = normalizeWithThreshold(m, 10);   // ±10% monthly is extreme
+    const momQuarterly = normalizeWithThreshold(q, 20); // ±20% quarterly is extreme
+    const momYearly = normalizeWithThreshold(y, 40);    // ±40% yearly is extreme
+    
+    // ==== TREND CONSISTENCY (are all timeframes aligned?) ====
+    const trendSigns: number[] = [d, w, m, q, y].map(v => v > 0 ? 1 : v < 0 ? -1 : 0);
+    const trendSum = trendSigns.reduce((a: number, b: number) => a + b, 0);
+    const trendConsistency = trendSum / 5; // -1 to +1, positive = aligned uptrend
+    
+    // ==== ACCELERATION (is momentum increasing?) ====
+    const acceleration = (d > 0 && w > d * 7) ? 0.1 : (d < 0 && w < d * 7) ? -0.1 : 0;
+    
+    // ==== OVERBOUGHT/OVERSOLD DETECTION ====
+    const overboughtScore = Math.max(0, 
+      (d > 2 ? (d - 2) * 0.3 : 0) +
+      (w > 6 ? (w - 6) * 0.15 : 0) +
+      (m > 12 ? (m - 12) * 0.1 : 0)
+    );
+    const oversoldScore = Math.max(0,
+      (d < -2 ? Math.abs(d + 2) * 0.3 : 0) +
+      (w < -6 ? Math.abs(w + 6) * 0.15 : 0) +
+      (m < -12 ? Math.abs(m + 12) * 0.1 : 0)
+    );
+    
+    // ==== DIVERGENCE WARNING (short-term vs medium-term) ====
+    const shortVsMediumDivergence = (m > 0 && d < -0.5) || (m < 0 && d > 0.5);
+    const divergencePenalty = shortVsMediumDivergence ? 0.15 : 0;
+    
+    // ==== REGIME-SPECIFIC WEIGHTING ====
+    // Different regimes favor different factors
+    const regimeWeights: Record<RegimeKey, {
+      momentum: number;
+      breadth: number;
+      trend: number;
+      contrarian: number; // weight for oversold bounce potential
+    }> = {
+      goldilocks:    { momentum: 0.45, breadth: 0.30, trend: 0.20, contrarian: 0.05 },
+      disinflation:  { momentum: 0.40, breadth: 0.30, trend: 0.20, contrarian: 0.10 },
+      reflation:     { momentum: 0.50, breadth: 0.25, trend: 0.15, contrarian: 0.10 },
+      recession:     { momentum: 0.25, breadth: 0.35, trend: 0.20, contrarian: 0.20 },
+      stagflation:   { momentum: 0.20, breadth: 0.40, trend: 0.25, contrarian: 0.15 },
+      deflation:     { momentum: 0.20, breadth: 0.40, trend: 0.25, contrarian: 0.15 },
+      dollarWeakness:{ momentum: 0.45, breadth: 0.30, trend: 0.15, contrarian: 0.10 },
+    };
+    
+    const rw = regimeWeights[regime];
+    
+    // ==== COMPOSITE MOMENTUM SCORE ====
+    // Weight recent performance more heavily but consider all timeframes
+    const compositeMomentum = (
+      momDaily * 0.15 +
+      momWeekly * 0.25 +
+      momMonthly * 0.35 +
+      momQuarterly * 0.15 +
+      momYearly * 0.10
+    );
+    
+    // ==== COMPOSITE BREADTH SCORE ====
+    const compositeBreadth = (
+      dailyBreadth * 0.20 +
+      weeklyBreadth * 0.30 +
+      monthlyBreadth * 0.35 +
+      quarterlyBreadth * 0.15
+    ) * 2 - 1; // normalize to -1 to +1
+    
+    // ==== ENTRY SCORE CALCULATION ====
+    let entryRaw = (
+      rw.momentum * compositeMomentum +
+      rw.breadth * compositeBreadth +
+      rw.trend * trendConsistency +
+      rw.contrarian * (oversoldScore > 0.5 ? 0.3 : 0) + // bounce potential
+      acceleration * 0.5
+    );
+    
+    // Apply penalties
+    entryRaw -= overboughtScore * 0.25;
+    entryRaw -= divergencePenalty;
+    
+    // Clamp to -1 to +1
+    entryRaw = Math.max(-1, Math.min(1, entryRaw));
+    
+    // ==== EXIT SCORE CALCULATION ====
+    let exitRaw = (
+      overboughtScore * 0.40 +
+      (compositeBreadth < 0 ? Math.abs(compositeBreadth) * 0.25 : 0) +
+      (momMonthly < 0 ? Math.abs(momMonthly) * 0.20 : 0) +
+      (trendConsistency < -0.4 ? Math.abs(trendConsistency) * 0.15 : 0) +
+      divergencePenalty * 0.5
+    );
+    exitRaw = Math.max(0, Math.min(1, exitRaw));
+    
+    // ==== CONVERT TO PROBABILITY (1-99%) ====
+    const entryPct = Math.round(Math.max(1, Math.min(99, ((entryRaw + 1) / 2) * 100)));
+    const exitPct = Math.round(Math.max(1, Math.min(99, exitRaw * 100)));
+    
+    // ==== BUILD PRECISE REASONING ====
+    const reasons: string[] = [];
+    
+    // Momentum reasons
+    if (m > 2) reasons.push(`Strong 1M momentum (+${m.toFixed(1)}%)`);
+    else if (m > 0) reasons.push(`Positive 1M momentum (+${m.toFixed(1)}%)`);
+    else if (m < -2) reasons.push(`Weak 1M momentum (${m.toFixed(1)}%)`);
+    
+    // Breadth reasons
+    if (monthlyBreadth >= 0.7) reasons.push(`Strong breadth (${Math.round(monthlyBreadth * 100)}% holdings up)`);
+    else if (monthlyBreadth >= 0.5) reasons.push(`Favorable breadth (${Math.round(monthlyBreadth * 100)}% holdings up)`);
+    else if (monthlyBreadth < 0.4) reasons.push(`Weak breadth (${Math.round(monthlyBreadth * 100)}% holdings up)`);
+    
+    // Trend reasons
+    if (trendConsistency > 0.6) reasons.push('Aligned uptrend across timeframes');
+    else if (trendConsistency < -0.6) reasons.push('Aligned downtrend across timeframes');
+    
+    // Risk reasons
+    if (overboughtScore > 0.5) reasons.push(`Overbought conditions (OB: ${(overboughtScore * 100).toFixed(0)})`);
+    if (oversoldScore > 0.5) reasons.push(`Oversold - potential bounce`);
+    if (shortVsMediumDivergence) reasons.push('Short-term divergence from trend');
+    
+    // Weekly trend
+    if (w > 3) reasons.push(`Weekly gaining (+${w.toFixed(1)}%)`);
+    else if (w < -3) reasons.push(`Weekly declining (${w.toFixed(1)}%)`);
+    
+    // If no specific reasons, add default
+    if (reasons.length === 0) {
+      reasons.push('Neutral market conditions');
+    }
+    
+    return { 
+      entry: entryPct, 
+      exit: exitPct, 
+      reasons,
+      // Additional debug data (optional for display)
+      _debug: {
+        momentum: compositeMomentum,
+        breadth: compositeBreadth,
+        trend: trendConsistency,
+        overbought: overboughtScore,
+        oversold: oversoldScore
+      }
+    };
   }
 
   // Period toggling UI removed for simplified view (bar chart only)

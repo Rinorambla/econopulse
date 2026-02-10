@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import RequirePlan from '@/components/RequirePlan';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
@@ -599,13 +599,13 @@ export default function AIPortfolioPage() {
   const [loadingStocks, setLoadingStocks] = useState(false);
   // Track which portfolios have expanded holdings view
   const [expandedHoldings, setExpandedHoldings] = useState<Set<string>>(new Set());
-  const toggleHoldingsExpanded = (key: string) => {
+  const toggleHoldingsExpanded = useCallback((key: string) => {
     setExpandedHoldings(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
-  };
+  }, []);
   // Regime sync (shared with MarketInteractiveChart)
   const [currentRegime, setCurrentRegime] = useState<RegimeKey>('goldilocks')
   useEffect(() => {
@@ -637,8 +637,8 @@ export default function AIPortfolioPage() {
 
   useEffect(() => {
     fetchEconomicPortfolios();
-    // Auto-refresh every 10 minutes
-    const id = setInterval(() => fetchEconomicPortfolios(), 600000);
+    // Auto-refresh every 15 minutes to reduce server load
+    const id = setInterval(() => fetchEconomicPortfolios(), 900000);
     return () => clearInterval(id);
   }, []);
 
@@ -653,43 +653,36 @@ export default function AIPortfolioPage() {
         // Augment with regional synthetic portfolios (no duplication)
         const augmented = augmentWithRegional(data.economicPortfolios) as any;
         
-        // Collect all symbols including:
-        // 1. Holdings from all portfolios
-        // 2. Existing underlyingStocks (from Europe/EM)
-        // 3. Regime-based underlying stocks for portfolios that don't have them yet
+        // PERFORMANCE OPTIMIZATION: Only load holdings initially, not underlyingStocks
+        // underlyingStocks will be loaded on-demand when user clicks "View Stocks"
         const symbolsToFetch: string[] = [];
         Object.entries(augmented).forEach(([key, p]: [string, any]) => {
-          // Add holding tickers
+          // Only add holding tickers (ETFs) for initial load
           p.holdings?.forEach((h: any) => symbolsToFetch.push(h.ticker));
-          // Add existing underlying stocks
-          p.underlyingStocks?.forEach((h: any) => symbolsToFetch.push(h.ticker));
-          // Check if this portfolio needs regime underlying stocks
-          if (!p.underlyingStocks || p.underlyingStocks.length === 0) {
-            const keyLower = key.toLowerCase().replace(/[-_]/g, '_');
-            const regimeStocks = REGIME_UNDERLYING_STOCKS[keyLower];
-            if (regimeStocks) {
-              regimeStocks.forEach((s: any) => symbolsToFetch.push(s.ticker));
-            }
-          }
         });
         const allSymbols = Array.from(new Set(symbolsToFetch));
         
-        console.log('[Portfolio] Fetching quotes for', allSymbols.length, 'symbols including underlying stocks');
+        console.log('[Portfolio] Fetching quotes for', allSymbols.length, 'ETF symbols (fast initial load)');
         let quotes: Record<string, any> = {};
         if (allSymbols.length) {
           try {
-            // Split into batches of 50 to avoid URL length limits
+            // PERFORMANCE OPTIMIZATION: Parallel batch fetching
             const batches: string[][] = [];
             for (let i = 0; i < allSymbols.length; i += 50) {
               batches.push(allSymbols.slice(i, i + 50));
             }
-            for (const batch of batches) {
-              const qres = await fetch(`/api/quotes?symbols=${encodeURIComponent(batch.join(','))}`);
-              const qjson = await qres.json();
+            // Fetch all batches in parallel for faster loading
+            const batchPromises = batches.map(batch => 
+              fetch(`/api/quotes?symbols=${encodeURIComponent(batch.join(','))}`)
+                .then(res => res.json())
+                .catch(err => ({ ok: false, error: err }))
+            );
+            const results = await Promise.all(batchPromises);
+            results.forEach(qjson => {
               if (qjson.ok) {
                 quotes = { ...quotes, ...(qjson.data || {}) };
               }
-            }
+            });
             console.log('[Portfolio] Received quotes for', Object.keys(quotes).length, 'symbols');
           } catch (e) {
             console.warn('Quotes fetch failed', e);
@@ -710,10 +703,11 @@ export default function AIPortfolioPage() {
             };
           });
           
-          // Determine underlying stocks: use existing if present, otherwise look up by regime
+          // PERFORMANCE OPTIMIZATION: Store underlying stocks metadata but don't fetch quotes yet
+          // Quotes will be fetched lazily when user clicks "View Stocks"
           let underlyingStocksBase = p.underlyingStocks;
           if (!underlyingStocksBase || underlyingStocksBase.length === 0) {
-            // Try to match portfolio to a regime and get underlying stocks
+            // Try to match portfolio to a regime and get underlying stocks template
             const keyLower = key.toLowerCase().replace(/[-_]/g, '_');
             const regimeStocks = REGIME_UNDERLYING_STOCKS[keyLower];
             if (regimeStocks) {
@@ -728,22 +722,9 @@ export default function AIPortfolioPage() {
             }
           }
           
-          // Update underlyingStocks with real quotes if present
-          const newUnderlyingStocks = underlyingStocksBase?.map((h: any) => {
-            const q = quotes[h.ticker];
-            if (!q) {
-              console.log('[Portfolio] No quote for underlying stock:', h.ticker);
-              return h;
-            }
-            return {
-              ...h,
-              name: q.name || h.name,
-              price: q.price ?? h.price,
-              change: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
-              changePercent: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
-              performance: q.performance || h.performance
-            };
-          });
+          // Keep existing underlyingStocks data (from Europe/EM) or set template
+          // Real quotes will be fetched on-demand
+          const newUnderlyingStocks = underlyingStocksBase;
           // recompute portfolio performance as average (or weighted) of underlying
           const totalWeight = newHoldings.reduce((s: number, h: any) => s + (h.weight || 0), 0) || 100;
           const agg = (tf: string) => {
@@ -972,6 +953,98 @@ export default function AIPortfolioPage() {
     }
   };
 
+  // PERFORMANCE OPTIMIZATION: Load underlying stocks on-demand when user clicks "View Stocks"
+  const loadUnderlyingStocksOnDemand = async (portfolioKey: string, portfolioData: any) => {
+    setLoadingStocks(true);
+    try {
+      const underlyingStocks = portfolioData.underlyingStocks || [];
+      if (underlyingStocks.length === 0) {
+        alert('No underlying stocks available for this portfolio');
+        setLoadingStocks(false);
+        return;
+      }
+
+      // Check if data is already loaded (has real prices) - acts as cache
+      const alreadyLoaded = underlyingStocks.some((s: any) => s.price > 0 && s.performance?.daily !== '0.00%');
+      if (alreadyLoaded) {
+        console.log('[LazyLoad] Using cached underlying stocks data');
+        setStocksModal({
+          open: true,
+          portfolio: portfolioData.name,
+          sector: 'Underlying Stocks',
+          stocks: underlyingStocks
+        });
+        setLoadingStocks(false);
+        return;
+      }
+
+      // Extract tickers and fetch quotes in parallel
+      const symbols = underlyingStocks.map((s: any) => s.ticker);
+      console.log('[LazyLoad] Fetching quotes for', symbols.length, 'underlying stocks');
+      
+      // Batch fetch with parallelization
+      const batches: string[][] = [];
+      for (let i = 0; i < symbols.length; i += 50) {
+        batches.push(symbols.slice(i, i + 50));
+      }
+      
+      const batchPromises = batches.map(batch => 
+        fetch(`/api/quotes?symbols=${encodeURIComponent(batch.join(','))}`)
+          .then(res => res.json())
+          .catch(err => ({ ok: false, error: err }))
+      );
+      
+      const results = await Promise.all(batchPromises);
+      let quotes: Record<string, any> = {};
+      results.forEach(qjson => {
+        if (qjson.ok) {
+          quotes = { ...quotes, ...(qjson.data || {}) };
+        }
+      });
+
+      // Merge real data into underlying stocks
+      const updatedStocks = underlyingStocks.map((stock: any) => {
+        const q = quotes[stock.ticker];
+        if (!q) return stock;
+        return {
+          ...stock,
+          name: q.name || stock.name,
+          price: q.price ?? stock.price,
+          change: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
+          changePercent: `${q.changePercent > 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`,
+          performance: q.performance || stock.performance
+        };
+      });
+
+      // Update the portfolio in state with the loaded data (cache it for future clicks)
+      setEconomicPortfolios(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [portfolioKey]: {
+            ...prev[portfolioKey],
+            underlyingStocks: updatedStocks
+          }
+        };
+      });
+
+      // Open modal with loaded data
+      setStocksModal({
+        open: true,
+        portfolio: portfolioData.name,
+        sector: 'Underlying Stocks',
+        stocks: updatedStocks
+      });
+
+      console.log('[LazyLoad] Loaded quotes for', Object.keys(quotes).length, 'of', symbols.length, 'stocks');
+    } catch (error) {
+      console.error('Error loading underlying stocks:', error);
+      alert('Failed to load underlying stocks. Please try again.');
+    } finally {
+      setLoadingStocks(false);
+    }
+  };
+
   // Map portfolio name to economic regime key used by MarketInteractiveChart
   type RegimeKey = 'goldilocks' | 'recession' | 'stagflation' | 'reflation' | 'deflation' | 'disinflation' | 'dollarWeakness'
   const friendlyRegimeLabel = (reg: RegimeKey) => ({
@@ -1159,17 +1232,11 @@ export default function AIPortfolioPage() {
             <div className="flex gap-2">
               {portfolioData.underlyingStocks?.length > 0 && (
                 <button
-                  onClick={() => {
-                    setStocksModal({
-                      open: true,
-                      portfolio: portfolioData.name,
-                      sector: 'Underlying Stocks',
-                      stocks: portfolioData.underlyingStocks
-                    });
-                  }}
-                  className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  onClick={() => loadUnderlyingStocksOnDemand(portfolioKey, portfolioData)}
+                  disabled={loadingStocks}
+                  className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
-                  📊 View Stocks ({portfolioData.underlyingStocks.length})
+                  {loadingStocks ? '⏳ Loading...' : `📊 View Stocks (${portfolioData.underlyingStocks.length})`}
                 </button>
               )}
               {portfolioData.holdings?.length > 5 && (

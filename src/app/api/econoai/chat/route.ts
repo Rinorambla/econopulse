@@ -18,8 +18,10 @@ function getOpenAIClient() {
 }
 
 export async function POST(req: NextRequest) {
+  let parsedQuestion = ''
   try {
     const { question, userId, context } = await req.json()
+    parsedQuestion = question || ''
     const usedContextFlag = Boolean(context)
 
     console.log('🎯 EconoAI request received:', { 
@@ -138,7 +140,7 @@ Keep prose crisp and professional.`
     const fallbackModel = 'gpt-4o-mini';
 
     let completion: any
-    const TIMEOUT_MS = 12000
+    const TIMEOUT_MS = 25000
     // Helper to timeout the OpenAI request
     const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
       return new Promise<T>((resolve, reject) => {
@@ -227,11 +229,36 @@ Keep prose crisp and professional.`
       stack: error?.stack?.split('\n').slice(0, 3).join('\n')
     })
 
-    // Handle specific OpenAI errors
+    // Handle specific OpenAI errors with retry logic
     if (error?.status === 429) {
-      // Soften rate-limit responses to keep UI responsive
+      // Rate limited on primary model – retry once with smaller/fallback model
+      console.warn('OpenAI 429 rate limit on primary model, retrying with gpt-4o-mini...')
+      try {
+        const openai = getOpenAIClient()
+        const retryCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
+            { role: 'user', content: parsedQuestion || 'market overview' }
+          ],
+          temperature: 0.7,
+          max_tokens: 800,
+        })
+        const retryAnswer = retryCompletion.choices[0]?.message?.content
+        if (retryAnswer) {
+          return NextResponse.json({
+            answer: retryAnswer,
+            question: parsedQuestion,
+            usedContext: false,
+            timestamp: new Date().toISOString(),
+            model: 'gpt-4o-mini',
+          }, { status: 200 })
+        }
+      } catch (retryErr) {
+        console.warn('Retry also failed:', retryErr)
+      }
       return NextResponse.json({
-        answer: 'We are receiving many requests right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
+        answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
         question: 'rate_limited',
         usedContext: false,
         fallback: true,
@@ -241,7 +268,6 @@ Keep prose crisp and professional.`
     }
 
     if (error?.status === 401 || error?.message?.includes('API key')) {
-      // Return a soft fallback instead of 500 so the page never shows an error banner
       return NextResponse.json({
         answer: 'Authentication issue with AI provider. Meanwhile, here’s a structured framework: summarize current trend, watch support/resistance, and align with macro (rates, USD).',
         question: 'auth_issue',
@@ -253,7 +279,6 @@ Keep prose crisp and professional.`
     }
 
     if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT' || error?.message === 'openai_timeout') {
-      // Return a graceful fallback rather than a 5xx so UI remains usable
       return NextResponse.json({
         answer:
           'Quick market framework while network is unstable: focus on trend, breadth, and macro levels (10Y yield, USD). Consider staged entries and clear risk limits until connectivity stabilizes.',
@@ -267,7 +292,7 @@ Keep prose crisp and professional.`
 
     // Unknown error: still provide a soft fallback so UX doesn't break
     return NextResponse.json({
-      answer: 'Temporary issue processing your request. Here is a quick guidance: define your time horizon, identify catalysts, and watch key support/resistance. Try again shortly for a full AI answer.',
+      answer: 'Temporary issue processing your request. Here is a quick guidance: define your time horizon, identify catalysts, and watch key support/resistance. Try again shortly for a full AI answer',
       question: 'unknown_error',
       usedContext: false,
       fallback: true,

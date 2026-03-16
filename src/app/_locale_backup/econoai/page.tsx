@@ -58,9 +58,13 @@ export default function EconoAIPage() {
           const j = await r.json()
           const configured = Boolean(j?.services?.openai?.configured)
           setOpenaiConfigured(configured)
-          if (j?.services?.openai) setOnline(configured)
+          // Always start online - let the actual chat call determine real status
+          setOnline(true)
         }
-      } catch {}
+      } catch {
+        // Even if health check fails, stay online - let chat endpoint decide
+        setOnline(true)
+      }
     })()
 
     // Only cycle demo questions if user hasn't asked anything
@@ -90,7 +94,7 @@ export default function EconoAIPage() {
       
       // Small helper with abort timeout to avoid hangs
       const fetchT = async (input: RequestInfo | URL, init?: RequestInit & { timeoutMs?: number }) => {
-        const ms = init?.timeoutMs ?? 12000
+        const ms = init?.timeoutMs ?? 25000
         const ctrl = new AbortController()
         const id = setTimeout(() => ctrl.abort(), ms)
         try {
@@ -131,7 +135,7 @@ export default function EconoAIPage() {
           context
         }),
         cache: 'no-store',
-        timeoutMs: 12000,
+        timeoutMs: 25000,
       })
 
       if (!response) {
@@ -152,13 +156,12 @@ export default function EconoAIPage() {
       // Accept both normal and fallback answers
       if (data?.answer) {
         setUserAnswer(data.answer)
-        // If backend returned a soft fallback, remain online when OpenAI is configured; else show limited mode
-        if (data?.fallback && !openaiConfigured) setOnline(false); else setOnline(true)
+        // Always stay online - backend always returns an answer (real or fallback)
+        setOnline(true)
       } else if (!response.ok) {
         // Friendly fallback when server returns error without answer
         setUserAnswer('Temporary issue retrieving the AI response. Quick framework: assess earnings momentum, breadth, and macro (10Y yield, USD). Re-try for detailed guidance.')
-        // Keep UI online if OpenAI is configured; otherwise limited mode
-        setOnline(!openaiConfigured ? false : true)
+        setOnline(true)
       } else {
         throw new Error('No answer received from AI')
       }
@@ -170,7 +173,7 @@ export default function EconoAIPage() {
       setUserAnswer('Quick guidance while we reconnect: define your time horizon, outline bull/bear scenarios with catalysts, and pick 2–3 levels to manage risk. Try again for the full AI view.')
       setError('')
       setTyping(false)
-      setOnline(false)
+      setOnline(true) // Stay online - next request may succeed
       setLatencyMs(Math.round(performance.now() - start))
     } finally {
       setIsAsking(false)

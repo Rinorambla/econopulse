@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         configured: stripeConfigured,
       },
       openai: {
-        status: process.env.OPENAI_ENABLED === 'true' ? 'enabled' : 'disabled',
+        status: !!process.env.OPENAI_API_KEY ? 'enabled' : 'disabled',
         configured: !!process.env.OPENAI_API_KEY,
       },
     };

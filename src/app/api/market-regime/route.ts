@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTiingoQuote } from '@/lib/tiingo';
+import { getTiingoMarketData, getTiingoHistorical } from '@/lib/tiingo';
 import { rateLimit, getClientIp, rateLimitHeaders } from '@/lib/rate-limit';
 
 interface RegimeData {
@@ -20,15 +20,17 @@ interface RegimeData {
 async function calculateMarketRegime(): Promise<RegimeData> {
   try {
     // Get key market data for regime classification
-    const [spy, vix, tlt, gld, dxy] = await Promise.all([
-      getTiingoQuote('SPY'),   // Equity momentum
-      getTiingoQuote('VIX'),   // Volatility/fear
-      getTiingoQuote('TLT'),   // Bond performance
-      getTiingoQuote('GLD'),   // Gold (risk hedge)
-      getTiingoQuote('DX-Y.NYB') // Dollar strength
+    const [quotes, vixHistorical] = await Promise.all([
+      getTiingoMarketData(['SPY', 'TLT', 'GLD']),
+      getTiingoHistorical('VIX', 5)
     ]);
+    const spy = quotes.find((q: any) => q.symbol === 'SPY');
+    const tlt = quotes.find((q: any) => q.symbol === 'TLT');
+    const gld = quotes.find((q: any) => q.symbol === 'GLD');
+    const vix = vixHistorical?.[0] ? { last: vixHistorical[0].close, prevClose: vixHistorical[1]?.close || vixHistorical[0].close } : null;
+    const dxy = null; // Dollar index not available on Tiingo IEX
     
-    if (!spy || !vix) {
+    if (!spy) {
       throw new Error('Failed to fetch core market data');
     }
     
@@ -43,17 +45,17 @@ async function calculateMarketRegime(): Promise<RegimeData> {
     };
     
     // Signal 1: Equity Momentum (SPY performance)
-    // Using current price vs historical average would be ideal, but we'll use a simple approach
-    if (spy.last > spy.prevClose * 1.02) {  // +2% daily gain
+    const spyChange = spy.changePercent || 0;
+    if (spyChange > 2) {
       signals.equityMomentum = 'on';
       onVotes++;
-    } else if (spy.last < spy.prevClose * 0.98) {  // -2% daily loss
+    } else if (spyChange < -2) {
       signals.equityMomentum = 'off';
       offVotes++;
     }
     
     // Signal 2: Volatility State (VIX levels)
-    const vixLevel = vix.last;
+    const vixLevel = vix?.last ?? 18;
     if (vixLevel < 15) {        // Low volatility = risk-on
       signals.volatilityState = 'on';
       onVotes++;
@@ -63,33 +65,29 @@ async function calculateMarketRegime(): Promise<RegimeData> {
     }
     
     // Signal 3: Credit Health (using TLT as proxy)
-    if (tlt && tlt.last) {
-      if (tlt.last < tlt.prevClose * 0.99) {  // Bonds selling off = risk-on
+    if (tlt) {
+      const tltChange = tlt.changePercent || 0;
+      if (tltChange < -1) {  // Bonds selling off = risk-on
         signals.creditHealth = 'on';
         onVotes++;
-      } else if (tlt.last > tlt.prevClose * 1.01) {  // Flight to quality = risk-off
+      } else if (tltChange > 1) {  // Flight to quality = risk-off
         signals.creditHealth = 'off';
         offVotes++;
       }
     }
     
-    // Signal 4: Currency Signal (Dollar strength)
-    if (dxy && dxy.last) {
-      if (dxy.last < dxy.prevClose * 0.995) {  // Weak dollar = risk-on
-        signals.currencySignal = 'on';
-        onVotes++;
-      } else if (dxy.last > dxy.prevClose * 1.005) {  // Strong dollar = risk-off
-        signals.currencySignal = 'off';
-        offVotes++;
-      }
+    // Signal 4: Currency Signal (Dollar strength) — skipped if no data
+    if (dxy) {
+      // Dollar index not available via Tiingo IEX
     }
     
     // Signal 5: Commodity Trend (Gold as risk hedge)
-    if (gld && gld.last) {
-      if (gld.last < gld.prevClose * 0.99) {  // Gold selling = risk-on
+    if (gld) {
+      const gldChange = gld.changePercent || 0;
+      if (gldChange < -1) {  // Gold selling = risk-on
         signals.commodityTrend = 'on';
         onVotes++;
-      } else if (gld.last > gld.prevClose * 1.01) {  // Gold buying = risk-off
+      } else if (gldChange > 1) {  // Gold buying = risk-off
         signals.commodityTrend = 'off';
         offVotes++;
       }
@@ -153,9 +151,9 @@ async function calculateMarketRegime(): Promise<RegimeData> {
 export async function GET(request: Request) {
   try {
     const clientIp = getClientIp(request);
-    const rateLimitResult = await rateLimit(`market-regime-${clientIp}`, 60, 300); // 60 requests per 5 minutes
+    const rateLimitResult = rateLimit(`market-regime-${clientIp}`, 60, 300000); // 60 requests per 5 minutes
     
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult.ok) {
       const headers = rateLimitHeaders(rateLimitResult);
       return NextResponse.json(
         { error: 'Rate limit exceeded' },

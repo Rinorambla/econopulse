@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTiingoQuote, getTiingoHistorical } from '@/lib/tiingo';
+import { getTiingoMarketData, getTiingoHistorical } from '@/lib/tiingo';
 import { rateLimit, getClientIp, rateLimitHeaders } from '@/lib/rate-limit';
 
 interface FlameData {
@@ -18,47 +18,49 @@ interface FlameData {
 
 async function calculateFlameLevel(): Promise<FlameData> {
   try {
-    // Get current VIX data
-    const vixQuote = await getTiingoQuote('VIX');
-    const vixHistorical = await getTiingoHistorical('VIX', 30); // 30 days
+    // Get current quotes for VIX, SPY, QQQ
+    const quotes = await getTiingoMarketData(['SPY', 'QQQ']);
+    const spyQuote = quotes.find((q: any) => q.symbol === 'SPY');
     
-    // Get SPY data for volume and momentum analysis
-    const spyQuote = await getTiingoQuote('SPY');
-    const spyHistorical = await getTiingoHistorical('SPY', 30);
+    // Get historical data
+    const [vixHistorical, spyHistorical] = await Promise.all([
+      getTiingoHistorical('VIX', 30),
+      getTiingoHistorical('SPY', 30)
+    ]);
     
-    // Get QQQ for tech momentum
-    const qqq = await getTiingoQuote('QQQ');
-    
-    if (!vixQuote || !spyQuote || !vixHistorical || !spyHistorical) {
+    if (!spyQuote || !spyHistorical || !spyHistorical.length) {
       throw new Error('Failed to fetch required market data');
     }
 
-    const currentVIX = vixQuote.adjClose;
-    const currentSPY = spyQuote.adjClose;
+    // Use historical VIX data for current level (VIX may not be in IEX endpoint)
+    const currentVIX = vixHistorical?.[0]?.close ?? 18;
+    const currentSPY = spyQuote.price || spyHistorical[0]?.close;
     
     // Component 1: VIX Spike Detection (-1 to 1)
-    const vixPrices = vixHistorical.map(d => d.adjClose);
-    const vixMA20 = vixPrices.slice(0, 20).reduce((a, b) => a + b) / 20;
+    const vixPrices = (vixHistorical || []).map((d: any) => d.close);
+    if (!vixPrices.length) throw new Error('No VIX historical data');
+    const vixMA20 = vixPrices.slice(0, 20).reduce((a: number, b: number) => a + b) / Math.min(20, vixPrices.length);
+    const vixSlice = vixPrices.slice(0, 20);
     const vixStdDev = Math.sqrt(
-      vixPrices.slice(0, 20).reduce((sum, price) => sum + Math.pow(price - vixMA20, 2), 0) / 20
-    );
+      vixSlice.reduce((sum: number, p: number) => sum + Math.pow(p - vixMA20, 2), 0) / vixSlice.length
+    ) || 1;
     const vixSpike = Math.max(-1, Math.min(1, (currentVIX - vixMA20) / (2 * vixStdDev)));
     
     // Component 2: Volume Surge (0-2 scale)
-    const recentVolumes = spyHistorical.slice(0, 5).map(d => d.volume);
-    const historicalVolumes = spyHistorical.slice(5, 25).map(d => d.volume);
-    const avgRecentVolume = recentVolumes.reduce((a, b) => a + b) / recentVolumes.length;
-    const avgHistoricalVolume = historicalVolumes.reduce((a, b) => a + b) / historicalVolumes.length;
+    const recentVolumes = spyHistorical.slice(0, 5).map((d: any) => d.volume).filter(Boolean);
+    const historicalVolumes = spyHistorical.slice(5, 25).map((d: any) => d.volume).filter(Boolean);
+    const avgRecentVolume = recentVolumes.length ? recentVolumes.reduce((a: number, b: number) => a + b) / recentVolumes.length : 1;
+    const avgHistoricalVolume = historicalVolumes.length ? historicalVolumes.reduce((a: number, b: number) => a + b) / historicalVolumes.length : 1;
     const volumeSurge = Math.min(2, avgRecentVolume / avgHistoricalVolume);
     
     // Component 3: Put/Call Extreme (approximate, -1 to 1)
     // Using VIX as proxy: high VIX = bearish extreme, low VIX = bullish extreme
-    const vixPercentile = vixPrices.filter(price => price <= currentVIX).length / vixPrices.length;
+    const vixPercentile = vixPrices.filter((p: number) => p <= currentVIX).length / vixPrices.length;
     const putCallExtreme = vixPercentile < 0.2 ? 1 : (vixPercentile > 0.8 ? -1 : 0);
     
     // Component 4: Fear & Greed Excess (0-1)
-    const spyPrices = spyHistorical.map(d => d.adjClose);
-    const spyReturn = (currentSPY - spyPrices[20]) / spyPrices[20]; // 20-day return
+    const spyPrices = spyHistorical.map((d: any) => d.close);
+    const spyReturn = spyPrices[20] ? (currentSPY - spyPrices[20]) / spyPrices[20] : 0; // 20-day return
     const fearGreedProxy = Math.max(0, Math.min(1, Math.abs(spyReturn * 10))); // Scale by 10x
     
     // Component 5: Momentum Overbought (0-1)
@@ -144,9 +146,9 @@ async function calculateFlameLevel(): Promise<FlameData> {
 export async function GET(request: Request) {
   try {
     const clientIp = getClientIp(request);
-    const rateLimitResult = await rateLimit(`flame-detector-${clientIp}`, 60, 300); // 60 requests per 5 minutes
+    const rateLimitResult = rateLimit(`flame-detector-${clientIp}`, 60, 300000); // 60 requests per 5 minutes
     
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult.ok) {
       const headers = rateLimitHeaders(rateLimitResult);
       return NextResponse.json(
         { error: 'Rate limit exceeded' },

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTiingoQuote, getTiingoHistorical } from '@/lib/tiingo';
+import { getTiingoMarketData, getTiingoHistorical } from '@/lib/tiingo';
 import { rateLimit, getClientIp, rateLimitHeaders } from '@/lib/rate-limit';
 
 interface BottomData {
@@ -18,15 +18,12 @@ interface BottomData {
 
 async function calculateBottomLevel(): Promise<BottomData> {
   try {
-    // Get major index data
-    const [vixQuote, spyQuote, qqq, xlk, xlu, tlt] = await Promise.all([
-      getTiingoQuote('VIX'),
-      getTiingoQuote('SPY'), 
-      getTiingoQuote('QQQ'),
-      getTiingoQuote('XLK'), // Technology sector
-      getTiingoQuote('XLU'), // Utilities sector (defensive)
-      getTiingoQuote('TLT')  // Long-term treasuries (credit stress proxy)
-    ]);
+    // Get current quotes for key symbols
+    const quotes = await getTiingoMarketData(['SPY', 'QQQ', 'XLK', 'XLU', 'TLT']);
+    const spyQuote = quotes.find((q: any) => q.symbol === 'SPY');
+    const xlk = quotes.find((q: any) => q.symbol === 'XLK');
+    const xlu = quotes.find((q: any) => q.symbol === 'XLU');
+    const tlt = quotes.find((q: any) => q.symbol === 'TLT');
     
     // Get historical data for calculations
     const [vixHistorical, spyHistorical, xlkHistorical, xluHistorical, tltHistorical] = await Promise.all([
@@ -37,15 +34,15 @@ async function calculateBottomLevel(): Promise<BottomData> {
       getTiingoHistorical('TLT', 30)
     ]);
     
-    if (!vixQuote || !spyQuote || !spyHistorical || !vixHistorical) {
+    if (!spyQuote || !spyHistorical?.length) {
       throw new Error('Failed to fetch required market data');
     }
     
-    const currentVIX = vixQuote.adjClose;
-    const currentSPY = spyQuote.adjClose;
+    const currentVIX = vixHistorical?.[0]?.close ?? 18;
+    const currentSPY = spyQuote.price || spyHistorical[0]?.close;
     
     // Component 1: Oversold Signals (0-1)
-    const spyPrices = spyHistorical.map(d => d.adjClose);
+    const spyPrices = spyHistorical.map((d: any) => d.close);
     const gains = [];
     const losses = [];
     
@@ -64,9 +61,9 @@ async function calculateBottomLevel(): Promise<BottomData> {
     const oversoldSignals = rsi < 30 ? (30 - rsi) / 30 : 0;
     
     // Component 2: Fear Spike (0-1)
-    const vixPrices = vixHistorical.map(d => d.adjClose);
-    const vixMA20 = vixPrices.slice(0, 20).reduce((a, b) => a + b) / 20;
-    const vixPercentile = vixPrices.filter(price => price <= currentVIX).length / vixPrices.length;
+    const vixPrices = (vixHistorical || []).map((d: any) => d.close);
+    const vixMA20 = vixPrices.length ? vixPrices.slice(0, 20).reduce((a: number, b: number) => a + b) / Math.min(20, vixPrices.length) : 18;
+    const vixPercentile = vixPrices.filter((p: number) => p <= currentVIX).length / vixPrices.length;
     const fearSpike = vixPercentile > 0.8 ? (vixPercentile - 0.8) / 0.2 : 0;
     
     // Component 3: Put/Call Panic (0-1)
@@ -78,9 +75,9 @@ async function calculateBottomLevel(): Promise<BottomData> {
     
     // Component 4: Defensive Rotation (0-1)
     let defensiveRotation = 0;
-    if (xlk && xlu && xlkHistorical && xluHistorical) {
-      const xlkReturn = (xlk.adjClose - xlkHistorical[20]?.adjClose) / xlkHistorical[20]?.adjClose || 0;
-      const xluReturn = (xlu.adjClose - xluHistorical[20]?.adjClose) / xluHistorical[20]?.adjClose || 0;
+    if (xlk && xlu && xlkHistorical?.length && xluHistorical?.length) {
+      const xlkReturn = xlkHistorical[20]?.close ? (xlk.price - xlkHistorical[20].close) / xlkHistorical[20].close : 0;
+      const xluReturn = xluHistorical[20]?.close ? (xlu.price - xluHistorical[20].close) / xluHistorical[20].close : 0;
       
       // When utilities outperform tech significantly, it's defensive rotation
       const rotationSignal = xluReturn - xlkReturn;
@@ -89,9 +86,9 @@ async function calculateBottomLevel(): Promise<BottomData> {
     
     // Component 5: Credit Stress (0-1)
     let creditStress = 0;
-    if (tlt && tltHistorical) {
-      const tltReturn = (tlt.adjClose - tltHistorical[20]?.adjClose) / tltHistorical[20]?.adjClose || 0;
-      const spyReturn = (currentSPY - spyPrices[20]) / spyPrices[20];
+    if (tlt && tltHistorical?.length) {
+      const tltReturn = tltHistorical[20]?.close ? (tlt.price - tltHistorical[20].close) / tltHistorical[20].close : 0;
+      const spyReturn = spyPrices[20] ? (currentSPY - spyPrices[20]) / spyPrices[20] : 0;
       
       // When bonds significantly outperform stocks, it indicates credit stress
       const spreadProxy = tltReturn - spyReturn;
@@ -167,9 +164,9 @@ async function calculateBottomLevel(): Promise<BottomData> {
 export async function GET(request: Request) {
   try {
     const clientIp = getClientIp(request);
-    const rateLimitResult = await rateLimit(`bottom-detector-${clientIp}`, 60, 300); // 60 requests per 5 minutes
+    const rateLimitResult = rateLimit(`bottom-detector-${clientIp}`, 60, 300000); // 60 requests per 5 minutes
     
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult.ok) {
       const headers = rateLimitHeaders(rateLimitResult);
       return NextResponse.json(
         { error: 'Rate limit exceeded' },

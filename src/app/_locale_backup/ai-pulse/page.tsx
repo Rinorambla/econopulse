@@ -5,30 +5,65 @@ import LocalErrorBoundary from '@/components/LocalErrorBoundary';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
 import Link from 'next/link';
-import { TrendingUp, TrendingDown, BarChart3, Target, RefreshCw, ArrowLeft, Calendar, Clock, Activity, Globe, DollarSign, Briefcase, PieChart } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Target, RefreshCw, ArrowLeft, Calendar, Clock, Activity, Globe, DollarSign, Briefcase, PieChart, ChevronDown, ChevronUp, Zap, Shield, AlertTriangle, Eye, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
-const MarketCategoriesEmbed = dynamic(()=> import('@/components/analytics/MarketCategoriesEmbed'), { ssr:false });
-const WatchlistPanel = dynamic(()=> import('@/components/WatchlistPanel'), { ssr:false });
-// Recharts moved to a lazy component to reduce initial JS
+
+const MarketCategoriesEmbed = dynamic(() => import('@/components/analytics/MarketCategoriesEmbed'), { ssr: false });
+const WatchlistPanel = dynamic(() => import('@/components/WatchlistPanel'), { ssr: false });
 const SectorPerformanceLazy = dynamic(() => import('@/components/charts/SectorPerformanceLazy'), { ssr: false });
 const ETFLineChartLazy = dynamic(() => import('@/components/charts/ETFLineChartLazy'), { ssr: false });
-// Calendars
-const EconomicCalendar = dynamic(() => import('@/components/analytics/EconomicCalendar').then(m=>m.EconomicCalendar), { ssr:false })
-const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m=>m.EarningsCalendar), { ssr:false })
-// 13F explorer removed per request
+const EconomicCalendar = dynamic(() => import('@/components/analytics/EconomicCalendar').then(m => m.EconomicCalendar), { ssr: false });
+const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m => m.EarningsCalendar), { ssr: false });
 
-// Types
-interface SectorPerformance { sector:string; daily:number; weekly:number; monthly:number; quarterly:number; sixMonth?:number; ytd?:number; fiftyTwoWeek?:number; yearly:number; marketCap:number; volume:number; topStocks:string[] }
-interface CountryIndicators { country:string; countryCode:string; gdp:{value:number;growth:number;date:string}; inflation:{value:number;date:string}; unemployment:{value:number;date:string}; interestRate:{value:number;date:string}; currency:{code:string;usdRate:number}; marketCap:number; population:number; creditRating:string }
-interface CountryData { countries:CountryIndicators[]; global:{ totalGdp:number; averageGrowth:number; averageInflation:number; averageUnemployment:number; totalCountries:number }; lastUpdated:string }
-interface EconomicCycle { current:{cycle:string;growth:string;inflation:string;confidence:number}; indicators:{ gdp:{value:number;date:string}; inflation:{value:number;date:string}; unemployment:{value:number;date:string}; fedRate:{value:number;date:string} }; analysis:string; lastUpdated:string }
-interface AIEconomicAnalysis { currentCycle:string; direction:'bullish'|'bearish'|'neutral'|'mixed'; confidence:number; timeframe:string; keyFactors:string[]; risks:string[]; opportunities:string[]; summary:string; recommendation:string }
-interface ETFData { symbol:string; name:string; category:string; price:number; change:number; volume:number; high:number; low:number; open:number; expense:number; volatility:number; trend:string; momentum:string; marketCap:number; ytdReturn:number; peRatio:number; dividend:number; beta:number; timestamp:string }
+// ─── Types ───────────────────────────────────────────────────────────
+interface SectorPerformance { sector: string; daily: number; weekly: number; monthly: number; quarterly: number; sixMonth?: number; ytd?: number; fiftyTwoWeek?: number; yearly: number; marketCap: number; volume: number; topStocks: string[] }
+interface CountryIndicators { country: string; countryCode: string; gdp: { value: number; growth: number; date: string }; inflation: { value: number; date: string }; unemployment: { value: number; date: string }; interestRate: { value: number; date: string }; currency: { code: string; usdRate: number }; marketCap: number; population: number; creditRating: string }
+interface CountryData { countries: CountryIndicators[]; global: { totalGdp: number; averageGrowth: number; averageInflation: number; averageUnemployment: number; totalCountries: number }; lastUpdated: string }
+interface EconomicCycle { current: { cycle: string; growth: string; inflation: string; confidence: number }; indicators: { gdp: { value: number; date: string }; inflation: { value: number; date: string }; unemployment: { value: number; date: string }; fedRate: { value: number; date: string } }; analysis: string; lastUpdated: string }
+interface AIEconomicAnalysis { currentCycle: string; direction: 'bullish' | 'bearish' | 'neutral' | 'mixed'; confidence: number; timeframe: string; keyFactors: string[]; risks: string[]; opportunities: string[]; summary: string; recommendation: string }
+interface ETFData { symbol: string; name: string; category: string; price: number; change: number; volume: number; high: number; low: number; open: number; expense: number; volatility: number; trend: string; momentum: string; marketCap: number; ytdReturn: number; peRatio: number; dividend: number; beta: number; timestamp: string }
 
-const getCountryFlag = (code:string) => ({ US:'🇺🇸', CN:'🇨🇳', DE:'🇩🇪', JP:'🇯🇵', IN:'🇮🇳', GB:'🇬🇧', FR:'🇫🇷', CA:'🇨🇦', IT:'🇮🇹', AU:'🇦🇺', BR:'🇧🇷', KR:'🇰🇷', ES:'🇪🇸', NL:'🇳🇱', CH:'🇨🇭' }[code] || '🏳️');
+const getCountryFlag = (code: string) => ({ US: '🇺🇸', CN: '🇨🇳', DE: '🇩🇪', JP: '🇯🇵', IN: '🇮🇳', GB: '🇬🇧', FR: '🇫🇷', CA: '🇨🇦', IT: '🇮🇹', AU: '🇦🇺', BR: '🇧🇷', KR: '🇰🇷', ES: '🇪🇸', NL: '🇳🇱', CH: '🇨🇭' }[code] || '🏳️');
+
+// ─── Section Wrapper ─────────────────────────────────────────────────
+function Section({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden ${className}`}>
+      {children}
+    </section>
+  );
+}
+function SectionHeader({ icon, title, badge, actions, subtitle }: { icon: React.ReactNode; title: string; badge?: string; actions?: React.ReactNode; subtitle?: string }) {
+  return (
+    <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center shrink-0">{icon}</div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-white tracking-tight">{title}</h2>
+            {badge && <span className="text-[10px] font-medium uppercase tracking-widest text-gray-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">{badge}</span>}
+          </div>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {actions && <div className="flex items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+// ─── Stat Pill ───────────────────────────────────────────────────────
+function StatPill({ label, value, sub, color = 'text-white' }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 min-w-[130px]">
+      <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-lg font-bold tabular-nums ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
 
 export default function AIPulsePage({ params }: { params: Promise<{ locale: string }> }) {
-  // Client-side fetch with timeout to avoid long hangs
+  // Client-side fetch with timeout
   const fetchT = React.useCallback(async (input: RequestInfo | URL, timeoutMs = 10000, init?: RequestInit) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -38,80 +73,57 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       clearTimeout(t);
     }
   }, []);
-  // Data state
+
+  // ─── State ───────────────────────────────────────────────────────
   const [sectorData, setSectorData] = useState<SectorPerformance[]>([]);
   const [economicData, setEconomicData] = useState<EconomicCycle | null>(null);
   const [countryData, setCountryData] = useState<CountryData | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIEconomicAnalysis | null>(null);
-  const [aiMeta, setAiMeta] = useState<{ realtime:boolean; dataSource:string; fallback:boolean }|null>(null);
+  const [aiMeta, setAiMeta] = useState<{ realtime: boolean; dataSource: string; fallback: boolean } | null>(null);
   const [etfData, setEtfData] = useState<ETFData[]>([]);
   const [selectedComparison, setSelectedComparison] = useState('');
-  // ETF comparison enhancements
-  // Simplified: spread-only mode by request
-  const [etfSpreadType, setEtfSpreadType] = useState<'percent'|'absolute'>('percent');
-  const [etfRange, setEtfRange] = useState<'1mo'|'3mo'|'6mo'|'1y'|'2y'|'5y'|'10y'|'max'>('3mo');
-  const [etfSeries, setEtfSeries] = useState<Array<{ time:number; a?:number; b?:number; spread?:number }>>([]);
+  const [etfSpreadType, setEtfSpreadType] = useState<'percent' | 'absolute'>('percent');
+  const [etfRange, setEtfRange] = useState<'1mo' | '3mo' | '6mo' | '1y' | '2y' | '5y' | '10y' | 'max'>('3mo');
+  const [etfSeries, setEtfSeries] = useState<Array<{ time: number; a?: number; b?: number; spread?: number }>>([]);
   const [etfSeriesLoading, setEtfSeriesLoading] = useState(false);
-  // Symbol comparison removed per request
-  const [topMovers, setTopMovers] = useState<Array<{symbol:string;price:number;changePercent:number}>>([]);
-  const [bottomMovers, setBottomMovers] = useState<Array<{symbol:string;price:number;changePercent:number}>>([]);
-  // Risk regime & ratios (moved here from Market DNA)
-  type RiskSignal = { key:string; label:string; dir:'risk-on'|'risk-off'|'neutral'; note?:string };
-  // Market Sentiment & Risk Metrics moved to Dashboard (removed from AI Pulse)
-  // Sparkline state (compact history for movers)
-  type SparkBar = { time:number; close:number };
+  const [topMovers, setTopMovers] = useState<Array<{ symbol: string; price: number; changePercent: number }>>([]);
+  const [bottomMovers, setBottomMovers] = useState<Array<{ symbol: string; price: number; changePercent: number }>>([]);
+  type SparkBar = { time: number; close: number };
   const [sparks, setSparks] = useState<Record<string, SparkBar[]>>({});
   const [sparkLoading, setSparkLoading] = useState(false);
   const [showCountryMatrix, setShowCountryMatrix] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-
-  // 13F section removed per request
 
   // UX state
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'sixMonth'|'ytd'|'fiftyTwoWeek'|'yearly'>('daily');
-  // Timeframe bar: 1D,1W,1M,3M,6M,YTD,52W
-  type TimeframeKey = '1D'|'1W'|'1M'|'3M'|'6M'|'YTD'|'52W';
+  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'sixMonth' | 'ytd' | 'fiftyTwoWeek' | 'yearly'>('daily');
+  type TimeframeKey = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '52W';
   const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeKey>('1D');
   const timeframeToPeriod: Record<TimeframeKey, typeof selectedPeriod> = {
-    '1D':'daily',
-    '1W':'weekly',
-    '1M':'monthly',
-    '3M':'quarterly',
-    '6M':'sixMonth',
-    'YTD':'ytd',
-    '52W':'fiftyTwoWeek'
+    '1D': 'daily', '1W': 'weekly', '1M': 'monthly', '3M': 'quarterly',
+    '6M': 'sixMonth', 'YTD': 'ytd', '52W': 'fiftyTwoWeek'
   };
-  useEffect(()=> { setSelectedPeriod(timeframeToPeriod[selectedTimeframe]); }, [selectedTimeframe]);
+  useEffect(() => { setSelectedPeriod(timeframeToPeriod[selectedTimeframe]); }, [selectedTimeframe]);
   const [selectedSector, setSelectedSector] = useState<string>('');
   const [lastUpdated, setLastUpdated] = useState('');
   const [syncMoversWithPeriod, setSyncMoversWithPeriod] = useState(false);
-
-  // Enhancements
-  const [sectorSort, setSectorSort] = useState<'performance'|'volume'|'marketCap'>('performance');
-  const [sectorView, setSectorView] = useState<'bar'|'multi'>('bar');
+  const [sectorSort, setSectorSort] = useState<'performance' | 'volume' | 'marketCap'>('performance');
+  const [sectorView, setSectorView] = useState<'bar' | 'multi'>('bar');
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showMarketDetails, setShowMarketDetails] = useState(false);
-  // Metric controls removed with value mode
-  const [dataHealth, setDataHealth] = useState({ sector:false, economic:false, ai:false, etf:false, country:false });
-  // Commodities placeholder removed (restored pre-tabs)
+  const [dataHealth, setDataHealth] = useState({ sector: false, economic: false, ai: false, etf: false, country: false });
 
+  // ─── Fetchers (same data logic) ────────────────────────────────
+  const fetchCountryData = async () => { try { const r = await fetchT('/api/country-data', 12000); if (!r.ok) throw new Error('country'); const j = await r.json(); setCountryData(j.data); setDataHealth(h => ({ ...h, country: !!j.data })); } catch (e) { console.error(e); } };
+  const fetchSectorData = async () => { try { setRefreshing(true); const r = await fetchT(`/api/sector-performance`, 12000, { cache: 'no-store' }); if (!r.ok) throw new Error('sector'); const j = await r.json(); const sectors = j.sectors || []; setSectorData(sectors); setDataHealth(h => ({ ...h, sector: sectors.length > 0 })); setLastUpdated(j.lastUpdated || new Date().toISOString()); setError(''); } catch (e) { console.error(e); setError('Failed to load sector performance data'); } finally { setLoading(false); setRefreshing(false); } };
+  const fetchEconomicData = async () => { try { const r = await fetchT('/api/economic-data', 10000); if (!r.ok) { console.warn('economic-data unavailable'); return; } const j = await r.json(); setEconomicData(j.data); setDataHealth(h => ({ ...h, economic: !!j.data })); } catch (e) { console.error(e); } };
+  const fetchAIAnalysis = async () => { try { setAiLoading(true); const r = await fetchT('/api/ai-economic-analysis', 12000); if (!r.ok) { console.warn('ai-economic-analysis unavailable'); setAiMeta(null); setAiAnalysis(null); return; } const j = await r.json(); const analysis = j.data?.analysis || j; setAiAnalysis(analysis); setAiMeta(j ? { realtime: !!j.realtime, dataSource: j.data?.dataSource || 'N/A', fallback: !!j.data?.fallback } : null); setDataHealth(h => ({ ...h, ai: !!analysis })); } catch (e) { console.error(e); } finally { setAiLoading(false); } };
+  const fetchETFData = async () => { try { const r = await fetchT('/api/etf-comparison', 10000); if (!r.ok) throw new Error('etf'); const j = await r.json(); const etfs = j.etfs || []; setEtfData(etfs); setDataHealth(h => ({ ...h, etf: etfs.length > 0 })); } catch (e) { console.error(e); } };
+  const fetchTopMovers = async (sectorOverride?: string) => { try { const s = sectorOverride ?? selectedSector; const p = syncMoversWithPeriod ? selectedPeriod : 'daily'; const qs = new URLSearchParams({ limit: '10', period: p }); if (s) qs.set('sector', s); const r = await fetchT(`/api/top-movers?${qs.toString()}`, 8000, { cache: 'no-store' }); if (!r.ok) throw new Error('movers'); const j = await r.json(); setTopMovers((j.top || []).map((m: any) => ({ symbol: m.symbol, price: Number(m.price) || 0, changePercent: Number(m.changePercent) || 0 }))); setBottomMovers((j.bottom || []).map((m: any) => ({ symbol: m.symbol, price: Number(m.price) || 0, changePercent: Number(m.changePercent) || 0 }))); } catch (e) { console.error(e); } };
 
-  // Fetchers
-  const fetchCountryData = async () => { try { const r = await fetchT('/api/country-data', 12000); if(!r.ok) throw new Error('country'); const j = await r.json(); setCountryData(j.data); setDataHealth(h=>({...h,country:!!j.data})); } catch(e){ console.error(e);} };
-  const fetchSectorData = async () => { try { setRefreshing(true); const r = await fetchT(`/api/sector-performance`, 12000, { cache:'no-store' }); if(!r.ok) throw new Error('sector'); const j = await r.json(); const sectors = j.sectors||[]; setSectorData(sectors); setDataHealth(h=>({...h,sector:sectors.length>0})); setLastUpdated(j.lastUpdated || new Date().toISOString()); setError(''); } catch(e){ console.error(e); setError('Failed to load sector performance data'); } finally { setLoading(false); setRefreshing(false);} };
-  const fetchEconomicData = async () => { try { const r = await fetchT('/api/economic-data', 10000); if(!r.ok) { console.warn('economic-data unavailable'); return; } const j = await r.json(); setEconomicData(j.data); setDataHealth(h=>({...h,economic:!!j.data})); } catch(e){ console.error(e);} };
-  const fetchAIAnalysis = async () => { try { setAiLoading(true); const r = await fetchT('/api/ai-economic-analysis', 12000); if(!r.ok) { console.warn('ai-economic-analysis unavailable'); setAiMeta(null); setAiAnalysis(null); return; } const j = await r.json(); const analysis = j.data?.analysis || j; setAiAnalysis(analysis); setAiMeta(j ? { realtime: !!j.realtime, dataSource: j.data?.dataSource||'N/A', fallback: !!j.data?.fallback } : null); setDataHealth(h=>({...h,ai:!!analysis})); } catch(e){ console.error(e);} finally { setAiLoading(false);} };
-  const fetchETFData = async () => { try { const r = await fetchT('/api/etf-comparison', 10000); if(!r.ok) throw new Error('etf'); const j = await r.json(); const etfs = j.etfs || []; setEtfData(etfs); setDataHealth(h=>({...h,etf:etfs.length>0})); } catch(e){ console.error(e);} };
-  // Risk metrics fetchers removed from AI Pulse
-  // Oil seasonality fetch removed
-  // Movers are strictly DAILY % change; always fetch period=daily and refresh with page data.
-  const fetchTopMovers = async (sectorOverride?: string) => { try { const s = sectorOverride ?? selectedSector; const p = syncMoversWithPeriod ? selectedPeriod : 'daily'; const qs = new URLSearchParams({ limit:'10', period:p }); if (s) qs.set('sector', s); const r = await fetchT(`/api/top-movers?${qs.toString()}`, 8000, { cache:'no-store' }); if(!r.ok) throw new Error('movers'); const j = await r.json(); setTopMovers((j.top||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); setBottomMovers((j.bottom||[]).map((m:any)=>({symbol:m.symbol, price:Number(m.price)||0, changePercent:Number(m.changePercent)||0}))); } catch(e){ console.error(e);} };
-
-  // Fetch mini history for visible movers (limit 15 per route constraints)
   const fetchSparkHistory = async (symbols: string[]) => {
     try {
       const uniq: string[] = [];
@@ -119,95 +131,70 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
       if (uniq.length === 0) return;
       setSparkLoading(true);
       const allMap: Record<string, SparkBar[]> = {};
-      // Yahoo history API allows up to 15 symbols per request; batch if needed
       for (let i = 0; i < uniq.length; i += 15) {
         const chunk = uniq.slice(i, i + 15);
         const qs = new URLSearchParams({ symbols: chunk.join(','), range: '1mo', interval: '1d' });
-  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 9000, { cache: 'no-store' });
+        const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 9000, { cache: 'no-store' });
         if (!res.ok) throw new Error('spark');
         const json = await res.json();
         (json.data || []).forEach((h: any) => {
-          const bars = (h.bars || []).map((b: any) => ({ time: Number(b.time)||0, close: Number(b.close)||0 })).filter((b:any)=> Number.isFinite(b.close));
+          const bars = (h.bars || []).map((b: any) => ({ time: Number(b.time) || 0, close: Number(b.close) || 0 })).filter((b: any) => Number.isFinite(b.close));
           if (h.symbol && bars.length > 0) allMap[h.symbol] = bars;
         });
       }
       setSparks(prev => ({ ...prev, ...allMap }));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSparkLoading(false);
-    }
+    } catch (e) { console.error(e); } finally { setSparkLoading(false); }
   };
 
-  useEffect(()=>{ fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
-  // Auto-refresh with visibility guard to avoid hidden-tab work
-  useEffect(()=>{
+  useEffect(() => { fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(''); }, []);
+  useEffect(() => {
     let stopped = false;
     const tick = () => {
-      if (document.visibilityState !== 'visible') return; // skip hidden tabs
-      fetchSectorData();
-      fetchEconomicData();
-      fetchCountryData();
-      fetchAIAnalysis();
-      fetchETFData();
-      fetchTopMovers();
+      if (document.visibilityState !== 'visible') return;
+      fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers();
     };
-    const heavy = setInterval(()=>{ if (!stopped) tick(); }, 600000); // 10 min
-    const movers = setInterval(()=>{ if (document.visibilityState === 'visible') fetchTopMovers(); }, 180000); // 3 min
-    const onVis = () => {
-      if (document.visibilityState === 'visible') tick();
-    };
+    const heavy = setInterval(() => { if (!stopped) tick(); }, 600000);
+    const movers = setInterval(() => { if (document.visibilityState === 'visible') fetchTopMovers(); }, 180000);
+    const onVis = () => { if (document.visibilityState === 'visible') tick(); };
     document.addEventListener('visibilitychange', onVis);
-    return ()=>{ stopped = true; clearInterval(heavy); clearInterval(movers); document.removeEventListener('visibilitychange', onVis); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { stopped = true; clearInterval(heavy); clearInterval(movers); document.removeEventListener('visibilitychange', onVis); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
-  // Refetch movers on sector/period/sync changes
-  useEffect(()=>{ fetchTopMovers(); }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
-  // Risk metrics moved to Dashboard
+  useEffect(() => { fetchTopMovers(); }, [selectedSector, selectedPeriod, syncMoversWithPeriod]);
 
-  // When movers change, fetch their sparklines
-  // Risk metrics removed from AI Pulse
-
-  // Fetch ETF historical series for spread mode
+  // ETF historical series for spread mode
   const fetchEtfComparisonSeries = async () => {
     try {
       if (!selectedComparison) return;
       const pairMap: Record<string, [string, string]> = {
-        'QQQ-SPY': ['QQQ', 'SPY'],
-        'VOO-VUG': ['VOO', 'VUG'],
-        'QQQ-VGT': ['QQQ', 'VGT'],
-        'IVV-VOO': ['IVV', 'VOO'],
-        'VOO-VTI': ['VOO', 'VTI'],
-        'JEPI-JEPQ': ['JEPI', 'JEPQ'],
+        'QQQ-SPY': ['QQQ', 'SPY'], 'VOO-VUG': ['VOO', 'VUG'], 'QQQ-VGT': ['QQQ', 'VGT'],
+        'IVV-VOO': ['IVV', 'VOO'], 'VOO-VTI': ['VOO', 'VTI'], 'JEPI-JEPQ': ['JEPI', 'JEPQ'],
       };
       const syms = pairMap[selectedComparison];
       if (!syms) return;
       setEtfSeriesLoading(true);
-      // Choose interval based on range length
-      const interval = ((): string => {
-        if (etfRange === '5y' || etfRange === '10y') return '1wk'
-        if (etfRange === 'max') return '1mo'
-        if (etfRange === '2y') return '1d'
-        return '1d'
-      })()
+      const interval = (() => {
+        if (etfRange === '5y' || etfRange === '10y') return '1wk';
+        if (etfRange === 'max') return '1mo';
+        return '1d';
+      })();
       const qs = new URLSearchParams({ symbols: syms.join(','), range: etfRange, interval });
-  const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 10000, { cache: 'no-store' });
+      const res = await fetchT(`/api/yahoo-history?${qs.toString()}`, 10000, { cache: 'no-store' });
       if (!res.ok) throw new Error('history');
       const json = await res.json();
       const arr: any[] = json.data || [];
-      const bySym: Record<string, Array<{ time:number; close:number }>> = {};
+      const bySym: Record<string, Array<{ time: number; close: number }>> = {};
       for (const h of arr) {
         const s = String(h.symbol || '');
-        const bars = (h.bars || []).map((b:any)=> ({ time: Number(b.time)||0, close: Number(b.close)||0 }))
-          .filter((b:any)=> Number.isFinite(b.time) && Number.isFinite(b.close));
+        const bars = (h.bars || []).map((b: any) => ({ time: Number(b.time) || 0, close: Number(b.close) || 0 }))
+          .filter((b: any) => Number.isFinite(b.time) && Number.isFinite(b.close));
         if (s && bars.length) bySym[s] = bars;
       }
       const aBars = bySym[syms[0]] || [];
       const bBars = bySym[syms[1]] || [];
       if (!aBars.length || !bBars.length) { setEtfSeries([]); return; }
-      // Align by timestamp (intersection)
-      const bMap = new Map<number, number>(bBars.map(b=> [b.time, b.close] as const));
-      const merged: Array<{ time:number; a:number; b:number; spread:number }> = [];
+      const bMap = new Map<number, number>(bBars.map(b => [b.time, b.close] as const));
+      const merged: Array<{ time: number; a: number; b: number; spread: number }> = [];
       for (const a of aBars) {
         const bClose = bMap.get(a.time);
         if (typeof bClose === 'number') {
@@ -215,543 +202,781 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           merged.push({ time: a.time, a: a.close, b: bClose, spread });
         }
       }
-      // Ensure chronological order
-      merged.sort((x,y)=> x.time - y.time);
+      merged.sort((x, y) => x.time - y.time);
       setEtfSeries(merged);
-    } catch (e) {
-      console.error(e);
-      setEtfSeries([]);
-    } finally {
-      setEtfSeriesLoading(false);
-    }
+    } catch (e) { console.error(e); setEtfSeries([]); } finally { setEtfSeriesLoading(false); }
   };
-  useEffect(()=>{
-    if (selectedComparison) {
-      fetchEtfComparisonSeries();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etfRange, etfSpreadType, selectedComparison]);
+  useEffect(() => { if (selectedComparison) fetchEtfComparisonSeries(); }, [etfRange, etfSpreadType, selectedComparison]);
 
-  // Helpers
-  const getPerformanceValue = (s:SectorPerformance) => ({
-    daily: s.daily,
-    weekly: s.weekly,
-    monthly: s.monthly,
-    quarterly: s.quarterly,
-    sixMonth: s.sixMonth ?? 0,
-    ytd: s.ytd ?? 0,
-    fiftyTwoWeek: s.fiftyTwoWeek ?? s.yearly,
-    yearly: s.yearly,
+  // ─── Helpers ────────────────────────────────────────────────────
+  const getPerformanceValue = (s: SectorPerformance) => ({
+    daily: s.daily, weekly: s.weekly, monthly: s.monthly, quarterly: s.quarterly,
+    sixMonth: s.sixMonth ?? 0, ytd: s.ytd ?? 0, fiftyTwoWeek: s.fiftyTwoWeek ?? s.yearly, yearly: s.yearly,
   } as any)[selectedPeriod] as number;
+
   const getPeriodLabel = () => ({
-    daily:'Today',
-    weekly:'This Week',
-    monthly:'This Month',
-    quarterly:'This Quarter',
-    sixMonth:'Last 6 Months',
-    ytd:'Year-To-Date',
-    fiftyTwoWeek:'Last 52 Weeks',
-    yearly:'Last 52 Weeks'
+    daily: 'Today', weekly: 'This Week', monthly: 'This Month', quarterly: 'This Quarter',
+    sixMonth: 'Last 6 Months', ytd: 'Year-To-Date', fiftyTwoWeek: 'Last 52 Weeks', yearly: 'Last 52 Weeks'
   } as const)[selectedPeriod];
-  const getEconomicCycleColor = (c:string) => { const l=c.toLowerCase(); if(l==='expansion') return 'text-green-400 bg-green-900/20 border-green-500/30'; if(l==='peak') return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30'; if(l==='contraction'||l==='recession') return 'text-red-400 bg-red-900/20 border-red-500/30'; if(l==='trough') return 'text-blue-400 bg-blue-900/20 border-blue-500/30'; return 'text-gray-400 bg-gray-900/20 border-gray-500/30'; };
-  const getPerformanceColor = (v:number) => v>2?'text-emerald-400':v>1?'text-green-400':v>0?'text-lime-400':v>-1?'text-yellow-400':v>-2?'text-orange-400':'text-red-400';
-  const getAIDirectionDisplay = (d:string) => { const dir=d.toLowerCase(); if(dir==='bullish') return {color:'text-green-400', icon:<TrendingUp className="w-5 h-5" />, bg:'bg-green-900/20 border-green-500/30'}; if(dir==='bearish') return {color:'text-red-400', icon:<TrendingDown className="w-5 h-5" />, bg:'bg-red-900/20 border-red-500/30'}; if(dir==='mixed') return {color:'text-yellow-400', icon:<BarChart3 className="w-5 h-5" />, bg:'bg-yellow-900/20 border-yellow-500/30'}; return {color:'text-gray-400', icon:<Target className="w-5 h-5" />, bg:'bg-gray-900/20 border-gray-500/30'}; };
-  const performanceToGradient = (val:number) => { const c=Math.max(-5, Math.min(5,val)); return c>=0?`linear-gradient(135deg, rgba(16,185,129,${0.15+0.65*(c/5)}) 0%, rgba(4,47,46,0.5) 100%)`:`linear-gradient(135deg, rgba(248,113,113,${0.15+0.65*(-c/5)}) 0%, rgba(67,12,12,0.45) 100%)`; };
-  const getProjectedCycleStyle = (c?: string) => {
-    const l = (c||'').toLowerCase();
-    if(l==='expansion') return 'bg-green-900/20 border-green-500/30 text-green-300';
-    if(l==='recovery') return 'bg-emerald-900/20 border-emerald-500/30 text-emerald-300';
-    if(l==='slowdown') return 'bg-yellow-900/20 border-yellow-500/30 text-yellow-300';
-    if(l==='contraction') return 'bg-red-900/20 border-red-500/30 text-red-300';
-    if(l==='transition') return 'bg-purple-900/20 border-purple-500/30 text-purple-300';
-    return 'bg-gray-900/20 border-gray-500/30 text-gray-300';
+
+  const getPerformanceColor = (v: number) => v > 2 ? 'text-emerald-400' : v > 1 ? 'text-green-400' : v > 0 ? 'text-lime-400' : v > -1 ? 'text-yellow-400' : v > -2 ? 'text-orange-400' : 'text-red-400';
+
+  const getAIDirectionDisplay = (d: string) => {
+    const dir = d.toLowerCase();
+    if (dir === 'bullish') return { color: 'text-emerald-400', icon: <TrendingUp className="w-5 h-5" />, bg: 'bg-emerald-500/10 border-emerald-500/20', pill: 'bg-emerald-500/20 text-emerald-300' };
+    if (dir === 'bearish') return { color: 'text-red-400', icon: <TrendingDown className="w-5 h-5" />, bg: 'bg-red-500/10 border-red-500/20', pill: 'bg-red-500/20 text-red-300' };
+    if (dir === 'mixed') return { color: 'text-amber-400', icon: <BarChart3 className="w-5 h-5" />, bg: 'bg-amber-500/10 border-amber-500/20', pill: 'bg-amber-500/20 text-amber-300' };
+    return { color: 'text-gray-400', icon: <Target className="w-5 h-5" />, bg: 'bg-gray-500/10 border-gray-500/20', pill: 'bg-gray-500/20 text-gray-300' };
   };
 
-  // No tab gating (restored baseline layout)
+  const getProjectedCycleStyle = (c?: string) => {
+    const l = (c || '').toLowerCase();
+    if (l === 'expansion') return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300';
+    if (l === 'recovery') return 'bg-cyan-500/10 border-cyan-500/20 text-cyan-300';
+    if (l === 'slowdown') return 'bg-amber-500/10 border-amber-500/20 text-amber-300';
+    if (l === 'contraction') return 'bg-red-500/10 border-red-500/20 text-red-300';
+    if (l === 'transition') return 'bg-purple-500/10 border-purple-500/20 text-purple-300';
+    return 'bg-gray-500/10 border-gray-500/20 text-gray-300';
+  };
 
-  // Derived
-  const currentComparison = React.useMemo(()=> { if(!selectedComparison||etfData.length===0) return null; const map:Record<string,string[]>={ 'QQQ-SPY':['QQQ','SPY'],'VOO-VUG':['VOO','VUG'],'QQQ-VGT':['QQQ','VGT'],'IVV-VOO':['IVV','VOO'],'VOO-VTI':['VOO','VTI'],'JEPI-JEPQ':['JEPI','JEPQ'] }; const symbols = map[selectedComparison]; if(!symbols) return null; return symbols.map(s=> etfData.find(e=>e.symbol===s)).filter(Boolean) as ETFData[]; }, [selectedComparison, etfData]);
-  const sortedSectors = React.useMemo(()=> { const c=[...sectorData]; if(sectorSort==='performance') return c.sort((a,b)=> getPerformanceValue(b)-getPerformanceValue(a)); if(sectorSort==='volume') return c.sort((a,b)=> b.volume-a.volume); if(sectorSort==='marketCap') return c.sort((a,b)=> b.marketCap-a.marketCap); return c; }, [sectorData, sectorSort, selectedPeriod]);
-  const projectedCycle = React.useMemo(()=> {
-    if(!economicData || !aiAnalysis) return null;
+  // ─── Derived data ──────────────────────────────────────────────
+  const currentComparison = React.useMemo(() => {
+    if (!selectedComparison || etfData.length === 0) return null;
+    const map: Record<string, string[]> = { 'QQQ-SPY': ['QQQ', 'SPY'], 'VOO-VUG': ['VOO', 'VUG'], 'QQQ-VGT': ['QQQ', 'VGT'], 'IVV-VOO': ['IVV', 'VOO'], 'VOO-VTI': ['VOO', 'VTI'], 'JEPI-JEPQ': ['JEPI', 'JEPQ'] };
+    const symbols = map[selectedComparison];
+    if (!symbols) return null;
+    return symbols.map(s => etfData.find(e => e.symbol === s)).filter(Boolean) as ETFData[];
+  }, [selectedComparison, etfData]);
+
+  const sortedSectors = React.useMemo(() => {
+    const c = [...sectorData];
+    if (sectorSort === 'performance') return c.sort((a, b) => getPerformanceValue(b) - getPerformanceValue(a));
+    if (sectorSort === 'volume') return c.sort((a, b) => b.volume - a.volume);
+    if (sectorSort === 'marketCap') return c.sort((a, b) => b.marketCap - a.marketCap);
+    return c;
+  }, [sectorData, sectorSort, selectedPeriod]);
+
+  const projectedCycle = React.useMemo(() => {
+    if (!economicData || !aiAnalysis) return null;
     const current = economicData.current.cycle.toLowerCase();
     const dir = aiAnalysis.direction.toLowerCase();
-    if(dir==='bullish') {
-      if(/contraction|trough|stagflation/.test(current)) return 'Recovery';
-      if(/recovery/.test(current)) return 'Expansion';
+    if (dir === 'bullish') {
+      if (/contraction|trough|stagflation/.test(current)) return 'Recovery';
+      if (/recovery/.test(current)) return 'Expansion';
       return 'Expansion';
     }
-    if(dir==='bearish') {
-      if(/expansion|peak/.test(current)) return 'Slowdown';
-      if(/recovery/.test(current)) return 'Contraction';
+    if (dir === 'bearish') {
+      if (/expansion|peak/.test(current)) return 'Slowdown';
+      if (/recovery/.test(current)) return 'Contraction';
       return 'Contraction';
     }
-    if(dir==='mixed') return 'Transition';
+    if (dir === 'mixed') return 'Transition';
     return economicData.current.cycle;
   }, [economicData, aiAnalysis]);
-  const riskBand = React.useMemo(()=> {
-    if(!economicData) return null;
+
+  const riskBand = React.useMemo(() => {
+    if (!economicData) return null;
     const inf = economicData.indicators?.inflation?.value || 0;
     const unemp = economicData.indicators?.unemployment?.value || 0;
     const gdp = economicData.indicators?.gdp?.value || 0;
-    const score = (inf>3.5?2:inf>2.5?1:0) + (unemp>6?2:unemp>4.5?1:0) + (gdp<1?2:gdp<2?1:0);
-    if(score<=1) return {label:'Low', class:'text-emerald-400'};
-    if(score===2) return {label:'Moderate', class:'text-yellow-400'};
-    if(score===3) return {label:'Elevated', class:'text-orange-400'};
-    return {label:'High', class:'text-red-400'};
+    const score = (inf > 3.5 ? 2 : inf > 2.5 ? 1 : 0) + (unemp > 6 ? 2 : unemp > 4.5 ? 1 : 0) + (gdp < 1 ? 2 : gdp < 2 ? 1 : 0);
+    if (score <= 1) return { label: 'Low', class: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+    if (score === 2) return { label: 'Moderate', class: 'text-yellow-400', bg: 'bg-yellow-500/10' };
+    if (score === 3) return { label: 'Elevated', class: 'text-orange-400', bg: 'bg-orange-500/10' };
+    return { label: 'High', class: 'text-red-400', bg: 'bg-red-500/10' };
   }, [economicData]);
 
-  // Country cycle classification matrix (heuristic, deterministic, no randomness)
-  const countryCycleMatrix = React.useMemo(()=> {
-    if(!countryData) return [] as Array<{code:string;country:string;stage:string;growth:number;inflation:number;unemployment:number;rate:number;next:string;risk:string}>;
+  // Country cycle classification matrix
+  const countryCycleMatrix = React.useMemo(() => {
+    if (!countryData) return [] as Array<{ code: string; country: string; stage: string; growth: number; inflation: number; unemployment: number; rate: number; next: string; risk: string }>;
     return countryData.countries.map(c => {
-      const g = c.gdp.growth;            // GDP growth %
-      const inf = c.inflation.value;     // CPI %
-      const u = c.unemployment.value;    // Unemployment %
-      const r = c.interestRate.value;    // Policy rate %
-
+      const g = c.gdp.growth;
+      const inf = c.inflation.value;
+      const u = c.unemployment.value;
+      const r = c.interestRate.value;
       let stage = 'Neutral';
-      // Simple macro phase heuristic
-      if(g >= 3.5 && inf > 3 && u < 4) stage = 'Overheating';
-      else if(g >= 2 && inf <= 3.2 && u <= 5) stage = 'Expansion';
-      else if(g > 0.5 && (inf > 4 || r > 4.5)) stage = 'Slowdown';
-      else if(g <= 0 && inf > 3.2 && u >= 5.5) stage = 'Stagflation';
-      else if(g < 0 && u > 6) stage = 'Contraction';
-      else if(g >= 0 && g < 1 && inf < 3 && u > 5) stage = 'Recovery';
-
-      // 3M forward outlook heuristic
+      if (g >= 3.5 && inf > 3 && u < 4) stage = 'Overheating';
+      else if (g >= 2 && inf <= 3.2 && u <= 5) stage = 'Expansion';
+      else if (g > 0.5 && (inf > 4 || r > 4.5)) stage = 'Slowdown';
+      else if (g <= 0 && inf > 3.2 && u >= 5.5) stage = 'Stagflation';
+      else if (g < 0 && u > 6) stage = 'Contraction';
+      else if (g >= 0 && g < 1 && inf < 3 && u > 5) stage = 'Recovery';
       let next = 'Sideways';
-      if(stage === 'Overheating') next = 'Policy Tightening → Slowdown';
-      else if(stage === 'Expansion') next = inf > 3 ? 'Monitor Inflation' : 'Sustained Expansion';
-      else if(stage === 'Slowdown') next = inf > 4 ? 'Disinflation Path' : 'Soft Landing Risk';
-      else if(stage === 'Stagflation') next = 'Disinflation Needed';
-      else if(stage === 'Contraction') next = inf < 3 ? 'Recovery Setup' : 'Further Weakness';
-      else if(stage === 'Recovery') next = g > 0.8 ? 'Expansion Setup' : 'Early Recovery';
-
-      // Risk level (composite score)
-      const macroScore = (inf>4?2:inf>3?1:0) + (u>7?2:u>5.5?1:0) + (g<0?2:g<1?1:0);
-      const risk = macroScore <=1 ? 'Low' : macroScore===2 ? 'Moderate' : macroScore===3 ? 'Elevated' : 'High';
-
-      return { code:c.countryCode, country:c.country, stage, growth:g, inflation:inf, unemployment:u, rate:r, next, risk };
+      if (stage === 'Overheating') next = 'Policy Tightening → Slowdown';
+      else if (stage === 'Expansion') next = inf > 3 ? 'Monitor Inflation' : 'Sustained Expansion';
+      else if (stage === 'Slowdown') next = inf > 4 ? 'Disinflation Path' : 'Soft Landing Risk';
+      else if (stage === 'Stagflation') next = 'Disinflation Needed';
+      else if (stage === 'Contraction') next = inf < 3 ? 'Recovery Setup' : 'Further Weakness';
+      else if (stage === 'Recovery') next = g > 0.8 ? 'Expansion Setup' : 'Early Recovery';
+      const macroScore = (inf > 4 ? 2 : inf > 3 ? 1 : 0) + (u > 7 ? 2 : u > 5.5 ? 1 : 0) + (g < 0 ? 2 : g < 1 ? 1 : 0);
+      const risk = macroScore <= 1 ? 'Low' : macroScore === 2 ? 'Moderate' : macroScore === 3 ? 'Elevated' : 'High';
+      return { code: c.countryCode, country: c.country, stage, growth: g, inflation: inf, unemployment: u, rate: r, next, risk };
     });
   }, [countryData]);
 
-  const stageColor = (s:string) => {
+  const stageColor = (s: string) => {
     const l = s.toLowerCase();
-    if(l==='expansion') return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30';
-    if(l==='overheating') return 'bg-orange-500/10 text-orange-300 border-orange-500/30';
-    if(l==='slowdown') return 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30';
-    if(l==='recovery') return 'bg-blue-500/10 text-blue-300 border-blue-500/30';
-    if(l==='contraction') return 'bg-red-500/10 text-red-300 border-red-500/30';
-    if(l==='stagflation') return 'bg-purple-500/10 text-purple-300 border-purple-500/30';
-    return 'bg-gray-500/10 text-gray-300 border-gray-500/30';
+    if (l === 'expansion') return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20';
+    if (l === 'overheating') return 'bg-orange-500/10 text-orange-300 border-orange-500/20';
+    if (l === 'slowdown') return 'bg-amber-500/10 text-amber-300 border-amber-500/20';
+    if (l === 'recovery') return 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20';
+    if (l === 'contraction') return 'bg-red-500/10 text-red-300 border-red-500/20';
+    if (l === 'stagflation') return 'bg-purple-500/10 text-purple-300 border-purple-500/20';
+    return 'bg-gray-500/10 text-gray-300 border-gray-500/20';
   };
-  const riskColor = (r:string) => {
+  const riskColor = (r: string) => {
     const l = r.toLowerCase();
-    if(l==='low') return 'text-emerald-300';
-    if(l==='moderate') return 'text-yellow-300';
-    if(l==='elevated') return 'text-orange-300';
+    if (l === 'low') return 'text-emerald-300';
+    if (l === 'moderate') return 'text-yellow-300';
+    if (l === 'elevated') return 'text-orange-300';
     return 'text-red-400';
   };
 
-  // === Macro regime helpers (Deflation / Reflation / Inflation / Stagflation) ===
-  function inferMacroRegime(g:number, cpi:number) {
-    // Simple quadrant-style mapping inspired by the attached image
+  // Macro regime helpers
+  function inferMacroRegime(g: number, cpi: number) {
     if (g <= 0 && cpi <= 2) return 'Deflation';
     if (g > 0 && g <= 2.5 && cpi <= 3) return 'Reflation';
     if (g > 2 && cpi > 3) return 'Inflation';
     if (g <= 1 && cpi > 3.2) return 'Stagflation';
-    // fallback
     return g > 1.5 ? 'Expansion' : 'Neutral';
   }
-  const regimeColor = (r:string) => {
+  const regimeColor = (r: string) => {
     const k = r.toLowerCase();
-    if(k==='deflation') return { bg:'bg-blue-500/10', text:'text-blue-300', border:'border-blue-500/30' };
-    if(k==='reflation') return { bg:'bg-emerald-500/10', text:'text-emerald-300', border:'border-emerald-500/30' };
-    if(k==='inflation') return { bg:'bg-yellow-500/10', text:'text-yellow-300', border:'border-yellow-500/30' };
-    if(k==='stagflation') return { bg:'bg-red-500/10', text:'text-red-300', border:'border-red-500/30' };
-    return { bg:'bg-gray-500/10', text:'text-gray-300', border:'border-gray-500/30' };
+    if (k === 'deflation') return { bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+    if (k === 'reflation') return { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
+    if (k === 'inflation') return { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
+    if (k === 'stagflation') return { bg: 'bg-red-500/10', text: 'text-red-300', border: 'border-red-500/20' };
+    return { bg: 'bg-gray-500/10', text: 'text-gray-300', border: 'border-gray-500/20' };
   };
 
-  // Inline MiniSparkline component for compact trend visualization
-  function MiniSparkline({ bars, color }: { bars: Array<{time:number; close:number}>; color: string }) {
+  // Inline MiniSparkline
+  function MiniSparkline({ bars, color }: { bars: Array<{ time: number; close: number }>; color: string }) {
     const w = 80; const h = 20; const pad = 2;
-    if (!bars || bars.length < 3) {
-      return <div className="w-20 h-5 bg-white/5 rounded" />;
-    }
-    const closes = bars.map(b=> b.close);
-    const min = Math.min(...closes);
-    const max = Math.max(...closes);
-    const range = max - min || 1;
+    if (!bars || bars.length < 3) return <div className="w-20 h-5 bg-white/5 rounded" />;
+    const closes = bars.map(b => b.close);
+    const min = Math.min(...closes); const max = Math.max(...closes); const range = max - min || 1;
     const points = bars.map((b, i) => {
-      const x = (i/(bars.length-1)) * (w - pad*2) + pad;
-      const y = h - pad - ((b.close - min) / range) * (h - pad*2);
+      const x = (i / (bars.length - 1)) * (w - pad * 2) + pad;
+      const y = h - pad - ((b.close - min) / range) * (h - pad * 2);
       return `${x},${y}`;
     }).join(' ');
-    const last = closes[closes.length-1];
+    const last = closes[closes.length - 1];
     const first = closes[0];
     const up = last >= first;
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-20 h-5 overflow-visible">
         <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={(w - pad)} cy={h - pad - ((last - min)/range)*(h - pad*2)} r="1.5" fill={up? color : '#94a3b8'} />
+        <circle cx={(w - pad)} cy={h - pad - ((last - min) / range) * (h - pad * 2)} r="1.5" fill={up ? color : '#94a3b8'} />
       </svg>
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mb-4 mx-auto" /><p className="text-white text-xl">Loading AI Pulse Dashboard...</p></div></div>;
-  if (error) return <div className="min-h-screen bg-[var(--background)]"><div className="container mx-auto px-4 py-8"><Link href="/dashboard" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10 mb-8"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link><div className="bg-red-500/10 backdrop-blur-md rounded-xl p-8 border border-red-500/20"><h1 className="text-2xl font-bold text-red-400 mb-4">Error Loading Data</h1><p className="text-white">{error}</p></div></div></div>;
+  // ─── Data Health Badge ─────────────────────────────────────────
+  const healthCount = Object.values(dataHealth).filter(Boolean).length;
+  const healthTotal = Object.keys(dataHealth).length;
+
+  // ─── Loading / Error states ────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-[#060a13] flex items-center justify-center">
+      <div className="text-center">
+        <div className="relative w-16 h-16 mx-auto mb-6">
+          <div className="absolute inset-0 rounded-full border-2 border-blue-500/20" />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
+          <Zap className="absolute inset-0 m-auto w-6 h-6 text-blue-400" />
+        </div>
+        <p className="text-white/80 text-lg font-medium">Initializing AI Pulse</p>
+        <p className="text-gray-500 text-sm mt-1">Loading market intelligence...</p>
+      </div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-[#060a13]">
+      <div className="container mx-auto px-4 py-8">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/[0.06] mb-8">
+          <ArrowLeft className="h-4 w-4" /> Dashboard
+        </Link>
+        <div className="bg-red-500/5 backdrop-blur-md rounded-2xl p-8 border border-red-500/10">
+          <h1 className="text-2xl font-bold text-red-400 mb-2">Unable to Load Data</h1>
+          <p className="text-gray-400">{error}</p>
+          <button onClick={() => { setError(''); setLoading(true); fetchSectorData(); }} className="mt-4 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg border border-red-500/20 transition-colors">
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <LocalErrorBoundary fallbackTitle="AI Pulse section error">
-    <RequirePlan min="free">
-  <div className="min-h-screen bg-[var(--background)] text-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/10"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-emerald-400 bg-clip-text text-transparent">AI Pulse Dashboard</h1>
-            </div>
-            {/* Market Categories button removed per request */}
-          </div>
-
-          {/* Macro Snapshot Hero (positioned below header) */}
-          {countryData && (
-            <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 border border-white/10 rounded-2xl p-6 mb-8 shadow-xl relative overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none opacity-20" style={{background:'radial-gradient(700px 200px at 20% -20%, rgba(59,130,246,0.25), transparent), radial-gradient(500px 150px at 80% 120%, rgba(16,185,129,0.18), transparent)'}} />
-              <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="w-9 h-9 rounded-lg bg-slate-700/70 border border-slate-600 flex items-center justify-center text-blue-300">🌍</div>
-                    <h2 className="text-2xl font-bold">Global Macro Snapshot</h2>
+      <RequirePlan min="free">
+        <div className="min-h-screen bg-[#060a13] text-white">
+          {/* ═══════ HEADER ═══════ */}
+          <header className="sticky top-0 z-30 bg-[#060a13]/80 backdrop-blur-xl border-b border-white/[0.04]">
+            <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Link href="/dashboard" className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors" title="Back to Dashboard">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-white" />
                   </div>
-                  <p className="text-sm text-gray-400">At-a-glance world economy status and cycle position</p>
+                  <div>
+                    <h1 className="text-base font-bold tracking-tight">AI Pulse</h1>
+                    <p className="text-[10px] text-gray-500 hidden sm:block">Real-Time Market Intelligence Platform</p>
+                  </div>
                 </div>
-                {/* Stats badges removed per request */}
               </div>
-              {/* Cycle curve */}
-              <div className="relative z-10 mt-6">
-                {(() => {
-                  const g = countryData?.global?.averageGrowth ?? 0;
-                  const cpi = countryData?.global?.averageInflation ?? 0;
-                  const regime = inferMacroRegime(g, cpi);
-                  const rc = regimeColor(regime);
-                  // Draw a smooth sine-like curve with an indicator
-                  return (
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-md text-[11px] border ${rc.bg} ${rc.text} ${rc.border}`}>{regime}</span>
-                          <span className="text-xs text-gray-400">G {g.toFixed(1)}% • CPI {cpi.toFixed(1)}%</span>
+
+              <div className="flex items-center gap-3">
+                {/* Data Health Indicator */}
+                <div className="hidden sm:flex items-center gap-1.5 text-[11px]">
+                  {Object.entries(dataHealth).map(([key, ok]) => (
+                    <div key={key} className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-gray-600'}`} title={`${key}: ${ok ? 'connected' : 'pending'}`} />
+                  ))}
+                  <span className="text-gray-500 ml-1">{healthCount}/{healthTotal}</span>
+                </div>
+                {/* Last Updated */}
+                {lastUpdated && (
+                  <span className="text-[11px] text-gray-500 hidden md:block">
+                    <Clock className="w-3 h-3 inline mr-1" />
+                    {new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                {/* Refresh */}
+                <button onClick={() => { fetchSectorData(); fetchEconomicData(); fetchCountryData(); fetchAIAnalysis(); fetchETFData(); fetchTopMovers(); }}
+                  className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-gray-400 hover:text-white transition-all"
+                  disabled={refreshing}>
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="container mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+            {/* ═══════ GLOBAL MACRO SNAPSHOT ═══════ */}
+            {countryData && (
+              <Section>
+                <SectionHeader
+                  icon={<Globe className="w-5 h-5 text-blue-400" />}
+                  title="Global Macro Snapshot"
+                  badge="Live"
+                  subtitle="World economy status and cycle position"
+                />
+                <div className="p-6">
+                  {/* Key stats row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                    <StatPill label="Global GDP" value={`$${(countryData.global.totalGdp / 1e12).toFixed(1)}T`} sub={`${countryData.global.averageGrowth >= 0 ? '+' : ''}${countryData.global.averageGrowth.toFixed(1)}% avg growth`} color={countryData.global.averageGrowth >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+                    <StatPill label="Avg Inflation" value={`${countryData.global.averageInflation.toFixed(1)}%`} color={countryData.global.averageInflation > 4 ? 'text-red-400' : countryData.global.averageInflation > 3 ? 'text-amber-400' : 'text-emerald-400'} />
+                    <StatPill label="Avg Unemployment" value={`${countryData.global.averageUnemployment.toFixed(1)}%`} color={countryData.global.averageUnemployment > 6 ? 'text-red-400' : 'text-amber-400'} />
+                    <StatPill label="Countries" value={String(countryData.global.totalCountries)} sub="Tracked economies" />
+                  </div>
+
+                  {/* Cycle Curve */}
+                  {(() => {
+                    const g = countryData?.global?.averageGrowth ?? 0;
+                    const cpi = countryData?.global?.averageInflation ?? 0;
+                    const regime = inferMacroRegime(g, cpi);
+                    const rc = regimeColor(regime);
+
+                    return (
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${rc.bg} ${rc.text} ${rc.border}`}>{regime}</span>
+                            <span className="text-xs text-gray-500">GDP {g.toFixed(1)}% · CPI {cpi.toFixed(1)}%</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {selectedCountry && (
+                              <button onClick={() => setSelectedCountry(null)} className="text-[11px] text-gray-400 hover:text-white transition-colors">Clear ({selectedCountry})</button>
+                            )}
+                            <span className="text-[10px] uppercase tracking-widest text-gray-600">Cycle Position</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          {selectedCountry && (
-                            <button onClick={()=> setSelectedCountry(null)} className="text-[11px] text-gray-300 hover:text-white underline">Clear highlight ({selectedCountry})</button>
-                          )}
-                          <span className="text-[10px] uppercase tracking-wide text-gray-500">Cycle Position</span>
-                        </div>
-                      </div>
-                      <svg viewBox="0 0 1000 180" className="w-full h-32">
-                        {/* Baseline */}
-                        <line x1="0" y1="90" x2="1000" y2="90" stroke="#64748B" strokeDasharray="4 6" />
-                        {/* Curve (hand-tuned cubic path approximating phases) */}
-                        <path d="M0,140 C 150,20 350,20 500,90 S 850,160 1000,40" fill="none" stroke="#93C5FD" strokeWidth="2" />
-                        {/* Phase labels */}
-                        <text x="80" y="160" fontSize="12" fill="#94A3B8">Deflation</text>
-                        <text x="350" y="30" fontSize="12" fill="#86EFAC">Reflation</text>
-                        <text x="700" y="30" fontSize="12" fill="#FDE68A">Inflation</text>
-                        <text x="880" y="160" fontSize="12" fill="#FCA5A5">Stagflation</text>
-                        {/* Marker position mapped by regime */}
-                        {(() => {
-                          let mx = 120; let my = 120; // Deflation default
-                          if (regime==='Reflation') { mx = 420; my = 70; }
-                          else if (regime==='Inflation') { mx = 730; my = 70; }
-                          else if (regime==='Stagflation') { mx = 920; my = 120; }
-                          return <g>
-                            <circle cx={mx} cy={my} r="6" fill="#F59E0B" />
-                            <circle cx={mx} cy={my} r="10" fill="transparent" stroke="#F59E0B" strokeOpacity="0.4" />
-                          </g>;
-                        })()}
-                        {/* Country markers along the curve */}
-                        {countryCycleMatrix.slice(0, 30).map((row, idx) => {
-                          const fmt = (v:number, d:number=1)=> Number.isFinite(v) ? v.toFixed(d) : '—';
-                          // Anchor by stage
-                          const s = row.stage.toLowerCase();
-                          let ax = 110, ay = 120; // deflation area
-                          if (s==='recovery' || s==='neutral') { ax = 380; ay = 90; }
-                          if (s==='expansion') { ax = 700; ay = 70; }
-                          if (s==='overheating') { ax = 760; ay = 65; }
-                          if (s==='slowdown') { ax = 860; ay = 110; }
-                          if (s==='stagflation') { ax = 910; ay = 120; }
-                          if (s==='contraction') { ax = 120; ay = 130; }
-                          // jitter to avoid overlap
-                          const col = idx % 10; const rowi = Math.floor(idx/10);
-                          const x = ax + col * 22;
-                          const y = ay + (rowi%2===0 ? -8 : 8);
-                          const title = `${row.country} • ${row.stage} | GDP ${fmt(row.growth,1)}% | CPI ${fmt(row.inflation,1)}% | Unemp ${fmt(row.unemployment,1)}% | Rate ${fmt(row.rate,2)}% | ${row.next} | Risk ${row.risk}`;
-                          const isSel = selectedCountry === row.code;
-                          return (
-                            <g key={row.code} onClick={()=> setSelectedCountry(isSel? null : row.code)} style={{cursor:'pointer'}}>
-                              <title>{title}</title>
-                              <circle cx={x} cy={y} r={isSel? '8' : '7'} fill={isSel? '#F59E0B' : '#0b1220'} stroke={isSel? '#FBBF24' : '#94A3B8'} strokeWidth={isSel? '1.5' : '1'} />
-                              {isSel && (
-                                <g>
-                                  <circle cx={x} cy={y} r="13" fill="transparent" stroke="#F59E0B" strokeOpacity="0.5" />
-                                  <circle cx={x} cy={y} r="18" fill="transparent" stroke="#F59E0B" strokeOpacity="0.25" />
-                                </g>
-                              )}
-                              {(() => {
-                                const lx = Math.min(x + 12, 954);
-                                const ly = y - 9;
-                                return (
+
+                        <svg viewBox="0 0 1000 180" className="w-full h-36">
+                          {/* Grid lines */}
+                          <line x1="0" y1="90" x2="1000" y2="90" stroke="#1e293b" strokeDasharray="4 6" />
+                          <line x1="250" y1="10" x2="250" y2="170" stroke="#1e293b" strokeDasharray="2 8" strokeOpacity="0.3" />
+                          <line x1="500" y1="10" x2="500" y2="170" stroke="#1e293b" strokeDasharray="2 8" strokeOpacity="0.3" />
+                          <line x1="750" y1="10" x2="750" y2="170" stroke="#1e293b" strokeDasharray="2 8" strokeOpacity="0.3" />
+                          {/* Curve */}
+                          <path d="M0,140 C 150,20 350,20 500,90 S 850,160 1000,40" fill="none" stroke="url(#curveGrad)" strokeWidth="2.5" strokeLinecap="round" />
+                          <defs>
+                            <linearGradient id="curveGrad" x1="0" y1="0" x2="1000" y2="0" gradientUnits="userSpaceOnUse">
+                              <stop offset="0%" stopColor="#60A5FA" />
+                              <stop offset="35%" stopColor="#34D399" />
+                              <stop offset="65%" stopColor="#FBBF24" />
+                              <stop offset="100%" stopColor="#F87171" />
+                            </linearGradient>
+                          </defs>
+                          {/* Phase labels */}
+                          <text x="80" y="172" fontSize="11" fill="#475569" fontWeight="500">Deflation</text>
+                          <text x="345" y="22" fontSize="11" fill="#475569" fontWeight="500">Reflation</text>
+                          <text x="680" y="22" fontSize="11" fill="#475569" fontWeight="500">Inflation</text>
+                          <text x="880" y="172" fontSize="11" fill="#475569" fontWeight="500">Stagflation</text>
+                          {/* Current regime marker */}
+                          {(() => {
+                            let mx = 120, my = 120;
+                            if (regime === 'Reflation') { mx = 420; my = 70; }
+                            else if (regime === 'Inflation') { mx = 730; my = 70; }
+                            else if (regime === 'Stagflation') { mx = 920; my = 120; }
+                            else if (regime === 'Expansion') { mx = 550; my = 85; }
+                            return (
+                              <g>
+                                <circle cx={mx} cy={my} r="18" fill="transparent" stroke="#F59E0B" strokeOpacity="0.15" />
+                                <circle cx={mx} cy={my} r="12" fill="transparent" stroke="#F59E0B" strokeOpacity="0.25" />
+                                <circle cx={mx} cy={my} r="5" fill="#F59E0B" />
+                              </g>
+                            );
+                          })()}
+                          {/* Country markers */}
+                          {countryCycleMatrix.slice(0, 30).map((row, idx) => {
+                            const fmt = (v: number, d: number = 1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+                            const s = row.stage.toLowerCase();
+                            let ax = 110, ay = 120;
+                            if (s === 'recovery' || s === 'neutral') { ax = 380; ay = 90; }
+                            if (s === 'expansion') { ax = 700; ay = 70; }
+                            if (s === 'overheating') { ax = 760; ay = 65; }
+                            if (s === 'slowdown') { ax = 860; ay = 110; }
+                            if (s === 'stagflation') { ax = 910; ay = 120; }
+                            if (s === 'contraction') { ax = 120; ay = 130; }
+                            const col = idx % 10; const rowi = Math.floor(idx / 10);
+                            const x = ax + col * 22;
+                            const y = ay + (rowi % 2 === 0 ? -8 : 8);
+                            const title = `${row.country} · ${row.stage} | GDP ${fmt(row.growth, 1)}% | CPI ${fmt(row.inflation, 1)}% | Unemp ${fmt(row.unemployment, 1)}% | Rate ${fmt(row.rate, 2)}% | ${row.next} | Risk ${row.risk}`;
+                            const isSel = selectedCountry === row.code;
+                            return (
+                              <g key={row.code} onClick={() => setSelectedCountry(isSel ? null : row.code)} style={{ cursor: 'pointer' }}>
+                                <title>{title}</title>
+                                <circle cx={x} cy={y} r={isSel ? '8' : '6'} fill={isSel ? '#F59E0B' : '#0f172a'} stroke={isSel ? '#FBBF24' : '#334155'} strokeWidth={isSel ? '1.5' : '1'} />
+                                {isSel && (
                                   <g>
-                                    <rect x={lx} y={ly-7} width="48" height="18" rx="4" ry="4" fill="rgba(2,6,23,0.9)" stroke={isSel? '#F59E0B' : '#475569'} />
-                                    <text x={lx+6} y={ly+5} fontSize="12" textAnchor="start">{getCountryFlag(row.code)}</text>
-                                    <text x={lx+24} y={ly+5} fontSize="11" fill={isSel? '#FFF7ED' : '#E2E8F0'} fontWeight="700">{row.code}</text>
+                                    <circle cx={x} cy={y} r="13" fill="transparent" stroke="#F59E0B" strokeOpacity="0.4" />
+                                    <circle cx={x} cy={y} r="18" fill="transparent" stroke="#F59E0B" strokeOpacity="0.2" />
                                   </g>
+                                )}
+                                {(() => {
+                                  const lx = Math.min(x + 12, 954);
+                                  const ly = y - 9;
+                                  return (
+                                    <g>
+                                      <rect x={lx} y={ly - 7} width="48" height="18" rx="6" ry="6" fill="rgba(2,6,23,0.95)" stroke={isSel ? '#F59E0B' : '#1e293b'} />
+                                      <text x={lx + 6} y={ly + 5} fontSize="12" textAnchor="start">{getCountryFlag(row.code)}</text>
+                                      <text x={lx + 24} y={ly + 5} fontSize="10" fill={isSel ? '#FFF7ED' : '#94a3b8'} fontWeight="600">{row.code}</text>
+                                    </g>
+                                  );
+                                })()}
+                              </g>
+                            );
+                          })}
+                        </svg>
+
+                        {/* Country pills */}
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {countryCycleMatrix.slice(0, 18).map((row) => {
+                            const active = selectedCountry === row.code;
+                            return (
+                              <button key={`leg-${row.code}`} onClick={() => setSelectedCountry(active ? null : row.code)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] border transition-all duration-200 ${active ? 'bg-amber-500/15 border-amber-400/30 text-amber-100 shadow-sm shadow-amber-500/10' : 'bg-white/[0.02] border-white/[0.06] text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'}`}>
+                                <span className="mr-1">{getCountryFlag(row.code)}</span>
+                                <span className="font-semibold">{row.code}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Global Economic Cycle Matrix Table */}
+                  {countryCycleMatrix.length > 0 && (
+                    <div className="mt-6">
+                      <button onClick={() => setShowCountryMatrix(!showCountryMatrix)}
+                        className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors mb-3">
+                        {showCountryMatrix ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        Global Economic Cycle Matrix
+                        <span className="text-[10px] font-normal uppercase tracking-widest text-gray-600 ml-1">Heuristic</span>
+                      </button>
+
+                      {showCountryMatrix && (
+                        <div className="overflow-auto rounded-xl border border-white/[0.06]">
+                          <table className="w-full text-xs min-w-[860px]">
+                            <thead>
+                              <tr className="bg-white/[0.02] border-b border-white/[0.06] text-[10px] text-gray-500 uppercase tracking-wider">
+                                <th className="text-left py-3 px-3 font-medium">Country</th>
+                                <th className="text-left py-3 px-3 font-medium">Stage</th>
+                                <th className="text-right py-3 px-3 font-medium">GDP %</th>
+                                <th className="text-right py-3 px-3 font-medium">Inflation %</th>
+                                <th className="text-right py-3 px-3 font-medium">Unemp %</th>
+                                <th className="text-right py-3 px-3 font-medium">Rate %</th>
+                                <th className="text-left py-3 px-3 font-medium">3M Outlook</th>
+                                <th className="text-left py-3 px-3 font-medium">Risk</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.03]">
+                              {countryCycleMatrix.map(row => {
+                                const active = selectedCountry === row.code;
+                                return (
+                                  <tr key={row.code} onClick={() => setSelectedCountry(active ? null : row.code)}
+                                    className={`hover:bg-white/[0.03] transition-colors cursor-pointer ${active ? 'bg-amber-500/5 ring-1 ring-amber-400/20' : ''}`}>
+                                    <td className="py-2.5 px-3 font-medium">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm leading-none">{getCountryFlag(row.code)}</span>
+                                        <span className="text-gray-200">{row.country}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 px-3"><span className={`px-2 py-0.5 rounded-md border text-[10px] font-medium ${stageColor(row.stage)}`}>{row.stage}</span></td>
+                                    <td className={`py-2.5 px-3 text-right font-mono tabular-nums ${row.growth >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{row.growth.toFixed(1)}</td>
+                                    <td className={`py-2.5 px-3 text-right font-mono tabular-nums ${row.inflation > 4 ? 'text-red-300' : row.inflation > 3 ? 'text-amber-300' : 'text-emerald-300'}`}>{row.inflation.toFixed(1)}</td>
+                                    <td className={`py-2.5 px-3 text-right font-mono tabular-nums ${row.unemployment > 7 ? 'text-red-300' : row.unemployment > 5.5 ? 'text-amber-300' : 'text-emerald-300'}`}>{row.unemployment.toFixed(1)}</td>
+                                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-gray-400">{Number.isFinite(row.rate) ? row.rate.toFixed(2) : '—'}</td>
+                                    <td className="py-2.5 px-3 text-gray-400 max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title={row.next}>{row.next}</td>
+                                    <td className={`py-2.5 px-3 font-semibold ${riskColor(row.risk)}`}>{row.risk}</td>
+                                  </tr>
                                 );
-                              })()}
-                            </g>
-                          );
-                        })}
-                      </svg>
-                      {/* Compact legend for clarity */}
-                      <div className="mt-2 flex flex-wrap gap-2 text-[12px] text-gray-300">
-                        {countryCycleMatrix.slice(0, 18).map((row)=> {
-                          const active = selectedCountry === row.code;
-                          return (
-                            <button key={`leg-${row.code}`} onClick={()=> setSelectedCountry(active? null : row.code)} className={`px-2 py-0.5 rounded-md border transition-colors ${active? 'bg-amber-500/20 border-amber-400/40 text-amber-100' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-                              <span className="mr-1 align-middle">{getCountryFlag(row.code)}</span>
-                              <span className="font-semibold mr-1">{row.code}</span>
-                              <span className="text-gray-400">{row.country}</span>
-                            </button>
-                          );
-                        })}
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <p className="mt-2 text-[10px] text-gray-600 leading-snug">Stages & outlook computed via deterministic macro thresholds (GDP, CPI, Unemployment, Policy Rate). Forward 3M outlook is heuristic guidance.</p>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* ═══════ MARKET CATEGORIES ═══════ */}
+            <Section>
+              <div className="p-1">
+                <MarketCategoriesEmbed />
+              </div>
+            </Section>
+
+            {/* ═══════ WATCHLIST ═══════ */}
+            <WatchlistPanel />
+
+            {/* ═══════ AI ECONOMIC ANALYSIS ═══════ */}
+            {aiAnalysis && (
+              <Section>
+                <SectionHeader
+                  icon={<Target className="w-5 h-5 text-purple-400" />}
+                  title="AI Economic Analysis"
+                  badge={aiMeta?.fallback ? 'Fallback' : 'AI'}
+                  subtitle="Machine learning-driven market outlook and cycle projection"
+                  actions={aiLoading ? <RefreshCw className="w-4 h-4 animate-spin text-gray-500" /> : undefined}
+                />
+                <div className="p-6 space-y-6">
+                  {/* Direction / Confidence / Timeframe cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className={`rounded-xl p-5 border ${getAIDirectionDisplay(aiAnalysis.direction).bg}`}>
+                      <div className="flex items-center gap-3 mb-3">
+                        {getAIDirectionDisplay(aiAnalysis.direction).icon}
+                        <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">Market Direction</span>
+                      </div>
+                      <p className={`text-2xl font-bold capitalize ${getAIDirectionDisplay(aiAnalysis.direction).color}`}>{aiAnalysis.direction}</p>
+                    </div>
+                    <div className="rounded-xl p-5 border border-white/[0.06] bg-white/[0.02]">
+                      <div className="flex items-center gap-3 mb-3">
+                        <BarChart3 className="w-5 h-5 text-blue-400" />
+                        <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">Confidence</span>
+                      </div>
+                      <div className="flex items-end gap-3">
+                        <p className="text-2xl font-bold text-blue-400 tabular-nums">{aiAnalysis.confidence}%</p>
+                        <div className="flex-1 mb-2">
+                          <div className="bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500 to-blue-400 h-full rounded-full transition-all duration-700" style={{ width: `${aiAnalysis.confidence}%` }} />
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
-              
-              {/* Global Economic Cycle Matrix - Always visible */}
-              {countryCycleMatrix.length>0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">Global Economic Cycle Matrix <span className="text-[10px] uppercase tracking-wide text-gray-400">Heuristic</span></h3>
-                  <div className="overflow-auto rounded-lg border border-white/10">
-                    <table className="w-full text-xs min-w-[860px]">
-                      <thead className="bg-white/5">
-                        <tr className="border-b border-white/10 text-[11px] text-gray-400 uppercase tracking-wide">
-                          <th className="text-left py-2 px-2">Country</th>
-                          <th className="text-left py-2 px-2">Stage</th>
-                          <th className="text-right py-2 px-2">GDP%</th>
-                          <th className="text-right py-2 px-2">Infl%</th>
-                          <th className="text-right py-2 px-2">Unemp%</th>
-                          <th className="text-right py-2 px-2">Rate%</th>
-                          <th className="text-left py-2 px-2">3M Outlook</th>
-                          <th className="text-left py-2 px-2">Risk</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {countryCycleMatrix.map(row => {
-                          const active = selectedCountry === row.code;
-                          return (
-                          <tr key={row.code} onClick={()=> setSelectedCountry(active? null : row.code)} className={`hover:bg-white/5 transition-colors cursor-pointer ${active? 'bg-amber-500/10 ring-1 ring-amber-400/40' : ''}`}>
-                            <td className="py-2 px-2 font-medium flex items-center gap-2"><span className="text-base leading-none">{getCountryFlag(row.code)}</span>{row.country}</td>
-                            <td className="py-2 px-2"><span className={`px-2 py-1 rounded-md border text-[11px] font-medium ${stageColor(row.stage)}`}>{row.stage}</span></td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.growth>=0? 'text-green-300':'text-red-300'}`}>{row.growth.toFixed(1)}</td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.inflation>4? 'text-red-300':row.inflation>3? 'text-yellow-300':'text-emerald-300'}`}>{row.inflation.toFixed(1)}</td>
-                            <td className={`py-2 px-2 text-right font-mono ${row.unemployment>7? 'text-red-300':row.unemployment>5.5? 'text-yellow-300':'text-emerald-300'}`}>{row.unemployment.toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right font-mono text-gray-300">{Number.isFinite(row.rate) ? row.rate.toFixed(2) : '—'}</td>
-                            <td className="py-2 px-2 text-gray-300 max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis" title={row.next}>{row.next}</td>
-                            <td className={`py-2 px-2 font-semibold ${riskColor(row.risk)}`}>{row.risk}</td>
-                          </tr>
-                        );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-2 text-[10px] text-gray-400 leading-snug">Stages & Outlook computed via deterministic macro thresholds (GDP, CPI, Unemployment, Policy Rate). No AI randomness. Forward 3M outlook is heuristic guidance, not a prediction.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Compact Sector Performance removed: duplicated with Sector Performance Analysis */}
-          
-
-          {/* Embedded Market Categories Section (moved up for prominence) */}
-          <div className="mb-8">
-            <MarketCategoriesEmbed />
-          </div>
-
-          {/* Watchlist */}
-          <WatchlistPanel />
-
-          {/* Economic Cycle Analysis section removed per request */}
-
-          {aiAnalysis && (
-            <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
-              <div className="flex items-center justify-between mb-6"><h2 className="text-2xl font-bold flex items-center gap-3"><Target className="w-7 h-7 text-purple-400" /> AI Economic Analysis {aiLoading && <RefreshCw className="w-5 h-5 animate-spin" />}</h2></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                <div className={`rounded-lg p-4 border ${getAIDirectionDisplay(aiAnalysis.direction).bg}`}><div className="flex items-center gap-3 mb-2">{getAIDirectionDisplay(aiAnalysis.direction).icon}<h3 className="font-semibold">Market Direction</h3></div><p className={`text-lg font-bold capitalize ${getAIDirectionDisplay(aiAnalysis.direction).color}`}>{aiAnalysis.direction}</p></div>
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10"><div className="flex items-center gap-3 mb-2"><BarChart3 className="w-5 h-5 text-blue-400" /><h3 className="font-semibold">Confidence Level</h3></div><div className="flex items-center gap-3"><div className="flex-1 bg-gray-700 rounded-full h-2"><div className="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full" style={{width:`${aiAnalysis.confidence}%`}} /></div><p className="text-lg font-bold text-blue-400">{aiAnalysis.confidence}%</p></div></div>
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10"><div className="flex items-center gap-3 mb-2"><Calendar className="w-5 h-5 text-green-400" /><h3 className="font-semibold">Timeframe</h3></div><p className="text-lg font-bold text-green-400">{aiAnalysis.timeframe}</p></div>
-              </div>
-              {/* Explicit forward regime callout as requested: Next 3–6 months */}
-              <div className={`rounded-lg p-4 border ${getProjectedCycleStyle(projectedCycle || undefined)} mb-6`}>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Activity className="w-5 h-5" />
-                    <div>
-                      <h3 className="font-semibold">Expected Regime (Next 3–6 Months)</h3>
-                      <p className="text-sm opacity-80">Based on FRED snapshot + AI directional signal</p>
+                    <div className="rounded-xl p-5 border border-white/[0.06] bg-white/[0.02]">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Calendar className="w-5 h-5 text-emerald-400" />
+                        <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">Timeframe</span>
+                      </div>
+                      <p className="text-2xl font-bold text-emerald-400">{aiAnalysis.timeframe}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold capitalize">{projectedCycle || '—'}</p>
-                    <p className="text-xs opacity-80">Confidence {aiAnalysis.confidence ?? 0}%</p>
-                  </div>
-                </div>
-              </div>
-              {aiAnalysis.summary && <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-6"><h3 className="text-lg font-semibold mb-3">AI Summary</h3><p className="text-gray-300 leading-relaxed">{aiAnalysis.summary}</p>{aiMeta?.fallback && <p className="mt-2 text-xs text-yellow-400">Displayed analysis generated from fallback template due to AI service issue.</p>}</div>}
-              {(economicData || aiAnalysis) && (
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-8">
-                  <h3 className="text-lg font-semibold mb-4">Cycle Snapshot & 3-Month AI Outlook</h3>
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm min-w-[640px]">
-                      <thead>
-                        <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-gray-400">
-                          <th className="text-left py-2">Metric</th>
-                          <th className="text-left py-2">Current</th>
-                          <th className="text-left py-2">AI (Now)</th>
-                          <th className="text-left py-2">Projected 3M</th>
-                          <th className="text-left py-2">Confidence</th>
-                          <th className="text-left py-2">Risk Band</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        <tr>
-                          <td className="py-3 font-medium">Cycle Phase</td>
-                          <td className="py-3 text-gray-200">{economicData?.current.cycle||'—'}</td>
-                          <td className="py-3 text-gray-200 capitalize">{aiAnalysis?.currentCycle||economicData?.current.cycle||'—'}</td>
-                          <td className={`py-3 font-semibold ${projectedCycle==='Expansion'?'text-green-400':projectedCycle==='Recovery'?'text-emerald-400':projectedCycle==='Slowdown'?'text-yellow-400':projectedCycle==='Contraction'?'text-red-400':projectedCycle==='Transition'?'text-purple-400':'text-gray-300'}`}>{projectedCycle||'—'}</td>
-                          <td className="py-3 text-gray-300">{aiAnalysis?.confidence ? `${aiAnalysis.confidence}%`:'—'}</td>
-                          <td className={`py-3 font-semibold ${riskBand?.class||''}`}>{riskBand?.label||'—'}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 font-medium">Growth Trend</td>
-                          <td className="py-3 text-gray-200">{economicData?.current.growth}</td>
-                          <td className="py-3 text-gray-300">{aiAnalysis?.direction}</td>
-                          <td className="py-3 text-gray-300">{projectedCycle? (projectedCycle==='Expansion'?'Stronger':'Adjusted'):'—'}</td>
-                          <td className="py-3 text-gray-300">{aiAnalysis?.timeframe||'—'}</td>
-                          <td className="py-3 text-gray-300">GDP {economicData?.indicators?.gdp?.value?.toFixed? economicData.indicators.gdp.value.toFixed(1):'—'}%</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3 font-medium">Inflation Regime</td>
-                          <td className="py-3 text-gray-200">{economicData?.current.inflation}</td>
-                          <td className="py-3 text-gray-300">{(economicData?.indicators?.inflation?.value||'—')}%</td>
-                          <td className="py-3 text-gray-300">{projectedCycle? (projectedCycle==='Expansion'?'Stable to Moderate':'Monitor'):'—'}</td>
-                          <td className="py-3 text-gray-300">Fed {economicData?.indicators?.fedRate?.value?.toFixed? economicData.indicators.fedRate.value.toFixed(2):'—'}%</td>
-                          <td className="py-3 text-gray-300">Unemp {economicData?.indicators?.unemployment?.value?.toFixed? economicData.indicators.unemployment.value.toFixed(1):'—'}%</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-3 text-[11px] text-gray-400">Projection logic combines current macro phase (FRED snapshot) with AI directional signal. This forward-looking view is probabilistic and not guaranteed.</p>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {aiAnalysis.keyFactors?.length>0 && <div className="bg-white/5 rounded-lg p-4 border border-white/10"><h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-400" /> Key Factors</h3><ul className="space-y-2">{aiAnalysis.keyFactors.slice(0,3).map((f,i)=>(<li key={i} className="text-gray-300 text-sm flex gap-2"><span className="text-blue-400">•</span><span>{f}</span></li>))}</ul></div>}
-                {aiAnalysis.risks?.length>0 && <div className="bg-white/5 rounded-lg p-4 border border-white/10"><h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Key Risks</h3><ul className="space-y-2">{aiAnalysis.risks.slice(0,3).map((r,i)=>(<li key={i} className="text-gray-300 text-sm flex gap-2"><span className="text-red-400">•</span><span>{r}</span></li>))}</ul></div>}
-                {aiAnalysis.opportunities?.length>0 && <div className="bg-white/5 rounded-lg p-4 border border-white/10"><h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><Target className="w-5 h-5 text-green-400" /> Opportunities</h3><ul className="space-y-2">{aiAnalysis.opportunities.slice(0,3).map((o,i)=>(<li key={i} className="text-gray-300 text-sm flex gap-2"><span className="text-green-400">•</span><span>{o}</span></li>))}</ul></div>}
-              </div>
-            </div>
-          )}
 
-
-          {/* Symbol/Index Comparison removed per request */}
-
-
-          {etfData.length>0 && (
-            <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center justify-between">ETF Comparison Tool <span className="text-[10px] uppercase tracking-wide text-gray-400">Snapshot</span></h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">{[{key:'QQQ-SPY',label:'QQQ vs SPY'},{key:'VOO-VUG',label:'VOO vs VUG'},{key:'QQQ-VGT',label:'QQQ vs VGT'},{key:'IVV-VOO',label:'IVV vs VOO'},{key:'VOO-VTI',label:'VOO vs VTI'},{key:'JEPI-JEPQ',label:'JEPI vs JEPQ'}].map(c => <button key={c.key} onClick={()=>setSelectedComparison(c.key)} className={`px-4 py-3 rounded-lg border transition-all ${selectedComparison===c.key?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20'}`}>{c.label}</button>)}</div>
-              {/* Range and spread-type controls only */}
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  {(['1mo','3mo','6mo','1y','2y','5y','10y','max'] as const).map(r => (
-                    <button key={r} onClick={()=> setEtfRange(r)} className={`px-3 py-1 rounded-md text-xs border transition-colors ${etfRange===r?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-gray-300 hover:text-white'}`}>{r.toUpperCase()}</button>
-                  ))}
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-md p-1">
-                  {(['percent','absolute'] as const).map(t => (
-                    <button key={t} onClick={()=> setEtfSpreadType(t)} className={`px-3 py-1 text-xs rounded ${etfSpreadType===t? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`}>{t==='percent'?'% Spread':'$ Spread'}</button>
-                  ))}
-                </div>
-              </div>
-
-              {selectedComparison && currentComparison && currentComparison.length>=2 && (
-                <div className="space-y-6">
-                  <div className="bg-white/5 rounded-lg p-4">
-                    <h4 className="text-white font-semibold mb-3">Spread over Time ({selectedComparison.replace('-', ' − ')})</h4>
-                    <div className="h-80">
-                      {etfSeriesLoading ? (
-                        <div className="w-full h-full animate-pulse bg-white/5 rounded" />
-                      ) : (
-                        <ETFLineChartLazy mode="spread" data={etfSeries as any} spreadType={etfSpreadType} />
-                      )}
+                  {/* Expected Regime Callout */}
+                  <div className={`rounded-xl p-5 border ${getProjectedCycleStyle(projectedCycle || undefined)}`}>
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <Activity className="w-5 h-5" />
+                        <div>
+                          <h3 className="font-semibold text-sm">Expected Regime — Next 3–6 Months</h3>
+                          <p className="text-xs opacity-70 mt-0.5">Based on FRED snapshot + AI directional signal</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold capitalize">{projectedCycle || '—'}</p>
+                        <p className="text-xs opacity-70">Confidence {aiAnalysis.confidence ?? 0}%</p>
+                      </div>
                     </div>
-                    <p className="mt-2 text-[10px] text-gray-500">Spread defined as {etfSpreadType==='percent'? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
                   </div>
-                  <div className="bg-white/5 rounded-lg p-4"><h4 className="text-white font-semibold mb-3">Detailed Comparison</h4><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-white/10"><th className="text-left py-2 text-gray-300">Symbol</th><th className="text-right py-2 text-gray-300">Price</th><th className="text-right py-2 text-gray-300">Change</th><th className="text-right py-2 text-gray-300">Volume</th><th className="text-right py-2 text-gray-300">High</th><th className="text-right py-2 text-gray-300">Low</th><th className="text-right py-2 text-gray-300">YTD</th><th className="text-right py-2 text-gray-300">Exp%</th><th className="text-right py-2 text-gray-300">Vol%</th></tr></thead><tbody>{currentComparison.map(etf => <tr key={etf.symbol} className="border-b border-white/5"><td className="py-3 font-medium">{etf.symbol}</td><td className="py-3 text-right">{typeof etf.price==='number'?`$${etf.price.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.change)}`}>{typeof etf.change==='number'?(etf.change>=0?'+':'')+etf.change.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volume==='number'?etf.volume.toLocaleString():'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.high==='number'?`$${etf.high.toFixed(2)}`:'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.low==='number'?`$${etf.low.toFixed(2)}`:'—'}</td><td className={`py-3 text-right font-medium ${getPerformanceColor(etf.ytdReturn)}`}>{typeof etf.ytdReturn==='number'?(etf.ytdReturn>=0?'+':'')+etf.ytdReturn.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.expense==='number'?etf.expense.toFixed(2)+'%':'—'}</td><td className="py-3 text-right text-gray-300">{typeof etf.volatility==='number'?etf.volatility.toFixed(2)+'%':'—'}</td></tr>)}</tbody></table></div></div>
+
+                  {/* AI Summary */}
+                  {aiAnalysis.summary && (
+                    <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                      <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">AI Summary</h3>
+                      <p className="text-gray-300 leading-relaxed text-sm">{aiAnalysis.summary}</p>
+                      {aiMeta?.fallback && <p className="mt-3 text-xs text-amber-400/80">Analysis generated from fallback template due to AI service issue.</p>}
+                    </div>
+                  )}
+
+                  {/* Cycle Snapshot Table */}
+                  {(economicData || aiAnalysis) && (
+                    <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+                      <div className="px-5 py-4 border-b border-white/[0.04]">
+                        <h3 className="text-sm font-semibold text-gray-300">Cycle Snapshot & 3-Month AI Outlook</h3>
+                      </div>
+                      <div className="overflow-auto">
+                        <table className="w-full text-sm min-w-[640px]">
+                          <thead>
+                            <tr className="border-b border-white/[0.04] text-[10px] uppercase tracking-wider text-gray-500">
+                              <th className="text-left py-3 px-5 font-medium">Metric</th>
+                              <th className="text-left py-3 px-3 font-medium">Current</th>
+                              <th className="text-left py-3 px-3 font-medium">AI (Now)</th>
+                              <th className="text-left py-3 px-3 font-medium">Projected 3M</th>
+                              <th className="text-left py-3 px-3 font-medium">Confidence</th>
+                              <th className="text-left py-3 px-3 font-medium">Risk Band</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.03]">
+                            <tr className="hover:bg-white/[0.02]">
+                              <td className="py-3 px-5 font-medium text-gray-200">Cycle Phase</td>
+                              <td className="py-3 px-3 text-gray-300">{economicData?.current.cycle || '—'}</td>
+                              <td className="py-3 px-3 text-gray-300 capitalize">{aiAnalysis?.currentCycle || economicData?.current.cycle || '—'}</td>
+                              <td className={`py-3 px-3 font-semibold ${projectedCycle === 'Expansion' ? 'text-emerald-400' : projectedCycle === 'Recovery' ? 'text-cyan-400' : projectedCycle === 'Slowdown' ? 'text-amber-400' : projectedCycle === 'Contraction' ? 'text-red-400' : projectedCycle === 'Transition' ? 'text-purple-400' : 'text-gray-400'}`}>{projectedCycle || '—'}</td>
+                              <td className="py-3 px-3 text-gray-400 tabular-nums">{aiAnalysis?.confidence ? `${aiAnalysis.confidence}%` : '—'}</td>
+                              <td className={`py-3 px-3 font-semibold ${riskBand?.class || ''}`}>{riskBand?.label || '—'}</td>
+                            </tr>
+                            <tr className="hover:bg-white/[0.02]">
+                              <td className="py-3 px-5 font-medium text-gray-200">Growth Trend</td>
+                              <td className="py-3 px-3 text-gray-300">{economicData?.current.growth}</td>
+                              <td className="py-3 px-3 text-gray-400">{aiAnalysis?.direction}</td>
+                              <td className="py-3 px-3 text-gray-400">{projectedCycle ? (projectedCycle === 'Expansion' ? 'Stronger' : 'Adjusted') : '—'}</td>
+                              <td className="py-3 px-3 text-gray-400">{aiAnalysis?.timeframe || '—'}</td>
+                              <td className="py-3 px-3 text-gray-400 tabular-nums">GDP {economicData?.indicators?.gdp?.value?.toFixed ? economicData.indicators.gdp.value.toFixed(1) : '—'}%</td>
+                            </tr>
+                            <tr className="hover:bg-white/[0.02]">
+                              <td className="py-3 px-5 font-medium text-gray-200">Inflation Regime</td>
+                              <td className="py-3 px-3 text-gray-300">{economicData?.current.inflation}</td>
+                              <td className="py-3 px-3 text-gray-400 tabular-nums">{(economicData?.indicators?.inflation?.value || '—')}%</td>
+                              <td className="py-3 px-3 text-gray-400">{projectedCycle ? (projectedCycle === 'Expansion' ? 'Stable to Moderate' : 'Monitor') : '—'}</td>
+                              <td className="py-3 px-3 text-gray-400 tabular-nums">Fed {economicData?.indicators?.fedRate?.value?.toFixed ? economicData.indicators.fedRate.value.toFixed(2) : '—'}%</td>
+                              <td className="py-3 px-3 text-gray-400 tabular-nums">Unemp {economicData?.indicators?.unemployment?.value?.toFixed ? economicData.indicators.unemployment.value.toFixed(1) : '—'}%</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="px-5 py-3 border-t border-white/[0.04]">
+                        <p className="text-[10px] text-gray-600">Projection combines current macro phase (FRED snapshot) with AI directional signal. Forward-looking view is probabilistic.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Key Factors / Risks / Opportunities */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {aiAnalysis.keyFactors?.length > 0 && (
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-blue-400" /> Key Factors
+                        </h3>
+                        <ul className="space-y-2.5">
+                          {aiAnalysis.keyFactors.slice(0, 3).map((f, i) => (
+                            <li key={i} className="text-gray-300 text-sm flex gap-2 leading-relaxed">
+                              <span className="w-1 h-1 rounded-full bg-blue-400 mt-2 shrink-0" />
+                              <span>{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {aiAnalysis.risks?.length > 0 && (
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-400" /> Key Risks
+                        </h3>
+                        <ul className="space-y-2.5">
+                          {aiAnalysis.risks.slice(0, 3).map((r, i) => (
+                            <li key={i} className="text-gray-300 text-sm flex gap-2 leading-relaxed">
+                              <span className="w-1 h-1 rounded-full bg-red-400 mt-2 shrink-0" />
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {aiAnalysis.opportunities?.length > 0 && (
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <Target className="w-4 h-4 text-emerald-400" /> Opportunities
+                        </h3>
+                        <ul className="space-y-2.5">
+                          {aiAnalysis.opportunities.slice(0, 3).map((o, i) => (
+                            <li key={i} className="text-gray-300 text-sm flex gap-2 leading-relaxed">
+                              <span className="w-1 h-1 rounded-full bg-emerald-400 mt-2 shrink-0" />
+                              <span>{o}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </Section>
+            )}
 
-              {/* Market Sentiment & Risk Metrics moved to Dashboard */}
-              {/* New extended comparison tool (synthetic demo). Real data already powering snapshot above. */}
-              {/* Extended ETFComparisonTool removed per request */}
-            </div>
-          )}
+            {/* ═══════ ETF COMPARISON TOOL ═══════ */}
+            {etfData.length > 0 && (
+              <Section>
+                <SectionHeader
+                  icon={<PieChart className="w-5 h-5 text-cyan-400" />}
+                  title="ETF Comparison Tool"
+                  badge="Snapshot"
+                  subtitle="Compare performance, spread, and fundamentals across major ETFs"
+                />
+                <div className="p-6 space-y-6">
+                  {/* Pair Selection */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    {[
+                      { key: 'QQQ-SPY', label: 'QQQ vs SPY' },
+                      { key: 'VOO-VUG', label: 'VOO vs VUG' },
+                      { key: 'QQQ-VGT', label: 'QQQ vs VGT' },
+                      { key: 'IVV-VOO', label: 'IVV vs VOO' },
+                      { key: 'VOO-VTI', label: 'VOO vs VTI' },
+                      { key: 'JEPI-JEPQ', label: 'JEPI vs JEPQ' },
+                    ].map(c => (
+                      <button key={c.key} onClick={() => setSelectedComparison(c.key)}
+                        className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 ${selectedComparison === c.key
+                          ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-200 shadow-sm shadow-cyan-500/10'
+                          : 'bg-white/[0.02] border-white/[0.06] text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
+                          }`}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
 
-          {/* REAL FRED + OpenAI section removed per request */}
+                  {/* Range & Spread Type Controls */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1 bg-white/[0.02] border border-white/[0.06] rounded-lg p-0.5">
+                      {(['1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max'] as const).map(r => (
+                        <button key={r} onClick={() => setEtfRange(r)}
+                          className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${etfRange === r ? 'bg-cyan-500/20 text-cyan-200' : 'text-gray-500 hover:text-gray-300'}`}>
+                          {r.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1 bg-white/[0.02] border border-white/[0.06] rounded-lg p-0.5">
+                      {(['percent', 'absolute'] as const).map(t => (
+                        <button key={t} onClick={() => setEtfSpreadType(t)}
+                          className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${etfSpreadType === t ? 'bg-cyan-500/20 text-cyan-200' : 'text-gray-500 hover:text-gray-300'}`}>
+                          {t === 'percent' ? '% Spread' : '$ Spread'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-          {/* Economic Calendar */}
-          <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-2xl p-6 border border-white/10 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Calendar className="w-7 h-7 text-cyan-400" /> Economic Calendar
-              </h2>
-              <span className="text-[10px] uppercase tracking-wide text-gray-400">Next 2–4 weeks</span>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-              <EconomicCalendar />
-            </div>
-          </div>
+                  {/* Spread Chart + Detail Table */}
+                  {selectedComparison && currentComparison && currentComparison.length >= 2 && (
+                    <div className="space-y-4">
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-semibold text-gray-200">Spread over Time <span className="text-gray-500 font-normal">({selectedComparison.replace('-', ' − ')})</span></h4>
+                        </div>
+                        <div className="h-80">
+                          {etfSeriesLoading ? (
+                            <div className="w-full h-full animate-pulse bg-white/[0.03] rounded-lg" />
+                          ) : (
+                            <ETFLineChartLazy mode="spread" data={etfSeries as any} spreadType={etfSpreadType} />
+                          )}
+                        </div>
+                        <p className="mt-3 text-[10px] text-gray-600">Spread = {etfSpreadType === 'percent' ? '100 × (A / B − 1)' : 'A − B'}. Range {etfRange.toUpperCase()}, daily bars.</p>
+                      </div>
 
-          {/* Earnings Calendar removed per request */}
+                      <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden">
+                        <div className="px-5 py-3 border-b border-white/[0.04]">
+                          <h4 className="text-sm font-semibold text-gray-300">Detailed Comparison</h4>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-white/[0.04] text-[10px] uppercase tracking-wider text-gray-500">
+                                <th className="text-left py-3 px-4 font-medium">Symbol</th>
+                                <th className="text-right py-3 px-3 font-medium">Price</th>
+                                <th className="text-right py-3 px-3 font-medium">Change</th>
+                                <th className="text-right py-3 px-3 font-medium">Volume</th>
+                                <th className="text-right py-3 px-3 font-medium">High</th>
+                                <th className="text-right py-3 px-3 font-medium">Low</th>
+                                <th className="text-right py-3 px-3 font-medium">YTD</th>
+                                <th className="text-right py-3 px-3 font-medium">Expense</th>
+                                <th className="text-right py-3 px-3 font-medium">Volatility</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.03]">
+                              {currentComparison.map(etf => (
+                                <tr key={etf.symbol} className="hover:bg-white/[0.02]">
+                                  <td className="py-3 px-4 font-semibold text-white">{etf.symbol}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-200">{typeof etf.price === 'number' ? `$${etf.price.toFixed(2)}` : '—'}</td>
+                                  <td className={`py-3 px-3 text-right font-mono tabular-nums font-medium ${getPerformanceColor(etf.change)}`}>{typeof etf.change === 'number' ? (etf.change >= 0 ? '+' : '') + etf.change.toFixed(2) + '%' : '—'}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-400">{typeof etf.volume === 'number' ? etf.volume.toLocaleString() : '—'}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-400">{typeof etf.high === 'number' ? `$${etf.high.toFixed(2)}` : '—'}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-400">{typeof etf.low === 'number' ? `$${etf.low.toFixed(2)}` : '—'}</td>
+                                  <td className={`py-3 px-3 text-right font-mono tabular-nums font-medium ${getPerformanceColor(etf.ytdReturn)}`}>{typeof etf.ytdReturn === 'number' ? (etf.ytdReturn >= 0 ? '+' : '') + etf.ytdReturn.toFixed(2) + '%' : '—'}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-400">{typeof etf.expense === 'number' ? etf.expense.toFixed(2) + '%' : '—'}</td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-gray-400">{typeof etf.volatility === 'number' ? etf.volatility.toFixed(2) + '%' : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
 
-          {/* Latest News simplified to only left column (NewsWidget) */}
-          <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/70 to-black/60 rounded-xl p-6 border border-white/10 mb-8 max-w-3xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Latest News</h2>
-              <span className="text-[10px] uppercase tracking-wide text-gray-400">Global</span>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-              {React.createElement(dynamic(()=> import('@/components/NewsWidget'), { ssr:false }))}
-            </div>
-          </div>
+            {/* ═══════ ECONOMIC CALENDAR ═══════ */}
+            <Section>
+              <SectionHeader
+                icon={<Calendar className="w-5 h-5 text-cyan-400" />}
+                title="Economic Calendar"
+                badge="Next 2–4 Weeks"
+                subtitle="Upcoming macro events and announcements"
+              />
+              <div className="p-4">
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
+                  <EconomicCalendar />
+                </div>
+              </div>
+            </Section>
 
-          
+            {/* ═══════ LATEST NEWS ═══════ */}
+            <Section className="max-w-3xl">
+              <SectionHeader
+                icon={<Radio className="w-5 h-5 text-indigo-400" />}
+                title="Latest News"
+                badge="Global"
+                subtitle="Real-time financial headlines"
+              />
+              <div className="p-5">
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4">
+                  {React.createElement(dynamic(() => import('@/components/NewsWidget'), { ssr: false }))}
+                </div>
+              </div>
+            </Section>
 
+          </main>
+
+          <Footer />
         </div>
-
-  {/* Data Sources & Integrity section removed per request */}
-
-          {/* 13F removed */}
-
-        <Footer />
-      </div>
-    </RequirePlan>
+      </RequirePlan>
     </LocalErrorBoundary>
   );
 }

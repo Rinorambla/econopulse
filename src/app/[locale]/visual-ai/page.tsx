@@ -26,35 +26,37 @@ interface WidgetData {
   category: TabType;
   endpoint: string;
   chartType: "bar" | "line" | "scatter";
+  xKey: string;
+  yKey: string;
   data: any[];
   loading: boolean;
   error: string | null;
 }
 
 const WIDGETS: Omit<WidgetData, "data" | "loading" | "error">[] = [
-  { id: "population", title: "Global Population", category: "macro", endpoint: "/api/visual-ai/population", chartType: "line" },
-  { id: "gdp", title: "GDP Growth", category: "macro", endpoint: "/api/visual-ai/gdp", chartType: "bar" },
-  { id: "trade", title: "Trade Balance", category: "macro", endpoint: "/api/visual-ai/trade", chartType: "bar" },
-  { id: "pmi", title: "PMI Indices", category: "macro", endpoint: "/api/visual-ai/pmi", chartType: "line" },
-  { id: "yields", title: "Bond Yields", category: "macro", endpoint: "/api/visual-ai/yields", chartType: "line" },
-  { id: "stocks", title: "Stock Indices", category: "markets", endpoint: "/api/visual-ai/stocks", chartType: "line" },
-  { id: "currencies", title: "Currency Pairs", category: "markets", endpoint: "/api/visual-ai/currencies", chartType: "line" },
-  { id: "energy", title: "Energy Prices", category: "commodities", endpoint: "/api/visual-ai/energy", chartType: "line" },
-  { id: "agriculture", title: "Agricultural Commodities", category: "commodities", endpoint: "/api/visual-ai/agriculture", chartType: "bar" },
-  { id: "metals", title: "Precious Metals", category: "commodities", endpoint: "/api/visual-ai/metals", chartType: "line" },
-  { id: "debt", title: "Government Debt", category: "policy", endpoint: "/api/visual-ai/debt", chartType: "bar" },
-  { id: "central-bank", title: "Central Bank Assets", category: "policy", endpoint: "/api/visual-ai/central-bank", chartType: "bar" },
-  { id: "fed-tools", title: "Fed Tools", category: "policy", endpoint: "/api/visual-ai/fed-tools", chartType: "line" },
-  { id: "recession-prob", title: "Recession Probability", category: "policy", endpoint: "/api/visual-ai/global-recession-probability", chartType: "line" },
-  { id: "cot-flow", title: "COT Flows", category: "markets", endpoint: "/api/visual-ai/cot-flow", chartType: "bar" },
-  { id: "geopolitical", title: "Geopolitical Risk", category: "policy", endpoint: "/api/visual-ai/geopolitical-risk", chartType: "line" },
+  { id: "population", title: "Global Population", category: "macro", endpoint: "/api/visual-ai/population", chartType: "bar", xKey: "country", yKey: "population" },
+  { id: "gdp", title: "GDP Growth", category: "macro", endpoint: "/api/visual-ai/gdp", chartType: "bar", xKey: "country", yKey: "gdpGrowth" },
+  { id: "trade", title: "Trade Balance", category: "macro", endpoint: "/api/visual-ai/trade", chartType: "bar", xKey: "country", yKey: "tradeBalance" },
+  { id: "pmi", title: "PMI Indices", category: "macro", endpoint: "/api/visual-ai/pmi", chartType: "bar", xKey: "country", yKey: "composite" },
+  { id: "yields", title: "Bond Yields", category: "macro", endpoint: "/api/visual-ai/yields", chartType: "line", xKey: "maturity", yKey: "us" },
+  { id: "stocks", title: "Stock Indices", category: "markets", endpoint: "/api/visual-ai/stocks", chartType: "bar", xKey: "country", yKey: "pe" },
+  { id: "currencies", title: "Currency Pairs", category: "markets", endpoint: "/api/visual-ai/currencies", chartType: "bar", xKey: "currencyCode", yKey: "exchangeRate" },
+  { id: "energy", title: "Energy Prices", category: "commodities", endpoint: "/api/visual-ai/energy", chartType: "bar", xKey: "commodity", yKey: "price" },
+  { id: "agriculture", title: "Agricultural Commodities", category: "commodities", endpoint: "/api/visual-ai/agriculture", chartType: "bar", xKey: "commodity", yKey: "price" },
+  { id: "metals", title: "Precious Metals", category: "commodities", endpoint: "/api/visual-ai/metals", chartType: "bar", xKey: "metal", yKey: "price" },
+  { id: "debt", title: "Government Debt", category: "policy", endpoint: "/api/visual-ai/debt", chartType: "bar", xKey: "country", yKey: "debtToGdp" },
+  { id: "central-bank", title: "Central Bank Rates", category: "policy", endpoint: "/api/visual-ai/central-bank", chartType: "bar", xKey: "bank", yKey: "currentRate" },
+  { id: "fed-tools", title: "Fed Tools", category: "policy", endpoint: "/api/visual-ai/fed-tools", chartType: "bar", xKey: "label", yKey: "value" },
+  { id: "recession-prob", title: "Recession Probability", category: "policy", endpoint: "/api/visual-ai/global-recession-probability", chartType: "line", xKey: "date", yKey: "probability" },
+  { id: "cot-flow", title: "COT Flows", category: "markets", endpoint: "/api/visual-ai/cot-flow", chartType: "bar", xKey: "market", yKey: "nonCommercialNet" },
+  { id: "geopolitical", title: "Geopolitical Risk", category: "policy", endpoint: "/api/visual-ai/geopolitical-risk", chartType: "line", xKey: "date", yKey: "gpr" },
 ];
 
 export default function VisualAIPage() {
   const t = useTranslations("VisualAI");
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [widgets, setWidgets] = useState<WidgetData[]>(
-    WIDGETS.map((w) => ({ ...w, data: [], loading: false, error: null }))
+    WIDGETS.map((w) => ({ ...w, data: [], loading: false, error: null, xKey: w.xKey, yKey: w.yKey }))
   );
   const [selectedWidget, setSelectedWidget] = useState<WidgetData | null>(null);
 
@@ -89,8 +91,22 @@ export default function VisualAIPage() {
       }
 
       const data = await response.json();
+      let chartData: any[] = [];
+
+      if (widgetId === "recession-prob") {
+        chartData = data.history || data.data || [];
+      } else if (widgetId === "fed-tools") {
+        chartData = (data.data || []).map((s: any) => ({
+          label: s.label || s.id,
+          value: s.latest?.value ?? 0,
+          unit: s.unit,
+        }));
+      } else {
+        chartData = data.data || [];
+      }
+
       setWidgets((prev) =>
-        prev.map((w) => (w.id === widgetId ? { ...w, data: data.data || [], loading: false } : w))
+        prev.map((w) => (w.id === widgetId ? { ...w, data: chartData, loading: false } : w))
       );
     } catch (error) {
       setWidgets((prev) =>
@@ -138,7 +154,7 @@ export default function VisualAIPage() {
       return (
         <ResponsiveContainer width="100%" height={96}>
           <LineChart data={chartData}>
-            <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey={widget.yKey} stroke="#3b82f6" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       );
@@ -148,7 +164,7 @@ export default function VisualAIPage() {
       return (
         <ResponsiveContainer width="100%" height={96}>
           <BarChart data={chartData}>
-            <Bar dataKey="value" fill="#3b82f6" />
+            <Bar dataKey={widget.yKey} fill="#3b82f6" />
           </BarChart>
         </ResponsiveContainer>
       );
@@ -157,7 +173,7 @@ export default function VisualAIPage() {
     return (
       <ResponsiveContainer width="100%" height={96}>
         <ScatterChart data={chartData}>
-          <Scatter dataKey="value" fill="#3b82f6" />
+          <Scatter dataKey={widget.yKey} fill="#3b82f6" />
         </ScatterChart>
       </ResponsiveContainer>
     );
@@ -177,11 +193,11 @@ export default function VisualAIPage() {
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={widget.data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="date" stroke="#9ca3af" />
+            <XAxis dataKey={widget.xKey} stroke="#9ca3af" />
             <YAxis stroke="#9ca3af" />
             <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }} />
             <Legend />
-            <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} name={widget.title} />
+            <Line type="monotone" dataKey={widget.yKey} stroke="#3b82f6" strokeWidth={2} name={widget.title} />
           </LineChart>
         </ResponsiveContainer>
       );
@@ -192,11 +208,11 @@ export default function VisualAIPage() {
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={widget.data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="date" stroke="#9ca3af" />
+            <XAxis dataKey={widget.xKey} stroke="#9ca3af" angle={-35} textAnchor="end" height={80} interval={0} tick={{ fontSize: 11 }} />
             <YAxis stroke="#9ca3af" />
             <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }} />
             <Legend />
-            <Bar dataKey="value" fill="#3b82f6" name={widget.title} />
+            <Bar dataKey={widget.yKey} fill="#3b82f6" name={widget.title} />
           </BarChart>
         </ResponsiveContainer>
       );
@@ -209,7 +225,7 @@ export default function VisualAIPage() {
           <XAxis dataKey="x" stroke="#9ca3af" />
           <YAxis dataKey="y" stroke="#9ca3af" />
           <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }} />
-          <Scatter dataKey="value" fill="#3b82f6" name={widget.title} />
+          <Scatter dataKey={widget.yKey} fill="#3b82f6" name={widget.title} />
         </ScatterChart>
       </ResponsiveContainer>
     );

@@ -474,6 +474,121 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <StatPill label="Countries" value={String(countryData.global.totalCountries)} sub="Tracked economies" />
                   </div>
 
+                  {/* ── World Map ── */}
+                  {countryCycleMatrix.length > 0 && (() => {
+                    // Geographic coordinates (lon, lat) → SVG viewBox (0-1000, 0-500) using Mercator-like projection
+                    const geoToSvg = (lon: number, lat: number): [number, number] => {
+                      const x = ((lon + 180) / 360) * 1000;
+                      const latRad = (lat * Math.PI) / 180;
+                      const mercN = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+                      const y = 250 - (mercN / Math.PI) * 250;
+                      return [Math.round(x), Math.round(Math.max(20, Math.min(480, y)))];
+                    };
+                    const countryCoords: Record<string, [number, number]> = {
+                      US: [-98, 38], CA: [-106, 56], BR: [-51, -14], GB: [-1, 53], FR: [2, 47], DE: [10, 51],
+                      IT: [12, 43], ES: [-4, 40], NL: [5, 52], CH: [8, 47], JP: [138, 36], CN: [104, 35],
+                      IN: [79, 21], KR: [128, 36], AU: [134, -25],
+                    };
+                    const stageToColor = (s: string) => {
+                      const l = s.toLowerCase();
+                      if (l === 'expansion') return '#34d399';
+                      if (l === 'overheating') return '#fb923c';
+                      if (l === 'slowdown') return '#fbbf24';
+                      if (l === 'recovery') return '#22d3ee';
+                      if (l === 'contraction') return '#f87171';
+                      if (l === 'stagflation') return '#c084fc';
+                      return '#94a3b8';
+                    };
+                    return (
+                      <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06] mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Globe className="w-4 h-4 text-blue-400" />
+                            <span className="text-sm font-semibold text-white">World Economic Map</span>
+                          </div>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {[['Expansion', '#34d399'], ['Overheating', '#fb923c'], ['Slowdown', '#fbbf24'], ['Recovery', '#22d3ee'], ['Contraction', '#f87171'], ['Stagflation', '#c084fc'], ['Neutral', '#94a3b8']].map(([label, color]) => (
+                              <div key={label} className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color as string }} />
+                                <span className="text-[10px] text-gray-500">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <svg viewBox="0 0 1000 500" className="w-full" style={{ aspectRatio: '2/1' }}>
+                          <defs>
+                            <radialGradient id="mapGlow">
+                              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
+                              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                            </radialGradient>
+                          </defs>
+                          {/* Ocean background */}
+                          <rect x="0" y="0" width="1000" height="500" fill="#060a13" rx="8" />
+                          {/* Simplified continent outlines */}
+                          {/* North America */}
+                          <path d="M120,60 L180,55 L220,80 L260,90 L280,100 L290,120 L285,140 L270,160 L250,180 L240,200 L230,220 L220,230 L195,240 L170,255 L160,260 L150,240 L140,210 L135,190 L130,170 L128,150 L125,130 L120,105 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* South America */}
+                          <path d="M230,275 L260,265 L290,270 L310,280 L320,300 L325,330 L320,360 L310,385 L295,400 L280,410 L265,430 L255,445 L250,440 L240,420 L235,395 L230,370 L228,340 L225,310 L225,290 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Europe */}
+                          <path d="M450,70 L475,65 L500,60 L530,65 L545,80 L550,95 L545,110 L540,125 L530,135 L515,145 L505,155 L490,160 L475,155 L460,145 L450,135 L445,120 L440,105 L442,85 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Africa */}
+                          <path d="M460,175 L490,170 L530,175 L560,185 L575,210 L580,240 L575,270 L565,300 L555,330 L540,355 L520,370 L500,375 L480,365 L465,345 L455,320 L450,290 L448,260 L450,230 L452,200 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Asia */}
+                          <path d="M560,55 L610,50 L660,55 L710,60 L760,70 L800,85 L820,100 L830,120 L825,150 L810,170 L790,185 L760,190 L730,200 L700,210 L670,215 L640,210 L615,200 L595,185 L580,170 L570,150 L565,130 L560,105 L558,80 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* India subcontinent */}
+                          <path d="M640,210 L665,200 L685,210 L690,235 L680,260 L665,275 L650,265 L640,245 L636,225 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Japan */}
+                          <path d="M840,110 L848,100 L855,115 L850,130 L842,125 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Korea */}
+                          <path d="M825,115 L832,108 L838,118 L833,126 L827,122 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Australia */}
+                          <path d="M780,340 L830,330 L870,335 L890,350 L885,375 L870,395 L845,405 L820,400 L800,390 L785,375 L778,355 Z" fill="#1e293b" fillOpacity="0.5" stroke="#334155" strokeWidth="0.8" />
+                          {/* Grid lines */}
+                          {[100, 200, 300, 400].map(y => (
+                            <line key={`h${y}`} x1="0" y1={y} x2="1000" y2={y} stroke="#1e293b" strokeWidth="0.3" strokeOpacity="0.4" />
+                          ))}
+                          {[200, 400, 600, 800].map(x => (
+                            <line key={`v${x}`} x1={x} y1="0" x2={x} y2="500" stroke="#1e293b" strokeWidth="0.3" strokeOpacity="0.4" />
+                          ))}
+                          {/* Equator */}
+                          <line x1="0" y1="250" x2="1000" y2="250" stroke="#334155" strokeWidth="0.4" strokeDasharray="6 4" strokeOpacity="0.3" />
+                          {/* Country markers */}
+                          {countryCycleMatrix.map((row) => {
+                            const coord = countryCoords[row.code];
+                            if (!coord) return null;
+                            const [cx, cy] = geoToSvg(coord[0], coord[1]);
+                            const fill = stageToColor(row.stage);
+                            const isSel = selectedCountry === row.code;
+                            const fmt = (v: number, d = 1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+                            return (
+                              <g key={`map-${row.code}`} onClick={() => setSelectedCountry(isSel ? null : row.code)} style={{ cursor: 'pointer' }}>
+                                <title>{`${row.country} · ${row.stage}\nGDP ${fmt(row.growth)}% · CPI ${fmt(row.inflation)}% · Unemp ${fmt(row.unemployment)}%\nRate ${fmt(row.rate, 2)}% · Risk: ${row.risk}`}</title>
+                                {/* Glow ring */}
+                                <circle cx={cx} cy={cy} r={isSel ? 22 : 16} fill={fill} fillOpacity={isSel ? 0.12 : 0.06} />
+                                {isSel && <circle cx={cx} cy={cy} r="28" fill="none" stroke={fill} strokeOpacity="0.3" strokeWidth="1" />}
+                                {/* Marker */}
+                                <circle cx={cx} cy={cy} r={isSel ? 8 : 6} fill={fill} fillOpacity="0.9" stroke={isSel ? '#fff' : fill} strokeWidth={isSel ? 2 : 1} strokeOpacity={isSel ? 0.8 : 0.4} />
+                                {/* Label */}
+                                <text x={cx} y={cy - (isSel ? 14 : 11)} textAnchor="middle" fontSize={isSel ? '11' : '9'} fill={isSel ? '#fff' : '#94a3b8'} fontWeight={isSel ? '700' : '600'}>
+                                  {row.code}
+                                </text>
+                                {/* Selected detail badge */}
+                                {isSel && (
+                                  <g>
+                                    <rect x={cx + 12} y={cy - 20} width="90" height="38" rx="6" fill="rgba(2,6,23,0.95)" stroke={fill} strokeWidth="0.8" />
+                                    <text x={cx + 17} y={cy - 6} fontSize="9" fill="#e2e8f0" fontWeight="600">{row.stage}</text>
+                                    <text x={cx + 17} y={cy + 7} fontSize="8" fill="#94a3b8">GDP {fmt(row.growth)}% · CPI {fmt(row.inflation)}%</text>
+                                  </g>
+                                )}
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+                    );
+                  })()}
+
                   {/* Cycle Curve */}
                   {(() => {
                     const g = countryData?.global?.averageGrowth ?? 0;

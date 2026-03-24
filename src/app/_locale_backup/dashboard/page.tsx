@@ -690,12 +690,12 @@ export default function DashboardPage() {
 																	const opt = optsByTicker[item.ticker];
 																	return (
 														<tr key={item.ticker} className="hover:bg-slate-700/40">
-															<td className={`px-2 py-1 ${wideSymbols ? 'min-w-[220px]' : 'min-w-[140px]'}`}>
-																<div className="flex flex-col">
-																	<span className="font-medium text-white">{item.ticker} {item.direction && <span className="text-[10px] text-gray-400">{item.direction}</span>}</span>
-																	<span title={item.name} className={`text-[10px] text-gray-400 ${wideSymbols ? 'whitespace-normal' : 'truncate max-w-[160px]'}`}>{item.name}</span>
-																	{item.sector && <span className="text-[10px] text-blue-400">{item.sector}</span>}
+															<td className="px-2 py-1 min-w-[90px]">
+																<div className="flex items-center gap-1.5">
+																	<span className="font-bold text-white tracking-tight" title={item.name}>{item.ticker}</span>
+																	{item.direction && <span className="text-[9px] text-gray-500">{item.direction}</span>}
 																</div>
+																{item.sector && <span className="text-[9px] text-blue-400/70">{item.sector}</span>}
 															</td>
 															<td className="px-2 py-1">
 																<div className="flex flex-col">
@@ -707,6 +707,16 @@ export default function DashboardPage() {
 															<td className="px-2 py-1 tabular-nums">{item.volume || '—'}</td>
 															<td className="px-2 py-1"><span className={`inline-flex px-1 py-0.5 rounded ${getTrendColor(item.trend)} font-semibold`}>{item.trend}</span></td>
 																			<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
+															<td className="px-2 py-1 text-center">{(() => {
+																const perf = parsePerf(item.performance);
+																const vol = parseVolume(item.volume);
+																const trendW = item.trend === 'UPTREND' ? 1 : item.trend === 'DOWNTREND' ? -1 : 0;
+																const dsW = item.demandSupply === 'Strong Demand' ? 1 : item.demandSupply === 'Weak Demand' ? -1 : 0;
+																const raw = (perf * 0.4) + (trendW * 20) + (dsW * 15) + (vol > 1e6 ? 5 : 0);
+																const dex = Math.max(-100, Math.min(100, Math.round(raw)));
+																const cls = dex > 20 ? 'text-emerald-400 font-semibold' : dex < -20 ? 'text-red-400 font-semibold' : 'text-gray-300';
+																return <span className={cls}>{dex > 0 ? '+' : ''}{dex}</span>;
+															})()}</td>
 																			<td className="px-2 py-1 text-gray-300">
 																				<span className="relative group inline-flex items-center gap-1">
 																					{opt?.optionsSentiment || item.optionsSentiment}
@@ -754,13 +764,11 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualAtm || item.unusualAtm}</td>
 															{/* RS% column removed */}
 															<td className="px-2 py-1 text-center"><AIScoreBadge item={item} /></td>
-															<td className="px-2 py-1"><AISignalBadge item={item} /></td>
-															<td className="px-2 py-1 text-gray-300">{item.category || '—'}</td>
 														</tr>
 																	);
 																})}
 													{!filteredData.length && (
-														<tr><td colSpan={15} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
+														<tr><td colSpan={16} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}
 												</tbody>
 											</table>

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -64,18 +64,9 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-        <div className="mt-3 flex items-center justify-between text-sm">
-          <button
-            onClick={async () => { await signInWithGoogle(); }}
-            className="text-white/80 hover:text-white"
-            type="button"
-          >
-            Continue with Google
-          </button>
-          <div className="flex items-center gap-3">
-            <a href="/forgot-password" className="text-blue-400 hover:text-blue-300">Forgot password?</a>
-            <a href="/signup" className="text-white/80 hover:text-white">Create account</a>
-          </div>
+        <div className="mt-3 flex items-center justify-end text-sm gap-3">
+          <a href="/forgot-password" className="text-blue-400 hover:text-blue-300">Forgot password?</a>
+          <a href="/signup" className="text-white/80 hover:text-white">Create account</a>
         </div>
       </div>
     </div>

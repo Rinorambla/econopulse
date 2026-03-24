@@ -1319,11 +1319,12 @@ export default function AIPortfolioPage() {
     if (!portfolioData || !portfolioData.holdings) return null;
   // Per-portfolio AI Entry/Exit chips removed per requirements
     return (
-  <div key={portfolioKey} id={`portfolio-${portfolioKey}`} className="bg-slate-800 border border-slate-600 rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow scroll-mt-20">
-        <div className="border-b border-slate-600 pb-4 mb-4 flex items-start justify-between gap-4">
+  <div key={portfolioKey} id={`portfolio-${portfolioKey}`} className="group relative bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-2xl shadow-lg p-6 hover:border-white/[0.12] hover:shadow-xl transition-all duration-300 scroll-mt-20 overflow-hidden">
+        <div className="pointer-events-none absolute -top-10 -right-10 w-32 h-32 rounded-full bg-indigo-500/5 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <div className="border-b border-white/[0.06] pb-4 mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-white mb-1">{portfolioData.name}</h3>
-            <p className="text-sm text-gray-400">{portfolioData.description}</p>
+            <p className="text-xs text-gray-500 leading-relaxed">{portfolioData.description}</p>
             {typeof portfolioData.aiScore === 'number' && (
               <div className="mt-1 text-[10px] tracking-wide uppercase text-gray-500">
                 AI Score: <span className={`${portfolioData.aiScore>75?'text-green-400':portfolioData.aiScore>50?'text-blue-400':portfolioData.aiScore>35?'text-amber-400':'text-red-400'}`}>{portfolioData.aiScore}</span> • {portfolioData.aiScore>75?'Strong':portfolioData.aiScore>50?'Moderate':portfolioData.aiScore>35?'Weak':'Very Weak'} momentum
@@ -1342,51 +1343,42 @@ export default function AIPortfolioPage() {
         </div>
         
         {/* Performance Section */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="text-center p-3 bg-slate-700 rounded-lg">
-            <div className="text-xs font-medium text-gray-400 mb-1">1D</div>
-            <div className={`text-sm font-bold ${getPerformanceColor(portfolioData.performance?.daily || '0.00%')}`}>
-              {portfolioData.performance?.daily || '0.00%'}
-            </div>
-          </div>
-          <div className="text-center p-3 bg-slate-700 rounded-lg">
-            <div className="text-xs font-medium text-gray-400 mb-1">1W</div>
-            <div className={`text-sm font-bold ${getPerformanceColor(portfolioData.performance?.weekly || '0.00%')}`}>
-              {portfolioData.performance?.weekly || '0.00%'}
-            </div>
-          </div>
-          <div className="text-center p-3 bg-slate-700 rounded-lg">
-            <div className="text-xs font-medium text-gray-400 mb-1">1M</div>
-            <div className={`text-sm font-bold ${getPerformanceColor(portfolioData.performance?.monthly || '0.00%')}`}>
-              {portfolioData.performance?.monthly || '0.00%'}
-            </div>
-          </div>
-          <div className="text-center p-3 bg-slate-700 rounded-lg">
-            <div className="text-xs font-medium text-gray-400 mb-1">1Y</div>
-            <div className={`text-sm font-bold ${getPerformanceColor(portfolioData.performance?.yearly || '0.00%')}`}>
-              {portfolioData.performance?.yearly || '0.00%'}
-            </div>
-          </div>
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {[
+            { label: '1D', key: 'daily' },
+            { label: '1W', key: 'weekly' },
+            { label: '1M', key: 'monthly' },
+            { label: '1Y', key: 'yearly' },
+          ].map(({ label, key }) => {
+            const val = portfolioData.performance?.[key] || '0.00%';
+            const num = parseFloat(String(val).replace(/[%+]/g, ''));
+            return (
+              <div key={key} className="text-center p-2.5 bg-white/[0.03] border border-white/[0.04] rounded-xl">
+                <div className="text-[10px] font-medium text-gray-500 mb-1">{label}</div>
+                <div className={`text-sm font-bold ${num >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{val}</div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Holdings */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-600 pb-1 mb-3">
-            <h4 className="text-sm font-semibold text-gray-300">Holdings (ETFs)</h4>
-            <div className="flex gap-2">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Holdings (ETFs)</h4>
+            <div className="flex gap-1.5">
               {portfolioData.underlyingStocks?.length > 0 && (
                 <button
                   onClick={() => loadUnderlyingStocksOnDemand(portfolioKey, portfolioData)}
                   disabled={loadingStocks}
-                  className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  className="text-[11px] px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {loadingStocks ? '⏳ Loading...' : `📊 View Stocks (${portfolioData.underlyingStocks.length})`}
+                  {loadingStocks ? '⏳ Loading...' : `📊 Stocks (${portfolioData.underlyingStocks.length})`}
                 </button>
               )}
               {portfolioData.holdings?.length > 5 && (
                 <button
                   onClick={() => toggleHoldingsExpanded(portfolioKey)}
-                  className="text-xs px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded transition-colors"
+                  className="text-[11px] px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded-lg transition-colors"
                 >
                   {expandedHoldings.has(portfolioKey) ? '▲ Less' : `▼ All`}
                 </button>
@@ -1394,13 +1386,22 @@ export default function AIPortfolioPage() {
             </div>
           </div>
           {portfolioData.holdings?.slice(0, expandedHoldings.has(portfolioKey) ? portfolioData.holdings.length : 5).map((stock: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-slate-700 rounded-lg gap-3 overflow-hidden">
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-sm text-white">{stock.ticker}</div>
-                <div className="text-xs text-gray-400 truncate">{stock.name}</div>
-                <div className="text-xs text-blue-400 mt-1">Weight: {stock.weight}%</div>
+            <div key={index} className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/[0.04] rounded-xl gap-3 overflow-hidden hover:bg-white/[0.05] transition-colors">
+              <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                <img
+                  src={`https://assets.parqet.com/logos/symbol/${stock.ticker}?format=jpg`}
+                  alt=""
+                  className="w-7 h-7 rounded-full bg-slate-700 object-cover flex-shrink-0 ring-1 ring-white/10"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  loading="lazy"
+                />
+                <div className="min-w-0">
+                  <div className="font-bold text-sm text-white">{stock.ticker}</div>
+                  <div className="text-[10px] text-gray-500 truncate">{stock.name}</div>
+                </div>
+                <span className="ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">{stock.weight}%</span>
               </div>
-              <div className="shrink-0 text-right ml-4 w-28 sm:w-32">
+              <div className="shrink-0 text-right ml-3 w-24">
                 <div className="text-sm font-semibold text-white whitespace-nowrap leading-tight">${typeof stock.price === 'number' ? stock.price.toFixed(2) : '0.00'}</div>
                 <div className={`text-xs font-medium whitespace-nowrap leading-tight ${getPerformanceColor(stock.change || stock.performance?.daily || '0.00%')}`}>
                   {stock.change || stock.performance?.daily || '0.00%'}
@@ -1417,45 +1418,54 @@ export default function AIPortfolioPage() {
   <RequirePlan min="premium">
     <div className="min-h-screen bg-[var(--background)] text-white">
       {/* Navigation Header */}
-      <div className="bg-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-6 py-4">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-white/[0.06]">
+        <div className="container mx-auto px-6 py-3">
           <div className="flex items-center">
-            <NavigationLink href="/" className="flex items-center space-x-2 text-gray-300 hover:text-white">
-              <ArrowLeftIcon className="h-5 w-5" />
-              <span>Back to Home</span>
+            <NavigationLink href="/" className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
+              <ArrowLeftIcon className="h-4 w-4" />
+              <span className="text-sm">Home</span>
             </NavigationLink>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto p-6 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-white">
-            ✨ AI Portfolio Generator
-          </h1>
-          <p className="text-gray-400">
-            Create personalized investment portfolios with artificial intelligence
-          </p>
+        {/* Hero Section */}
+        <div className="relative mb-10 overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-indigo-600/10 via-slate-900/60 to-emerald-600/10 p-8 sm:p-10">
+          <div className="pointer-events-none absolute -top-20 -right-20 w-60 h-60 rounded-full bg-indigo-500/10 blur-[80px]" />
+          <div className="pointer-events-none absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-emerald-500/10 blur-[80px]" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-medium">
+              <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span></span>
+              AI-Powered
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
+              Portfolio Intelligence
+            </h1>
+            <p className="text-white/50 max-w-xl text-base">
+              Create personalized investment portfolios with AI, explore regime-based allocations, and track live ETF & stock performance.
+            </p>
+          </div>
         </div>
 
         <div className="space-y-6">
-          <div className="flex space-x-1 bg-slate-800 p-1 rounded-lg">
+          <div className="flex space-x-1 bg-white/[0.03] border border-white/[0.06] p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('ai-generator')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeTab === 'ai-generator'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-gray-400 hover:text-white hover:bg-slate-700'
+                  ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
               }`}
             >
               AI Generator
             </button>
             <button
               onClick={() => setActiveTab('economic-portfolios')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeTab === 'economic-portfolios'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-gray-400 hover:text-white hover:bg-slate-700'
+                  ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/[0.05]'
               }`}
             >
               Economic Portfolios
@@ -1464,13 +1474,14 @@ export default function AIPortfolioPage() {
 
           {activeTab === 'ai-generator' && (
             <div className="space-y-6">
-              <div className="bg-slate-800 p-6 rounded-lg border border-slate-600">
-                <h2 className="text-xl font-semibold mb-4 text-white">
-                  ✨ Generate your personalized portfolio
+              <div className="bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.06] rounded-2xl p-6 sm:p-8">
+                <h2 className="text-xl font-bold mb-5 text-white flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400">✨</span>
+                  Generate Your Portfolio
                 </h2>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-gray-400">
                       Investment Amount ($)
                     </label>
                     <input
@@ -1478,27 +1489,27 @@ export default function AIPortfolioPage() {
                       placeholder="e.g. 10000"
                       value={investment}
                       onChange={(e) => setInvestment(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 transition-all"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-300">
-                      Describe your investment goals
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-gray-400">
+                      Investment Goals & Strategy
                     </label>
                     <textarea
                       placeholder="e.g. I want a diversified portfolio with focus on technology and long-term growth..."
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       rows={4}
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 transition-all"
                     />
                   </div>
                   
                   <button 
                     onClick={generatePortfolio}
                     disabled={!prompt.trim() || !investment.trim() || isGenerating}
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white py-3 px-6 rounded-xl font-semibold shadow-lg shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-500/30"
                   >
                     {isGenerating ? (
                       <>⏳ Generating portfolio...</>
@@ -1510,51 +1521,59 @@ export default function AIPortfolioPage() {
               </div>
 
               {(genError || generatedHoldings) && (
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-600 space-y-6">
+                <div className="bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.06] p-6 rounded-2xl space-y-6">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-white flex items-center gap-2">📈 Generated Portfolio {genStats && <span className="text-xs font-normal text-gray-400">(Real Market Data)</span>}</h2>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 text-sm">📈</span>
+                      Generated Portfolio {genStats && <span className="text-xs font-normal text-gray-500">(Real Market Data)</span>}
+                    </h2>
                     {genStats && (
-                      <button onClick={()=> navigator.clipboard.writeText(generatedPortfolioText)} className="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 border border-slate-500 text-gray-300">Copy Markdown</button>
+                      <button onClick={()=> navigator.clipboard.writeText(generatedPortfolioText)} className="text-[11px] px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-gray-400 transition-colors">Copy Markdown</button>
                     )}
                   </div>
                   {genError && (
-                    <div className="text-red-400 text-sm bg-red-900/20 border border-red-700 rounded p-3">{genError}</div>
+                    <div className="text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-xl p-3">{genError}</div>
                   )}
                   {generatedHoldings && genStats && (
                     <>
-                      <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-4 text-xs">
-                        <div className="bg-slate-700 rounded p-3">
-                          <div className="text-gray-400 mb-1">Invested</div>
-                          <div className="text-green-400 font-semibold">${genStats.invested.toFixed(2)}</div>
+                      <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3">
+                          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Invested</div>
+                          <div className="text-green-400 font-bold">${genStats.invested.toFixed(2)}</div>
                         </div>
-                        <div className="bg-slate-700 rounded p-3">
-                          <div className="text-gray-400 mb-1">Cash Buffer</div>
-                          <div className="text-blue-400 font-semibold">${genStats.cash.toFixed(2)}</div>
+                        <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3">
+                          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Cash Buffer</div>
+                          <div className="text-blue-400 font-bold">${genStats.cash.toFixed(2)}</div>
                         </div>
-                        <div className="bg-slate-700 rounded p-3">
-                          <div className="text-gray-400 mb-1">Diversification</div>
-                          <div className="text-amber-400 font-semibold">{genStats.diversification}%</div>
+                        <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3">
+                          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Diversification</div>
+                          <div className="text-amber-400 font-bold">{genStats.diversification}%</div>
                         </div>
-                        <div className="bg-slate-700 rounded p-3">
-                          <div className="text-gray-400 mb-1">Risk Profile</div>
-                          <div className="font-semibold capitalize {genStats.risk==='high'?'text-red-400':genStats.risk==='low'?'text-green-400':'text-yellow-400'}">{genStats.risk}</div>
+                        <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-3">
+                          <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Risk Profile</div>
+                          <div className="font-bold capitalize {genStats.risk==='high'?'text-red-400':genStats.risk==='low'?'text-green-400':'text-yellow-400'}">{genStats.risk}</div>
                         </div>
                       </div>
-                      <div className="overflow-auto rounded border border-slate-600">
+                      <div className="overflow-auto rounded-xl border border-white/[0.06]">
                         <table className="w-full text-xs">
-                          <thead className="bg-slate-700 text-gray-300">
+                          <thead className="bg-white/[0.04] text-gray-400">
                             <tr>
-                              {['Symbol','Role','Target %','Real %','Shares','Price','Value','Daily %','Monthly %','Yearly %'].map(h=> <th key={h} className="px-2 py-1 text-left font-semibold">{h}</th>)}
+                              {['Symbol','Role','Target %','Real %','Shares','Price','Value','Daily %','Monthly %','Yearly %'].map(h=> <th key={h} className="px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wider">{h}</th>)}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-700">
+                          <tbody className="divide-y divide-white/[0.04]">
                             {generatedHoldings.map(h=> {
                               const d = parseFloat(h.perf?.daily?.replace('%','')||'0');
                               const m = parseFloat(h.perf?.monthly?.replace('%','')||'0');
                               const y = parseFloat(h.perf?.yearly?.replace('%','')||'0');
                               return (
-                                <tr key={h.symbol} className="hover:bg-slate-700/40">
-                                  <td className="px-2 py-1 font-semibold text-white whitespace-nowrap">{h.symbol}</td>
+                                <tr key={h.symbol} className="hover:bg-white/[0.03] transition-colors">
+                                  <td className="px-2 py-1 whitespace-nowrap">
+                                    <div className="flex items-center gap-1.5">
+                                      <img src={`https://assets.parqet.com/logos/symbol/${h.symbol}?format=jpg`} alt="" className="w-5 h-5 rounded-full bg-slate-600 object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} loading="lazy" />
+                                      <span className="font-semibold text-white">{h.symbol}</span>
+                                    </div>
+                                  </td>
                                   <td className="px-2 py-1 text-gray-400 whitespace-nowrap">{h.role}</td>
                                   <td className="px-2 py-1">{h.targetWeight.toFixed(1)}</td>
                                   <td className="px-2 py-1">{h.realizedWeight.toFixed(1)}</td>
@@ -1571,7 +1590,7 @@ export default function AIPortfolioPage() {
                         </table>
                       </div>
                       <div className="space-y-3">
-                        <div className="bg-slate-700 p-4 rounded-md text-[11px] text-gray-400 leading-relaxed border border-slate-600">
+                        <div className="bg-white/[0.03] border border-white/[0.04] p-4 rounded-xl text-[11px] text-gray-500 leading-relaxed">
                           <p className="mb-1"><strong className="text-gray-300">Methodology:</strong> We infer risk profile & thematic emphasis from your text, map to asset class target weights (equities, factors, international, bonds, hedges, thematic, crypto), fetch live quotes (Yahoo Finance), compute share counts using floor division, and report residual as cash buffer. Diversification score = normalized Shannon entropy of target weights.</p>
                         </div>
                         <div
@@ -1598,7 +1617,7 @@ export default function AIPortfolioPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-gray-300 mb-2">Markdown Summary</h3>
-                        <pre className="bg-slate-900/60 border border-slate-600 rounded p-3 text-[11px] whitespace-pre-wrap text-gray-300 max-h-64 overflow-auto">{generatedPortfolioText}</pre>
+                        <pre className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3 text-[11px] whitespace-pre-wrap text-gray-400 max-h-64 overflow-auto">{generatedPortfolioText}</pre>
                       </div>
                     </>
                   )}
@@ -1611,10 +1630,11 @@ export default function AIPortfolioPage() {
             <div className="space-y-6">
               <div className="mb-6 flex justify-between items-center">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2 text-white">
-                    💼 Economic Portfolios
+                  <h2 className="text-2xl font-bold mb-2 text-white flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400">💼</span>
+                    Economic Portfolios
                   </h2>
-                  <div className="flex items-center space-x-2 text-sm text-gray-400">
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
                     <span>Ready-to-use portfolios for different economic scenarios</span>
                     {lastUpdated && (
                       <span>• Last updated: {new Date(lastUpdated).toLocaleTimeString()}</span>
@@ -1623,10 +1643,10 @@ export default function AIPortfolioPage() {
                 </div>
                 <div className="shrink-0 text-right space-y-2">
                   {topPick && (
-                    <div className="bg-gradient-to-br from-slate-700/70 via-slate-800 to-slate-900/80 border border-slate-600 rounded-lg p-3 w-72 text-left shadow-lg">
+                    <div className="bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.06] rounded-xl p-3 w-72 text-left shadow-lg">
                       <div className="flex items-center justify-between mb-1">
                         <div className="text-[11px] text-gray-300 font-medium">AI Best Entry Now</div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-500 bg-slate-900/40 text-gray-300">{friendlyRegimeLabel(currentRegime)}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">{friendlyRegimeLabel(currentRegime)}</span>
                       </div>
                       <div className="text-sm font-semibold text-white truncate">{topPick.name}</div>
                       <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1649,7 +1669,7 @@ export default function AIPortfolioPage() {
                           </ul>
                         </div>
                       ) : null}
-                      <a href={`#portfolio-${topPick.key}`} className="mt-2 inline-block text-[11px] text-blue-300 hover:text-blue-200">Open portfolio →</a>
+                      <a href={`#portfolio-${topPick.key}`} className="mt-2 inline-block text-[11px] text-indigo-300 hover:text-indigo-200 transition-colors">Open portfolio →</a>
                     </div>
                   )}
                 </div>
@@ -1664,19 +1684,19 @@ export default function AIPortfolioPage() {
               ) : economicPortfolios ? (
                 <>
                   {/* Performance Comparison Chart */}
-                  <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-lg p-6 mb-6">
+                  <div className="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-2xl shadow-lg p-6 mb-6">
                     <div className="mb-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-md bg-slate-700/80 border border-slate-600 flex items-center justify-center text-blue-300">📊</div>
+                        <div className="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/20 flex items-center justify-center text-indigo-300">📊</div>
                         <div>
                           <h3 className="text-xl font-bold text-white">Performance Overview</h3>
-                          <p className="text-xs text-slate-400">Compare portfolios across timeframes</p>
+                          <p className="text-xs text-gray-500">Compare portfolios across timeframes</p>
                         </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 gap-6">
                       {/* Bar Chart - Performance by Selected Period (Enhanced, now includes 1D) */}
-                      <div className="bg-slate-700 rounded-lg p-4">
+                      <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
                           <h4 className="text-lg font-semibold text-white">{barPeriod==='daily'?'Daily':barPeriod==='weekly'?'Weekly':barPeriod==='monthly'?'Monthly':barPeriod==='quarterly'?'Quarterly':'Yearly'} Performance (%)</h4>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1684,13 +1704,13 @@ export default function AIPortfolioPage() {
                               <button
                                 key={p}
                                 onClick={()=>setBarPeriod(p)}
-                                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${barPeriod===p?'bg-blue-600 text-white border-blue-500':'bg-slate-800 text-gray-400 border-slate-600 hover:text-white'}`}
+                                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${barPeriod===p?'bg-indigo-600 text-white border-indigo-500 shadow-sm shadow-indigo-600/20':'bg-white/[0.04] text-gray-400 border-white/[0.06] hover:text-white'}`}
                                 title={p==='daily'?'Daily':p==='weekly'?'Weekly':p==='monthly'?'Monthly':p==='quarterly'?'Quarterly':'Yearly'}
                               >
                                 {p==='daily'?'1D':p==='weekly'?'1W':p==='monthly'?'1M':p==='quarterly'?'3M':'1Y'}
                               </button>
                             ))}
-                            <button onClick={()=>setBarSort(s=> s==='performance'?'name':'performance')} className="px-2.5 py-1 text-xs rounded-md border bg-slate-800 text-gray-400 border-slate-600 hover:text-white" title="Toggle sort">
+                            <button onClick={()=>setBarSort(s=> s==='performance'?'name':'performance')} className="px-2.5 py-1 text-xs rounded-lg border bg-white/[0.04] text-gray-400 border-white/[0.06] hover:text-white transition-colors" title="Toggle sort">
                               Sort: {barSort==='performance'?'Perf':'Name'}
                             </button>
                           </div>
@@ -1768,7 +1788,7 @@ export default function AIPortfolioPage() {
                   </div>
                 </>
               ) : (
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-600 text-center">
+                <div className="bg-white/[0.03] border border-white/[0.06] p-6 rounded-2xl text-center">
                   <p className="text-gray-400">
                     Error loading economic portfolios.
                   </p>
@@ -1783,14 +1803,15 @@ export default function AIPortfolioPage() {
 
       {/* Individual Stocks Modal */}
       {stocksModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setStocksModal({ ...stocksModal, open: false })}>
-          <div className="bg-slate-800 rounded-lg max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-600 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" onClick={() => setStocksModal({ ...stocksModal, open: false })}>
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-white/[0.08] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="p-4 border-b border-slate-700 bg-slate-900/50">
+            <div className="p-4 border-b border-white/[0.06] bg-white/[0.02]">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-white mb-1">
-                    📊 Individual Stocks - {stocksModal.sector}
+                  <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600/20 text-indigo-300 text-sm">📊</span>
+                    Individual Stocks - {stocksModal.sector}
                   </h2>
                   <p className="text-sm text-gray-400">
                     Top performing stocks from {stocksModal.portfolio}
@@ -1798,7 +1819,7 @@ export default function AIPortfolioPage() {
                 </div>
                 <button
                   onClick={() => setStocksModal({ ...stocksModal, open: false })}
-                  className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-slate-700 transition-colors"
+                  className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/[0.06] transition-colors"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1811,12 +1832,21 @@ export default function AIPortfolioPage() {
             <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)]">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {stocksModal.stocks.map((stock, index) => (
-                  <div key={index} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600 hover:border-blue-500/50 transition-all">
+                  <div key={index} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-4 hover:border-indigo-500/30 hover:bg-white/[0.05] transition-all duration-200">
                     {/* Stock Header */}
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-white text-base mb-1">{stock.ticker}</div>
-                        <div className="text-xs text-gray-400 line-clamp-2 leading-tight">{stock.name}</div>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <img
+                          src={`https://assets.parqet.com/logos/symbol/${stock.ticker}?format=jpg`}
+                          alt=""
+                          className="w-8 h-8 rounded-full bg-slate-600 object-cover flex-shrink-0 ring-1 ring-white/10"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          loading="lazy"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-bold text-white text-base">{stock.ticker}</div>
+                          <div className="text-xs text-gray-400 line-clamp-1 leading-tight">{stock.name}</div>
+                        </div>
                       </div>
                       <div className="ml-2 text-right shrink-0">
                         <div className="text-sm font-bold text-white">${stock.price.toFixed(2)}</div>
@@ -1828,32 +1858,32 @@ export default function AIPortfolioPage() {
 
                     {/* Weight Badge */}
                     <div className="mb-3">
-                      <span className="inline-block px-2 py-0.5 bg-blue-600/20 text-blue-400 text-xs rounded-full font-medium">
+                      <span className="inline-block px-2 py-0.5 bg-indigo-600/20 text-indigo-300 text-xs rounded-lg font-medium border border-indigo-500/20">
                         Suggested: {stock.weight}%
                       </span>
                     </div>
 
                     {/* Performance Grid */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-800/50 rounded p-2">
+                      <div className="bg-white/[0.03] border border-white/[0.04] rounded-lg p-2">
                         <div className="text-gray-500 text-[10px] mb-0.5">1W</div>
                         <div className={`font-semibold ${getPerformanceColor(stock.performance.weekly)}`}>
                           {stock.performance.weekly}
                         </div>
                       </div>
-                      <div className="bg-slate-800/50 rounded p-2">
+                      <div className="bg-white/[0.03] border border-white/[0.04] rounded-lg p-2">
                         <div className="text-gray-500 text-[10px] mb-0.5">1M</div>
                         <div className={`font-semibold ${getPerformanceColor(stock.performance.monthly)}`}>
                           {stock.performance.monthly}
                         </div>
                       </div>
-                      <div className="bg-slate-800/50 rounded p-2">
+                      <div className="bg-white/[0.03] border border-white/[0.04] rounded-lg p-2">
                         <div className="text-gray-500 text-[10px] mb-0.5">3M</div>
                         <div className={`font-semibold ${getPerformanceColor(stock.performance.quarterly)}`}>
                           {stock.performance.quarterly}
                         </div>
                       </div>
-                      <div className="bg-slate-800/50 rounded p-2">
+                      <div className="bg-white/[0.03] border border-white/[0.04] rounded-lg p-2">
                         <div className="text-gray-500 text-[10px] mb-0.5">1Y</div>
                         <div className={`font-semibold ${getPerformanceColor(stock.performance.yearly)}`}>
                           {stock.performance.yearly}
@@ -1866,7 +1896,7 @@ export default function AIPortfolioPage() {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-700 bg-slate-900/50">
+            <div className="p-4 border-t border-white/[0.06] bg-white/[0.02]">
               <div className="text-xs text-gray-500 space-y-1">
                 <p>
                   <strong className="text-gray-400">Note:</strong> These are suggested individual stocks you can invest in instead of ETFs. 

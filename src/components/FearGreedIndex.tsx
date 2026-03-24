@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, BoltIcon } from '@heroicons/react/24/outline';
-import MarketParticles from './MarketParticles';
 
 interface MarketData {
   fearGreedIndex: number;
@@ -30,118 +29,121 @@ const FearGreedIndex = () => {
     if (index < 75) return 'Greed';
     return 'Extreme Greed';
   };
-  const getIndexColor = (index: number): string => {
-    if (index < 25) return 'from-red-500 to-red-700';
-    if (index < 45) return 'from-orange-500 to-red-500';
-    if (index < 55) return 'from-yellow-500 to-orange-500';
-    if (index < 75) return 'from-green-500 to-yellow-500';
-    return 'from-green-400 to-green-600';
-  };
-  const getGlowColor = (index: number): string => {
-    if (index < 25) return 'shadow-red-500/50';
-    if (index < 45) return 'shadow-orange-500/50';
-    if (index < 55) return 'shadow-yellow-500/50';
-    if (index < 75) return 'shadow-green-500/50';
-    return 'shadow-green-400/50';
+  const getRingColor = (index: number): string => {
+    if (index < 25) return '#ef4444';
+    if (index < 45) return '#f97316';
+    if (index < 55) return '#eab308';
+    if (index < 75) return '#22c55e';
+    return '#4ade80';
   };
 
-  useEffect(() => {
-    const fetchReal = async () => {
-      try {
-        const r = await fetch('/api/market-sentiment-new', { cache: 'no-store' });
-        if (!r.ok) throw new Error('failed');
-        const json = await r.json();
-        
-        // Log to debug if values are stuck
-        console.log('📊 Fear & Greed Update:', {
-          index: json.fearGreedIndex,
-          vol: json.volatility,
-          trend: json.trend,
-          updated: json.lastUpdated
-        });
-        
-        setData(json);
-      } catch (e) {
-        console.warn('❌ Fear & Greed API failed, using fallback');
-        const now = Date.now();
-        const cycle = Math.sin(Math.floor(now / 60000) / 5);
-        const fg = Math.round(50 + cycle * 15);
-        const vol = Math.round(15 + Math.abs(cycle) * 10);
-        const trend: 'up' | 'down' | 'neutral' = fg > 60 ? 'up' : fg < 40 ? 'down' : 'neutral';
-        setData(d => ({
-          ...d,
-          fearGreedIndex: fg,
-          trend,
-          volatility: vol,
-          aiPrediction: 'Fallback neutral composite displayed (live feed unavailable).',
-          sentiment: getSentiment(fg),
-          lastUpdated: new Date().toISOString()
-        }));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchReal();
-    const id = setInterval(fetchReal, 120000);
-    return () => clearInterval(id);
+  const fetchReal = useCallback(async () => {
+    try {
+      const r = await fetch('/api/market-sentiment-new', { cache: 'no-store' });
+      if (!r.ok) throw new Error('failed');
+      const json = await r.json();
+      setData(json);
+    } catch {
+      const now = Date.now();
+      const cycle = Math.sin(Math.floor(now / 60000) / 5);
+      const fg = Math.round(50 + cycle * 15);
+      const vol = Math.round(15 + Math.abs(cycle) * 10);
+      const trend: 'up' | 'down' | 'neutral' = fg > 60 ? 'up' : fg < 40 ? 'down' : 'neutral';
+      setData({
+        fearGreedIndex: fg,
+        trend,
+        volatility: vol,
+        aiPrediction: 'Fallback',
+        sentiment: getSentiment(fg),
+        lastUpdated: new Date().toISOString()
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchReal();
+    const id = setInterval(fetchReal, 120_000);
+    return () => clearInterval(id);
+  }, [fetchReal]);
+
+  // SVG arc helper
+  const arcPath = (pct: number) => {
+    const r = 44;
+    const cx = 50, cy = 50;
+    const startAngle = -210;
+    const sweep = 240;
+    const angle = startAngle + sweep * Math.min(pct, 1);
+    const rad = (a: number) => (a * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(rad(startAngle));
+    const y1 = cy + r * Math.sin(rad(startAngle));
+    const x2 = cx + r * Math.cos(rad(angle));
+    const y2 = cy + r * Math.sin(rad(angle));
+    const large = sweep * pct > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full py-8">
-        <div className="animate-spin rounded-full h-20 w-20 border-b-2 border-blue-400" />
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-400" />
       </div>
     );
   }
 
+  const pct = data.fearGreedIndex / 100;
+  const color = getRingColor(data.fearGreedIndex);
+
   return (
-    <div className="relative w-full h-full flex items-center justify-center p-3 sm:p-6">
-      {/* Hide particles on very small screens and respect reduced motion via CSS media query */}
-      <div className="hidden sm:block motion-safe:opacity-100 motion-reduce:hidden">
-        <MarketParticles />
+    <div className="relative w-full h-full flex flex-col items-center justify-center p-4 gap-2">
+      {/* Compact gauge */}
+      <div className="relative w-[130px] h-[130px]">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-[0deg]">
+          {/* Track */}
+          <path d={arcPath(1)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" strokeLinecap="round" />
+          {/* Value */}
+          <path d={arcPath(pct)} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 6px ${color}55)`, transition: 'all 0.8s ease-out' }} />
+        </svg>
+        {/* Center text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-extrabold text-white leading-none" style={{ color }}>{data.fearGreedIndex}</span>
+          <span className="text-[9px] text-white/60 mt-0.5">{data.sentiment}</span>
+        </div>
+        {/* Trend arrow */}
+        <div className="absolute top-1 right-1">
+          {data.trend === 'up'
+            ? <ArrowTrendingUpIcon className="h-4 w-4 text-green-400" />
+            : data.trend === 'down'
+            ? <ArrowTrendingDownIcon className="h-4 w-4 text-red-400" />
+            : null}
+        </div>
       </div>
 
-      {/* Cerchio centrale */}
-      <div className={`relative w-28 h-28 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br ${getIndexColor(data.fearGreedIndex)} shadow-2xl ${getGlowColor(data.fearGreedIndex)} flex items-center justify-center`}>
-        <div className="absolute inset-2 bg-slate-900 rounded-full flex flex-col items-center justify-center border border-white/10">
-          <div className="text-xl sm:text-3xl font-bold text-white leading-none">{data.fearGreedIndex}</div>
-          <div className="text-[10px] sm:text-xs text-gray-300 text-center px-1 sm:px-2 leading-tight">{data.sentiment}</div>
+      {/* Bottom metrics row */}
+      <div className="flex items-center gap-2 text-[9px]">
+        <div className="bg-white/[0.06] rounded px-1.5 py-0.5">
+          <span className="text-gray-500">Vol </span>
+          <span className="font-bold text-white">{data.volatility}%</span>
         </div>
-        <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2">
-          {data.trend === 'up' ? (
-            <ArrowTrendingUpIcon className="h-4 w-4 sm:h-6 sm:w-6 text-green-400" />
-          ) : (
-            <ArrowTrendingDownIcon className="h-4 w-4 sm:h-6 sm:w-6 text-red-400" />
-          )}
+        <div className="bg-white/[0.06] rounded px-1.5 py-0.5">
+          <span className="text-gray-500">Sig </span>
+          <span className={`font-bold ${data.trend === 'up' ? 'text-green-400' : data.trend === 'down' ? 'text-red-400' : 'text-yellow-400'}`}>
+            {data.trend === 'up' ? 'BULL' : data.trend === 'down' ? 'BEAR' : 'FLAT'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span></span>
+          <span className="text-gray-500">Live</span>
         </div>
       </div>
 
-      {/* Pannello testi in basso a destra */}
-      <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex flex-col items-end gap-2 max-w-[230px] sm:max-w-xs text-right">
-        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded-full font-semibold flex items-center shadow-lg self-end">
-          <BoltIcon className="h-3 w-3 mr-1" /> AI POWERED
-        </div>
-
-        {data.lastUpdated && (
-          <div className="text-[9px] sm:text-[11px] text-gray-500">Upd: {new Date(data.lastUpdated).toLocaleTimeString()}</div>
-        )}
-        <div className="flex items-center gap-2">
-          <div className="bg-white/10 rounded-md px-2 py-1">
-            <span className="block text-[9px] text-gray-400">Vol</span>
-            <span className="block text-[10px] font-bold text-white">{data.volatility}%</span>
-          </div>
-          <div className="bg-white/10 rounded-md px-2 py-1">
-            <span className="block text-[9px] text-gray-400">Sig</span>
-            <span className={`block text-[10px] font-bold ${data.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>{data.trend === 'up' ? 'BULL' : 'BEAR'}</span>
-          </div>
-            <div className="bg-white/10 rounded-md px-2 py-1">
-            <span className="block text-[9px] text-gray-400">Idx</span>
-            <span className="block text-[10px] font-bold text-white">{data.fearGreedIndex}</span>
-          </div>
-          <div className="flex items-center text-[9px] text-gray-400">
-            <div className="w-2 h-2 bg-green-400 rounded-full mr-1" />Live
-          </div>
-        </div>
+      {/* AI badge + timestamp */}
+      <div className="flex items-center gap-2 text-[8px]">
+        <span className="inline-flex items-center gap-0.5 bg-gradient-to-r from-purple-600/80 to-pink-600/80 text-white px-1.5 py-0.5 rounded-full font-semibold">
+          <BoltIcon className="h-2.5 w-2.5" /> AI
+        </span>
+        {data.lastUpdated && <span className="text-gray-600">{new Date(data.lastUpdated).toLocaleTimeString()}</span>}
       </div>
     </div>
   );

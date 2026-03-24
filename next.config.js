@@ -14,7 +14,7 @@ const nextConfig = {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://assets.parqet.com",
       "font-src 'self' data:",
       "connect-src 'self' https://api.openai.com https://*.supabase.co https://js.stripe.com https://*.stripe.com https://*.vercel.app",
       "frame-src https://js.stripe.com https://hooks.stripe.com",

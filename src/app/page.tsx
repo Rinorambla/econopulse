@@ -22,7 +22,7 @@ export default function HomePage() {
         <div className="pointer-events-none absolute -bottom-40 right-0 w-[400px] h-[400px] rounded-full bg-emerald-500/10 blur-[100px]" />
 
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="relative z-10 pb-10 sm:pb-20 md:pb-24 lg:max-w-2xl lg:w-full lg:pb-32 xl:pb-40">
+          <div className="relative z-10 pb-10 sm:pb-20 md:pb-24 lg:max-w-3xl lg:w-full lg:pb-32 xl:pb-40">
             <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-14 sm:px-6 md:mt-16 lg:mt-24 lg:px-8 xl:mt-28">
               <div className="sm:text-center lg:text-left">
                 {/* Badge */}
@@ -67,9 +67,17 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Fear & Greed Index widget on the right */}
-        <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
-          <div className="h-56 w-full sm:h-72 md:h-80 lg:w-full lg:h-full bg-gradient-to-br from-[var(--color-panel)] to-[var(--color-backdrop)] border-l border-[var(--color-border)]/50">
+        {/* Fear & Greed Index — compact floating card on the right */}
+        <div className="hidden lg:flex lg:absolute lg:top-1/2 lg:-translate-y-1/2 lg:right-8 xl:right-16 z-20">
+          <div className="w-[260px] h-[260px] rounded-2xl bg-gradient-to-br from-[var(--color-panel)] to-[var(--color-backdrop)] border border-[var(--color-border)]/40 shadow-2xl shadow-black/40 overflow-hidden">
+            <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
+              <FearGreedIndex />
+            </SafeBoundary>
+          </div>
+        </div>
+        {/* Mobile: smaller F&G card */}
+        <div className="lg:hidden flex justify-center px-4 pb-6">
+          <div className="w-full max-w-[280px] h-[220px] rounded-2xl bg-gradient-to-br from-[var(--color-panel)] to-[var(--color-backdrop)] border border-[var(--color-border)]/40 shadow-xl overflow-hidden">
             <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
               <FearGreedIndex />
             </SafeBoundary>

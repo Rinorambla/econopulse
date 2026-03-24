@@ -690,8 +690,15 @@ export default function DashboardPage() {
 																	const opt = optsByTicker[item.ticker];
 																	return (
 														<tr key={item.ticker} className="hover:bg-slate-700/40">
-															<td className="px-2 py-1 min-w-[90px]">
+															<td className="px-2 py-1 min-w-[110px]">
 																<div className="flex items-center gap-1.5">
+																	<img
+																		src={`https://assets.parqet.com/logos/symbol/${item.ticker}?format=jpg`}
+																		alt=""
+																		className="w-5 h-5 rounded-full bg-slate-700 object-cover flex-shrink-0"
+																		onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+																		loading="lazy"
+																	/>
 																	<span className="font-bold text-white tracking-tight" title={item.name}>{item.ticker}</span>
 																	{item.direction && <span className="text-[9px] text-gray-500">{item.direction}</span>}
 																</div>

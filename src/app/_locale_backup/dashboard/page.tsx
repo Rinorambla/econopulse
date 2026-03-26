@@ -214,10 +214,16 @@ export default function DashboardPage() {
 
 	const enrichedData = useMemo(() => {
 		if (!data.length) return [] as (MarketData & { rs:number })[];
-		// Compute relative strength percentile based on performance
+		// Compute relative strength using composite of perf + volume
 		const perfValues = data.map(d => parsePerf(d.performance));
 		const sorted = [...perfValues].sort((a,b)=>a-b);
-		const percentile = (val:number) => (sorted.indexOf(val) / (sorted.length - 1)) * 100;
+		// Binary search percentile (avoids indexOf tie bug)
+		const percentile = (val:number) => {
+			if (sorted.length <= 1) return 50;
+			let lo = 0, hi = sorted.length - 1;
+			while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (sorted[mid] <= val) lo = mid; else hi = mid - 1; }
+			return lo / (sorted.length - 1) * 100;
+		};
 		return data.map(d => ({ ...d, rs: Math.round(percentile(parsePerf(d.performance))) }));
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [data]);
@@ -717,10 +723,12 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">{item.demandSupply}</td>
 															<td className="px-2 py-1 text-center">{(() => {
 																const perf = parsePerf(item.performance);
-																const vol = parseVolume(item.volume);
-																const trendW = item.trend === 'UPTREND' ? 1 : item.trend === 'DOWNTREND' ? -1 : 0;
-																const dsW = item.demandSupply === 'Strong Demand' ? 1 : item.demandSupply === 'Weak Demand' ? -1 : 0;
-																const raw = (perf * 0.4) + (trendW * 20) + (dsW * 15) + (vol > 1e6 ? 5 : 0);
+															const volStr = item.volume || '0';
+															const volNum = parseFloat(volStr) * (volStr.includes('B') ? 1e9 : volStr.includes('M') ? 1e6 : volStr.includes('K') ? 1e3 : 1);
+															const trendW = item.trend === 'Strong Up' ? 1 : item.trend === 'Strong Down' ? -1 : item.trend === 'Up' ? 0.4 : item.trend === 'Down' ? -0.4 : 0;
+															const dsW = item.demandSupply === 'High Demand' ? 1 : item.demandSupply === 'Moderate Demand' ? 0.4 : item.demandSupply === 'High Supply' ? -1 : item.demandSupply === 'Moderate Supply' ? -0.4 : 0;
+															const volW = volNum > 50e6 ? 8 : volNum > 10e6 ? 5 : volNum > 1e6 ? 2 : 0;
+															const raw = (perf * 8) + (trendW * 18) + (dsW * 14) + (perf > 0 ? volW : -volW);
 																const dex = Math.max(-100, Math.min(100, Math.round(raw)));
 																const cls = dex > 20 ? 'text-emerald-400 font-semibold' : dex < -20 ? 'text-red-400 font-semibold' : 'text-gray-300';
 																return <span className={cls}>{dex > 0 ? '+' : ''}{dex}</span>;

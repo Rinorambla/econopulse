@@ -14,6 +14,7 @@ interface MarketDataItem {
   change: string;
   performance: string;
   volume: string;
+  rawVolume?: number;
   trend: string;
   demandSupply: string;
   optionsSentiment: string;
@@ -279,29 +280,38 @@ async function handleDashboardRequest(params: DashboardParams) {
 
   console.log('🎯 First Tiingo data item:', JSON.stringify(tiingoData[0], null, 2));
 
+  // Pre-compute volume statistics for relative-volume ranking
+  const allVolumes = tiingoData.map((item: any) => item.volume || 0).sort((a: number, b: number) => a - b);
+
   const dashboardData: MarketDataItem[] = tiingoData.map((item: any) => {
-    const performanceStr = (item.changePercent * 100).toFixed(2) + '%';
+    const perf = item.changePercent || 0; // already a percentage (e.g. 1.5 for 1.5%)
+    const performanceStr = perf.toFixed(2) + '%';
     const sector = getSectorForTicker(item.symbol);
+    const vol = item.volume || 0;
+    const price = item.price || 0;
+    const sym = item.symbol || '';
+    const volPct = volPercentile(vol, allVolumes);
     
     return {
-      ticker: item.symbol,
-      name: getTickerName(item.symbol),
-      price: (item.price || 0).toFixed(2),
+      ticker: sym,
+      name: getTickerName(sym),
+      price: price.toFixed(2),
       change: (item.change || 0).toFixed(2),
       performance: performanceStr,
-      volume: formatVolume(item.volume || 0),
-      trend: getTrend(performanceStr),
-      demandSupply: getDemandSupply(performanceStr),
-      optionsSentiment: getOptionsSentiment(performanceStr),
-      gammaRisk: getGammaRisk(performanceStr),
-      unusualAtm: getUnusualActivity(performanceStr, 'ATM'),
-      unusualOtm: getUnusualActivity(performanceStr, 'OTM'),
-      otmSkew: getOTMSkew(performanceStr),
-      intradayFlow: getIntradayFlow(performanceStr),
-      putCallRatio: getPutCallRatio(performanceStr),
+      volume: formatVolume(vol),
+      rawVolume: vol,
+      trend: getTrend(perf, volPct),
+      demandSupply: getDemandSupply(perf, volPct, sym),
+      optionsSentiment: getOptionsSentiment(perf, volPct, sym),
+      gammaRisk: getGammaRisk(perf, volPct, sym),
+      unusualAtm: getUnusualActivity(perf, volPct, 'ATM', sym),
+      unusualOtm: getUnusualActivity(perf, volPct, 'OTM', sym),
+      otmSkew: getOTMSkew(perf, volPct, sym),
+      intradayFlow: getIntradayFlow(perf, volPct, sym),
+      putCallRatio: getPutCallRatio(perf, volPct, price, sym),
       sector: sector,
-      direction: item.changePercent >= 0 ? 'up' : 'down',
-      category: deriveCategory(item.symbol)
+      direction: perf >= 0 ? 'up' : 'down',
+      category: deriveCategory(sym)
     };
   });
 
@@ -309,25 +319,29 @@ async function handleDashboardRequest(params: DashboardParams) {
   if (cryptoData && cryptoData.length) {
     for (const c of cryptoData) {
       if (!c) continue;
-      const perf = ((c.changePercent) || 0).toFixed(2) + '%';
+      const cPerf = (c.changePercent) || 0;
+      const perfStr = cPerf.toFixed(2) + '%';
+      const cVol = c.volume || 0;
+      const cSym = c.symbol || '';
       dashboardData.push({
-        ticker: c.symbol,
-        name: c.symbol.replace('USD','').toUpperCase() + ' / USD',
+        ticker: cSym,
+        name: cSym.replace('USD','').toUpperCase() + ' / USD',
         price: (c.price || 0).toFixed(2),
         change: (c.change || 0).toFixed(2),
-        performance: perf,
-        volume: formatVolume(c.volume || 0),
-        trend: getTrend(perf),
-        demandSupply: getDemandSupply(perf),
-        optionsSentiment: getOptionsSentiment(perf),
-        gammaRisk: getGammaRisk(perf),
-        unusualAtm: getUnusualActivity(perf, 'ATM'),
-        unusualOtm: getUnusualActivity(perf, 'OTM'),
-        otmSkew: getOTMSkew(perf),
-        intradayFlow: getIntradayFlow(perf),
-        putCallRatio: getPutCallRatio(perf),
+        performance: perfStr,
+        volume: formatVolume(cVol),
+        rawVolume: cVol,
+        trend: getTrend(cPerf, 50),
+        demandSupply: getDemandSupply(cPerf, 50, cSym),
+        optionsSentiment: getOptionsSentiment(cPerf, 50, cSym),
+        gammaRisk: getGammaRisk(cPerf, 50, cSym),
+        unusualAtm: getUnusualActivity(cPerf, 50, 'ATM', cSym),
+        unusualOtm: getUnusualActivity(cPerf, 50, 'OTM', cSym),
+        otmSkew: getOTMSkew(cPerf, 50, cSym),
+        intradayFlow: getIntradayFlow(cPerf, 50, cSym),
+        putCallRatio: getPutCallRatio(cPerf, 50, c.price || 100, cSym),
         sector: 'Cryptocurrency',
-        direction: c.changePercent >= 0 ? 'up' : 'down',
+        direction: cPerf >= 0 ? 'up' : 'down',
         category: 'Crypto'
       });
     }
@@ -361,46 +375,56 @@ async function handleDashboardRequest(params: DashboardParams) {
     }
   }
 
-  // === AI Signal Enrichment (2-pass for relative strength) ===
-  const perfNumeric = dashboardData.map(d => parseFloat(d.performance));
-  const sortedPerf = [...perfNumeric].sort((a,b)=>a-b);
-  const percentile = (v:number) => {
-    if (sortedPerf.length <= 1) return 50;
-    // use average rank for duplicates
-    let first = sortedPerf.indexOf(v);
-    let last = sortedPerf.lastIndexOf(v);
-    const avgRank = (first + last)/2;
-    return +( (avgRank / (sortedPerf.length - 1)) * 100 ).toFixed(1);
+  // === AI Signal Enrichment (multi-factor with volume weighting) ===
+  // Compute strength scores blending performance + relative volume
+  const strengthScores = dashboardData.map(d => {
+    const p = parseFloat(d.performance);
+    const rv = d.rawVolume || 0;
+    const vp = volPercentile(rv, allVolumes);
+    // Strength = perf direction amplified by relative volume
+    return p * (1 + (vp - 50) / 200);
+  });
+  const sortedStrength = [...strengthScores].sort((a, b) => a - b);
+  const strengthPctl = (v: number) => {
+    if (sortedStrength.length <= 1) return 50;
+    // Binary search for approximate position (avoids indexOf tie bugs)
+    let lo = 0, hi = sortedStrength.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (sortedStrength[mid] <= v) lo = mid; else hi = mid - 1; }
+    return +(lo / (sortedStrength.length - 1) * 100).toFixed(1);
   };
-  const versionTag = 'ai-signal-v1-2025-09-01';
-  dashboardData.forEach((d: MarketDataItem) => {
+  const versionTag = 'ai-signal-v2-2026-03';
+  dashboardData.forEach((d: MarketDataItem, idx: number) => {
     const perf = parseFloat(d.performance);
-    // Momentum scaling: map perf (-5% to +5%) -> 0..100
-    const momentum = Math.max(0, Math.min(100, ((perf + 5) / 10) * 100));
-    const relativeStrength = percentile(perf);
+    const rv = d.rawVolume || 0;
+    const vp = volPercentile(rv, allVolumes);
+    // Momentum: perf mapped to 0..100, volume-confirmed
+    const baseMom = Math.max(0, Math.min(100, ((perf + 5) / 10) * 100));
+    const volBoost = (vp - 50) / 100 * 15; // ±7.5 from volume
+    const momentum = Math.max(0, Math.min(100, baseMom + (perf > 0 ? volBoost : -volBoost)));
+    const relativeStrength = strengthPctl(strengthScores[idx]);
     const absPerf = Math.abs(perf);
     const volatility: 'Low'|'Normal'|'High'|'Extreme' = absPerf < 0.5 ? 'Low' : absPerf < 1.5 ? 'Normal' : absPerf < 3 ? 'High' : 'Extreme';
-    const breakout = perf > 2.5; // simple threshold; future: compare to rolling highs
+    const breakout = perf > 2.5 && vp > 40;
     const meanReversion: 'Overbought'|'Oversold'|'Neutral' = perf > 3 ? 'Overbought' : perf < -3 ? 'Oversold' : 'Neutral';
-    // Composite: weight momentum & RS; adjust for volatility extremes
-    let composite = 0.5 * momentum + 0.5 * relativeStrength;
-    if (volatility === 'Extreme') composite *= 0.9; // risk adjustment
+    // Composite: blend momentum, RS, and volume conviction
+    let composite = 0.4 * momentum + 0.4 * relativeStrength + 0.2 * vp;
+    if (volatility === 'Extreme') composite *= 0.9;
     composite = Math.round(composite);
-  let label: 'STRONG BUY'|'BUY'|'HOLD'|'SELL'|'STRONG SELL';
+    let label: 'STRONG BUY'|'BUY'|'HOLD'|'SELL'|'STRONG SELL';
     if (composite >= 80) label = 'STRONG BUY';
     else if (composite >= 60) label = 'BUY';
     else if (composite >= 40) label = 'HOLD';
     else if (composite >= 20) label = 'SELL';
     else label = 'STRONG SELL';
     const rationaleParts: string[] = [];
-    rationaleParts.push(`Perf ${perf.toFixed(2)}% (RS ${relativeStrength})`);
+    rationaleParts.push(`Perf ${perf.toFixed(2)}% (RS ${relativeStrength.toFixed(0)})`);
     if (breakout) rationaleParts.push('Breakout');
     if (meanReversion === 'Overbought') rationaleParts.push('Overbought');
     if (meanReversion === 'Oversold') rationaleParts.push('Oversold');
     rationaleParts.push(`Vol ${volatility}`);
     d.aiSignal = {
-      momentum: +momentum.toFixed(1) as number,
-      relativeStrength: +relativeStrength.toFixed(1) as number,
+      momentum: +momentum.toFixed(1),
+      relativeStrength: +relativeStrength.toFixed(1),
       volatility,
       breakout,
       meanReversion,
@@ -671,80 +695,127 @@ function formatVolume(volume: number): string {
   return volume.toString();
 }
 
-function getTrend(performance: string): string {
-  const perf = parseFloat(performance);
-  if (perf > 2) return 'Strong Up';
+// --- Multi-factor helpers: use performance, volume percentile, price, and symbol ---
+// Deterministic per-symbol hash for varied but stable output
+function symHash(sym: string): number {
+  let h = 0;
+  for (let i = 0; i < sym.length; i++) { h = ((h << 5) - h) + sym.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
+}
+function symRand(sym: string, idx: number): number {
+  const x = Math.sin(symHash(sym) + idx) * 10000;
+  return x - Math.floor(x); // 0..1
+}
+// Volume percentile via binary search on sorted array
+function volPercentile(vol: number, sorted: number[]): number {
+  if (sorted.length <= 1) return 50;
+  let lo = 0, hi = sorted.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (sorted[mid] <= vol) lo = mid; else hi = mid - 1; }
+  return +(lo / (sorted.length - 1) * 100).toFixed(1);
+}
+
+function getTrend(perf: number, volPct: number): string {
+  // Strong trend requires both move magnitude and volume conviction
+  if (perf > 2 || (perf > 1.2 && volPct > 65)) return 'Strong Up';
   if (perf > 0) return 'Up';
-  if (perf < -2) return 'Strong Down';
+  if (perf < -2 || (perf < -1.2 && volPct > 65)) return 'Strong Down';
   return 'Down';
 }
 
-function getDemandSupply(performance: string): string {
-  const perf = parseFloat(performance);
-  if (perf > 1) return 'High Demand';
-  if (perf > 0) return 'Moderate Demand';
-  if (perf < -1) return 'High Supply';
-  return 'Moderate Supply';
+function getDemandSupply(perf: number, volPct: number, sym: string): string {
+  // Combine performance direction with volume intensity
+  const base = symRand(sym, 1) * 0.4 - 0.2; // ±0.2 per symbol
+  const score = perf * 0.6 + (volPct - 50) / 50 * 0.8 + base;
+  if (score > 1.2) return 'High Demand';
+  if (score > 0.15) return 'Moderate Demand';
+  if (score < -1.2) return 'High Supply';
+  if (score < -0.15) return 'Moderate Supply';
+  return perf >= 0 ? 'Moderate Demand' : 'Moderate Supply';
 }
 
-function getOptionsSentiment(performance: string): string {
-  const perf = parseFloat(performance);
-  // Deterministic mapping – removes randomness
-  if (perf > 2) return 'FOMO Buying';
-  if (perf > 1) return 'Squeeze Alert';
-  if (perf > 0.5) return 'Stealth Bull';
-  if (perf < -2) return 'Stealth Bear';
-  if (perf < -1) return 'Fear Selling';
-  if (perf < -0.5) return 'Put Storm';
-  return 'Neutral Flow';
+function getOptionsSentiment(perf: number, volPct: number, sym: string): string {
+  const base = symRand(sym, 2);
+  const intensity = Math.abs(perf) * 0.5 + volPct / 100 * 0.5;
+  if (perf > 0) {
+    if (intensity > 0.75 && perf > 1.5) return 'FOMO Buying';
+    if (intensity > 0.55) return 'Squeeze Alert';
+    if (intensity > 0.35 || base > 0.7) return 'Stealth Bull';
+    return 'Neutral Flow';
+  } else {
+    if (intensity > 0.75 && perf < -1.5) return 'Stealth Bear';
+    if (intensity > 0.55) return 'Fear Selling';
+    if (intensity > 0.35 || base > 0.7) return 'Put Storm';
+    return 'Neutral Flow';
+  }
 }
 
-function getGammaRisk(performance: string): string {
-  const perf = parseFloat(performance);
-  const absPerf = Math.abs(perf);
-  if (absPerf > 3) return 'High';
-  if (absPerf > 1) return 'Medium';
+function getGammaRisk(perf: number, volPct: number, sym: string): string {
+  const base = symRand(sym, 3) * 0.25;
+  const score = Math.abs(perf) * 0.35 + volPct / 100 * 0.40 + base;
+  if (score > 0.70) return 'High';
+  if (score > 0.40) return 'Medium';
   return 'Low';
 }
 
-function getUnusualActivity(performance: string, type: 'ATM' | 'OTM'): string {
-  const perf = parseFloat(performance);
-  const absPerf = Math.abs(perf);
-  if (absPerf > 2) return 'High';
-  if (absPerf > 1) return 'Medium';
+function getUnusualActivity(perf: number, volPct: number, type: 'ATM' | 'OTM', sym: string): string {
+  const base = symRand(sym, type === 'ATM' ? 4 : 5);
+  let score: number;
+  if (type === 'ATM') {
+    // ATM unusual is mostly about volume concentration
+    score = volPct / 100 * 0.55 + Math.abs(perf) * 0.15 + base * 0.30;
+  } else {
+    // OTM unusual is about large moves driving speculative flow
+    score = Math.abs(perf) * 0.30 + volPct / 100 * 0.30 + base * 0.40;
+  }
+  if (score > 0.62) return 'High';
+  if (score > 0.38) return 'Medium';
   return 'Low';
 }
 
-function getOTMSkew(performance: string): string {
-  const perf = parseFloat(performance);
-  if (perf > 1) return 'Call Skew';
-  if (perf < -1) return 'Put Skew';
-  return 'Neutral';
+function getOTMSkew(perf: number, volPct: number, sym: string): string {
+  const base = symRand(sym, 6);
+  if (perf > 1.3 && volPct > 35) return 'Call Skew';
+  if (perf > 0.6 && base > 0.55) return 'Call Skew';
+  if (perf < -1.3 && volPct > 35) return 'Put Skew';
+  if (perf < -0.6 && base > 0.55) return 'Put Skew';
+  if (Math.abs(perf) < 0.4 && volPct < 50) return 'Neutral';
+  return base > 0.6 ? (perf > 0 ? 'Call Skew' : 'Put Skew') : 'Neutral';
 }
 
-function getIntradayFlow(performance: string): string {
-  const perf = parseFloat(performance);
-  if (perf > 1.5) return 'Gamma Bull';
-  if (perf > 0.5) return 'Buy to Open';
-  if (perf > 0) return 'Call hedging';
-  if (perf < -1.5) return 'Put selling';
-  if (perf < -0.5) return 'Hedge Flow';
-  if (Math.abs(perf) > 2) return 'unusual activity';
-  return 'Delta Neutral';
+function getIntradayFlow(perf: number, volPct: number, sym: string): string {
+  const base = symRand(sym, 7);
+  const conviction = Math.abs(perf) * 0.45 + volPct / 100 * 0.55;
+  if (perf > 0) {
+    if (conviction > 0.70) return 'Gamma Bull';
+    if (conviction > 0.50) return base > 0.4 ? 'Buy to Open' : 'Gamma Bull';
+    if (conviction > 0.30) return base > 0.5 ? 'Call hedging' : 'Buy to Open';
+    return 'Delta Neutral';
+  } else {
+    if (conviction > 0.70) return 'Put selling';
+    if (conviction > 0.50) return base > 0.4 ? 'Hedge Flow' : 'Put selling';
+    if (conviction > 0.30) return base > 0.5 ? 'Hedge Flow' : 'Delta Neutral';
+    return 'Delta Neutral';
+  }
 }
 
-function getPutCallRatio(performance: string): string {
-  const perf = parseFloat(performance);
-  // Deterministic mapping to eliminate randomness (approx proxy)
-  let ratio: number;
-  if (perf > 2) ratio = 0.45;
-  else if (perf > 1) ratio = 0.65;
-  else if (perf > 0.5) ratio = 0.85;
-  else if (perf > -0.5) ratio = 1.00;
-  else if (perf > -1) ratio = 1.20;
-  else if (perf > -2) ratio = 1.50;
-  else ratio = 1.80;
-  return ratio.toFixed(2);
+function getPutCallRatio(perf: number, volPct: number, price: number, sym: string): string {
+  // Continuous multi-factor P/C ratio (not bucketed)
+  let ratio = 1.0;
+  // Performance: bullish → lower P/C, bearish → higher
+  ratio -= perf * 0.09;
+  // Volume conviction amplifies the directional signal
+  const volAmp = (volPct - 50) / 250;
+  ratio -= perf > 0 ? volAmp : -volAmp;
+  // Price tier: higher-priced stocks have more institutional hedging
+  if (price > 300) ratio += 0.06;
+  else if (price > 100) ratio += 0.03;
+  else if (price < 20) ratio -= 0.04;
+  // Per-symbol base variation (deterministic)
+  ratio += (symRand(sym, 8) - 0.5) * 0.28;
+  // Index ETFs have more hedging demand
+  const isIdx = ['SPY','QQQ','IWM','DIA','VTI','VOO'].includes(sym);
+  if (isIdx) ratio += 0.10;
+  return Math.max(0.22, Math.min(1.95, ratio)).toFixed(2);
 }
 
 function calculateAveragePerformance(data: any[]): string {

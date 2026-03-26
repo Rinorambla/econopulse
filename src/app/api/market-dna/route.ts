@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import { getPolygonClient } from '@/lib/polygonFinance';
 
 interface MarketFeatures {
   vix: number;
@@ -244,41 +245,19 @@ async function fetchTwelveDataMetrics() {
   }
 }
 
-// Fetch Polygon data
+// Fetch Polygon data via shared client
 async function fetchPolygonData() {
-  const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
-  if (!POLYGON_API_KEY) return null;
-
   try {
-    // Fetch SPY price
-    const spyResponse = await fetch(
-      `https://api.polygon.io/v2/last/trade/SPY?apikey=${POLYGON_API_KEY}`,
-      { next: { revalidate: 60 }, signal: AbortSignal.timeout(5000) }
-    );
+    const polygon = getPolygonClient();
+    if (!polygon.isConfigured) return null;
 
-    let spyPrice = 450.0;
-    if (spyResponse.ok) {
-      const spyData = await spyResponse.json();
-      if (spyData.results?.p) {
-        spyPrice = spyData.results.p;
-      }
-    }
+    const spyQuote = await polygon.getPreviousDay('SPY');
+    const gldQuote = await polygon.getPreviousDay('GLD');
 
-    // Fetch Gold price (GLD ETF as proxy)
-    const goldResponse = await fetch(
-      `https://api.polygon.io/v2/last/trade/GLD?apikey=${POLYGON_API_KEY}`,
-      { next: { revalidate: 60 }, signal: AbortSignal.timeout(5000) }
-    );
-
-    let goldPrice = 2050.0;
-    if (goldResponse.ok) {
-      const goldData = await goldResponse.json();
-      if (goldData.results?.p) {
-        goldPrice = goldData.results.p * 10; // Approximate gold price from GLD
-      }
-    }
-
-    return { spyPrice, goldPrice };
+    return {
+      spyPrice: spyQuote?.price || 450.0,
+      goldPrice: gldQuote ? gldQuote.price * 10 : 2050.0 // Approximate gold price from GLD
+    };
   } catch (error) {
     console.error('Polygon API error:', error);
     return null;

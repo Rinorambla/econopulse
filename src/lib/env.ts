@@ -12,6 +12,8 @@ export const env = {
   // Chiavi sensibili (server-only)
   get FMP_API_KEY(): string | undefined { return process.env.FMP_API_KEY },
   get TIINGO_API_KEY(): string | undefined { return process.env.TIINGO_API_KEY },
+  get POLYGON_API_KEY(): string | undefined { return process.env.POLYGON_API_KEY },
+  get POLYGON_API_KEY_2(): string | undefined { return process.env.POLYGON_API_KEY_2 },
   get OPENAI_API_KEY(): string | undefined { return process.env.OPENAI_API_KEY },
   get STRIPE_SECRET_KEY(): string | undefined { return process.env.STRIPE_SECRET_KEY },
   get STRIPE_WEBHOOK_SECRET(): string | undefined { return process.env.STRIPE_WEBHOOK_SECRET },

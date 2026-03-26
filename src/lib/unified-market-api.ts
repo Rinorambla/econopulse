@@ -1,11 +1,14 @@
 // UNIFIED MARKET API - Sistema Unificato per Tutti i Mercati Finanziari
 // Aggiornamenti 2x al giorno con rotazione intelligente delle API
 
+import { getPolygonClient, type PolygonQuote } from './polygonFinance';
+
 interface APICredentials {
   tiingo: string[];
   twelvedata: string[];
   exchangerate: string[];
   alphavintage: string[];
+  polygon: string[];
   fred: string;
 }
 
@@ -48,6 +51,10 @@ export class UnifiedMarketAPI {
       ].filter(Boolean) as string[],
       alphavintage: [
         process.env.ALPHAVANTAGE_API_KEY || ''
+      ].filter(Boolean) as string[],
+      polygon: [
+        process.env.POLYGON_API_KEY || '',
+        process.env.POLYGON_API_KEY_2 || ''
       ].filter(Boolean) as string[],
       fred: process.env.FRED_API_KEY || ''
     };
@@ -107,7 +114,7 @@ export class UnifiedMarketAPI {
     return currentHour >= 9 && currentHour <= 16;
   }
 
-  // EQUITY - Azioni (Tiingo + TwelveData)
+  // EQUITY - Azioni (Tiingo → Polygon → TwelveData)
   async fetchEquityData(symbols: string[]): Promise<MarketData[]> {
     const results: MarketData[] = [];
     
@@ -117,7 +124,16 @@ export class UnifiedMarketAPI {
       const tiingoData = await this.fetchFromTiingo(symbols.slice(0, 50), tiingoKey);
       results.push(...tiingoData);
       
-      // Se non abbiamo abbastanza dati, usa TwelveData
+      // Se non abbiamo abbastanza dati, prova Polygon.io
+      if (results.length < symbols.length * 0.8) {
+        const remainingSymbols = symbols.filter(s => 
+          !results.some(r => r.symbol === s)
+        );
+        const polygonData = await this.fetchFromPolygon(remainingSymbols);
+        results.push(...polygonData);
+      }
+
+      // Ultimo fallback: TwelveData
       if (results.length < symbols.length * 0.8) {
         const twelveKey = this.getNextApiKey('twelvedata');
         const remainingSymbols = symbols.filter(s => 
@@ -134,22 +150,30 @@ export class UnifiedMarketAPI {
     return results;
   }
 
-  // FOREX - Valute (ExchangeRate + TwelveData)  
+  // FOREX - Valute (Polygon → ExchangeRate → TwelveData)  
   async fetchForexData(pairs: string[]): Promise<MarketData[]> {
     const results: MarketData[] = [];
     
     try {
-      const exchangeKey = this.getNextApiKey('exchangerate');
-      const forexData = await this.fetchFromExchangeRate(pairs, exchangeKey);
-      results.push(...forexData);
-      
+      // Prova prima con Polygon forex
+      const polygonForex = await this.fetchForexFromPolygon(pairs);
+      results.push(...polygonForex);
+
+      // Se non bastano, usa ExchangeRate
+      if (results.length < pairs.length * 0.8) {
+        const remaining = pairs.filter(p => !results.some(r => r.symbol === p));
+        const exchangeKey = this.getNextApiKey('exchangerate');
+        const forexData = await this.fetchFromExchangeRate(remaining, exchangeKey);
+        results.push(...forexData);
+      }
     } catch (error) {
       console.warn('Forex API error:', error);
       
       // Fallback to TwelveData
       try {
+        const remaining = pairs.filter(p => !results.some(r => r.symbol === p));
         const twelveKey = this.getNextApiKey('twelvedata');
-        const twelveForex = await this.fetchForexFromTwelve(pairs, twelveKey);
+        const twelveForex = await this.fetchForexFromTwelve(remaining, twelveKey);
         results.push(...twelveForex);
       } catch (fallbackError) {
         console.warn('Forex fallback error:', fallbackError);
@@ -159,15 +183,22 @@ export class UnifiedMarketAPI {
     return results;
   }
 
-  // CRYPTO - Criptovalute (TwelveData + Alpha Vintage)
+  // CRYPTO - Criptovalute (Polygon → TwelveData)
   async fetchCryptoData(symbols: string[]): Promise<MarketData[]> {
     const results: MarketData[] = [];
     
     try {
-      const twelveKey = this.getNextApiKey('twelvedata');
-      const cryptoData = await this.fetchCryptoFromTwelve(symbols, twelveKey);
-      results.push(...cryptoData);
-      
+      // Prova prima con Polygon crypto
+      const polygonCrypto = await this.fetchCryptoFromPolygon(symbols);
+      results.push(...polygonCrypto);
+
+      // Fallback to TwelveData per i rimanenti
+      if (results.length < symbols.length * 0.8) {
+        const remaining = symbols.filter(s => !results.some(r => r.symbol === s));
+        const twelveKey = this.getNextApiKey('twelvedata');
+        const cryptoData = await this.fetchCryptoFromTwelve(remaining, twelveKey);
+        results.push(...cryptoData);
+      }
     } catch (error) {
       console.warn('Crypto API error:', error);
     }
@@ -433,6 +464,110 @@ export class UnifiedMarketAPI {
       console.warn('AlphaVintage API error:', error);
     }
     
+    return results;
+  }
+
+  // POLYGON.IO - Equities via prev day aggregates
+  private async fetchFromPolygon(symbols: string[]): Promise<MarketData[]> {
+    const results: MarketData[] = [];
+    
+    try {
+      const polygon = getPolygonClient();
+      if (!polygon.isConfigured) return results;
+
+      const quotes = await polygon.getSnapshots(symbols);
+      
+      for (const q of quotes) {
+        results.push({
+          symbol: q.symbol,
+          name: q.name,
+          price: q.price,
+          change: q.change,
+          changePercent: q.changePercent,
+          volume: q.volume,
+          timestamp: q.timestamp,
+          source: 'Polygon'
+        });
+      }
+      
+      console.log(`✅ Polygon equities: ${results.length} symbols fetched`);
+    } catch (error) {
+      console.warn('Polygon equities error:', error);
+    }
+    
+    return results;
+  }
+
+  // POLYGON.IO - Forex pairs
+  private async fetchForexFromPolygon(pairs: string[]): Promise<MarketData[]> {
+    const results: MarketData[] = [];
+    
+    try {
+      const polygon = getPolygonClient();
+      if (!polygon.isConfigured) return results;
+
+      for (const pair of pairs) {
+        // Converte EURUSD=X → from=EUR, to=USD
+        const clean = pair.replace('=X', '');
+        const from = clean.slice(0, 3);
+        const to = clean.slice(3) || 'USD';
+
+        const quote = await polygon.getForexQuote(from, to);
+        if (quote) {
+          results.push({
+            symbol: pair,
+            name: quote.name,
+            price: quote.price,
+            change: quote.change,
+            changePercent: quote.changePercent,
+            timestamp: quote.timestamp,
+            source: 'Polygon-Forex'
+          });
+        }
+      }
+
+      console.log(`✅ Polygon forex: ${results.length} pairs fetched`);
+    } catch (error) {
+      console.warn('Polygon forex error:', error);
+    }
+
+    return results;
+  }
+
+  // POLYGON.IO - Crypto pairs
+  private async fetchCryptoFromPolygon(symbols: string[]): Promise<MarketData[]> {
+    const results: MarketData[] = [];
+    
+    try {
+      const polygon = getPolygonClient();
+      if (!polygon.isConfigured) return results;
+
+      for (const symbol of symbols) {
+        // Converte BTC-USD → from=BTC, to=USD
+        const parts = symbol.split('-');
+        const from = parts[0];
+        const to = parts[1] || 'USD';
+
+        const quote = await polygon.getCryptoQuote(from, to);
+        if (quote) {
+          results.push({
+            symbol: symbol,
+            name: quote.name,
+            price: quote.price,
+            change: quote.change,
+            changePercent: quote.changePercent,
+            volume: quote.volume,
+            timestamp: quote.timestamp,
+            source: 'Polygon-Crypto'
+          });
+        }
+      }
+
+      console.log(`✅ Polygon crypto: ${results.length} symbols fetched`);
+    } catch (error) {
+      console.warn('Polygon crypto error:', error);
+    }
+
     return results;
   }
 

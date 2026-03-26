@@ -22,7 +22,19 @@ import {
 // ========== Types ==========
 type ChartStyle = 'candle' | 'line' | 'area'
 type RangeKey = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
-type IndicatorKey = 'sma20' | 'sma50' | 'ema20' | 'bb' | 'volume' | 'vwap'
+type IndicatorKey =
+  // Trend
+  | 'sma20' | 'sma50' | 'sma100' | 'sma200'
+  | 'ema9' | 'ema20' | 'ema50' | 'ema200'
+  | 'ichimoku'
+  // Volatility
+  | 'bb' | 'keltner' | 'atr' | 'donchian'
+  // Volume
+  | 'volume' | 'vwap' | 'obv'
+  // Momentum
+  | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
+  // Support/Resistance
+  | 'pivots'
 
 interface Bar {
   time: number
@@ -52,13 +64,55 @@ const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: strin
   { key: 'MAX', label: 'MAX', range: 'max', interval: '1mo' },
 ]
 
-const IND_OPTIONS: { key: IndicatorKey; label: string }[] = [
-  { key: 'sma20', label: 'SMA 20' },
-  { key: 'sma50', label: 'SMA 50' },
-  { key: 'ema20', label: 'EMA 20' },
-  { key: 'bb', label: 'Bollinger' },
-  { key: 'volume', label: 'Volume' },
-  { key: 'vwap', label: 'VWAP' },
+const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: string }[] }[] = [
+  {
+    category: 'Trend',
+    items: [
+      { key: 'sma20', label: 'SMA 20' },
+      { key: 'sma50', label: 'SMA 50' },
+      { key: 'sma100', label: 'SMA 100' },
+      { key: 'sma200', label: 'SMA 200' },
+      { key: 'ema9', label: 'EMA 9' },
+      { key: 'ema20', label: 'EMA 20' },
+      { key: 'ema50', label: 'EMA 50' },
+      { key: 'ema200', label: 'EMA 200' },
+      { key: 'ichimoku', label: 'Ichimoku' },
+    ],
+  },
+  {
+    category: 'Volatility',
+    items: [
+      { key: 'bb', label: 'Bollinger' },
+      { key: 'keltner', label: 'Keltner Ch.' },
+      { key: 'atr', label: 'ATR (14)' },
+      { key: 'donchian', label: 'Donchian' },
+    ],
+  },
+  {
+    category: 'Volume',
+    items: [
+      { key: 'volume', label: 'Volume' },
+      { key: 'vwap', label: 'VWAP' },
+      { key: 'obv', label: 'OBV' },
+    ],
+  },
+  {
+    category: 'Momentum',
+    items: [
+      { key: 'rsi', label: 'RSI (14)' },
+      { key: 'macd', label: 'MACD' },
+      { key: 'stochastic', label: 'Stochastic' },
+      { key: 'cci', label: 'CCI (20)' },
+      { key: 'williamsR', label: 'Williams %R' },
+      { key: 'mom', label: 'Momentum' },
+    ],
+  },
+  {
+    category: 'S / R',
+    items: [
+      { key: 'pivots', label: 'Pivot Points' },
+    ],
+  },
 ]
 
 // ========== TA Helpers ==========
@@ -122,6 +176,198 @@ function computeVWAP(bars: Bar[]): (number | null)[] {
     out.push(cumVol > 0 ? cumTPV / cumVol : null)
   }
   return out
+}
+
+// Additional TA helpers
+function computeATR(bars: Bar[], period = 14): (number | null)[] {
+  const trs: number[] = []
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i]
+    if (i === 0) { trs.push(b.high - b.low); continue }
+    const pc = bars[i - 1].close
+    trs.push(Math.max(b.high - b.low, Math.abs(b.high - pc), Math.abs(b.low - pc)))
+  }
+  const out: (number | null)[] = []
+  let prev: number | null = null
+  const k = 2 / (period + 1)
+  for (let i = 0; i < trs.length; i++) {
+    if (prev === null) {
+      if (i < period - 1) { out.push(null); continue }
+      let s = 0; for (let j = i - period + 1; j <= i; j++) s += trs[j]
+      prev = s / period
+    } else {
+      prev = trs[i] * k + prev * (1 - k)
+    }
+    out.push(prev)
+  }
+  return out
+}
+
+function computeKeltner(bars: Bar[], emaPeriod = 20, atrPeriod = 10, mult = 1.5) {
+  const closes = bars.map(b => b.close)
+  const basis = computeEMA(closes, emaPeriod)
+  const atrVals = computeATR(bars, atrPeriod)
+  const upper: (number | null)[] = []
+  const lower: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (basis[i] === null || atrVals[i] === null) { upper.push(null); lower.push(null); continue }
+    upper.push(basis[i]! + mult * atrVals[i]!)
+    lower.push(basis[i]! - mult * atrVals[i]!)
+  }
+  return { basis, upper, lower }
+}
+
+function computeDonchian(bars: Bar[], period = 20) {
+  const upper: (number | null)[] = []
+  const lower: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { upper.push(null); lower.push(null); continue }
+    let hi = -Infinity, lo = Infinity
+    for (let j = i - period + 1; j <= i; j++) { hi = Math.max(hi, bars[j].high); lo = Math.min(lo, bars[j].low) }
+    upper.push(hi); lower.push(lo)
+  }
+  return { upper, lower }
+}
+
+function computeRSI(closes: number[], period = 14): (number | null)[] {
+  const out: (number | null)[] = [null]
+  const gains: number[] = []
+  const losses: number[] = []
+  for (let i = 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1]
+    gains.push(d > 0 ? d : 0)
+    losses.push(d < 0 ? -d : 0)
+    if (i < period) { out.push(null); continue }
+    if (i === period) {
+      const ag = gains.reduce((s, v) => s + v, 0) / period
+      const al = losses.reduce((s, v) => s + v, 0) / period
+      out.push(al === 0 ? 100 : 100 - 100 / (1 + ag / al))
+    } else {
+      const prevRsi = out[i - 1]
+      if (prevRsi === null) { out.push(null); continue }
+      // Wilder smoothing
+      const prevAg = (() => { let ag = gains.slice(0, period).reduce((s, v) => s + v, 0) / period; for (let k = period; k < gains.length; k++) ag = (ag * (period - 1) + gains[k]) / period; return ag })()
+      const prevAl = (() => { let al = losses.slice(0, period).reduce((s, v) => s + v, 0) / period; for (let k = period; k < losses.length; k++) al = (al * (period - 1) + losses[k]) / period; return al })()
+      out.push(prevAl === 0 ? 100 : 100 - 100 / (1 + prevAg / prevAl))
+    }
+  }
+  return out
+}
+
+function computeMACD(closes: number[], fast = 12, slow = 26, signal = 9) {
+  const emaFast = computeEMA(closes, fast)
+  const emaSlow = computeEMA(closes, slow)
+  const macdLine: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (emaFast[i] === null || emaSlow[i] === null) { macdLine.push(null); continue }
+    macdLine.push(emaFast[i]! - emaSlow[i]!)
+  }
+  const nonNullMacd = macdLine.filter(v => v !== null) as number[]
+  const sigLine = computeEMA(nonNullMacd, signal)
+  const sigPadLen = macdLine.length - nonNullMacd.length
+  const sigFull: (number | null)[] = Array(sigPadLen).fill(null).concat(sigLine)
+  const histogram: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (macdLine[i] === null || sigFull[i] === null) { histogram.push(null); continue }
+    histogram.push(macdLine[i]! - sigFull[i]!)
+  }
+  return { macdLine, signal: sigFull, histogram }
+}
+
+function computeStochastic(bars: Bar[], kPeriod = 14, dPeriod = 3) {
+  const kLine: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < kPeriod - 1) { kLine.push(null); continue }
+    let hi = -Infinity, lo = Infinity
+    for (let j = i - kPeriod + 1; j <= i; j++) {
+      hi = Math.max(hi, bars[j].high)
+      lo = Math.min(lo, bars[j].low)
+    }
+    const range = hi - lo
+    kLine.push(range === 0 ? 50 : ((bars[i].close - lo) / range) * 100)
+  }
+  const nonNullK = kLine.filter(v => v !== null) as number[]
+  const dRaw = computeSMA(nonNullK, dPeriod)
+  const dLine: (number | null)[] = Array(kLine.length - nonNullK.length).fill(null).concat(dRaw)
+  return { kLine, dLine }
+}
+
+function computeCCI(bars: Bar[], period = 20): (number | null)[] {
+  const tps = bars.map(b => (b.high + b.low + b.close) / 3)
+  const out: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    const slice = tps.slice(i - period + 1, i + 1)
+    const mean = slice.reduce((s, v) => s + v, 0) / period
+    const md = slice.reduce((s, v) => s + Math.abs(v - mean), 0) / period
+    out.push(md === 0 ? 0 : (tps[i] - mean) / (0.015 * md))
+  }
+  return out
+}
+
+function computeWilliamsR(bars: Bar[], period = 14): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    let hi = -Infinity, lo = Infinity
+    for (let j = i - period + 1; j <= i; j++) {
+      hi = Math.max(hi, bars[j].high)
+      lo = Math.min(lo, bars[j].low)
+    }
+    const range = hi - lo
+    out.push(range === 0 ? -50 : ((hi - bars[i].close) / range) * -100)
+  }
+  return out
+}
+
+function computeMomentum(closes: number[], period = 10): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { out.push(null); continue }
+    out.push(closes[i] - closes[i - period])
+  }
+  return out
+}
+
+function computeOBV(bars: Bar[]): number[] {
+  const out: number[] = [0]
+  for (let i = 1; i < bars.length; i++) {
+    if (bars[i].close > bars[i - 1].close) out.push(out[i - 1] + bars[i].volume)
+    else if (bars[i].close < bars[i - 1].close) out.push(out[i - 1] - bars[i].volume)
+    else out.push(out[i - 1])
+  }
+  return out
+}
+
+function computeIchimoku(bars: Bar[], tenkan = 9, kijun = 26, senkou = 52) {
+  const midHL = (list: Bar[], p: number, i: number): number | null => {
+    if (i < p - 1) return null
+    let hi = -Infinity, lo = Infinity
+    for (let j = i - p + 1; j <= i; j++) { hi = Math.max(hi, list[j].high); lo = Math.min(lo, list[j].low) }
+    return (hi + lo) / 2
+  }
+  const tenkanSen: (number | null)[] = []
+  const kijunSen: (number | null)[] = []
+  const senkouA: (number | null)[] = []
+  const senkouB: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    const t = midHL(bars, tenkan, i); tenkanSen.push(t)
+    const k = midHL(bars, kijun, i); kijunSen.push(k)
+    senkouA.push(t !== null && k !== null ? (t + k) / 2 : null)
+    senkouB.push(midHL(bars, senkou, i))
+  }
+  return { tenkanSen, kijunSen, senkouA, senkouB }
+}
+
+function computePivots(bars: Bar[]): { pp: number; s1: number; s2: number; s3: number; r1: number; r2: number; r3: number } | null {
+  if (bars.length < 2) return null
+  const prev = bars[bars.length - 2]
+  const pp = (prev.high + prev.low + prev.close) / 3
+  return {
+    pp,
+    s1: 2 * pp - prev.high, s2: pp - (prev.high - prev.low), s3: prev.low - 2 * (prev.high - pp),
+    r1: 2 * pp - prev.low, r2: pp + (prev.high - prev.low), r3: prev.high + 2 * (pp - prev.low),
+  }
 }
 
 // ========== Component ==========
@@ -296,8 +542,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       mainSeriesRef.current = as_
     }
 
+    // ===== Helper to add overlay line =====
+    const addOverlay = (vals: (number | null)[], color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
+      const ls = chart.addSeries(LineSeries, { color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style, crosshairMarkerVisible: false })
+      ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
+      overlaySeriesRef.current.push(ls)
+    }
+
+    // Check how many sub-panels we need (for proper margin allocation)
+    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv']
+    const activeSubPanels = subPanelKeys.filter(k => indicators.has(k))
+    const hasVolume = indicators.has('volume')
+
     // Volume
-    if (indicators.has('volume')) {
+    if (hasVolume) {
       const vs = chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'volume' },
         priceScaleId: 'volume',
@@ -313,49 +571,175 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       volumeSeriesRef.current = vs
     }
 
-    // SMA 20
-    if (indicators.has('sma20')) {
-      const vals = computeSMA(closes, 20)
-      const ls = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, lineStyle: LineStyle.Solid, crosshairMarkerVisible: false })
-      ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
-      overlaySeriesRef.current.push(ls)
+    // ── Trend Overlays ──
+    if (indicators.has('sma20')) addOverlay(computeSMA(closes, 20), '#f59e0b')
+    if (indicators.has('sma50')) addOverlay(computeSMA(closes, 50), '#a855f7')
+    if (indicators.has('sma100')) addOverlay(computeSMA(closes, 100), '#06b6d4')
+    if (indicators.has('sma200')) addOverlay(computeSMA(closes, 200), '#ef4444', LineStyle.Solid, 2)
+    if (indicators.has('ema9')) addOverlay(computeEMA(closes, 9), '#34d399', LineStyle.Dashed)
+    if (indicators.has('ema20')) addOverlay(computeEMA(closes, 20), '#06b6d4', LineStyle.Dashed)
+    if (indicators.has('ema50')) addOverlay(computeEMA(closes, 50), '#f472b6', LineStyle.Dashed)
+    if (indicators.has('ema200')) addOverlay(computeEMA(closes, 200), '#fb923c', LineStyle.Dashed, 2)
+
+    // Ichimoku Cloud
+    if (indicators.has('ichimoku')) {
+      const ichi = computeIchimoku(bars)
+      addOverlay(ichi.tenkanSen, '#2563eb', LineStyle.Solid) // Tenkan (blue)
+      addOverlay(ichi.kijunSen, '#dc2626', LineStyle.Solid)  // Kijun (red)
+      addOverlay(ichi.senkouA, 'rgba(34,197,94,0.5)', LineStyle.Dotted) // Senkou A
+      addOverlay(ichi.senkouB, 'rgba(239,68,68,0.5)', LineStyle.Dotted) // Senkou B
     }
 
-    // SMA 50
-    if (indicators.has('sma50')) {
-      const vals = computeSMA(closes, 50)
-      const ls = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, lineStyle: LineStyle.Solid, crosshairMarkerVisible: false })
-      ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
-      overlaySeriesRef.current.push(ls)
-    }
-
-    // EMA 20
-    if (indicators.has('ema20')) {
-      const vals = computeEMA(closes, 20)
-      const ls = chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, lineStyle: LineStyle.Dashed, crosshairMarkerVisible: false })
-      ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
-      overlaySeriesRef.current.push(ls)
-    }
-
-    // Bollinger Bands
+    // ── Volatility Overlays ──
     if (indicators.has('bb')) {
       const { basis, upper, lower } = computeBB(closes, 20, 2)
-      const addBBLine = (vals: (number | null)[], color: string, style: LineStyle) => {
-        const ls = chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: style, crosshairMarkerVisible: false })
-        ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
-        overlaySeriesRef.current.push(ls)
-      }
-      addBBLine(upper, 'rgba(168,85,247,0.5)', LineStyle.Solid)
-      addBBLine(basis, 'rgba(168,85,247,0.3)', LineStyle.Dashed)
-      addBBLine(lower, 'rgba(168,85,247,0.5)', LineStyle.Solid)
+      addOverlay(upper, 'rgba(168,85,247,0.5)')
+      addOverlay(basis, 'rgba(168,85,247,0.3)', LineStyle.Dashed)
+      addOverlay(lower, 'rgba(168,85,247,0.5)')
+    }
+    if (indicators.has('keltner')) {
+      const kc = computeKeltner(bars)
+      addOverlay(kc.upper, 'rgba(34,211,238,0.5)')
+      addOverlay(kc.basis, 'rgba(34,211,238,0.3)', LineStyle.Dashed)
+      addOverlay(kc.lower, 'rgba(34,211,238,0.5)')
+    }
+    if (indicators.has('donchian')) {
+      const dc = computeDonchian(bars)
+      addOverlay(dc.upper, 'rgba(251,191,36,0.5)')
+      addOverlay(dc.lower, 'rgba(251,191,36,0.5)')
     }
 
-    // VWAP
-    if (indicators.has('vwap')) {
-      const vals = computeVWAP(bars)
-      const ls = chart.addSeries(LineSeries, { color: '#ec4899', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false })
+    // ── Volume Overlays ──
+    if (indicators.has('vwap')) addOverlay(computeVWAP(bars), '#ec4899', LineStyle.Dotted)
+
+    // ── Pivot Points (horizontal lines) ──
+    if (indicators.has('pivots') && bars.length >= 2) {
+      const pv = computePivots(bars)
+      if (pv) {
+        const drawHLine = (val: number, color: string, style: LineStyle) => {
+          const ls = chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: style, crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false })
+          ls.setData(timeLabels.map(t => ({ time: t, value: val } as LineData)))
+          overlaySeriesRef.current.push(ls)
+        }
+        drawHLine(pv.pp, '#94a3b8', LineStyle.Solid)
+        drawHLine(pv.r1, 'rgba(239,68,68,0.6)', LineStyle.Dashed)
+        drawHLine(pv.r2, 'rgba(239,68,68,0.4)', LineStyle.Dotted)
+        drawHLine(pv.s1, 'rgba(34,197,94,0.6)', LineStyle.Dashed)
+        drawHLine(pv.s2, 'rgba(34,197,94,0.4)', LineStyle.Dotted)
+      }
+    }
+
+    // ── Sub-panel indicators (rendered as overlays into a secondary price-scale) ──
+    // Due to lightweight-charts limitations, we render sub-panel indicators in a separate scale area
+    const subPanelScaleBase = 0.62 // leave room for sub-panels at the bottom
+    if (activeSubPanels.length > 0) {
+      chart.priceScale('right').applyOptions({
+        scaleMargins: { top: 0.05, bottom: 1 - subPanelScaleBase + (hasVolume ? 0.04 : 0) },
+      })
+    }
+
+    let panelIdx = 0
+    const panelHeight = activeSubPanels.length > 0 ? (1 - subPanelScaleBase) / Math.min(activeSubPanels.length, 3) : 0
+
+    const addSubLine = (vals: (number | null)[], scaleId: string, color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
+      const ls = chart.addSeries(LineSeries, {
+        color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style, crosshairMarkerVisible: false,
+        priceScaleId: scaleId, lastValueVisible: true,
+      })
       ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
       overlaySeriesRef.current.push(ls)
+      return ls
+    }
+
+    const addSubHistogram = (vals: (number | null)[], scaleId: string) => {
+      const hs = chart.addSeries(HistogramSeries, { priceScaleId: scaleId })
+      hs.setData(vals.map((v, i) => v !== null ? ({
+        time: timeLabels[i], value: v,
+        color: v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)',
+      } as HistogramData) : null).filter(Boolean) as HistogramData[])
+      overlaySeriesRef.current.push(hs)
+    }
+
+    const setupSubScale = (scaleId: string) => {
+      const top = subPanelScaleBase + panelIdx * panelHeight
+      chart.priceScale(scaleId).applyOptions({
+        scaleMargins: { top, bottom: Math.max(0, 1 - top - panelHeight) },
+      })
+      panelIdx++
+    }
+
+    // RSI
+    if (indicators.has('rsi')) {
+      const rsiVals = computeRSI(closes)
+      const sid = 'rsi-panel'
+      setupSubScale(sid)
+      addSubLine(rsiVals, sid, '#8b5cf6')
+      // 30/70 reference lines
+      const line30 = timeLabels.map(t => ({ time: t, value: 30 } as LineData))
+      const line70 = timeLabels.map(t => ({ time: t, value: 70 } as LineData))
+      const ls30 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, priceScaleId: sid, lastValueVisible: false })
+      ls30.setData(line30); overlaySeriesRef.current.push(ls30)
+      const ls70 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, priceScaleId: sid, lastValueVisible: false })
+      ls70.setData(line70); overlaySeriesRef.current.push(ls70)
+    }
+
+    // MACD
+    if (indicators.has('macd')) {
+      const m = computeMACD(closes)
+      const sid = 'macd-panel'
+      setupSubScale(sid)
+      addSubLine(m.macdLine, sid, '#3b82f6')
+      addSubLine(m.signal, sid, '#f97316', LineStyle.Dashed)
+      addSubHistogram(m.histogram, sid)
+    }
+
+    // Stochastic
+    if (indicators.has('stochastic')) {
+      const s = computeStochastic(bars)
+      const sid = 'stoch-panel'
+      setupSubScale(sid)
+      addSubLine(s.kLine, sid, '#06b6d4')
+      addSubLine(s.dLine, sid, '#f97316', LineStyle.Dashed)
+    }
+
+    // CCI
+    if (indicators.has('cci')) {
+      const cciVals = computeCCI(bars)
+      const sid = 'cci-panel'
+      setupSubScale(sid)
+      addSubLine(cciVals, sid, '#14b8a6')
+    }
+
+    // Williams %R
+    if (indicators.has('williamsR')) {
+      const wrVals = computeWilliamsR(bars)
+      const sid = 'wr-panel'
+      setupSubScale(sid)
+      addSubLine(wrVals, sid, '#f43f5e')
+    }
+
+    // Momentum
+    if (indicators.has('mom')) {
+      const momVals = computeMomentum(closes)
+      const sid = 'mom-panel'
+      setupSubScale(sid)
+      addSubLine(momVals, sid, '#a78bfa')
+    }
+
+    // ATR (sub-panel)
+    if (indicators.has('atr')) {
+      const atrVals = computeATR(bars)
+      const sid = 'atr-panel'
+      setupSubScale(sid)
+      addSubLine(atrVals, sid, '#fb923c')
+    }
+
+    // OBV (sub-panel)
+    if (indicators.has('obv')) {
+      const obvVals = computeOBV(bars)
+      const sid = 'obv-panel'
+      setupSubScale(sid)
+      addSubLine(obvVals.map(v => v as number | null), sid, '#22d3ee')
     }
 
     // Fit content
@@ -473,30 +857,56 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         </div>
       </div>
 
-      {/* ===== INDICATOR BAR ===== */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-slate-800/30 border-b border-white/5">
-        <span className="text-[10px] text-gray-500 mr-1">Indicators:</span>
-        {IND_OPTIONS.map(ind => (
-          <button
-            key={ind.key}
-            onClick={() => toggleIndicator(ind.key)}
-            className={`px-2 py-0.5 text-[10px] rounded-full transition-colors border ${
-              indicators.has(ind.key)
-                ? 'bg-blue-600/30 border-blue-500/40 text-blue-300'
-                : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {ind.label}
-          </button>
-        ))}
-        {/* Indicator legend */}
-        <div className="ml-auto flex items-center gap-3 text-[9px]">
-          {indicators.has('sma20') && <span className="text-amber-400">● SMA 20</span>}
-          {indicators.has('sma50') && <span className="text-purple-400">● SMA 50</span>}
-          {indicators.has('ema20') && <span className="text-cyan-400">● EMA 20</span>}
-          {indicators.has('bb') && <span className="text-purple-400/70">● BB(20,2)</span>}
-          {indicators.has('vwap') && <span className="text-pink-400">● VWAP</span>}
+      {/* ===== INDICATOR BAR (categorized) ===== */}
+      <div className="px-3 py-1.5 bg-slate-800/30 border-b border-white/5 space-y-1">
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
+          {IND_CATEGORIES.map(cat => (
+            <div key={cat.category} className="flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mr-0.5">{cat.category}</span>
+              {cat.items.map(ind => (
+                <button
+                  key={ind.key}
+                  onClick={() => toggleIndicator(ind.key)}
+                  className={`px-1.5 py-0.5 text-[10px] rounded-full transition-colors border ${
+                    indicators.has(ind.key)
+                      ? 'bg-blue-600/30 border-blue-500/40 text-blue-300'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {ind.label}
+                </button>
+              ))}
+              <div className="w-px h-3 bg-white/10 mx-0.5 hidden lg:block" />
+            </div>
+          ))}
         </div>
+        {/* Active indicator legend */}
+        {indicators.size > 0 && (
+          <div className="flex items-center gap-3 text-[9px] flex-wrap">
+            {indicators.has('sma20') && <span className="text-amber-400">● SMA 20</span>}
+            {indicators.has('sma50') && <span className="text-purple-400">● SMA 50</span>}
+            {indicators.has('sma100') && <span className="text-cyan-400">● SMA 100</span>}
+            {indicators.has('sma200') && <span className="text-red-400">● SMA 200</span>}
+            {indicators.has('ema9') && <span className="text-emerald-400">● EMA 9</span>}
+            {indicators.has('ema20') && <span className="text-cyan-400">● EMA 20</span>}
+            {indicators.has('ema50') && <span className="text-pink-400">● EMA 50</span>}
+            {indicators.has('ema200') && <span className="text-orange-400">● EMA 200</span>}
+            {indicators.has('ichimoku') && <span className="text-blue-400">● Ichimoku</span>}
+            {indicators.has('bb') && <span className="text-purple-400/70">● BB(20,2)</span>}
+            {indicators.has('keltner') && <span className="text-cyan-300">● Keltner</span>}
+            {indicators.has('donchian') && <span className="text-amber-300">● Donchian</span>}
+            {indicators.has('vwap') && <span className="text-pink-400">● VWAP</span>}
+            {indicators.has('obv') && <span className="text-cyan-400">● OBV</span>}
+            {indicators.has('rsi') && <span className="text-purple-400">● RSI</span>}
+            {indicators.has('macd') && <span className="text-blue-400">● MACD</span>}
+            {indicators.has('stochastic') && <span className="text-cyan-400">● Stoch</span>}
+            {indicators.has('cci') && <span className="text-teal-400">● CCI</span>}
+            {indicators.has('williamsR') && <span className="text-rose-400">● W%R</span>}
+            {indicators.has('mom') && <span className="text-violet-400">● Mom</span>}
+            {indicators.has('atr') && <span className="text-orange-400">● ATR</span>}
+            {indicators.has('pivots') && <span className="text-gray-400">● Pivots</span>}
+          </div>
+        )}
       </div>
 
       {/* ===== CROSSHAIR TOOLTIP ===== */}

@@ -238,9 +238,8 @@ export async function GET(req: NextRequest) {
       return { date, triggeredKeys, percent };
     });
 
-    // Recent (last 6 month-end snapshots from July to Dec 2025) - recompute point-in-time triggers per month
+    // Recent (last 6 month-end snapshots) - recompute point-in-time triggers per month
     const recent: Snapshot[] = [];
-    const monthLabels = ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12'];
     for (let m = 5; m >= 0; m--) {
       const ref = new Date();
       ref.setDate(1);
@@ -248,7 +247,7 @@ export async function GET(req: NextRequest) {
       ref.setMonth(ref.getMonth() - m + 1);
       ref.setDate(0); // last day of previous month
       const dateStr = ref.toISOString().split('T')[0];
-      const monthLabel = monthLabels[5 - m];
+      const monthLabel = dateStr.slice(0, 7); // e.g. "2026-01"
       const triggeredKeys: string[] = [];
       // Re-evaluate triggers historically (subset of metrics we can reconstruct)
       const sentVal = valueOnOrBefore(umcSent, dateStr);

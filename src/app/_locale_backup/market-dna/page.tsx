@@ -334,589 +334,796 @@ export default function MarketDNAPage() {
 
   if (loading) {
     return (
-  <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <div className="text-white text-xl">Analyzing Market DNA...</div>
+      <div className="min-h-screen bg-[#060a13] flex items-center justify-center overflow-hidden">
+        <div className="relative text-center">
+          {/* Animated DNA helix backdrop */}
+          <div className="absolute -inset-32 opacity-20">
+            <svg viewBox="0 0 200 200" className="w-64 h-64 mx-auto animate-spin" style={{ animationDuration: '8s' }}>
+              <defs>
+                <linearGradient id="dnaGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" />
+                  <stop offset="50%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#ec4899" />
+                </linearGradient>
+              </defs>
+              <circle cx="100" cy="100" r="80" fill="none" stroke="url(#dnaGrad)" strokeWidth="0.5" strokeDasharray="4 6" />
+              <circle cx="100" cy="100" r="60" fill="none" stroke="url(#dnaGrad)" strokeWidth="0.3" strokeDasharray="2 8" />
+              <circle cx="100" cy="100" r="40" fill="none" stroke="url(#dnaGrad)" strokeWidth="0.5" />
+            </svg>
+          </div>
+          <div className="relative w-20 h-20 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse" />
+            <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-blue-400 border-r-purple-400 animate-spin" />
+            <span className="absolute inset-0 flex items-center justify-center text-2xl">🧬</span>
+          </div>
+          <p className="text-white/90 text-xl font-semibold tracking-tight">Decoding Market DNA</p>
+          <p className="text-gray-500 text-sm mt-2">Analyzing patterns, correlations & regime signals...</p>
+        </div>
       </div>
     );
   }
 
   if (!data) {
     return (
-  <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <div className="text-red-400 text-xl">Failed to load Market DNA data</div>
+      <div className="min-h-screen bg-[#060a13] flex items-center justify-center">
+        <div className="bg-red-500/5 backdrop-blur-md rounded-2xl p-8 border border-red-500/10 max-w-md text-center">
+          <span className="text-4xl mb-4 block">⚠️</span>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Analysis Unavailable</h2>
+          <p className="text-gray-400 text-sm">Failed to decode current market DNA patterns.</p>
+          <button onClick={fetchMarketDNA} className="mt-4 px-5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg border border-red-500/20 transition-colors text-sm font-medium">
+            Retry Analysis
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <RequirePlan min="premium">
-  <div className="min-h-screen bg-[var(--background)] text-white">
-        {/* Header */}
-        <div className="bg-slate-800 border-b border-slate-700">
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                  <NavigationLink href="/" className="text-blue-400 hover:text-blue-300">
-                    <ArrowLeftIcon className="h-5 w-5" />
-                </NavigationLink>
+      <div className="min-h-screen bg-[#060a13] text-white">
+        {/* ═══════ HEADER ═══════ */}
+        <header className="sticky top-0 z-30 bg-[#060a13]/80 backdrop-blur-xl border-b border-white/[0.04]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <NavigationLink href="/dashboard" className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                <ArrowLeftIcon className="h-4 w-4" />
+              </NavigationLink>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                  <span className="text-lg">🧬</span>
+                </div>
                 <div>
-                  <h1 className="text-2xl font-bold">🧠 Market DNA</h1>
-                  <p className="text-sm text-gray-400">Historical Pattern Recognition & Similarity Analysis</p>
+                  <h1 className="text-base font-bold tracking-tight">Market DNA</h1>
+                  <p className="text-[10px] text-gray-500 hidden sm:block">Historical Pattern Recognition & Risk Intelligence</p>
                 </div>
               </div>
-                {/* auto-refresh hidden per requirements */}
+            </div>
+            <div className="flex items-center gap-3">
+              {data.marketMetrics?.spyPrice && (
+                <div className="hidden sm:flex items-center gap-2 text-[11px]">
+                  <span className="text-gray-500">S&P</span>
+                  <span className="text-white font-semibold tabular-nums">{data.marketMetrics.spyPrice.toFixed(0)}</span>
+                  {data.marketMetrics.vixLevel && (
+                    <>
+                      <span className="w-px h-3 bg-white/10" />
+                      <span className="text-gray-500">VIX</span>
+                      <span className={`font-semibold tabular-nums ${data.marketMetrics.vixLevel > 25 ? 'text-red-400' : data.marketMetrics.vixLevel > 18 ? 'text-amber-400' : 'text-emerald-400'}`}>{data.marketMetrics.vixLevel.toFixed(1)}</span>
+                    </>
+                  )}
+                </div>
+              )}
+              <button onClick={fetchMarketDNA} disabled={refreshing}
+                className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-gray-400 hover:text-white transition-all">
+                <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </button>
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-          
-          {/* Current DNA Score & Historical Similarity Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-slate-800 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold flex items-center">
-                  <ChartBarIcon className="h-6 w-6 mr-2 text-blue-400" />
-                  Current Market DNA
-                </h2>
-                <ArrowTrendingUpIcon className="h-6 w-6 text-red-400" />
-              </div>
-              
-              <div className="text-center mb-6">
-                <div className="text-5xl font-bold mb-2">
-                  <span className={data.currentDNAScore >= 80 ? 'text-red-500' : data.currentDNAScore >= 60 ? 'text-orange-500' : 'text-green-500'}>
-                    {data.currentDNAScore}%
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+          {/* ═══════ HERO: DNA SCORE + PATTERN MATCH ═══════ */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* DNA Score Card */}
+            <div className="lg:col-span-2 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.08] via-purple-500/[0.05] to-pink-500/[0.08] rounded-2xl" />
+              <div className="relative bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] p-6 shadow-[0_0_60px_-15px_rgba(139,92,246,0.15)]">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center">
+                      <ChartBarIcon className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <span className="text-sm font-semibold text-white">Market DNA Score</span>
+                  </div>
+                  <span className="text-[10px] font-medium uppercase tracking-widest text-gray-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">Live</span>
+                </div>
+
+                {/* Central gauge */}
+                <div className="flex flex-col items-center mb-6">
+                  <div className="relative w-44 h-24">
+                    <svg viewBox="0 0 200 110" className="w-full h-full">
+                      <defs>
+                        <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#22c55e" />
+                          <stop offset="40%" stopColor="#f59e0b" />
+                          <stop offset="70%" stopColor="#ef4444" />
+                          <stop offset="100%" stopColor="#dc2626" />
+                        </linearGradient>
+                      </defs>
+                      {/* Background arc */}
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(148,163,184,0.1)" strokeWidth="12" strokeLinecap="round" />
+                      {/* Value arc */}
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" strokeWidth="12" strokeLinecap="round"
+                        strokeDasharray={`${(data.currentDNAScore / 100) * 251.2} 251.2`} />
+                      {/* Needle */}
+                      {(() => {
+                        const angle = -180 + (data.currentDNAScore / 100) * 180
+                        const rad = (angle * Math.PI) / 180
+                        const nx = 100 + Math.cos(rad) * 60
+                        const ny = 100 + Math.sin(rad) * 60
+                        return <line x1="100" y1="100" x2={nx} y2={ny} stroke="white" strokeWidth="2" strokeLinecap="round" />
+                      })()}
+                      <circle cx="100" cy="100" r="4" fill="white" />
+                    </svg>
+                  </div>
+                  <div className="text-center -mt-2">
+                    <span className={`text-4xl font-black tabular-nums ${data.currentDNAScore >= 80 ? 'text-red-400' : data.currentDNAScore >= 60 ? 'text-amber-400' : data.currentDNAScore >= 40 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                      {data.currentDNAScore}%
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">Pattern Strength</p>
+                  </div>
+                </div>
+
+                {/* Dominant Pattern Badge */}
+                <div className="text-center">
+                  <span className={`inline-flex px-4 py-2 rounded-xl text-sm font-semibold border ${
+                    data.dominantPattern.includes('Crisis') ? 'bg-red-500/10 border-red-500/20 text-red-300' :
+                    data.dominantPattern.includes('Bubble') ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' :
+                    'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  }`}>
+                    {data.dominantPattern}
                   </span>
                 </div>
-                <div className="text-lg text-gray-300 mb-4">Pattern Strength</div>
-                <div className={`inline-flex px-4 py-2 rounded-full text-sm font-semibold ${
-                  data.dominantPattern.includes('Crisis') ? 'bg-red-900/30 text-red-400' :
-                  data.dominantPattern.includes('Bubble') ? 'bg-orange-900/30 text-orange-400' :
-                  'bg-green-900/30 text-green-400'
-                }`}>
-                  {data.dominantPattern}
-                </div>
-              </div>
 
-              {/* DNA Score Gauge Chart */}
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Risk Level', value: data.currentDNAScore },
-                        { name: 'Safe Level', value: 100 - data.currentDNAScore }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={60}
-                      outerRadius={80}
-                      dataKey="value"
-                    >
-                      <Cell fill={data.currentDNAScore >= 80 ? '#dc2626' : data.currentDNAScore >= 60 ? '#ea580c' : '#16a34a'} />
-                      <Cell fill="#334155" />
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => [`${value}%`, 'DNA Score']}
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                {/* Quick metrics */}
+                {data.marketMetrics && (
+                  <div className="grid grid-cols-2 gap-2 mt-5">
+                    {[
+                      { l: 'S&P 500', v: data.marketMetrics.spyPrice?.toFixed(0) },
+                      { l: 'VIX', v: data.marketMetrics.vixLevel?.toFixed(1) },
+                      { l: 'Dollar', v: data.marketMetrics.dollarIndex?.toFixed(1) },
+                      { l: 'Gold', v: data.marketMetrics.goldPrice ? `$${data.marketMetrics.goldPrice.toFixed(0)}` : '—' },
+                    ].map(m => (
+                      <div key={m.l} className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{m.l}</p>
+                        <p className="text-sm font-bold tabular-nums text-white">{m.v || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                <ExclamationTriangleIcon className="h-6 w-6 mr-2 text-red-400" />
-                Historical Similarity Trends
-              </h2>
-              
-              <div className="h-64 mb-4">
-                <LazyVisible minHeight={256}>
-                  <HistoricalSimilarityChart data={similaritySeries as any} />
-                </LazyVisible>
-              </div>
-
-              <div className={`border-l-4 border-red-500 pl-4`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-lg">{data.topHistoricalMatch.date}</span>
-                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${getSimilarityColor(data.topHistoricalMatch.similarity)}`}>
-                    {data.topHistoricalMatch.similarity}% Similar
-                  </span>
-                </div>
-                <div className="text-red-400 font-medium mb-2">{data.topHistoricalMatch.eventType}</div>
-                <div className="text-sm text-gray-400 mb-2">{data.topHistoricalMatch.description}</div>
-                <div className="text-sm">
-                  <span className="text-gray-400">Next Period Return: </span>
-                  <span className="text-red-500 font-bold">{data.topHistoricalMatch.nextPeriodReturn}</span>
+            {/* Historical Similarity Chart + Top Match */}
+            <div className="lg:col-span-3 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">Historical Similarity</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Pattern matching against crisis events</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Additional Historical Matches */}
-          <div className="bg-slate-800 rounded-xl p-6">
-            <h2 className="text-xl font-bold mb-4">📊 Additional Historical Patterns</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data.additionalMatches.map((match, index) => (
-                <div key={index} className="bg-slate-700 rounded-lg p-4">
+              <div className="p-6">
+                <div className="h-56 mb-5">
+                  <LazyVisible minHeight={224}>
+                    <HistoricalSimilarityChart data={similaritySeries as any} />
+                  </LazyVisible>
+                </div>
+                {/* Top match callout */}
+                <div className={`rounded-xl p-4 border-l-4 ${data.topHistoricalMatch.similarity >= 80 ? 'border-red-500 bg-red-500/[0.05]' : data.topHistoricalMatch.similarity >= 60 ? 'border-amber-500 bg-amber-500/[0.05]' : 'border-emerald-500 bg-emerald-500/[0.05]'}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{match.date}</span>
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${getSimilarityColor(match.similarity)}`}>
-                      {match.similarity}%
+                    <div>
+                      <span className="text-xs text-gray-500">{data.topHistoricalMatch.date}</span>
+                      <span className="mx-2 text-gray-600">·</span>
+                      <span className={`text-sm font-semibold ${data.topHistoricalMatch.similarity >= 80 ? 'text-red-400' : data.topHistoricalMatch.similarity >= 60 ? 'text-amber-400' : 'text-emerald-400'}`}>{data.topHistoricalMatch.eventType}</span>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${getSimilarityColor(data.topHistoricalMatch.similarity)}`}>
+                      {data.topHistoricalMatch.similarity}% Match
                     </span>
                   </div>
-                  <div className="text-sm text-orange-400 mb-1">{match.eventType}</div>
-                  <div className="text-xs text-gray-400 mb-2">{match.description}</div>
-                  <div className="text-xs">
-                    <div className="text-gray-400 mb-1">Return: <span className="text-red-400 font-semibold">{match.nextPeriodReturn}</span></div>
+                  <p className="text-sm text-gray-400 leading-relaxed">{data.topHistoricalMatch.description}</p>
+                  <div className="flex items-center gap-4 mt-2 text-xs">
+                    <span className="text-gray-500">Next Period: <span className="text-red-400 font-semibold">{data.topHistoricalMatch.nextPeriodReturn}</span></span>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
 
-          {/* Peak Signals Matrix (Market Peak Watchlist) */}
+          {/* ═══════ ADDITIONAL HISTORICAL PATTERNS ═══════ */}
+          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center">
+                  <ChartBarIcon className="h-5 w-5 text-blue-400" />
+                </div>
+                <h2 className="text-lg font-semibold text-white tracking-tight">Additional Historical Patterns</h2>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.additionalMatches.map((match, index) => (
+                  <div key={index} className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-all group">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-semibold text-gray-200">{match.date}</span>
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${getSimilarityColor(match.similarity)}`}>
+                        {match.similarity}%
+                      </span>
+                    </div>
+                    <p className={`text-sm font-medium mb-1 ${match.similarity >= 70 ? 'text-amber-400' : 'text-blue-400'}`}>{match.eventType}</p>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-3">{match.description}</p>
+                    <div className="flex items-center justify-between text-xs border-t border-white/[0.04] pt-2">
+                      <span className="text-gray-500">Next Period Return</span>
+                      <span className="text-red-400 font-semibold">{match.nextPeriodReturn}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════ PEAK SIGNALS MATRIX ═══════ */}
           {peakSignals && (
-            <div className="bg-slate-800 rounded-xl p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">🚨 EconoPulse Peak Signals <span className="text-sm font-normal text-slate-400">{peakSignals.current.percent}% triggered (real+proxy)</span></h2>
-                <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
-                  <span>Live S&P proxy: <span className="text-blue-400 font-semibold">{data.marketMetrics?.spyPrice?.toFixed(0)}</span></span>
-                  {loadingPeak && <span className="text-emerald-300">Updating…</span>}
+            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500/20 to-amber-500/10 border border-red-500/20 flex items-center justify-center">
+                    <span className="text-lg">🚨</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold text-white tracking-tight">EconoPulse Peak Signals</h2>
+                      <span className={`text-[10px] font-medium uppercase tracking-widest px-2 py-0.5 rounded-full border ${peakSignals.current.percent > 60 ? 'text-red-300 bg-red-500/10 border-red-500/20' : peakSignals.current.percent > 30 ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'}`}>
+                        {peakSignals.current.percent}% Triggered
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">Real-time market peak watchlist (real + proxy signals)</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  {data.marketMetrics?.spyPrice && <span>S&P: <span className="text-blue-400 font-semibold">{data.marketMetrics.spyPrice.toFixed(0)}</span></span>}
+                  {loadingPeak && <span className="text-emerald-400 animate-pulse">Updating...</span>}
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="p-4 overflow-x-auto">
                 <table className="min-w-full text-[11px]">
                   <thead>
-                    <tr className="border-b border-slate-700/60 bg-slate-700/40">
-                      <th className="text-left py-2 px-2 font-semibold">Signpost</th>
-                      <th className="text-left py-2 px-2 font-semibold">Category</th>
-                      {peakSignals.historical.map(h=> (
-                        <th key={h.date} className="py-2 px-2 font-semibold text-center whitespace-nowrap">{h.date}</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                      <th className="text-left py-2.5 px-3 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Signpost</th>
+                      <th className="text-left py-2.5 px-3 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Category</th>
+                      {peakSignals.historical.map(h => (
+                        <th key={h.date} className="py-2.5 px-2 font-medium text-center whitespace-nowrap text-gray-400 uppercase tracking-wider text-[10px]">{h.date}</th>
                       ))}
-                      {peakSignals.recent.map(r=> (
-                        <th key={r.date} className="py-2 px-2 font-semibold text-center whitespace-nowrap">{r.date}</th>
+                      {peakSignals.recent.map(r => (
+                        <th key={r.date} className="py-2.5 px-2 font-medium text-center whitespace-nowrap text-gray-400 uppercase tracking-wider text-[10px]">{r.date}</th>
                       ))}
-                      <th className="py-2 px-2 font-semibold text-center whitespace-nowrap">Current</th>
+                      <th className="py-2.5 px-2 font-medium text-center whitespace-nowrap text-[10px] text-blue-400 uppercase tracking-wider">Now</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-white/[0.03]">
                     {peakSignals.signals.map(sig => (
-                      <tr key={sig.key} className="border-b border-slate-700/40 hover:bg-slate-700/30">
-                        <td className="py-2 px-2 font-medium text-slate-200 max-w-xs">
-                          <div className="flex flex-col">
-                            <span>{sig.label}</span>
-                            <span className="text-[10px] text-slate-500">Src: {sig.source} • Thr: {sig.threshold} • {sig.status==='proxy'?'Proxy':sig.status==='unavailable'?'N/A':'Real'}</span>
+                      <tr key={sig.key} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-gray-200 max-w-xs">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-gray-100">{sig.label}</span>
+                            <span className="text-[9px] text-gray-600">{sig.source} · {sig.threshold} · {sig.status === 'proxy' ? 'Proxy' : sig.status === 'unavailable' ? 'N/A' : 'Real'}</span>
                           </div>
                         </td>
-                        <td className="py-2 px-2"><span className={`px-2 py-1 rounded border text-[10px] font-semibold ${categoryColor(sig.category)}`}>{sig.category}</span></td>
-                        {peakSignals.historical.map(h=> <td key={h.date+sig.key} className="py-2 px-2 text-center">{checkMark(h.triggeredKeys.includes(sig.key), sig.status)}</td>)}
-                        {peakSignals.recent.map(r=> <td key={r.date+sig.key} className="py-2 px-2 text-center">{checkMark(r.triggeredKeys.includes(sig.key), sig.status)}</td>)}
-                        <td className="py-2 px-2 text-center font-bold">{checkMark(peakSignals.current.triggeredKeys.includes(sig.key), sig.status)}</td>
+                        <td className="py-2.5 px-3"><span className={`px-2 py-0.5 rounded-md border text-[9px] font-semibold ${categoryColor(sig.category)}`}>{sig.category}</span></td>
+                        {peakSignals.historical.map(h => <td key={h.date + sig.key} className="py-2.5 px-2 text-center">{checkMark(h.triggeredKeys.includes(sig.key), sig.status)}</td>)}
+                        {peakSignals.recent.map(r => <td key={r.date + sig.key} className="py-2.5 px-2 text-center">{checkMark(r.triggeredKeys.includes(sig.key), sig.status)}</td>)}
+                        <td className="py-2.5 px-2 text-center font-bold">{checkMark(peakSignals.current.triggeredKeys.includes(sig.key), sig.status)}</td>
                       </tr>
                     ))}
-                    {/* Summary rows */}
-                    <tr className="bg-slate-700/60">
-                      <td className="py-2 px-2 font-semibold">% triggered</td>
-                      <td className="py-2 px-2"></td>
-                      {peakSignals.historical.map(h=> <td key={h.date+'pct'} className="py-2 px-2 text-center font-semibold text-amber-300">{h.percent}%</td>)}
-                      {peakSignals.recent.map(r=> <td key={r.date+'pct'} className="py-2 px-2 text-center font-semibold text-amber-300">{r.percent}%</td>)}
-                      <td className="py-2 px-2 text-center font-semibold text-emerald-300">{peakSignals.current.percent}%</td>
+                    {/* Summary row */}
+                    <tr className="bg-white/[0.03]">
+                      <td className="py-2.5 px-3 font-semibold text-gray-200">% triggered</td>
+                      <td className="py-2.5 px-3" />
+                      {peakSignals.historical.map(h => <td key={h.date + 'pct'} className="py-2.5 px-2 text-center font-semibold text-amber-300">{h.percent}%</td>)}
+                      {peakSignals.recent.map(r => <td key={r.date + 'pct'} className="py-2.5 px-2 text-center font-semibold text-amber-300">{r.percent}%</td>)}
+                      <td className="py-2.5 px-2 text-center font-semibold text-emerald-300">{peakSignals.current.percent}%</td>
                     </tr>
-                    
                   </tbody>
                 </table>
               </div>
-              <div className="mt-3 text-[10px] text-slate-500 leading-relaxed">
-                Real: raw open data; Proxy: open substitute for proprietary construct; N/A: requires licensed data (excluded). Historical peak dates sampled; recent columns = last 6 monthly snapshots. Informational only – not investment advice.
+              <div className="px-6 py-3 border-t border-white/[0.04]">
+                <p className="text-[10px] text-gray-600 leading-relaxed">
+                  Real: raw open data · Proxy: open substitute for proprietary construct · N/A: requires licensed data (excluded). Historical peak dates sampled. Informational only – not investment advice.
+                </p>
               </div>
             </div>
           )}
 
-          {/* Advanced Analytics Dashboard */}
+          {/* ═══════ ADVANCED ANALYTICS DASHBOARD ═══════ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Market Regime Evolution */}
-            <div className="bg-slate-800 rounded-xl p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                🔄 Market Regime Evolution
-              </h2>
-              <div className="h-64">
-                <LazyVisible minHeight={256}>
-                  <MarketRegimeArea data={regimeSeries as any} />
-                </LazyVisible>
+            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-500/20 flex items-center justify-center">
+                    <span className="text-lg">🔄</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">Market Regime Evolution</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Regime classification over time</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="h-64">
+                  <LazyVisible minHeight={256}>
+                    <MarketRegimeArea data={regimeSeries as any} />
+                  </LazyVisible>
+                </div>
               </div>
             </div>
 
             {/* Sector Risk Radar */}
-            <div className="bg-slate-800 rounded-xl p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                🎯 Sector Risk Analysis
-              </h2>
-              <div className="h-64">
-                <LazyVisible minHeight={256}>
-                  <SectorRiskRadar data={radarSeries as any} />
-                </LazyVisible>
-              </div>
-            </div>
-          </div>
-
-          {/* Sector Vulnerabilities with Charts */}
-          <div className="bg-slate-800 rounded-xl p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-              <h2 className="text-xl font-bold">⚠️ Sector Vulnerability Analysis</h2>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <div className="flex items-center gap-1 bg-slate-700/60 rounded-md p-1">
-                  {['score','change'].map(k=> (
-                    <button key={k} onClick={()=>setSectorSort(k as any)} className={`px-2 py-1 rounded-md font-medium transition-colors ${sectorSort===k?'bg-blue-600 text-white':'text-slate-300 hover:text-white'}`}>{k==='score'?'Sort: Risk':'Sort: Δ'}</button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1 bg-slate-700/60 rounded-md p-1">
-                  {['bars','table'].map(v => (
-                    <button key={v} onClick={()=>setSectorView(v as any)} className={`px-2 py-1 rounded-md font-medium transition-colors ${sectorView===v?'bg-indigo-600 text-white':'text-slate-300 hover:text-white'}`}>{v==='bars'?'Bars':'Table'}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Sector Risk Bar Chart Enhanced */}
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart 
-                    data={[...data.sectorVulnerabilities].sort((a,b)=>{
-                      if (sectorSort==='score') return b.score - a.score;
-                      const av = parseFloat(a.change); const bv = parseFloat(b.change); return bv - av;
-                    })}
-                    layout="vertical"
-                    margin={{ top: 10, right: 24, left: 0, bottom: 10 }}
-                  >
-                    <defs>
-                      <linearGradient id="riskCrit" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7f1d1d"/><stop offset="100%" stopColor="#dc2626"/></linearGradient>
-                      <linearGradient id="riskHigh" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7c2d12"/><stop offset="100%" stopColor="#ea580c"/></linearGradient>
-                      <linearGradient id="riskMed" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#78350f"/><stop offset="100%" stopColor="#f59e0b"/></linearGradient>
-                      <linearGradient id="riskLow" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#065f46"/><stop offset="100%" stopColor="#16a34a"/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 4" stroke="#334155" horizontal={false} />
-                    <XAxis type="number" stroke="#94a3b8" fontSize={11} domain={[0,100]} tickFormatter={(v)=>`${v}`}/>
-                    <YAxis dataKey="sector" type="category" stroke="#94a3b8" width={110} tick={{fontSize:11}} />
-                    <Tooltip 
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                      formatter={(value, name, p:any) => {
-                        if (name==='score') return [`${value}`, 'Risk Score'];
-                        return [value, name];
-                      }}
-                    />
-                    <Legend formatter={(val)=> val==='score'?'Risk Score':val} wrapperStyle={{fontSize:10}} />
-                    <Bar dataKey="score" radius={[0,6,6,0]} barSize={20}>
-                      <LabelList dataKey="score" position="right" className="fill-slate-200 text-[10px]" />
-                      {data.sectorVulnerabilities.sort((a,b)=>{
-                        if (sectorSort==='score') return b.score - a.score; const av=parseFloat(a.change); const bv=parseFloat(b.change); return bv-av; }).map((entry, idx)=> {
-                        const grad = entry.riskLevel==='CRITICAL'?'url(#riskCrit)':entry.riskLevel==='HIGH'?'url(#riskHigh)':entry.riskLevel==='MEDIUM'?'url(#riskMed)':'url(#riskLow)';
-                        return <Cell key={`cell-r-${idx}`} fill={grad} stroke="#1e293b" strokeWidth={0.5} />;
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400 px-1">
-                  <span>Gradient encodes risk severity.</span>
-                  <span>Sorted by {sectorSort==='score'?'risk score':'Δ change'}.</span>
-                </div>
-              </div>
-
-              {/* Sector Cards or Table */}
-              {sectorView==='bars' ? (
-                <div className="grid grid-cols-2 gap-4">
-                  {data.sectorVulnerabilities.map((sector, index) => (
-                    <div key={index} className="bg-slate-700/60 rounded-lg p-4 border border-slate-600/50 hover:border-slate-500 transition-colors group">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-sm group-hover:text-white transition-colors">{sector.sector}</span>
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wide ${getRiskColor(sector.riskLevel)}`}>
-                          {sector.riskLevel}
-                        </span>
-                      </div>
-                      <div className="flex items-end gap-3 mb-1">
-                        <div className="text-2xl font-bold text-slate-100 leading-none">{sector.score}</div>
-                        <div className={`text-sm font-medium ${sector.change.startsWith('+') ? 'text-green-400':'text-red-400'}`}>{sector.change}</div>
-                      </div>
-                      <div className="h-2 w-full bg-slate-600/40 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{width:`${sector.score}%`, background: sector.riskLevel==='CRITICAL'?'linear-gradient(90deg,#7f1d1d,#dc2626)': sector.riskLevel==='HIGH'?'linear-gradient(90deg,#7c2d12,#ea580c)': sector.riskLevel==='MEDIUM'?'linear-gradient(90deg,#78350f,#f59e0b)':'linear-gradient(90deg,#065f46,#16a34a)'}}></div>
-                      </div>
-                      <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-                        <span>Exposure</span><span>{sector.score}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-auto">
-                  <table className="min-w-full text-xs">
-                    <thead className="text-slate-300">
-                      <tr className="text-left border-b border-slate-600">
-                        <th className="py-2 pr-4 font-semibold">Sector</th>
-                        <th className="py-2 pr-4 font-semibold">Risk</th>
-                        <th className="py-2 pr-4 font-semibold">Score</th>
-                        <th className="py-2 pr-4 font-semibold">Δ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...data.sectorVulnerabilities].sort((a,b)=>{
-                        if (sectorSort==='score') return b.score - a.score; const av=parseFloat(a.change); const bv=parseFloat(b.change); return bv-av; }).map((s,i)=>(
-                        <tr key={i} className="border-b border-slate-700/60 hover:bg-slate-700/30">
-                          <td className="py-1 pr-4 font-medium text-slate-100">{s.sector}</td>
-                          <td className="py-1 pr-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getRiskColor(s.riskLevel)}`}>{s.riskLevel}</span></td>
-                          <td className="py-1 pr-4 text-slate-200 font-semibold">{s.score}</td>
-                          <td className={`py-1 pr-4 font-medium ${s.change.startsWith('+')?'text-green-400':'text-red-400'}`}>{s.change}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            <div className="mt-4 text-[10px] text-slate-500 flex flex-wrap gap-3">
-              <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-rose-900 to-red-600 rounded-sm mr-1"></span>Critical</span>
-              <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-amber-900 to-orange-600 rounded-sm mr-1"></span>High</span>
-              <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-yellow-900 to-amber-500 rounded-sm mr-1"></span>Medium</span>
-              <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-emerald-900 to-green-600 rounded-sm mr-1"></span>Low</span>
-            </div>
-          </div>
-
-          {/* Market Clusters */}
-          <div className="bg-slate-800 rounded-xl p-6">
-            <h2 className="text-xl font-bold mb-4">🔄 Current Market Clusters</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {data.marketClusters.map((cluster, index) => (
-                <div key={index} className="bg-slate-700 rounded-lg p-4">
-                  <h3 className="font-semibold text-lg mb-2">{cluster.clusterName}</h3>
-                  <div className="mb-2">
-                    <span className="text-sm text-gray-400">Assets: </span>
-                    <span className="text-blue-400">{cluster.currentAssets.join(', ')}</span>
+            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
+                    <span className="text-lg">🎯</span>
                   </div>
-                  <div className="mb-2">
-                    <span className="text-sm text-gray-400">Historical: </span>
-                    <span className="text-yellow-400">{cluster.historicalComparison}</span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">Sector Risk Radar</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Multi-dimensional risk distribution</p>
                   </div>
-                  <div className="text-sm text-orange-400">{cluster.riskAssessment}</div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Correlation Anomalies with Advanced Visualization */}
-          <div className="bg-slate-800 rounded-xl p-6">
-            <h2 className="text-xl font-bold mb-4">🌊 Correlation Anomalies & Asset Relationships</h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Correlation Scatter Plot */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-blue-400">Asset Correlation Scatter</h3>
+              </div>
+              <div className="p-6">
                 <div className="h-64">
+                  <LazyVisible minHeight={256}>
+                    <SectorRiskRadar data={radarSeries as any} />
+                  </LazyVisible>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════ SECTOR VULNERABILITY ANALYSIS ═══════ */}
+          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <span className="text-lg">⚠️</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white tracking-tight">Sector Vulnerability Analysis</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Risk scoring across market sectors</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-1 border border-white/[0.06]">
+                  {['score','change'].map(k=> (
+                    <button key={k} onClick={()=>setSectorSort(k as any)} className={`px-3 py-1.5 rounded-md font-medium transition-all ${sectorSort===k?'bg-blue-500/20 text-blue-400 border border-blue-500/30':'text-gray-400 hover:text-white border border-transparent'}`}>{k==='score'?'Sort: Risk':'Sort: Δ'}</button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-1 border border-white/[0.06]">
+                  {['bars','table'].map(v => (
+                    <button key={v} onClick={()=>setSectorView(v as any)} className={`px-3 py-1.5 rounded-md font-medium transition-all ${sectorView===v?'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30':'text-gray-400 hover:text-white border border-transparent'}`}>{v==='bars'?'Cards':'Table'}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Sector Risk Bar Chart */}
+                <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis 
-                        type="number" 
-                        dataKey="currentCorrelation" 
-                        name="Current Correlation"
-                        domain={[-1, 1]}
-                        stroke="#d1d5db"
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        type="number" 
-                        dataKey="historicalAvg" 
-                        name="Historical Average"
-                        domain={[-1, 1]}
-                        stroke="#d1d5db"
-                        fontSize={12}
-                      />
+                    <BarChart 
+                      data={[...data.sectorVulnerabilities].sort((a,b)=>{
+                        if (sectorSort==='score') return b.score - a.score;
+                        const av = parseFloat(a.change); const bv = parseFloat(b.change); return bv - av;
+                      })}
+                      layout="vertical"
+                      margin={{ top: 10, right: 24, left: 0, bottom: 10 }}
+                    >
+                      <defs>
+                        <linearGradient id="riskCrit" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7f1d1d"/><stop offset="100%" stopColor="#dc2626"/></linearGradient>
+                        <linearGradient id="riskHigh" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#7c2d12"/><stop offset="100%" stopColor="#ea580c"/></linearGradient>
+                        <linearGradient id="riskMed" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#78350f"/><stop offset="100%" stopColor="#f59e0b"/></linearGradient>
+                        <linearGradient id="riskLow" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#065f46"/><stop offset="100%" stopColor="#16a34a"/></linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="2 4" stroke="#1e293b" horizontal={false} />
+                      <XAxis type="number" stroke="#475569" fontSize={11} domain={[0,100]} tickFormatter={(v)=>`${v}`}/>
+                      <YAxis dataKey="sector" type="category" stroke="#475569" width={110} tick={{fontSize:11}} />
                       <Tooltip 
-                        cursor={{ strokeDasharray: '3 3' }}
                         contentStyle={getTooltipStyle()}
                         labelStyle={getTooltipLabelStyle()}
                         itemStyle={getTooltipItemStyle()}
-                        formatter={(value, name) => [
-                          typeof value === 'number' ? value.toFixed(2) : value, 
-                          name === 'currentCorrelation' ? 'Current' : 'Historical'
-                        ]}
+                        formatter={(value, name, p:any) => {
+                          if (name==='score') return [`${value}`, 'Risk Score'];
+                          return [value, name];
+                        }}
                       />
-                      <Scatter 
-                        name="Correlations" 
-                        data={data.correlationAnomalies} 
-                        fill="#8884d8"
-                      >
-                        {data.correlationAnomalies.map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={
-                              entry.anomalyLevel === 'CRITICAL' ? '#dc2626' :
-                              entry.anomalyLevel === 'WARNING' ? '#ea580c' :
-                              entry.anomalyLevel === 'ALERT' ? '#d97706' : '#16a34a'
-                            }
-                            stroke="#fff"
-                            strokeWidth={2}
-                          />
-                        ))}
-                      </Scatter>
-                    </ScatterChart>
+                      <Legend formatter={(val)=> val==='score'?'Risk Score':val} wrapperStyle={{fontSize:10}} />
+                      <Bar dataKey="score" radius={[0,6,6,0]} barSize={20}>
+                        <LabelList dataKey="score" position="right" className="fill-gray-300 text-[10px]" />
+                        {data.sectorVulnerabilities.sort((a,b)=>{
+                          if (sectorSort==='score') return b.score - a.score; const av=parseFloat(a.change); const bv=parseFloat(b.change); return bv-av; }).map((entry, idx)=> {
+                          const grad = entry.riskLevel==='CRITICAL'?'url(#riskCrit)':entry.riskLevel==='HIGH'?'url(#riskHigh)':entry.riskLevel==='MEDIUM'?'url(#riskMed)':'url(#riskLow)';
+                          return <Cell key={`cell-r-${idx}`} fill={grad} stroke="#0c1222" strokeWidth={0.5} />;
+                        })}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
+                  <div className="mt-2 flex items-center justify-between text-[10px] text-gray-600 px-1">
+                    <span>Gradient encodes risk severity.</span>
+                    <span>Sorted by {sectorSort==='score'?'risk score':'Δ change'}.</span>
+                  </div>
+                </div>
+
+                {/* Sector Cards or Table */}
+                {sectorView==='bars' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {data.sectorVulnerabilities.map((sector, index) => (
+                      <div key={index} className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.06] hover:border-white/[0.12] transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-sm text-gray-200 group-hover:text-white transition-colors">{sector.sector}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide border ${getRiskColor(sector.riskLevel)}`}>
+                            {sector.riskLevel}
+                          </span>
+                        </div>
+                        <div className="flex items-end gap-3 mb-2">
+                          <div className="text-2xl font-bold text-white leading-none">{sector.score}</div>
+                          <div className={`text-sm font-medium ${sector.change.startsWith('+') ? 'text-green-400':'text-red-400'}`}>{sector.change}</div>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{width:`${sector.score}%`, background: sector.riskLevel==='CRITICAL'?'linear-gradient(90deg,#7f1d1d,#dc2626)': sector.riskLevel==='HIGH'?'linear-gradient(90deg,#7c2d12,#ea580c)': sector.riskLevel==='MEDIUM'?'linear-gradient(90deg,#78350f,#f59e0b)':'linear-gradient(90deg,#065f46,#16a34a)'}}></div>
+                        </div>
+                        <div className="mt-2 flex justify-between text-[10px] text-gray-600">
+                          <span>Exposure</span><span>{sector.score}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="text-left border-b border-white/[0.06]">
+                          <th className="py-2.5 pr-4 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Sector</th>
+                          <th className="py-2.5 pr-4 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Risk</th>
+                          <th className="py-2.5 pr-4 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Score</th>
+                          <th className="py-2.5 pr-4 font-medium text-gray-400 uppercase tracking-wider text-[10px]">Δ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.03]">
+                        {[...data.sectorVulnerabilities].sort((a,b)=>{
+                          if (sectorSort==='score') return b.score - a.score; const av=parseFloat(a.change); const bv=parseFloat(b.change); return bv-av; }).map((s,i)=>(
+                          <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-2 pr-4 font-medium text-gray-100">{s.sector}</td>
+                            <td className="py-2 pr-4"><span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRiskColor(s.riskLevel)}`}>{s.riskLevel}</span></td>
+                            <td className="py-2 pr-4 text-gray-200 font-semibold">{s.score}</td>
+                            <td className={`py-2 pr-4 font-medium ${s.change.startsWith('+')?'text-green-400':'text-red-400'}`}>{s.change}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="mt-5 pt-4 border-t border-white/[0.04] flex flex-wrap gap-4 text-[10px] text-gray-600">
+                <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-rose-900 to-red-600 rounded-sm mr-1"></span>Critical</span>
+                <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-amber-900 to-orange-600 rounded-sm mr-1"></span>High</span>
+                <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-yellow-900 to-amber-500 rounded-sm mr-1"></span>Medium</span>
+                <span><span className="inline-block w-2 h-2 bg-gradient-to-r from-emerald-900 to-green-600 rounded-sm mr-1"></span>Low</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════ MARKET CLUSTERS ═══════ */}
+          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500/20 to-emerald-500/10 border border-teal-500/20 flex items-center justify-center">
+                  <span className="text-lg">🔄</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white tracking-tight">Market Clusters</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Current asset groupings and risk assessment</p>
                 </div>
               </div>
-
-              {/* Correlation Anomalies List */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-orange-400">Current Anomalies</h3>
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {data.correlationAnomalies.map((anomaly, index) => (
-                    <div key={index} className="bg-slate-700 rounded-lg p-4">
-                      <div className="font-semibold text-slate-100">{anomaly.asset1}vs{anomaly.asset2}</div>
-                      <div className="text-sm text-slate-200 mt-1">Current: {anomaly.currentCorrelation.toFixed(2)}</div>
-                      <div className="text-sm text-slate-400">Avg: {anomaly.historicalAvg.toFixed(2)}</div>
-                      <div className={`inline-block mt-2 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                        anomaly.anomalyLevel === 'CRITICAL' ? 'bg-red-900/30 text-red-400' :
-                        anomaly.anomalyLevel === 'WARNING' ? 'bg-orange-900/30 text-orange-400' :
-                        anomaly.anomalyLevel === 'ALERT' ? 'bg-yellow-900/30 text-yellow-400' :
-                        'bg-green-900/30 text-green-400'
-                      }`}>
-                        {anomaly.anomalyLevel}
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {data.marketClusters.map((cluster, index) => (
+                  <div key={index} className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06] hover:border-white/[0.12] transition-all group">
+                    <h3 className="font-semibold text-base text-white mb-3 group-hover:text-blue-300 transition-colors">{cluster.clusterName}</h3>
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Assets</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cluster.currentAssets.map((a, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-medium">{a}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Historical Comparison</span>
+                        <span className="text-sm text-amber-400">{cluster.historicalComparison}</span>
+                      </div>
+                      <div className="pt-2 border-t border-white/[0.04]">
+                        <span className="text-sm text-orange-400 leading-relaxed">{cluster.riskAssessment}</span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════ CORRELATION ANOMALIES ═══════ */}
+          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/10 border border-purple-500/20 flex items-center justify-center">
+                  <span className="text-lg">🌊</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white tracking-tight">Correlation Anomalies & Asset Relationships</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Detecting breaks in historical correlation patterns</p>
                 </div>
               </div>
             </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Correlation Scatter Plot */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 text-blue-400 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+                    Asset Correlation Scatter
+                  </h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis 
+                          type="number" 
+                          dataKey="currentCorrelation" 
+                          name="Current Correlation"
+                          domain={[-1, 1]}
+                          stroke="#475569"
+                          fontSize={11}
+                        />
+                        <YAxis 
+                          type="number" 
+                          dataKey="historicalAvg" 
+                          name="Historical Average"
+                          domain={[-1, 1]}
+                          stroke="#475569"
+                          fontSize={11}
+                        />
+                        <Tooltip 
+                          cursor={{ strokeDasharray: '3 3' }}
+                          contentStyle={getTooltipStyle()}
+                          labelStyle={getTooltipLabelStyle()}
+                          itemStyle={getTooltipItemStyle()}
+                          formatter={(value, name) => [
+                            typeof value === 'number' ? value.toFixed(2) : value, 
+                            name === 'currentCorrelation' ? 'Current' : 'Historical'
+                          ]}
+                        />
+                        <Scatter 
+                          name="Correlations" 
+                          data={data.correlationAnomalies} 
+                          fill="#8884d8"
+                        >
+                          {data.correlationAnomalies.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={
+                                entry.anomalyLevel === 'CRITICAL' ? '#dc2626' :
+                                entry.anomalyLevel === 'WARNING' ? '#ea580c' :
+                                entry.anomalyLevel === 'ALERT' ? '#d97706' : '#16a34a'
+                              }
+                              stroke="rgba(255,255,255,0.15)"
+                              strokeWidth={1.5}
+                            />
+                          ))}
+                        </Scatter>
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
 
-            {/* Correlation Heatmap */}
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-3 text-purple-400">Asset Correlation Matrix</h3>
-              <div className="bg-slate-700 rounded-lg p-4">
-                <div className="grid grid-cols-6 gap-1 text-xs">
-                  <div className="font-semibold text-gray-300"></div>
-                  <div className="font-semibold text-center text-gray-300">SPY</div>
-                  <div className="font-semibold text-center text-gray-300">TLT</div>
-                  <div className="font-semibold text-center text-gray-300">GLD</div>
-                  <div className="font-semibold text-center text-gray-300">VIX</div>
-                  <div className="font-semibold text-center text-gray-300">DXY</div>
-                  {correlationMatrix.map((row, rowIndex) => (
-                    <React.Fragment key={`row-${rowIndex}`}>
-                      <div key={`label-${rowIndex}`} className="font-semibold text-gray-300">{row.asset}</div>
-                      {(['spy','tlt','gld','vix','dxy'] as const).map(key => {
-                        const val = (row as any)[key];
-                        const color = val > 0.6 ? 'bg-emerald-600/80' : val < -0.6 ? 'bg-red-600/80' : 'bg-amber-600/80';
-                        return (
-                          <div key={`${key}-${rowIndex}`} className={`text-center p-2 rounded font-semibold ${color} text-white`}>
-                            {val.toFixed(2)}
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
+                {/* Correlation Anomalies List */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 text-orange-400 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div>
+                    Current Anomalies
+                  </h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+                    {data.correlationAnomalies.map((anomaly, index) => (
+                      <div key={index} className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.06] hover:border-white/[0.10] transition-all">
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold text-sm text-gray-100">{anomaly.asset1} <span className="text-gray-600">vs</span> {anomaly.asset2}</div>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            anomaly.anomalyLevel === 'CRITICAL' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                            anomaly.anomalyLevel === 'WARNING' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                            anomaly.anomalyLevel === 'ALERT' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {anomaly.anomalyLevel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-xs">
+                          <span className="text-gray-400">Current: <span className="text-gray-200 font-semibold">{anomaly.currentCorrelation.toFixed(2)}</span></span>
+                          <span className="text-gray-400">Avg: <span className="text-gray-200 font-semibold">{anomaly.historicalAvg.toFixed(2)}</span></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Correlation Heatmap */}
+              <div className="mt-6 pt-6 border-t border-white/[0.04]">
+                <h3 className="text-sm font-semibold mb-4 text-purple-400 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                  Asset Correlation Matrix
+                </h3>
+                <div className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
+                  <div className="grid grid-cols-6 gap-1.5 text-xs">
+                    <div></div>
+                    {['SPY','TLT','GLD','VIX','DXY'].map(h => (
+                      <div key={h} className="font-semibold text-center text-gray-400 text-[10px] uppercase tracking-wider py-1">{h}</div>
+                    ))}
+                    {correlationMatrix.map((row, rowIndex) => (
+                      <React.Fragment key={`row-${rowIndex}`}>
+                        <div className="font-semibold text-gray-400 text-[10px] uppercase tracking-wider flex items-center">{row.asset}</div>
+                        {(['spy','tlt','gld','vix','dxy'] as const).map(key => {
+                          const val = (row as any)[key];
+                          const color = val > 0.6 ? 'bg-emerald-500/30 border-emerald-500/20 text-emerald-300' : val < -0.6 ? 'bg-red-500/30 border-red-500/20 text-red-300' : 'bg-amber-500/20 border-amber-500/15 text-amber-300';
+                          return (
+                            <div key={`${key}-${rowIndex}`} className={`text-center py-2 rounded-lg font-semibold border ${color}`}>
+                              {val.toFixed(2)}
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* AI Insight with Risk Dashboard */}
+          {/* ═══════ AI INSIGHT + RISK GAUGE ═══════ */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-6 border border-blue-500/30">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                <span className="mr-2">🤖</span>
-                AI Market DNA Insight
-              </h2>
-              <p className="text-gray-300 leading-relaxed mb-4">{data.aiInsight}</p>
-              
-              {/* Key Risk Indicators */}
-              <div className="bg-slate-800/50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-3 text-yellow-400">⚡ Key Risk Indicators</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Market Stress Level:</span>
-                    <span className="text-red-400 font-bold">{data.currentDNAScore}%</span>
+            {/* AI Market DNA Insight */}
+            <div className="lg:col-span-2 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.03] via-transparent to-purple-500/[0.03] pointer-events-none"></div>
+              <div className="relative px-6 py-5 border-b border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/10 border border-blue-500/20 flex items-center justify-center">
+                    <span className="text-lg">🤖</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Crisis Probability:</span>
-                    <span className="text-orange-400 font-bold">{Math.round(data.currentDNAScore * 0.75)}%</span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">AI Market DNA Insight</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Machine learning pattern interpretation</p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Volatility Regime:</span>
-                    <span className="text-yellow-400 font-bold">
-                      {data.currentDNAScore > 80 ? 'High' : data.currentDNAScore > 60 ? 'Elevated' : 'Normal'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Time Horizon:</span>
-                    <span className="text-blue-400 font-bold">3-6 months</span>
+                </div>
+              </div>
+              <div className="relative p-6">
+                <p className="text-gray-300 leading-relaxed text-sm mb-5">{data.aiInsight}</p>
+                
+                {/* Key Risk Indicators */}
+                <div className="bg-white/[0.02] rounded-xl p-5 border border-white/[0.06]">
+                  <h3 className="text-sm font-semibold mb-4 text-amber-400 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                    Key Risk Indicators
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'Market Stress', value: `${data.currentDNAScore}%`, color: 'text-red-400' },
+                      { label: 'Crisis Probability', value: `${Math.round(data.currentDNAScore * 0.75)}%`, color: 'text-orange-400' },
+                      { label: 'Volatility Regime', value: data.currentDNAScore > 80 ? 'High' : data.currentDNAScore > 60 ? 'Elevated' : 'Normal', color: 'text-amber-400' },
+                      { label: 'Time Horizon', value: '3-6 months', color: 'text-blue-400' },
+                    ].map(kri => (
+                      <div key={kri.label} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
+                        <span className="text-xs text-gray-400">{kri.label}</span>
+                        <span className={`text-sm font-bold ${kri.color}`}>{kri.value}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Real-time Risk Gauge */}
-            <div className="bg-slate-800 rounded-xl p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                🎯 Risk Gauge
-              </h2>
-              
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'High Risk', value: data.currentDNAScore > 80 ? data.currentDNAScore - 60 : 0, fill: '#dc2626' },
-                        { name: 'Medium Risk', value: data.currentDNAScore > 40 ? Math.min(40, data.currentDNAScore - 40) : 0, fill: '#ea580c' },
-                        { name: 'Low Risk', value: Math.min(40, data.currentDNAScore), fill: '#d97706' },
-                        { name: 'Safe Zone', value: Math.max(0, 100 - data.currentDNAScore), fill: '#16a34a' }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={40}
-                      outerRadius={80}
-                      dataKey="value"
-                    >
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value, name) => [`${value}%`, name]}
-                      contentStyle={getTooltipStyle()}
-                      labelStyle={getTooltipLabelStyle()}
-                      itemStyle={getTooltipItemStyle()}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+            {/* Risk Gauge */}
+            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500/20 to-red-500/10 border border-rose-500/20 flex items-center justify-center">
+                    <span className="text-lg">🎯</span>
+                  </div>
+                  <h2 className="text-lg font-semibold text-white tracking-tight">Risk Gauge</h2>
+                </div>
               </div>
-              
-              {/* Action Recommendations */}
-              <div className="mt-4 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-300">Recommended Actions:</h3>
-                <div className="text-xs space-y-1">
-                  {data.currentDNAScore > 80 && (
-                    <div className="text-red-400">• Reduce portfolio risk exposure</div>
-                  )}
-                  {data.currentDNAScore > 70 && (
-                    <div className="text-orange-400">• Increase cash allocation</div>
-                  )}
-                  {data.currentDNAScore > 60 && (
-                    <div className="text-yellow-400">• Monitor correlations closely</div>
-                  )}
-                  <div className="text-blue-400">• Consider hedging strategies</div>
+              <div className="p-6">
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'High Risk', value: data.currentDNAScore > 80 ? data.currentDNAScore - 60 : 0, fill: '#dc2626' },
+                          { name: 'Medium Risk', value: data.currentDNAScore > 40 ? Math.min(40, data.currentDNAScore - 40) : 0, fill: '#ea580c' },
+                          { name: 'Low Risk', value: Math.min(40, data.currentDNAScore), fill: '#d97706' },
+                          { name: 'Safe Zone', value: Math.max(0, 100 - data.currentDNAScore), fill: '#16a34a' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        startAngle={180}
+                        endAngle={0}
+                        innerRadius={40}
+                        outerRadius={80}
+                        dataKey="value"
+                      >
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value, name) => [`${value}%`, name]}
+                        contentStyle={getTooltipStyle()}
+                        labelStyle={getTooltipLabelStyle()}
+                        itemStyle={getTooltipItemStyle()}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                {/* Recommended Actions */}
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Recommended Actions</h3>
+                  <div className="space-y-2">
+                    {data.currentDNAScore > 80 && (
+                      <div className="flex items-center gap-2 text-xs bg-red-500/[0.06] border border-red-500/10 rounded-lg px-3 py-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"></div>
+                        <span className="text-red-400">Reduce portfolio risk exposure</span>
+                      </div>
+                    )}
+                    {data.currentDNAScore > 70 && (
+                      <div className="flex items-center gap-2 text-xs bg-orange-500/[0.06] border border-orange-500/10 rounded-lg px-3 py-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"></div>
+                        <span className="text-orange-400">Increase cash allocation</span>
+                      </div>
+                    )}
+                    {data.currentDNAScore > 60 && (
+                      <div className="flex items-center gap-2 text-xs bg-amber-500/[0.06] border border-amber-500/10 rounded-lg px-3 py-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></div>
+                        <span className="text-amber-400">Monitor correlations closely</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs bg-blue-500/[0.06] border border-blue-500/10 rounded-lg px-3 py-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+                      <span className="text-blue-400">Consider hedging strategies</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Data Source Info */}
-          <div className="text-center text-sm text-gray-400">
-            Last updated: {new Date(data.lastUpdated).toLocaleString()}
+          {/* ═══════ FOOTER ═══════ */}
+          <div className="bg-[#0c1222]/40 backdrop-blur rounded-xl border border-white/[0.04] px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span className="text-xs text-gray-600">Last updated: {new Date(data.lastUpdated).toLocaleString()}</span>
+            <span className="text-[10px] text-gray-700">EconoPulse Market DNA · Informational only · Not investment advice</span>
           </div>
-        </div>
+        </main>
 
         <Footer />
       </div>

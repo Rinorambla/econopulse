@@ -650,23 +650,7 @@ export function MarketCategoriesEmbed() {
         )}
       </div>
 
-      {/* Symbol selector synced with TradingView + analysis */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-sm">Symbol:</span>
-          <input
-            value={symbolInput}
-            onChange={(e)=> setSymbolInput(e.target.value)}
-            onKeyDown={(e)=>{ if(e.key==='Enter'){ const v=resolveUserSymbol(symbolInput); if(v) { setSelectedSymbol(v); setSymbolInput(v) } } }}
-            placeholder="SPY, QQQ, AAPL, BTC-USD…"
-            className="bg-white/10 border border-white/20 rounded-md px-3 py-1 text-sm text-white"
-            aria-label="Symbol"
-          />
-          <button onClick={()=>{ const v=resolveUserSymbol(symbolInput); if(v) { setSelectedSymbol(v); setSymbolInput(v) } }} className="px-2 py-1 text-xs rounded bg-blue-600 text-white">Apply</button>
-        </div>
-        {/* Removed TV debug mapping display as requested */}
-      </div>
-
+      {/* Chart area */}
       <div className="w-full mb-3">
         <AdvancedChart symbol={selectedSymbol} onSymbolChange={(s) => { setSelectedSymbol(s); setSymbolInput(s) }} height={520} />
       </div>

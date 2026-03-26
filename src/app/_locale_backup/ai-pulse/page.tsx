@@ -466,14 +466,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   subtitle="World economy status and cycle position"
                 />
                 <div className="p-6">
-                  {/* Key stats row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                    <StatPill label="Global GDP" value={`$${(countryData.global.totalGdp / 1e12).toFixed(1)}T`} sub={`${countryData.global.averageGrowth >= 0 ? '+' : ''}${countryData.global.averageGrowth.toFixed(1)}% avg growth`} color={countryData.global.averageGrowth >= 0 ? 'text-emerald-400' : 'text-red-400'} />
-                    <StatPill label="Avg Inflation" value={`${countryData.global.averageInflation.toFixed(1)}%`} color={countryData.global.averageInflation > 4 ? 'text-red-400' : countryData.global.averageInflation > 3 ? 'text-amber-400' : 'text-emerald-400'} />
-                    <StatPill label="Avg Unemployment" value={`${countryData.global.averageUnemployment.toFixed(1)}%`} color={countryData.global.averageUnemployment > 6 ? 'text-red-400' : 'text-amber-400'} />
-                    <StatPill label="Countries" value={String(countryData.global.totalCountries)} sub="Tracked economies" />
-                  </div>
-
                   {/* ── World Map ── */}
                   {countryCycleMatrix.length > 0 && (() => {
                     // Geographic coordinates (lon, lat) → SVG viewBox (0-1000, 0-500) using Mercator-like projection

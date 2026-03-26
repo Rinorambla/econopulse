@@ -1,11 +1,13 @@
 // Options data provider with multi-source fallback
-// Primary: Tradier API (free sandbox for delayed data)
+// Primary: Polygon.io API (real options chain with OI, volume, greeks)
+// Secondary: Tradier API (free sandbox for delayed data)
 // Fallback: Calculated estimates based on historical patterns
 //
 // This module computes precise Put/Call ratios (volume & OI), approximate Gamma Exposure (GEX)
 // using Black-Scholes gamma and chain open interest, and a simple IV skew between ~25d OTM call/put.
 
 import { gamma as bsGamma, callDelta, putDelta } from './blackScholes';
+import { getPolygonClient } from './polygonFinance';
 
 // ========== CONFIGURATION ==========
 // Tradier API - supports both sandbox (free, delayed) and production (paid, real-time)
@@ -39,7 +41,7 @@ export type OptionsMetrics = {
   callSkew?: 'Call Skew' | 'Put Skew' | 'Neutral';
   atmVolumeShare?: number | null;
   otmVolumeShare?: number | null;
-  dataSource?: 'tradier' | 'cboe' | 'estimated';
+  dataSource?: 'polygon' | 'tradier' | 'cboe' | 'estimated';
 };
 
 // ========== TRADIER API PROVIDER ==========
@@ -331,6 +333,39 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     const nowTs = Date.now();
     const cached = CACHE.get(cacheKey);
     if (cached && nowTs - cached.ts < TTL_MS) return cached.data;
+
+    // === ATTEMPT 0: Polygon.io (real options chain with OI/volume/greeks) ===
+    const polygon = getPolygonClient();
+    if (polygon.isConfigured) {
+      try {
+        const pm = await polygon.getOptionsMetrics(upperSymbol);
+        if (pm && (pm.totalCallVolume + pm.totalPutVolume) > 0) {
+          const result: OptionsMetrics = {
+            symbol: upperSymbol,
+            asOf: new Date().toISOString(),
+            underlyingPrice: pm.underlyingPrice,
+            totalCallVolume: pm.totalCallVolume,
+            totalPutVolume: pm.totalPutVolume,
+            totalCallOI: pm.totalCallOI,
+            totalPutOI: pm.totalPutOI,
+            putCallVolumeRatio: pm.putCallVolumeRatio,
+            putCallOIRatio: pm.putCallOIRatio,
+            gex: pm.gex,
+            gexLabel: pm.gexLabel,
+            ivCall25d: pm.ivCall25d,
+            ivPut25d: pm.ivPut25d,
+            callSkew: pm.callSkew,
+            atmVolumeShare: pm.atmVolumeShare,
+            otmVolumeShare: pm.otmVolumeShare,
+            dataSource: 'polygon' as any
+          };
+          CACHE.set(cacheKey, { ts: Date.now(), data: result });
+          return result;
+        }
+      } catch (e) {
+        console.warn('Polygon options provider failed:', upperSymbol, e);
+      }
+    }
 
     // === ATTEMPT 1: Tradier API (best quality) ===
     if (TRADIER_TOKEN) {

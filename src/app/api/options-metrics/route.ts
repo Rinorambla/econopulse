@@ -17,6 +17,7 @@ type APIMetrics = {
   unusualAtm?: 'Low'|'Medium'|'High';
   unusualOtm?: 'Low'|'Medium'|'High';
   unusualCombo?: string | null;
+  dataSource?: string;
 };
 
 function classifyOptionsSentiment(pcVolRatio: number | null, totalVol: number, gex: number | null): string {
@@ -81,7 +82,8 @@ export async function GET(req: NextRequest) {
         optionsSentiment: sentiment,
         unusualAtm: levelFromShare(m.atmVolumeShare),
         unusualOtm: levelFromShare(m.otmVolumeShare),
-        unusualCombo
+        unusualCombo,
+        dataSource: m.dataSource || 'estimated'
       };
     }
 

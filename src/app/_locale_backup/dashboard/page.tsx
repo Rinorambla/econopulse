@@ -117,6 +117,7 @@ export default function DashboardPage() {
 		unusualAtm?: 'Low'|'Medium'|'High';
 		unusualOtm?: 'Low'|'Medium'|'High';
 		unusualCombo?: string|null;
+		dataSource?: string;
 	}>>({});
 	useEffect(() => {
 		if (chartsReady) return;
@@ -727,7 +728,8 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">
 																				<span className="relative group inline-flex items-center gap-1">
 																					{opt?.optionsSentiment || item.optionsSentiment}
-																			{opt && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
+																			{opt && (opt.dataSource === 'polygon' || opt.dataSource === 'tradier') && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
+																			{opt && opt.dataSource === 'estimated' && <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-600/20 text-yellow-300 border border-yellow-500/20">EST</span>}
 																			{opt && (
 																				<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																					<SmallTooltip lines={[
@@ -738,7 +740,19 @@ export default function DashboardPage() {
 																			)}
 																		</span>
 																			</td>
-																			<td className="px-2 py-1 text-gray-300">{opt?.gammaLabel || item.gammaRisk}</td>
+																			<td className="px-2 py-1 text-gray-300">
+																				<span className="relative group inline-flex items-center gap-1">
+																					{opt?.gammaLabel || item.gammaRisk}
+																					{opt?.gammaExposure != null && (
+																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
+																							<SmallTooltip lines={[
+																								`GEX: ${opt.gammaExposure > 0 ? '+' : ''}${(opt.gammaExposure / 1e9).toFixed(2)}B`,
+																								`${opt.gammaExposure > 0 ? 'Dealers long gamma (stabilizing)' : 'Dealers short gamma (volatile)'}`
+																							]} />
+																						</div>
+																					)}
+																				</span>
+																			</td>
 																			<td className="px-2 py-1">
 																				<span className="relative group inline-flex font-semibold tabular-nums">
 																					{(() => {
@@ -767,7 +781,12 @@ export default function DashboardPage() {
 																			</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualOtm || item.unusualOtm}</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.callSkew || item.otmSkew}</td>
-																			<td className="px-2 py-1 text-gray-300">{(opt && typeof opt.gammaExposure === 'number' && opt.gammaExposure > 0) ? 'Gamma Bull' : item.intradayFlow}</td>
+																			<td className="px-2 py-1 text-gray-300">{(() => {
+																				if (opt && typeof opt.gammaExposure === 'number' && isFinite(opt.gammaExposure)) {
+																					return opt.gammaExposure > 0 ? 'Gamma Bull' : 'Gamma Bear';
+																				}
+																				return item.intradayFlow;
+																			})()}</td>
 																			<td className="px-2 py-1 text-gray-300">{opt?.unusualAtm || item.unusualAtm}</td>
 															{/* RS% column removed */}
 															<td className="px-2 py-1 text-center"><AIScoreBadge item={item} /></td>

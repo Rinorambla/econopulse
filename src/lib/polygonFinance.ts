@@ -37,6 +37,42 @@ interface PolygonSnapshotTicker {
   min?: { o: number; h: number; l: number; c: number; v: number; vw: number };
 }
 
+interface PolygonOptionContract {
+  ticker: string;
+  underlying: string;
+  strike: number;
+  expiration: string;
+  contractType: 'call' | 'put';
+  openInterest: number;
+  volume: number;
+  lastPrice: number;
+  impliedVolatility: number | null;
+  delta: number | null;
+  gamma: number | null;
+  theta: number | null;
+  vega: number | null;
+}
+
+interface PolygonOptionsMetrics {
+  symbol: string;
+  underlyingPrice: number;
+  totalCallVolume: number;
+  totalPutVolume: number;
+  totalCallOI: number;
+  totalPutOI: number;
+  putCallVolumeRatio: number | null;
+  putCallOIRatio: number | null;
+  gex: number | null;
+  gexLabel: 'Low' | 'Medium' | 'High' | 'Extreme';
+  ivCall25d: number | null;
+  ivPut25d: number | null;
+  callSkew: 'Call Skew' | 'Put Skew' | 'Neutral';
+  atmVolumeShare: number | null;
+  otmVolumeShare: number | null;
+  contractCount: number;
+  dataSource: 'polygon';
+}
+
 // Mapping comuni per nomi leggibili
 const TICKER_NAMES: Record<string, string> = {
   'AAPL': 'Apple Inc.',
@@ -450,6 +486,231 @@ class PolygonClient {
     target.setDate(target.getDate() - daysBack);
     return target.toISOString().split('T')[0];
   }
+
+  // ========== OPTIONS CHAIN ==========
+
+  // Get options contracts list for a ticker (with OI, volume, greeks)
+  async getOptionsSnapshot(ticker: string): Promise<PolygonOptionContract[]> {
+    const cacheKey = `opts-snap-${ticker}`;
+    const cached = this.getCached<PolygonOptionContract[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      await this.throttle();
+      const apiKey = this.getNextKey();
+      // Snapshot endpoint: requires Starter+ plan. Returns full chain with greeks.
+      const url = `https://api.polygon.io/v3/snapshot/options/${encodeURIComponent(ticker)}?limit=250&apiKey=${apiKey}`;
+
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(12000),
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          console.warn('Polygon options snapshot requires paid plan, falling back to contracts');
+          return this.getOptionsContracts(ticker);
+        }
+        return [];
+      }
+
+      const data = await response.json();
+      if (!data.results || !Array.isArray(data.results)) return [];
+
+      const contracts: PolygonOptionContract[] = data.results.map((r: any) => ({
+        ticker: r.details?.ticker || '',
+        underlying: ticker,
+        strike: r.details?.strike_price || 0,
+        expiration: r.details?.expiration_date || '',
+        contractType: r.details?.contract_type || 'call',
+        openInterest: r.open_interest || 0,
+        volume: r.day?.volume || 0,
+        lastPrice: r.day?.close || r.last_quote?.midpoint || 0,
+        impliedVolatility: r.implied_volatility || null,
+        delta: r.greeks?.delta || null,
+        gamma: r.greeks?.gamma || null,
+        theta: r.greeks?.theta || null,
+        vega: r.greeks?.vega || null,
+      }));
+
+      this.setCache(cacheKey, contracts);
+      console.log(`✅ Polygon options snapshot for ${ticker}: ${contracts.length} contracts`);
+      return contracts;
+    } catch (error) {
+      console.warn(`Polygon options snapshot error for ${ticker}:`, error);
+      return this.getOptionsContracts(ticker);
+    }
+  }
+
+  // Fallback: Get options contracts via reference endpoint (free tier compatible)
+  async getOptionsContracts(ticker: string): Promise<PolygonOptionContract[]> {
+    const cacheKey = `opts-ref-${ticker}`;
+    const cached = this.getCached<PolygonOptionContract[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      await this.throttle();
+      const apiKey = this.getNextKey();
+      // Get nearest 2 expirations worth of contracts
+      const today = new Date().toISOString().split('T')[0];
+      const url = `https://api.polygon.io/v3/reference/options/contracts?underlying_ticker=${encodeURIComponent(ticker)}&expiration_date.gte=${today}&order=asc&limit=250&sort=expiration_date&apiKey=${apiKey}`;
+
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      if (!data.results || !Array.isArray(data.results)) return [];
+
+      // Reference endpoint gives contract details but NOT live OI/volume/greeks
+      // We need to enrich with prev-day aggs for each contract
+      const contracts: PolygonOptionContract[] = data.results.map((r: any) => ({
+        ticker: r.ticker || '',
+        underlying: r.underlying_ticker || ticker,
+        strike: r.strike_price || 0,
+        expiration: r.expiration_date || '',
+        contractType: r.contract_type || 'call',
+        openInterest: 0,  // to be enriched
+        volume: 0,
+        lastPrice: 0,
+        impliedVolatility: null,
+        delta: null,
+        gamma: null,
+        theta: null,
+        vega: null,
+      }));
+
+      // Enrich top contracts (nearest expirations, near ATM) with prev-day data
+      // Group by expiration, pick the 2 nearest, then ±10 strikes around ATM
+      const expirations = [...new Set(contracts.map(c => c.expiration))].sort();
+      const nearExps = expirations.slice(0, 2);
+      const nearContracts = contracts.filter(c => nearExps.includes(c.expiration));
+
+      // Get underlying price for ATM filtering
+      const quote = await this.getPreviousDay(ticker);
+      const underlyingPrice = quote?.price || 0;
+
+      // Filter to strikes within 15% of ATM
+      const relevantContracts = underlyingPrice > 0 
+        ? nearContracts.filter(c => Math.abs(c.strike - underlyingPrice) / underlyingPrice < 0.15)
+        : nearContracts.slice(0, 50);
+
+      // Batch enrich with prev-day aggs (respecting rate limits)
+      for (const contract of relevantContracts.slice(0, 40)) {
+        try {
+          await this.throttle();
+          const aggKey = this.getNextKey();
+          const aggUrl = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(contract.ticker)}/prev?adjusted=true&apiKey=${aggKey}`;
+          const aggRes = await fetch(aggUrl, {
+            signal: AbortSignal.timeout(6000),
+            headers: { 'Accept': 'application/json' }
+          });
+          if (aggRes.ok) {
+            const aggData = await aggRes.json();
+            if (aggData.results?.[0]) {
+              const a = aggData.results[0];
+              contract.volume = a.v || 0;
+              contract.lastPrice = a.c || 0;
+            }
+          }
+        } catch { /* skip individual contract errors */ }
+      }
+
+      this.setCache(cacheKey, relevantContracts);
+      console.log(`✅ Polygon options contracts for ${ticker}: ${relevantContracts.length} enriched`);
+      return relevantContracts;
+    } catch (error) {
+      console.warn(`Polygon options contracts error for ${ticker}:`, error);
+      return [];
+    }
+  }
+
+  // Get options aggregate metrics (P/C ratio, GEX, volume) for a ticker
+  async getOptionsMetrics(ticker: string): Promise<PolygonOptionsMetrics | null> {
+    const cacheKey = `opts-metrics-${ticker}`;
+    const cached = this.getCached<PolygonOptionsMetrics>(cacheKey);
+    if (cached) return cached;
+
+    const contracts = await this.getOptionsSnapshot(ticker);
+    if (!contracts.length) return null;
+
+    let totalCallVol = 0, totalPutVol = 0;
+    let totalCallOI = 0, totalPutOI = 0;
+    let gex = 0;
+    let atmVolume = 0, otmVolume = 0, totalVolume = 0;
+
+    // Get underlying price
+    const quote = await this.getPreviousDay(ticker);
+    const price = quote?.price || 0;
+
+    for (const c of contracts) {
+      totalVolume += c.volume;
+      const moneyness = price > 0 ? c.strike / price : 1;
+
+      if (Math.abs(moneyness - 1) < 0.02) atmVolume += c.volume;
+      else if (Math.abs(moneyness - 1) > 0.05) otmVolume += c.volume;
+
+      if (c.contractType === 'call') {
+        totalCallVol += c.volume;
+        totalCallOI += c.openInterest;
+        // GEX = OI × contractMultiplier × S² × gamma (dealer long calls)
+        if (c.gamma && price > 0) {
+          gex += c.openInterest * 100 * price * price * c.gamma;
+        }
+      } else {
+        totalPutVol += c.volume;
+        totalPutOI += c.openInterest;
+        // Dealer short puts = short gamma
+        if (c.gamma && price > 0) {
+          gex -= c.openInterest * 100 * price * price * c.gamma;
+        }
+      }
+    }
+
+    const pcVolRatio = totalCallVol > 0 ? totalPutVol / totalCallVol : null;
+    const pcOIRatio = totalCallOI > 0 ? totalPutOI / totalCallOI : null;
+    const gexAbs = Math.abs(gex);
+    const gexLabel: 'Low' | 'Medium' | 'High' | 'Extreme' = 
+      gexAbs > 5e10 ? 'Extreme' : gexAbs > 1e10 ? 'High' : gexAbs > 1e9 ? 'Medium' : 'Low';
+
+    // IV skew from 25-delta contracts
+    const calls25 = contracts.filter(c => c.contractType === 'call' && c.delta && Math.abs(c.delta - 0.25) < 0.1);
+    const puts25 = contracts.filter(c => c.contractType === 'put' && c.delta && Math.abs(Math.abs(c.delta) - 0.25) < 0.1);
+    const avgCallIV = calls25.length > 0 ? calls25.reduce((s, c) => s + (c.impliedVolatility || 0), 0) / calls25.length : null;
+    const avgPutIV = puts25.length > 0 ? puts25.reduce((s, c) => s + (c.impliedVolatility || 0), 0) / puts25.length : null;
+
+    let callSkew: 'Call Skew' | 'Put Skew' | 'Neutral' = 'Neutral';
+    if (avgCallIV && avgPutIV) {
+      const diff = avgCallIV - avgPutIV;
+      callSkew = diff > 0.02 ? 'Call Skew' : diff < -0.02 ? 'Put Skew' : 'Neutral';
+    }
+
+    const metrics: PolygonOptionsMetrics = {
+      symbol: ticker,
+      underlyingPrice: price,
+      totalCallVolume: totalCallVol,
+      totalPutVolume: totalPutVol,
+      totalCallOI: totalCallOI,
+      totalPutOI: totalPutOI,
+      putCallVolumeRatio: pcVolRatio,
+      putCallOIRatio: pcOIRatio,
+      gex: isFinite(gex) ? gex : null,
+      gexLabel,
+      ivCall25d: avgCallIV,
+      ivPut25d: avgPutIV,
+      callSkew,
+      atmVolumeShare: totalVolume > 0 ? atmVolume / totalVolume : null,
+      otmVolumeShare: totalVolume > 0 ? otmVolume / totalVolume : null,
+      contractCount: contracts.length,
+      dataSource: 'polygon'
+    };
+
+    this.setCache(cacheKey, metrics);
+    return metrics;
+  }
 }
 
 // Singleton per riuso across routes
@@ -462,5 +723,5 @@ export function getPolygonClient(): PolygonClient {
   return polygonClientInstance;
 }
 
-export type { PolygonQuote };
+export type { PolygonQuote, PolygonOptionContract, PolygonOptionsMetrics };
 export { PolygonClient };

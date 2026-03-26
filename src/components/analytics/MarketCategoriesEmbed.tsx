@@ -6,7 +6,7 @@ import { ArrowLeft, Building2, PieChart, Activity, Target, TrendingUp, TrendingD
 
 // Reuse existing analytics widgets
 const MarketInteractiveChart = dynamic(() => import('@/components/analytics/MarketInteractiveChart'), { ssr: false })
-const TradingViewWidget = dynamic(() => import('@/components/analytics/TradingViewWidget'), { ssr: false })
+const AdvancedChart = dynamic(() => import('@/components/analytics/AdvancedChart'), { ssr: false, loading: () => <div className="h-[520px] bg-slate-900/50 rounded-lg flex items-center justify-center text-gray-400 text-sm">Loading chart…</div> })
 const MarketBreadthChart = dynamic(() => import('@/components/analytics/MarketBreadthChart').then(m=>m.MarketBreadthChart), { ssr:false })
 const SectorBarChart = dynamic(() => import('@/components/analytics/SectorBarChart').then(m=>m.SectorBarChart), { ssr:false })
 const PerformanceHistogram = dynamic(() => import('@/components/analytics/PerformanceHistogram').then(m=>m.PerformanceHistogram), { ssr:false })
@@ -667,8 +667,8 @@ export function MarketCategoriesEmbed() {
         {/* Removed TV debug mapping display as requested */}
       </div>
 
-      <div className="w-full mb-3 h-[520px]">
-        <TradingViewWidget symbol={tvSymbol} theme="dark" interval="D" showRSI={false} showStochastic={false} />
+      <div className="w-full mb-3">
+        <AdvancedChart symbol={selectedSymbol} onSymbolChange={(s) => { setSelectedSymbol(s); setSymbolInput(s) }} height={520} />
       </div>
       {/* Snapshot cards under chart removed per request */}
 

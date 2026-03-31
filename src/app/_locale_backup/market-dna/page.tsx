@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const HistoricalSimilarityChart = dynamic(() => import('@/components/charts/HistoricalSimilarityChart'), { ssr: false });
 const MarketRegimeArea = dynamic(() => import('@/components/charts/MarketRegimeArea'), { ssr: false });
 const SectorRiskRadar = dynamic(() => import('@/components/charts/SectorRiskRadar'), { ssr: false });
+const TradingViewWidget = dynamic(() => import('@/components/analytics/TradingViewWidget'), { ssr: false, loading: () => <div className="h-[400px] bg-[#0c1222] rounded-lg flex items-center justify-center text-gray-500 text-sm">Loading S&P 500 chart…</div> });
 
 interface HistoricalPattern {
   date: string;
@@ -56,6 +57,13 @@ interface MarketDNAData {
   aiInsight: string;
   lastUpdated: string;
   marketMetrics?: { spyPrice:number; vixLevel:number; dollarIndex:number; goldPrice:number };
+  riskRatios?: Record<string, number | null>;
+  riskSummary?: {
+    regime: 'Risk-On' | 'Neutral' | 'Risk-Off';
+    score: number;
+    votes: { on: number; off: number };
+    signals: Array<{ key: string; label: string; value: number | null; dir: 'risk-on' | 'risk-off' | 'neutral'; note?: string }>;
+  };
 }
 
 // Real peak signals (fetched from /api/peak-signals)
@@ -429,6 +437,24 @@ export default function MarketDNAPage() {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
+          {/* ═══════ S&P 500 REFERENCE CHART ═══════ */}
+          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <ArrowTrendingUpIcon className="h-4 w-4 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">S&P 500 — Live Market Context</h2>
+                  <p className="text-[10px] text-gray-500">Reference price action for DNA pattern analysis</p>
+                </div>
+              </div>
+            </div>
+            <div style={{ height: 400 }}>
+              <TradingViewWidget symbol="AMEX:SPY" backgroundColor="#0F0F0F" gridColor="rgba(242, 242, 242, 0.06)" />
+            </div>
+          </div>
+
           {/* ═══════ HERO: DNA SCORE + PATTERN MATCH ═══════ */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* DNA Score Card */}
@@ -582,6 +608,69 @@ export default function MarketDNAPage() {
               </div>
             </div>
           </div>
+
+          {/* ═══════ CROSS-ASSET RISK REGIME ═══════ */}
+          {data.riskSummary && (
+            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/10 border border-indigo-500/20 flex items-center justify-center">
+                    <span className="text-lg">⚡</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">Cross-Asset Risk Regime</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Real-time ratio-based regime classification</p>
+                  </div>
+                </div>
+                <div className={`px-4 py-1.5 rounded-full text-xs font-bold border ${
+                  data.riskSummary.regime === 'Risk-Off' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                  data.riskSummary.regime === 'Risk-On' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                  'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                }`}>
+                  {data.riskSummary.regime} · {data.riskSummary.votes.on + data.riskSummary.votes.off} signals
+                </div>
+              </div>
+              <div className="p-6">
+                {/* Regime Score Bar */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                      <span>Risk-Off</span>
+                      <span className="font-mono tabular-nums">{data.riskSummary.score > 0 ? '+' : ''}{data.riskSummary.score.toFixed(2)}</span>
+                      <span>Risk-On</span>
+                    </div>
+                    <div className="h-3 bg-white/[0.04] rounded-full overflow-hidden relative">
+                      <div className="absolute inset-y-0 left-1/2 w-px bg-white/10" />
+                      {data.riskSummary.score !== 0 && (
+                        <div
+                          className={`absolute inset-y-0 rounded-full ${data.riskSummary.score > 0 ? 'bg-emerald-500/60' : 'bg-red-500/60'}`}
+                          style={data.riskSummary.score > 0
+                            ? { left: '50%', width: `${Math.abs(data.riskSummary.score) * 50}%` }
+                            : { right: '50%', width: `${Math.abs(data.riskSummary.score) * 50}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {/* Signal Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {data.riskSummary.signals.map(sig => (
+                    <div key={sig.key} className="bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3 hover:border-white/[0.12] transition-all">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{sig.key}</span>
+                        <span className={`w-2 h-2 rounded-full ${
+                          sig.dir === 'risk-on' ? 'bg-emerald-400' : sig.dir === 'risk-off' ? 'bg-red-400' : 'bg-gray-500'
+                        }`} />
+                      </div>
+                      <div className="text-sm font-bold tabular-nums text-white">{sig.value != null ? sig.value.toFixed(2) : '—'}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">{sig.label}</div>
+                      {sig.note && <div className="text-[9px] text-gray-600 mt-1">{sig.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ═══════ PEAK SIGNALS MATRIX ═══════ */}
           {peakSignals && (

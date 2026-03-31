@@ -467,9 +467,10 @@ function analyzeSectorVulnerabilities(currentFeatures: MarketFeatures) {
     else if (riskScore >= 45) riskLevel = 'MEDIUM';
     else riskLevel = 'LOW';
     
-    // Generate realistic change percentages based on risk
-    const changeRange = riskScore > 70 ? [-12, -3] : riskScore > 50 ? [-8, 2] : [-3, 5];
-    const change = (Math.random() * (changeRange[1] - changeRange[0]) + changeRange[0]).toFixed(1);
+    // Generate realistic change percentages based on risk — deterministic
+    const changeBase = riskScore > 70 ? -7.5 : riskScore > 50 ? -3.0 : 1.0;
+    const changeOffset = Math.sin((sector.baseRisk + riskScore) * 0.3) * 3;
+    const change = (changeBase + changeOffset).toFixed(1);
     
     return {
       sector: sector.sector,
@@ -551,7 +552,7 @@ export async function GET(request: NextRequest) {
       {
         asset1: 'SPY',
         asset2: 'TLT',
-        currentCorrelation: currentFeatures.bondEquityCorr,
+        currentCorrelation: +currentFeatures.bondEquityCorr.toFixed(2),
         historicalAvg: -0.25,
         anomalyLevel: Math.abs(currentFeatures.bondEquityCorr - (-0.25)) > 0.5 ? 'CRITICAL' as const : 
                       Math.abs(currentFeatures.bondEquityCorr - (-0.25)) > 0.3 ? 'WARNING' as const : 'NORMAL' as const
@@ -559,14 +560,14 @@ export async function GET(request: NextRequest) {
       {
         asset1: 'VIX',
         asset2: 'DXY',
-        currentCorrelation: -0.15 + (Math.random() - 0.5) * 0.6,
+        currentCorrelation: +(0.15 - currentFeatures.vix * 0.012).toFixed(2),
         historicalAvg: 0.35,
         anomalyLevel: currentFeatures.vix > 25 ? 'WARNING' as const : 'NORMAL' as const
       },
       {
         asset1: 'GLD',
         asset2: 'TIPS',
-        currentCorrelation: 0.65 + (Math.random() - 0.5) * 0.4,
+        currentCorrelation: +(0.55 + currentFeatures.economicIndicators.inflation * 0.03).toFixed(2),
         historicalAvg: 0.45,
         anomalyLevel: currentFeatures.economicIndicators.inflation > 4.0 ? 'ALERT' as const : 'NORMAL' as const
       }
@@ -708,23 +709,23 @@ export async function GET(request: NextRequest) {
       corrAssets.forEach(col => {
         if (row === col) rowObj[col.toLowerCase()] = 1;
         else {
-          // derive pseudo correlation from anomalies + noise
+          // derive pseudo correlation from anomalies + deterministic offset
             const anomaly = correlationAnomalies.find(a => (a.asset1===row && a.asset2===col) || (a.asset1===col && a.asset2===row));
-            let base = anomaly ? anomaly.currentCorrelation : (Math.sin((row.charCodeAt(0)+col.charCodeAt(0))*0.15)*0.6);
-            base += (Math.random()-0.5)*0.1; // mild noise
+            const seed = (row.charCodeAt(0)+col.charCodeAt(0)) * 0.15;
+            let base = anomaly ? anomaly.currentCorrelation : Math.sin(seed)*0.6;
             rowObj[col.toLowerCase()] = Math.max(-1, Math.min(1, +base.toFixed(2)));
         }
       });
       return rowObj;
     });
 
-    // Sector radar derived from vulnerabilities (map to factors)
-    const sectorRadar = sectorVulnerabilities.slice(0,5).map(s => ({
+    // Sector radar derived from vulnerabilities (map to factors) — deterministic
+    const sectorRadar = sectorVulnerabilities.slice(0,5).map((s, idx) => ({
       sector: s.sector,
       riskScore: s.score,
-      momentum: Math.max(10, Math.min(100, 100 - s.score + (Math.random()*15-7))),
-      valuation: Math.max(10, Math.min(100, 50 + (Math.random()*40-20))),
-      sentiment: Math.max(10, Math.min(100, 60 - (s.score/2) + (Math.random()*20-10)))
+      momentum: Math.max(10, Math.min(100, Math.round(100 - s.score + Math.sin(idx * 2.1) * 8))),
+      valuation: Math.max(10, Math.min(100, Math.round(50 + Math.cos(idx * 1.7) * 15))),
+      sentiment: Math.max(10, Math.min(100, Math.round(60 - (s.score / 2) + Math.sin(idx * 3.2) * 7)))
     }));
 
     const response = {

@@ -175,23 +175,28 @@ async function fetchFREDData() {
     const indicators = ['UNRATE', 'CPIAUCSL', 'FEDFUNDS', 'GDPC1'];
     const results: any = {};
 
-    for (const indicator of indicators) {
-      const response = await fetch(
-        `https://api.stlouisfed.org/fred/series/observations?series_id=${indicator}&api_key=${FRED_API_KEY}&file_type=json&limit=1&sort_order=desc`,
-        { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) }
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.observations && data.observations.length > 0) {
-          const value = parseFloat(data.observations[0].value);
-          if (!isNaN(value)) {
-            switch (indicator) {
-              case 'UNRATE': results.unemployment = value; break;
-              case 'CPIAUCSL': results.inflation = value; break;
-              case 'FEDFUNDS': results.fedFundsRate = value; break;
-              case 'GDPC1': results.gdpGrowth = value; break;
-            }
+    const fetches = await Promise.allSettled(
+      indicators.map(indicator =>
+        fetch(
+          `https://api.stlouisfed.org/fred/series/observations?series_id=${indicator}&api_key=${FRED_API_KEY}&file_type=json&limit=1&sort_order=desc`,
+          { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) }
+        ).then(async res => ({ indicator, res }))
+      )
+    );
+
+    for (const outcome of fetches) {
+      if (outcome.status !== 'fulfilled') continue;
+      const { indicator, res } = outcome.value;
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.observations && data.observations.length > 0) {
+        const value = parseFloat(data.observations[0].value);
+        if (!isNaN(value)) {
+          switch (indicator) {
+            case 'UNRATE': results.unemployment = value; break;
+            case 'CPIAUCSL': results.inflation = value; break;
+            case 'FEDFUNDS': results.fedFundsRate = value; break;
+            case 'GDPC1': results.gdpGrowth = value; break;
           }
         }
       }

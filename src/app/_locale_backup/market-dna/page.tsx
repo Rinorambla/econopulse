@@ -209,7 +209,7 @@ export default function MarketDNAPage() {
       setRefreshing(true);
       
         // Add cache busting to force fresh data
-        const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 12000);
+        const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 25000);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -289,7 +289,7 @@ export default function MarketDNAPage() {
         aiInsight: 'The current market DNA shows 91% similarity to July 2007, just before the financial crisis. Key warning signals include the breakdown of traditional bond-equity negative correlation, rising credit spreads, and sector rotation patterns consistent with late-cycle behavior. The AI model suggests heightened caution, particularly in financial and real estate sectors.',
         lastUpdated: new Date().toISOString()
       };
-      setData(fallback);
+      setData(normalizeMarketDNA(fallback));
     } finally {
       setLoading(false);
       setRefreshing(false);

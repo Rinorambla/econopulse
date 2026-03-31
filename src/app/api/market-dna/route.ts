@@ -649,16 +649,22 @@ export async function GET(request: NextRequest) {
     // Generate AI insight
     const aiInsight = await generateAIInsight(topMatch, currentFeatures, additionalMatches);
     
-    // Build historical similarity synthetic (server-side deterministic) series
-    const similarityDays = 60;
+    // Build historical similarity synthetic (server-side deterministic) series — 365 days
+    const similarityDays = 365;
     const historicalSimilaritySeries = Array.from({length: similarityDays}, (_,i)=>{
       const idx = similarityDays - i;
       const d = new Date(); d.setDate(d.getDate() - idx);
-      const base = topMatch.similarity - 10 + Math.sin(i*0.15)*8; // center around top similarity
-      const crisis2007 = Math.max(20, Math.min(95, base + (Math.sin(i*0.12)*6)));
-      const bubble2000 = Math.max(10, Math.min(85, base - 12 + Math.cos(i*0.09)*7));
-      const pandemic2020 = Math.max(5, Math.min(80, base - 18 + Math.sin(i*0.07)*9));
-      const composite = Math.round((crisis2007 + bubble2000 + pandemic2020)/3);
+      // Multi-frequency oscillation anchored to the top match similarity
+      const base = topMatch.similarity - 10;
+      const slow = Math.sin(i * 0.025) * 12;
+      const med = Math.sin(i * 0.08) * 6;
+      const fast = Math.sin(i * 0.15) * 3;
+      // Trend: gradually rise from lower similarity towards current over the year
+      const trend = (i / similarityDays) * 15;
+      const crisis2007 = Math.max(15, Math.min(98, base + trend + slow + fast + 5));
+      const bubble2000 = Math.max(8, Math.min(90, base - 14 + trend + med + Math.cos(i * 0.06) * 5));
+      const pandemic2020 = Math.max(5, Math.min(85, base - 22 + trend + Math.sin(i * 0.045) * 8 + fast));
+      const composite = Math.round((crisis2007 + bubble2000 + pandemic2020) / 3);
       return {
         date: d.toISOString().split('T')[0],
         crisis2007: Math.round(crisis2007),
@@ -668,16 +674,19 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Build market regime series (riskLevel and volatility) trailing 120 days
-    const regimeDays = 120;
+    // Build market regime series (riskLevel and volatility) trailing 365 days
+    const regimeDays = 365;
     const marketRegimeSeries = Array.from({length: regimeDays}, (_,i)=>{
       const idx = regimeDays - i;
       const d = new Date(); d.setDate(d.getDate() - idx);
-      // trending risk: earlier lower, ramping to current similarity
       const progress = i / regimeDays;
-      const target = topMatch.similarity; // anchor
-      const baseRisk = 40 + progress * (target - 40) + Math.sin(i*0.11)*5;
-      const volatility = baseRisk * 0.8 + Math.cos(i*0.07)*6 + 10;
+      const target = topMatch.similarity;
+      // Multi-frequency regime evolution with realistic phases
+      const cycleSlow = Math.sin(i * 0.02) * 8;
+      const cycleMed = Math.sin(i * 0.07) * 4;
+      const cycleFast = Math.sin(i * 0.13) * 2;
+      const baseRisk = 35 + progress * (target - 35) + cycleSlow + cycleMed + cycleFast;
+      const volatility = baseRisk * 0.75 + Math.cos(i * 0.05) * 8 + Math.sin(i * 0.12) * 3 + 12;
       let regime: string;
       if (baseRisk > 80) regime = 'Crisis Formation';
       else if (baseRisk > 65) regime = 'Late Cycle';
@@ -686,8 +695,8 @@ export async function GET(request: NextRequest) {
       else regime = 'Recovery';
       return {
         date: d.toISOString().split('T')[0],
-        riskLevel: Math.round(baseRisk*10)/10,
-        volatility: Math.round(volatility*10)/10,
+        riskLevel: Math.round(Math.max(10, Math.min(100, baseRisk)) * 10) / 10,
+        volatility: Math.round(Math.max(5, Math.min(100, volatility)) * 10) / 10,
         regime
       };
     });

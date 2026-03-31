@@ -82,33 +82,40 @@ export default function MarketDNAPage() {
   // Normalize response and synthesize series if missing (older API payloads)
   function normalizeMarketDNA(result: MarketDNAData): MarketDNAData {
     const out = { ...result } as MarketDNAData;
-    // Historical similarity
+    // Historical similarity — 365 days
     if (!out.historicalSimilaritySeries || out.historicalSimilaritySeries.length === 0) {
       const base = Math.max(40, Math.min(95, out.topHistoricalMatch?.similarity ?? out.currentDNAScore ?? 60));
-      const days = 60;
+      const days = 365;
       const series = Array.from({ length: days }, (_, i) => {
         const d = new Date(); d.setDate(d.getDate() - (days - i));
-        const s1 = Math.max(20, Math.min(95, base + Math.sin(i * 0.15) * 8));
-        const s2 = Math.max(10, Math.min(85, base - 12 + Math.cos(i * 0.09) * 7));
-        const s3 = Math.max(5, Math.min(80, base - 18 + Math.sin(i * 0.07) * 9));
+        const trend = (i / days) * 15;
+        const slow = Math.sin(i * 0.025) * 12;
+        const med = Math.sin(i * 0.08) * 6;
+        const fast = Math.sin(i * 0.15) * 3;
+        const s1 = Math.max(15, Math.min(98, base + trend + slow + fast));
+        const s2 = Math.max(8, Math.min(90, base - 14 + trend + med + Math.cos(i * 0.06) * 5));
+        const s3 = Math.max(5, Math.min(85, base - 22 + trend + Math.sin(i * 0.045) * 8 + fast));
         const composite = Math.round((s1 + s2 + s3) / 3);
         return { date: d.toISOString().slice(0,10), crisis2007: Math.round(s1), bubble2000: Math.round(s2), pandemic2020: Math.round(s3), composite };
       });
       out.historicalSimilaritySeries = series;
     }
-    // Market regime series
+    // Market regime series — 365 days
     if (!out.marketRegimeSeries || out.marketRegimeSeries.length === 0) {
-      const days = 120; const target = Math.max(40, Math.min(95, out.topHistoricalMatch?.similarity ?? out.currentDNAScore ?? 60));
+      const days = 365; const target = Math.max(40, Math.min(95, out.topHistoricalMatch?.similarity ?? out.currentDNAScore ?? 60));
       out.marketRegimeSeries = Array.from({ length: days }, (_, i) => {
         const d = new Date(); d.setDate(d.getDate() - (days - i));
-        const progress = i / days; const baseRisk = 40 + progress * (target - 40) + Math.sin(i * 0.11) * 5;
-        const volatility = baseRisk * 0.8 + Math.cos(i * 0.07) * 6 + 10;
+        const progress = i / days;
+        const cycleSlow = Math.sin(i * 0.02) * 8;
+        const cycleMed = Math.sin(i * 0.07) * 4;
+        const baseRisk = 35 + progress * (target - 35) + cycleSlow + cycleMed;
+        const volatility = baseRisk * 0.75 + Math.cos(i * 0.05) * 8 + 12;
         let regime = 'Recovery';
         if (baseRisk > 80) regime = 'Crisis Formation';
         else if (baseRisk > 65) regime = 'Late Cycle';
         else if (baseRisk > 50) regime = 'Mid Cycle';
         else if (baseRisk > 40) regime = 'Expansion';
-        return { date: d.toISOString().slice(0,10), riskLevel: Math.round(baseRisk * 10) / 10, volatility: Math.round(volatility * 10) / 10, regime };
+        return { date: d.toISOString().slice(0,10), riskLevel: Math.round(Math.max(10, Math.min(100, baseRisk)) * 10) / 10, volatility: Math.round(Math.max(5, Math.min(100, volatility)) * 10) / 10, regime };
       });
     }
     // Sector radar (needs radial points)
@@ -518,8 +525,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-56 mb-5">
-                  <LazyVisible minHeight={224}>
+                <div className="h-80 mb-5">
+                  <LazyVisible minHeight={320}>
                     <HistoricalSimilarityChart data={similaritySeries as any} />
                   </LazyVisible>
                 </div>
@@ -599,6 +606,40 @@ export default function MarketDNAPage() {
                   {loadingPeak && <span className="text-emerald-400 animate-pulse">Updating...</span>}
                 </div>
               </div>
+              {/* Peak Signals Timeline Chart */}
+              <div className="px-6 pt-5">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+                  Signals Triggered Over Time
+                </h3>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      ...peakSignals.historical.map(h => ({ date: h.date, percent: h.percent, type: 'historical', spy: h.spy })),
+                      ...peakSignals.recent.map(r => ({ date: r.date, percent: r.percent, type: 'recent', spy: r.spy })),
+                      { date: 'Now', percent: peakSignals.current.percent, type: 'current', spy: peakSignals.current.spy }
+                    ]} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="date" stroke="#475569" fontSize={10} />
+                      <YAxis stroke="#475569" fontSize={10} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                      <Tooltip
+                        contentStyle={getTooltipStyle()}
+                        formatter={(value: any, name: any) => [`${value}%`, 'Triggered']}
+                        labelStyle={getTooltipLabelStyle()}
+                      />
+                      <Bar dataKey="percent" radius={[4, 4, 0, 0]} barSize={28}>
+                        {[
+                          ...peakSignals.historical.map(h => h.percent),
+                          ...peakSignals.recent.map(r => r.percent),
+                          peakSignals.current.percent
+                        ].map((pct, idx) => (
+                          <Cell key={`peak-${idx}`} fill={pct > 60 ? '#dc2626' : pct > 30 ? '#f59e0b' : '#16a34a'} fillOpacity={0.8} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
               <div className="p-4 overflow-x-auto">
                 <table className="min-w-full text-[11px]">
                   <thead>
@@ -664,8 +705,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-64">
-                  <LazyVisible minHeight={256}>
+                <div className="h-96">
+                  <LazyVisible minHeight={384}>
                     <MarketRegimeArea data={regimeSeries as any} />
                   </LazyVisible>
                 </div>
@@ -686,8 +727,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-64">
-                  <LazyVisible minHeight={256}>
+                <div className="h-96">
+                  <LazyVisible minHeight={384}>
                     <SectorRiskRadar data={radarSeries as any} />
                   </LazyVisible>
                 </div>

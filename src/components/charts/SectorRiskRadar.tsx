@@ -1,6 +1,6 @@
 "use client";
-import React from 'react';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip } from 'recharts';
+import React, { useState } from 'react';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, Legend } from 'recharts';
 
 type RadarPoint = { sector: string; riskScore: number; momentum: number; valuation?: number; sentiment?: number };
 
@@ -11,17 +11,56 @@ const tooltipStyle = {
   color: '#f1f5f9'
 };
 
+type Dimension = 'riskScore' | 'momentum' | 'valuation' | 'sentiment';
+const DIMENSIONS: { key: Dimension; label: string; stroke: string; fill: string; fillOpacity: number; default: boolean }[] = [
+  { key: 'riskScore', label: 'Risk Score', stroke: '#dc2626', fill: '#dc2626', fillOpacity: 0.5, default: true },
+  { key: 'momentum', label: 'Momentum', stroke: '#3b82f6', fill: '#3b82f6', fillOpacity: 0.25, default: true },
+  { key: 'valuation', label: 'Valuation', stroke: '#f59e0b', fill: '#f59e0b', fillOpacity: 0.2, default: false },
+  { key: 'sentiment', label: 'Sentiment', stroke: '#10b981', fill: '#10b981', fillOpacity: 0.2, default: false },
+];
+
 export default function SectorRiskRadar({ data }: { data: RadarPoint[] }) {
+  const [active, setActive] = useState<Set<Dimension>>(new Set(DIMENSIONS.filter(d => d.default).map(d => d.key)));
+
+  const toggle = (k: Dimension) => setActive(prev => {
+    const next = new Set(prev);
+    next.has(k) ? next.delete(k) : next.add(k);
+    return next;
+  });
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <RadarChart data={data}>
-        <PolarGrid stroke="#475569" />
-        <PolarAngleAxis dataKey="sector" tick={{ fill: '#d1d5db', fontSize: 12 }} />
-        <PolarRadiusAxis angle={0} domain={[0, 100]} tick={{ fill: '#d1d5db', fontSize: 10 }} stroke="#64748b" />
-        <Radar name="Risk Score" dataKey="riskScore" stroke="#dc2626" fill="#dc2626" fillOpacity={0.6} strokeWidth={3} dot={{ fill: '#dc2626', strokeWidth: 2, r: 4 }} />
-        <Radar name="Momentum" dataKey="momentum" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} strokeWidth={3} dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} />
-        <Tooltip contentStyle={tooltipStyle as any} />
-      </RadarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col h-full">
+      {/* Dimension Toggle Buttons */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {DIMENSIONS.map(dim => (
+          <button
+            key={dim.key}
+            onClick={() => toggle(dim.key)}
+            className={`px-2.5 py-1 rounded-md text-[10px] font-semibold border transition-all ${
+              active.has(dim.key)
+                ? 'bg-white/10 border-white/20 text-white'
+                : 'bg-white/[0.03] border-white/[0.06] text-gray-500 hover:text-gray-300 hover:border-white/10'
+            }`}
+            style={active.has(dim.key) ? { borderColor: dim.stroke, color: dim.stroke } : undefined}
+          >
+            {dim.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadarChart data={data}>
+            <PolarGrid stroke="#1e293b" />
+            <PolarAngleAxis dataKey="sector" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#475569', fontSize: 9 }} stroke="#1e293b" />
+            {DIMENSIONS.map(dim => active.has(dim.key) && (
+              <Radar key={dim.key} name={dim.label} dataKey={dim.key} stroke={dim.stroke} fill={dim.fill} fillOpacity={dim.fillOpacity} strokeWidth={2} dot={{ fill: dim.stroke, strokeWidth: 1, r: 3 }} />
+            ))}
+            <Tooltip contentStyle={tooltipStyle as any} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeftIcon, ChartBarIcon, ArrowTrendingUpIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ChartBarIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
@@ -11,7 +11,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const HistoricalSimilarityChart = dynamic(() => import('@/components/charts/HistoricalSimilarityChart'), { ssr: false });
 const MarketRegimeArea = dynamic(() => import('@/components/charts/MarketRegimeArea'), { ssr: false });
 const SectorRiskRadar = dynamic(() => import('@/components/charts/SectorRiskRadar'), { ssr: false });
-const TradingViewWidget = dynamic(() => import('@/components/analytics/TradingViewWidget'), { ssr: false, loading: () => <div className="h-[400px] bg-[#0c1222] rounded-lg flex items-center justify-center text-gray-500 text-sm">Loading S&P 500 chart…</div> });
 
 interface HistoricalPattern {
   date: string;
@@ -436,24 +435,6 @@ export default function MarketDNAPage() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-
-          {/* ═══════ S&P 500 REFERENCE CHART ═══════ */}
-          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border border-blue-500/20 flex items-center justify-center">
-                  <ArrowTrendingUpIcon className="h-4 w-4 text-blue-400" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-white">S&P 500 — Live Market Context</h2>
-                  <p className="text-[10px] text-gray-500">Reference price action for DNA pattern analysis</p>
-                </div>
-              </div>
-            </div>
-            <div style={{ height: 400 }}>
-              <TradingViewWidget symbol="AMEX:SPY" backgroundColor="#0F0F0F" gridColor="rgba(242, 242, 242, 0.06)" />
-            </div>
-          </div>
 
           {/* ═══════ HERO: DNA SCORE + PATTERN MATCH ═══════ */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

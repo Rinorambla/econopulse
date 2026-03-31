@@ -381,7 +381,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
   const [symbol, setSymbol] = useState(propSymbol)
   const [inputVal, setInputVal] = useState(propSymbol)
-  const [rangeKey, setRangeKey] = useState<RangeKey>('3M')
+  const [rangeKey, setRangeKey] = useState<RangeKey>('1Y')
   const [chartStyle, setChartStyle] = useState<ChartStyle>('candle')
   const [indicators, setIndicators] = useState<Set<IndicatorKey>>(new Set(['volume']))
   const [bars, setBars] = useState<Bar[]>([])
@@ -921,7 +921,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       )}
 
       {/* ===== CHART AREA ===== */}
-      <div style={{ height, position: 'relative' }}>
+      <div style={{ height, position: 'relative' }} className="[&_a[href*='tradingview']]:!hidden [&_table]:!hidden">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/70">
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -938,7 +938,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </div>
           </div>
         )}
-        <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
+        <div ref={chartContainerRef} className="[&>a]:!hidden [&>table]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
         <div ref={tooltipRef} />
       </div>
 

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { TrendingUp, TrendingDown, BarChart3, Target, RefreshCw, ArrowLeft, Calendar, Clock, Activity, Globe, DollarSign, Briefcase, PieChart, ChevronDown, ChevronUp, Zap, Shield, AlertTriangle, Eye, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
+const AdvancedChart = dynamic(() => import('@/components/analytics/AdvancedChart'), { ssr: false, loading: () => <div className="h-[600px] bg-[#0c1222]/80 rounded-2xl border border-white/[0.06] flex items-center justify-center text-gray-400 text-sm">Loading chart…</div> });
 const MarketCategoriesEmbed = dynamic(() => import('@/components/analytics/MarketCategoriesEmbed'), { ssr: false });
 const WatchlistPanel = dynamic(() => import('@/components/WatchlistPanel'), { ssr: false });
 const SectorPerformanceLazy = dynamic(() => import('@/components/charts/SectorPerformanceLazy'), { ssr: false });
@@ -755,6 +756,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               </Section>
             )}
+
+            {/* ═══════ ADVANCED CHART (Yahoo Finance Style) ═══════ */}
+            <Section>
+              <div className="px-3 pt-3 pb-1">
+                <AdvancedChart symbol="SPY" height={600} />
+              </div>
+            </Section>
 
             {/* ═══════ MARKET CATEGORIES ═══════ */}
             <Section>

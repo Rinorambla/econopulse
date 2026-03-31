@@ -44,7 +44,7 @@ export default function LazyVisible({ children, minHeight = 300, rootMargin = '2
   return (
     <div ref={ref} style={{ minHeight: minH }}>
       {visible ? (
-        <div style={{ width: '100%', height: minH }}>
+        <div style={{ width: '100%' }}>
           {children}
         </div>
       ) : (

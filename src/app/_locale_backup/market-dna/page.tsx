@@ -525,8 +525,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-80 mb-5">
-                  <LazyVisible minHeight={320}>
+                <div className="mb-5">
+                  <LazyVisible minHeight={380}>
                     <HistoricalSimilarityChart data={similaritySeries as any} />
                   </LazyVisible>
                 </div>
@@ -705,8 +705,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-96">
-                  <LazyVisible minHeight={384}>
+                <div>
+                  <LazyVisible minHeight={380}>
                     <MarketRegimeArea data={regimeSeries as any} />
                   </LazyVisible>
                 </div>
@@ -727,8 +727,8 @@ export default function MarketDNAPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="h-96">
-                  <LazyVisible minHeight={384}>
+                <div>
+                  <LazyVisible minHeight={410}>
                     <SectorRiskRadar data={radarSeries as any} />
                   </LazyVisible>
                 </div>

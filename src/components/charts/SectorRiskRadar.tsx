@@ -28,8 +28,12 @@ export default function SectorRiskRadar({ data }: { data: RadarPoint[] }) {
     return next;
   });
 
+  if (!data || data.length === 0) {
+    return <div className="flex items-center justify-center h-64 text-gray-500 text-sm">No sector risk data available</div>;
+  }
+
   return (
-    <div className="flex flex-col h-full">
+    <div>
       {/* Dimension Toggle Buttons */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {DIMENSIONS.map(dim => (
@@ -47,7 +51,7 @@ export default function SectorRiskRadar({ data }: { data: RadarPoint[] }) {
           </button>
         ))}
       </div>
-      <div className="flex-1 min-h-0">
+      <div style={{ width: '100%', height: 350 }}>
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid stroke="#1e293b" />

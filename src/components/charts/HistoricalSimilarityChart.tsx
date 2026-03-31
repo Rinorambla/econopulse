@@ -93,8 +93,12 @@ export default function HistoricalSimilarityChart({ data }: { data: SimilarityPo
     return next;
   });
 
+  if (!data || data.length === 0) {
+    return <div className="flex items-center justify-center h-64 text-gray-500 text-sm">No historical similarity data available</div>;
+  }
+
   return (
-    <div className="flex flex-col h-full">
+    <div>
       {/* Indicator Toggle Buttons */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {INDICATORS.map(ind => (
@@ -112,7 +116,7 @@ export default function HistoricalSimilarityChart({ data }: { data: SimilarityPo
           </button>
         ))}
       </div>
-      <div className="flex-1 min-h-0">
+      <div style={{ width: '100%', height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={enriched}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />

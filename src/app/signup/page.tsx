@@ -29,7 +29,7 @@ export default function SignupPage() {
         if (res.needsConfirmation) {
           setInfo('Check your email to confirm your account.');
         } else {
-          router.push('/dashboard');
+          router.push('/ai-pulse');
         }
       } else {
         setError(res.error || 'Signup failed');

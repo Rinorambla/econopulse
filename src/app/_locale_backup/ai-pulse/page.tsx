@@ -100,10 +100,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [lastUpdated, setLastUpdated] = useState('');
   const [error, setError] = useState('');
   const [screenerSort, setScreenerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'changePercent', dir: 'desc' });
-  const [dataHealth, setDataHealth] = useState({ sector: false, movers: false, ai: false });
+  const [dataHealth, setDataHealth] = useState({ sector: false, movers: false, ai: false, heatmap: false });
   const [aiError, setAiError] = useState(false);
   const [perfPeriod, setPerfPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'yearly'>('daily');
   const [detailLoading, setDetailLoading] = useState(false);
+  const [heatmapQuotes, setHeatmapQuotes] = useState<Mover[]>([]);
 
   // ─── Fetchers ──────────────────────────────────────────────────
   const fetchSectorData = useCallback(async () => {
@@ -160,43 +161,48 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     try {
       setDetailLoading(true);
       setStockDetail(null);
-      const r = await fetchT(`/api/yahoo-extended-quotes?symbols=${encodeURIComponent(symbol)}`, 10000);
+      const r = await fetchT(`/api/stock-detail?symbol=${encodeURIComponent(symbol)}`, 12000);
       if (!r.ok) return;
       const j = await r.json();
-      const quotes = j.data || [];
-      if (quotes.length > 0) {
-        const q = quotes[0];
+      if (j.ok && j.data) {
+        const q = j.data;
         setStockDetail({
           symbol: q.symbol,
           shortName: q.shortName,
-          longName: q.longName,
           regularMarketPrice: q.regularMarketPrice,
           regularMarketChange: q.regularMarketChange,
           regularMarketChangePercent: q.regularMarketChangePercent,
           regularMarketVolume: q.regularMarketVolume,
           averageDailyVolume3Month: q.averageDailyVolume3Month,
-          marketCap: q.marketCap,
-          trailingPE: q.trailingPE,
-          forwardPE: q.forwardPE,
-          epsTrailingTwelveMonths: q.epsTrailingTwelveMonths,
           fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
           fiftyTwoWeekLow: q.fiftyTwoWeekLow,
           fiftyDayAverage: q.fiftyDayAverage,
           twoHundredDayAverage: q.twoHundredDayAverage,
           sector: q.sector,
-          industry: q.industry,
         });
       }
     } catch (e) { console.error(e); }
     finally { setDetailLoading(false); }
   }, [fetchT]);
 
+  const fetchHeatmapQuotes = useCallback(async () => {
+    try {
+      const r = await fetchT('/api/heatmap-quotes', 15000, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.ok && j.data) {
+        setHeatmapQuotes(j.data);
+        setDataHealth(h => ({ ...h, heatmap: j.data.length > 0 }));
+      }
+    } catch (e) { console.error(e); }
+  }, [fetchT]);
+
   // ─── Effects ───────────────────────────────────────────────────
-  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis]);
+  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchHeatmapQuotes]);
 
   useEffect(() => {
     const heavy = setInterval(() => {
-      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); }
+      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(); }
     }, 600000);
     const movers = setInterval(() => {
       if (document.visibilityState === 'visible') fetchTopMovers();
@@ -209,9 +215,12 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   // ─── Derived data ─────────────────────────────────────────────
   const stockMap = useMemo(() => {
     const m: Record<string, Mover> = {};
+    // Heatmap quotes (Tiingo IEX bulk) are the primary source
+    for (const s of heatmapQuotes) m[s.symbol] = s;
+    // Overlay with top-movers data (may have additional symbols)
     for (const s of allMovers) m[s.symbol] = s;
     return m;
-  }, [allMovers]);
+  }, [heatmapQuotes, allMovers]);
 
   const screenerData = useMemo(() => {
     const arr = [...allMovers];
@@ -465,18 +474,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       <p className="text-gray-400 text-[10px] truncate">{stockDetail.shortName || stockDetail.longName || ''}</p>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                         {([
-                          ['Market Cap', stockDetail.marketCap ? fmtNum(stockDetail.marketCap) : '—'],
                           ['% Change', stockDetail.regularMarketChangePercent != null ? `${fmtPct(stockDetail.regularMarketChangePercent)}%` : '—'],
                           ['Sector', stockDetail.sector || '—'],
-                          ['Industry', stockDetail.industry || '—'],
                           ['Volume', stockDetail.regularMarketVolume ? fmtNum(stockDetail.regularMarketVolume) : '—'],
-                          ['Avg Vol', stockDetail.averageDailyVolume3Month ? fmtNum(stockDetail.averageDailyVolume3Month) : '—'],
-                          ['PE Ratio', stockDetail.trailingPE ? fmt(stockDetail.trailingPE, 1) : '—'],
-                          ['Forward PE', stockDetail.forwardPE ? fmt(stockDetail.forwardPE, 1) : '—'],
-                          ['EPS', stockDetail.epsTrailingTwelveMonths ? fmt(stockDetail.epsTrailingTwelveMonths) : '—'],
+                          ['Avg Vol (3M)', stockDetail.averageDailyVolume3Month ? fmtNum(stockDetail.averageDailyVolume3Month) : '—'],
                           ['52W High', stockDetail.fiftyTwoWeekHigh ? `$${fmt(stockDetail.fiftyTwoWeekHigh)}` : '—'],
                           ['52W Low', stockDetail.fiftyTwoWeekLow ? `$${fmt(stockDetail.fiftyTwoWeekLow)}` : '—'],
                           ['50D Avg', stockDetail.fiftyDayAverage ? `$${fmt(stockDetail.fiftyDayAverage)}` : '—'],
+                          ['200D Avg', stockDetail.twoHundredDayAverage ? `$${fmt(stockDetail.twoHundredDayAverage)}` : '—'],
                         ] as [string, string][]).map(([label, val]) => (
                           <div key={label} className="flex justify-between">
                             <span className="text-gray-500">{label}</span>

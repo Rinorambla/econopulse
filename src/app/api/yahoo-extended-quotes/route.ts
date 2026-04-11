@@ -10,11 +10,25 @@ type OutRow = {
   marketState?: string;
   regularMarketPrice?: number | null;
   regularMarketChangePercent?: number | null;
+  regularMarketChange?: number | null;
   preMarketPrice?: number | null;
   preMarketChangePercent?: number | null;
   postMarketPrice?: number | null;
   postMarketChangePercent?: number | null;
   shortName?: string | null;
+  longName?: string | null;
+  regularMarketVolume?: number | null;
+  averageDailyVolume3Month?: number | null;
+  marketCap?: number | null;
+  trailingPE?: number | null;
+  forwardPE?: number | null;
+  epsTrailingTwelveMonths?: number | null;
+  fiftyTwoWeekHigh?: number | null;
+  fiftyTwoWeekLow?: number | null;
+  fiftyDayAverage?: number | null;
+  twoHundredDayAverage?: number | null;
+  sector?: string | null;
+  industry?: string | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -36,12 +50,26 @@ export async function GET(req: NextRequest) {
       symbol: r.symbol,
       marketState: r.marketState,
       regularMarketPrice: r.regularMarketPrice ?? null,
+      regularMarketChange: r.regularMarketChange ?? null,
       regularMarketChangePercent: r.regularMarketChangePercent ?? null,
       preMarketPrice: r.preMarketPrice ?? null,
       preMarketChangePercent: r.preMarketChangePercent ?? null,
       postMarketPrice: r.postMarketPrice ?? null,
       postMarketChangePercent: r.postMarketChangePercent ?? null,
-      shortName: r.shortName ?? r.longName ?? null,
+      shortName: r.shortName ?? null,
+      longName: r.longName ?? null,
+      regularMarketVolume: r.regularMarketVolume ?? null,
+      averageDailyVolume3Month: r.averageDailyVolume3Month ?? null,
+      marketCap: r.marketCap ?? null,
+      trailingPE: r.trailingPE ?? null,
+      forwardPE: r.forwardPE ?? null,
+      epsTrailingTwelveMonths: r.epsTrailingTwelveMonths ?? null,
+      fiftyTwoWeekHigh: r.fiftyTwoWeekHigh ?? null,
+      fiftyTwoWeekLow: r.fiftyTwoWeekLow ?? null,
+      fiftyDayAverage: r.fiftyDayAverage ?? null,
+      twoHundredDayAverage: r.twoHundredDayAverage ?? null,
+      sector: r.sector ?? null,
+      industry: r.industry ?? null,
     }));
     return NextResponse.json({ ok: true, data: out, asOf: new Date().toISOString() }, { headers: rateLimitHeaders(rl) });
   } catch (e: any) {

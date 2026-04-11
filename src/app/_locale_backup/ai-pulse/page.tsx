@@ -33,12 +33,13 @@ interface AIEconomicAnalysis {
 }
 
 // ─── S&P 500 Sector → Top Stocks Map ────────────────────────────────
+// Keys match the sector-performance API names
 const SECTOR_STOCKS: Record<string, string[]> = {
-  'Information Technology': ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'CRM', 'ADBE', 'CSCO', 'ACN', 'ORCL', 'INTC', 'AMD', 'QCOM'],
-  'Health Care': ['UNH', 'JNJ', 'LLY', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY'],
-  'Financials': ['BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK'],
+  'Technology': ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'CRM', 'ADBE', 'CSCO', 'ACN', 'ORCL', 'INTC', 'AMD', 'QCOM'],
+  'Healthcare': ['UNH', 'JNJ', 'LLY', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY'],
+  'Financial': ['BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK'],
   'Consumer Discretionary': ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'LOW', 'SBUX', 'TJX', 'BKNG', 'CMG'],
-  'Communication Services': ['GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'T', 'VZ', 'TMUS'],
+  'Communication': ['GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'T', 'VZ', 'TMUS'],
   'Industrials': ['GE', 'CAT', 'UNP', 'HON', 'UPS', 'BA', 'RTX', 'DE', 'LMT'],
   'Consumer Staples': ['PG', 'KO', 'PEP', 'COST', 'WMT', 'PM', 'MO', 'MDLZ'],
   'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PXD', 'VLO'],
@@ -100,6 +101,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [error, setError] = useState('');
   const [screenerSort, setScreenerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'changePercent', dir: 'desc' });
   const [dataHealth, setDataHealth] = useState({ sector: false, movers: false, ai: false });
+  const [aiError, setAiError] = useState(false);
+  const [perfPeriod, setPerfPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'yearly'>('daily');
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // ─── Fetchers ──────────────────────────────────────────────────
   const fetchSectorData = useCallback(async () => {
@@ -138,23 +142,53 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
   const fetchAIAnalysis = useCallback(async () => {
     try {
-      const r = await fetchT('/api/ai-economic-analysis', 12000);
-      if (!r.ok) return;
+      setAiError(false);
+      const r = await fetchT('/api/ai-economic-analysis', 15000);
+      if (!r.ok) { setAiError(true); return; }
       const j = await r.json();
-      const analysis = j.data?.analysis || j;
-      setAiAnalysis(analysis);
-      setDataHealth(h => ({ ...h, ai: !!analysis }));
-    } catch (e) { console.error(e); }
+      const analysis = j.data?.analysis || j.analysis || j;
+      if (analysis && (analysis.direction || analysis.summary)) {
+        setAiAnalysis(analysis);
+        setDataHealth(h => ({ ...h, ai: true }));
+      } else {
+        setAiError(true);
+      }
+    } catch (e) { console.error(e); setAiError(true); }
   }, [fetchT]);
 
   const fetchStockDetail = useCallback(async (symbol: string) => {
     try {
-      const r = await fetchT(`/api/yahoo-quotes?symbols=${encodeURIComponent(symbol)}`, 8000);
+      setDetailLoading(true);
+      setStockDetail(null);
+      const r = await fetchT(`/api/yahoo-extended-quotes?symbols=${encodeURIComponent(symbol)}`, 10000);
       if (!r.ok) return;
       const j = await r.json();
       const quotes = j.data || [];
-      if (quotes.length > 0) setStockDetail(quotes[0]);
+      if (quotes.length > 0) {
+        const q = quotes[0];
+        setStockDetail({
+          symbol: q.symbol,
+          shortName: q.shortName,
+          longName: q.longName,
+          regularMarketPrice: q.regularMarketPrice,
+          regularMarketChange: q.regularMarketChange,
+          regularMarketChangePercent: q.regularMarketChangePercent,
+          regularMarketVolume: q.regularMarketVolume,
+          averageDailyVolume3Month: q.averageDailyVolume3Month,
+          marketCap: q.marketCap,
+          trailingPE: q.trailingPE,
+          forwardPE: q.forwardPE,
+          epsTrailingTwelveMonths: q.epsTrailingTwelveMonths,
+          fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: q.fiftyTwoWeekLow,
+          fiftyDayAverage: q.fiftyDayAverage,
+          twoHundredDayAverage: q.twoHundredDayAverage,
+          sector: q.sector,
+          industry: q.industry,
+        });
+      }
     } catch (e) { console.error(e); }
+    finally { setDetailLoading(false); }
   }, [fetchT]);
 
   // ─── Effects ───────────────────────────────────────────────────
@@ -324,36 +358,32 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             {/* ─── ROW 1: Heatmap | Screener | Company + Industry ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
-              {/* 1. SECTOR HEATMAP */}
+              {/* 1. SECTOR HEATMAP — true treemap layout */}
               <Panel title="S&P 500 Sector Heatmap" badge="LIVE" className="lg:col-span-4 min-h-[340px]">
-                <div className="p-2">
-                  <div className="grid gap-1">
-                    {sectorData.slice(0, 11).map(sector => {
-                      const stocks = SECTOR_STOCKS[sector.sector] || [];
-                      return (
-                        <div key={sector.sector}>
-                          <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider px-1 py-0.5">{sector.sector}</div>
-                          <div className="flex flex-wrap gap-0.5">
-                            {stocks.slice(0, 8).map(sym => {
-                              const mover = stockMap[sym];
-                              const pct = mover?.changePercent ?? sector.daily;
-                              const weight = STOCK_WEIGHTS[sym] || 2;
-                              const w = Math.max(32, Math.min(80, weight * 3));
-                              return (
-                                <button key={sym} onClick={() => setSelectedSymbol(sym)}
-                                  className={`rounded text-center transition-all hover:ring-1 hover:ring-white/30 ${selectedSymbol === sym ? 'ring-1 ring-blue-400' : ''}`}
-                                  style={{ width: `${w}px`, minHeight: '28px' }}
-                                  title={`${sym}: ${fmtPct(pct)}%`}>
-                                  <div className={`rounded px-1 py-1 h-full flex flex-col items-center justify-center ${pctBgAlpha(pct)}`}>
-                                    <span className="text-[9px] font-bold text-white leading-none">{sym}</span>
-                                    <span className={`text-[8px] font-mono ${pctColor(pct)}`}>{fmtPct(pct)}%</span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
+                <div className="p-1.5">
+                  <div className="flex flex-wrap gap-px">
+                    {sectorData.map(sector => {
+                      const stocks = SECTOR_STOCKS[sector.sector] || sector.topStocks || [];
+                      return stocks.map(sym => {
+                        const mover = stockMap[sym];
+                        const pct = mover?.changePercent ?? sector.daily;
+                        const weight = STOCK_WEIGHTS[sym] || 2;
+                        // treemap: bigger weight = bigger tile
+                        const size = Math.max(36, Math.min(90, weight * 2.8));
+                        const h = Math.max(28, Math.min(48, weight * 1.6));
+                        const bgColor = pct > 2 ? 'bg-emerald-600/80' : pct > 0.5 ? 'bg-emerald-500/50' : pct > 0 ? 'bg-emerald-500/25' : pct > -0.5 ? 'bg-red-500/25' : pct > -2 ? 'bg-red-500/50' : 'bg-red-600/80';
+                        return (
+                          <button key={sym} onClick={() => setSelectedSymbol(sym)}
+                            className={`rounded-sm text-center transition-all hover:brightness-125 hover:z-10 ${selectedSymbol === sym ? 'ring-1 ring-blue-400 z-10' : ''} ${bgColor}`}
+                            style={{ width: `${size}px`, height: `${h}px` }}
+                            title={`${sym} (${sector.sector}): ${fmtPct(pct)}%`}>
+                            <div className="flex flex-col items-center justify-center h-full">
+                              <span className={`font-bold text-white leading-none ${weight > 10 ? 'text-[10px]' : 'text-[8px]'}`}>{sym}</span>
+                              <span className={`font-mono leading-none mt-0.5 ${weight > 10 ? 'text-[9px]' : 'text-[7px]'} ${pctColor(pct)}`}>{fmtPct(pct)}%</span>
+                            </div>
+                          </button>
+                        );
+                      });
                     })}
                   </div>
                 </div>
@@ -419,29 +449,34 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               <div className="lg:col-span-4 flex flex-col gap-2">
                 {/* Company Detail */}
                 <Panel title={selectedSymbol ? `Company: ${selectedSymbol}` : 'Company Info'} badge={stockDetail ? 'LIVE' : undefined} className="flex-1 min-h-[160px]">
-                  {stockDetail ? (
+                  {detailLoading ? (
+                    <div className="p-4 text-center text-gray-500 text-xs">
+                      <RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-40" />
+                      Loading {selectedSymbol}...
+                    </div>
+                  ) : stockDetail ? (
                     <div className="p-3 space-y-2 text-[10px]">
                       <div className="flex items-center justify-between">
                         <span className="text-base font-bold text-white">{stockDetail.symbol}</span>
                         <span className={`text-sm font-bold ${pctColor(stockDetail.regularMarketChangePercent ?? 0)}`}>
-                          ${fmt(stockDetail.regularMarketPrice ?? 0)}
+                          {stockDetail.regularMarketPrice ? `$${fmt(stockDetail.regularMarketPrice)}` : '—'}
                         </span>
                       </div>
                       <p className="text-gray-400 text-[10px] truncate">{stockDetail.shortName || stockDetail.longName || ''}</p>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                         {([
-                          ['Market Cap', fmtNum(stockDetail.marketCap ?? 0)],
-                          ['% Change', `${fmtPct(stockDetail.regularMarketChangePercent ?? 0)}%`],
-                          ['Sector', String(stockDetail.sector || 'N/A')],
-                          ['Industry', String(stockDetail.industry || 'N/A')],
-                          ['Volume', fmtNum(stockDetail.regularMarketVolume ?? 0)],
-                          ['Avg Vol', fmtNum(stockDetail.averageDailyVolume3Month ?? 0)],
-                          ['PE Ratio', fmt(stockDetail.trailingPE ?? 0, 1)],
-                          ['Forward PE', fmt(stockDetail.forwardPE ?? 0, 1)],
-                          ['EPS', fmt(stockDetail.epsTrailingTwelveMonths ?? 0)],
-                          ['52W High', `$${fmt(stockDetail.fiftyTwoWeekHigh ?? 0)}`],
-                          ['52W Low', `$${fmt(stockDetail.fiftyTwoWeekLow ?? 0)}`],
-                          ['50D Avg', `$${fmt(stockDetail.fiftyDayAverage ?? 0)}`],
+                          ['Market Cap', stockDetail.marketCap ? fmtNum(stockDetail.marketCap) : '—'],
+                          ['% Change', stockDetail.regularMarketChangePercent != null ? `${fmtPct(stockDetail.regularMarketChangePercent)}%` : '—'],
+                          ['Sector', stockDetail.sector || '—'],
+                          ['Industry', stockDetail.industry || '—'],
+                          ['Volume', stockDetail.regularMarketVolume ? fmtNum(stockDetail.regularMarketVolume) : '—'],
+                          ['Avg Vol', stockDetail.averageDailyVolume3Month ? fmtNum(stockDetail.averageDailyVolume3Month) : '—'],
+                          ['PE Ratio', stockDetail.trailingPE ? fmt(stockDetail.trailingPE, 1) : '—'],
+                          ['Forward PE', stockDetail.forwardPE ? fmt(stockDetail.forwardPE, 1) : '—'],
+                          ['EPS', stockDetail.epsTrailingTwelveMonths ? fmt(stockDetail.epsTrailingTwelveMonths) : '—'],
+                          ['52W High', stockDetail.fiftyTwoWeekHigh ? `$${fmt(stockDetail.fiftyTwoWeekHigh)}` : '—'],
+                          ['52W Low', stockDetail.fiftyTwoWeekLow ? `$${fmt(stockDetail.fiftyTwoWeekLow)}` : '—'],
+                          ['50D Avg', stockDetail.fiftyDayAverage ? `$${fmt(stockDetail.fiftyDayAverage)}` : '—'],
                         ] as [string, string][]).map(([label, val]) => (
                           <div key={label} className="flex justify-between">
                             <span className="text-gray-500">{label}</span>
@@ -459,20 +494,31 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </Panel>
 
                 {/* Industry Ranking */}
-                <Panel title="Industry Performance" badge="TODAY" className="min-h-[160px]">
+                <Panel title="Industry Performance" className="min-h-[160px]"
+                  actions={
+                    <div className="flex gap-0.5">
+                      {(['daily', 'weekly', 'monthly', 'quarterly', 'ytd', 'yearly'] as const).map(p => (
+                        <button key={p} onClick={() => setPerfPeriod(p)}
+                          className={`px-1.5 py-0.5 text-[8px] rounded transition-colors ${perfPeriod === p ? 'bg-blue-500/30 text-blue-300' : 'text-gray-500 hover:text-gray-300'}`}>
+                          {p === 'daily' ? '1D' : p === 'weekly' ? '1W' : p === 'monthly' ? '1M' : p === 'quarterly' ? '3M' : p === 'ytd' ? 'YTD' : '1Y'}
+                        </button>
+                      ))}
+                    </div>
+                  }>
                   <div className="p-2 space-y-0.5">
-                    {industryRanks.slice(0, 11).map((s, i) => {
-                      const maxAbs = Math.max(...industryRanks.map(x => Math.abs(x.daily)), 1);
-                      const barW = Math.abs(s.daily) / maxAbs * 100;
+                    {[...sectorData].sort((a, b) => (b[perfPeriod] ?? 0) - (a[perfPeriod] ?? 0)).slice(0, 11).map((s, i) => {
+                      const val = (s as unknown as Record<string, number>)[perfPeriod] ?? 0;
+                      const maxAbs = Math.max(...sectorData.map(x => Math.abs((x as unknown as Record<string, number>)[perfPeriod] ?? 0)), 1);
+                      const barW = Math.abs(val) / maxAbs * 100;
                       return (
                         <div key={s.sector} className="flex items-center gap-1.5 h-5">
                           <span className="text-[8px] text-gray-500 w-3 text-right">{i + 1}</span>
-                          <span className="text-[9px] text-gray-300 w-20 truncate">{s.sector.replace('Consumer ', 'Cons. ').replace('Information ', '')}</span>
+                          <span className="text-[9px] text-gray-300 w-20 truncate">{s.sector.replace('Consumer ', '')}</span>
                           <div className="flex-1 h-3 bg-white/[0.02] rounded-sm overflow-hidden">
-                            <div className={`h-full rounded-sm transition-all ${s.daily >= 0 ? 'bg-emerald-500/50' : 'bg-red-500/50'}`}
+                            <div className={`h-full rounded-sm transition-all ${val >= 0 ? 'bg-emerald-500/50' : 'bg-red-500/50'}`}
                               style={{ width: `${Math.max(2, barW)}%` }} />
                           </div>
-                          <span className={`text-[9px] font-mono w-10 text-right ${pctColor(s.daily)}`}>{fmtPct(s.daily)}%</span>
+                          <span className={`text-[9px] font-mono w-12 text-right ${pctColor(val)}`}>{fmtPct(val)}%</span>
                         </div>
                       );
                     })}
@@ -632,9 +678,22 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       )}
                     </div>
                   </div>
+                ) : aiError ? (
+                  <div className="p-6 text-center">
+                    <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-amber-500/40" />
+                    <p className="text-sm text-gray-400 mb-1">AI analysis temporarily unavailable</p>
+                    <p className="text-[10px] text-gray-600 mb-3">The service may be starting up or the API key is not configured.</p>
+                    <button onClick={fetchAIAnalysis}
+                      className="px-3 py-1.5 text-[10px] rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-colors">
+                      Retry
+                    </button>
+                  </div>
                 ) : (
                   <div className="p-8 text-center text-gray-500">
-                    <Zap className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                    <div className="relative w-8 h-8 mx-auto mb-3">
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
+                      <Zap className="absolute inset-0 m-auto w-4 h-4 text-blue-400/40" />
+                    </div>
                     <p className="text-sm">Loading AI analysis...</p>
                   </div>
                 )}
@@ -665,12 +724,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       const y = 300 - (pt.mom / 100) * 300;
                       const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
                       const short = pt.sector
-                        .replace('Information Technology', 'Tech')
+                        .replace('Technology', 'Tech')
                         .replace('Consumer Discretionary', 'Cons.Disc')
                         .replace('Consumer Staples', 'Cons.Stap')
-                        .replace('Communication Services', 'Comm')
-                        .replace('Health Care', 'Health')
-                        .replace('Real Estate', 'RE');
+                        .replace('Communication', 'Comm')
+                        .replace('Healthcare', 'Health')
+                        .replace('Real Estate', 'RE')
+                        .replace('Financial', 'Fin');
                       return (
                         <g key={pt.sector}>
                           <circle cx={x} cy={y} r="5" fill={color} fillOpacity="0.7" stroke={color} strokeWidth="1" />
@@ -702,12 +762,12 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     </div>
                     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-2.5 text-center">
                       <p className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Best Sector</p>
-                      <p className="text-sm font-bold text-emerald-400 truncate">{industryRanks[0]?.sector?.replace('Information Technology', 'Tech').replace('Consumer ', '') || '—'}</p>
+                      <p className="text-sm font-bold text-emerald-400 truncate">{industryRanks[0]?.sector?.replace('Technology', 'Tech').replace('Consumer ', '') || '—'}</p>
                       <p className="text-[8px] text-emerald-400/70">{fmtPct(industryRanks[0]?.daily || 0)}%</p>
                     </div>
                     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-2.5 text-center">
                       <p className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Worst Sector</p>
-                      <p className="text-sm font-bold text-red-400 truncate">{industryRanks[industryRanks.length - 1]?.sector?.replace('Information Technology', 'Tech').replace('Consumer ', '') || '—'}</p>
+                      <p className="text-sm font-bold text-red-400 truncate">{industryRanks[industryRanks.length - 1]?.sector?.replace('Technology', 'Tech').replace('Consumer ', '') || '—'}</p>
                       <p className="text-[8px] text-red-400/70">{fmtPct(industryRanks[industryRanks.length - 1]?.daily || 0)}%</p>
                     </div>
                   </div>
@@ -721,9 +781,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       <div className="text-xs text-gray-300 leading-relaxed space-y-2">
                         <p>
                           <span className="font-semibold text-white">Sector Shift:</span>{' '}
-                          {industryRanks.slice(0, 3).map(s => s.sector.replace('Information Technology', 'Tech').replace('Consumer ', '')).join(', ')}{' '}
+                          {industryRanks.slice(0, 3).map(s => s.sector.replace('Technology', 'Tech').replace('Consumer ', '')).join(', ')}{' '}
                           lead the session, while{' '}
-                          {industryRanks.slice(-2).map(s => s.sector.replace('Information Technology', 'Tech').replace('Consumer ', '')).join(' and ')}{' '}
+                          {industryRanks.slice(-2).map(s => s.sector.replace('Technology', 'Tech').replace('Consumer ', '')).join(' and ')}{' '}
                           lag behind.
                         </p>
                         <p>

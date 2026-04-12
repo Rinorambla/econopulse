@@ -31,6 +31,17 @@ interface AIEconomicAnalysis {
   confidence: number; timeframe: string; keyFactors: string[]; risks: string[];
   opportunities: string[]; summary: string; recommendation: string;
 }
+interface SentimentData {
+  fearGreedIndex: number; sentiment: string; trend: string; volatility: number; aiPrediction: string;
+}
+interface RegimeData {
+  regime: string; score: number; level: number; description: string;
+  signals: Record<string, string>;
+}
+interface FlameData {
+  level: number; intensity: string; description: string;
+  components: Record<string, number>;
+}
 
 // ─── S&P 500 Sector → Top Stocks Map ────────────────────────────────
 // Keys match the sector-performance API names
@@ -95,6 +106,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [stockDetail, setStockDetail] = useState<StockQuote | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIEconomicAnalysis | null>(null);
+  const [sentimentData, setSentimentData] = useState<SentimentData | null>(null);
+  const [regimeData, setRegimeData] = useState<RegimeData | null>(null);
+  const [flameData, setFlameData] = useState<FlameData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
@@ -144,12 +158,38 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const fetchAIAnalysis = useCallback(async () => {
     try {
       setAiError(false);
-      const r = await fetchT('/api/ai-economic-analysis', 15000);
-      if (!r.ok) { setAiError(true); return; }
-      const j = await r.json();
-      const analysis = j.data?.analysis || j.analysis || j;
-      if (analysis && (analysis.direction || analysis.summary)) {
-        setAiAnalysis(analysis);
+      // Fetch 3 Tiingo-based APIs in parallel (no OpenAI needed)
+      const [sentR, regimeR, flameR, aiR] = await Promise.all([
+        fetchT('/api/market-sentiment-new', 10000).catch(() => null),
+        fetchT('/api/market-regime', 10000).catch(() => null),
+        fetchT('/api/flame-detector', 10000).catch(() => null),
+        fetchT('/api/ai-economic-analysis', 15000).catch(() => null),
+      ]);
+
+      let gotData = false;
+
+      if (sentR?.ok) {
+        const sj = await sentR.json();
+        if (sj.fearGreedIndex != null) { setSentimentData(sj); gotData = true; }
+      }
+      if (regimeR?.ok) {
+        const rj = await regimeR.json();
+        if (rj.regime) { setRegimeData(rj); gotData = true; }
+      }
+      if (flameR?.ok) {
+        const fj = await flameR.json();
+        if (fj.level != null) { setFlameData(fj); gotData = true; }
+      }
+      if (aiR?.ok) {
+        const aj = await aiR.json();
+        const analysis = aj.data?.analysis || aj.analysis || aj;
+        if (analysis && (analysis.direction || analysis.summary)) {
+          setAiAnalysis(analysis);
+          gotData = true;
+        }
+      }
+
+      if (gotData) {
         setDataHealth(h => ({ ...h, ai: true }));
       } else {
         setAiError(true);
@@ -236,11 +276,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const industryRanks = useMemo(() => [...sectorData].sort((a, b) => b.daily - a.daily), [sectorData]);
 
   const breadth = useMemo(() => {
-    const up = allMovers.filter(m => m.changePercent > 0).length;
-    const down = allMovers.filter(m => m.changePercent < 0).length;
-    const total = allMovers.length || 1;
+    // Use heatmapQuotes (90+ stocks) for more accurate breadth, fallback to allMovers
+    const source = heatmapQuotes.length > 0 ? heatmapQuotes : allMovers;
+    const up = source.filter(m => m.changePercent > 0).length;
+    const down = source.filter(m => m.changePercent < 0).length;
+    const total = source.length || 1;
     return { up, down, unchanged: total - up - down, total, upPct: Math.round((up / total) * 100), downPct: Math.round((down / total) * 100) };
-  }, [allMovers]);
+  }, [heatmapQuotes, allMovers]);
 
   const stageData = useMemo(() => {
     let s1 = 0, s2 = 0, s3 = 0, s4 = 0;
@@ -597,9 +639,130 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </Panel>
               </div>
 
-              {/* 6. AI INSIGHT PANEL */}
-              <Panel title="AI Market Intelligence" badge={aiAnalysis ? 'AI LIVE' : 'WAITING'} className="lg:col-span-8 min-h-[280px]">
-                {aiAnalysis ? (
+              {/* 6. AI INSIGHT PANEL — Composite: Sentiment + Regime + Flame + OpenAI fallback */}
+              <Panel title="AI Market Intelligence" badge={(sentimentData || regimeData || flameData) ? 'LIVE' : aiAnalysis ? 'AI LIVE' : 'WAITING'} className="lg:col-span-8 min-h-[280px]">
+                {(sentimentData || regimeData || flameData) ? (
+                  <div className="p-4 space-y-4">
+                    {/* Top row: Fear & Greed + Regime + Flame */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* Fear & Greed */}
+                      {sentimentData && (
+                        <div className={`rounded-lg px-4 py-3 border ${
+                          sentimentData.fearGreedIndex >= 70 ? 'bg-emerald-500/10 border-emerald-500/20' :
+                          sentimentData.fearGreedIndex <= 30 ? 'bg-red-500/10 border-red-500/20' :
+                          'bg-amber-500/10 border-amber-500/20'
+                        }`}>
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">Fear & Greed</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-2xl font-bold tabular-nums ${
+                              sentimentData.fearGreedIndex >= 70 ? 'text-emerald-400' :
+                              sentimentData.fearGreedIndex <= 30 ? 'text-red-400' : 'text-amber-400'
+                            }`}>{sentimentData.fearGreedIndex}</span>
+                            <span className="text-[10px] text-gray-400">/100</span>
+                          </div>
+                          <p className={`text-[10px] mt-0.5 ${
+                            sentimentData.fearGreedIndex >= 70 ? 'text-emerald-400' :
+                            sentimentData.fearGreedIndex <= 30 ? 'text-red-400' : 'text-amber-400'
+                          }`}>{sentimentData.sentiment}</p>
+                        </div>
+                      )}
+                      {/* Regime */}
+                      {regimeData && (
+                        <div className={`rounded-lg px-4 py-3 border ${
+                          regimeData.regime === 'Risk-On' ? 'bg-emerald-500/10 border-emerald-500/20' :
+                          regimeData.regime === 'Risk-Off' ? 'bg-red-500/10 border-red-500/20' :
+                          'bg-blue-500/10 border-blue-500/20'
+                        }`}>
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">Market Regime</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {regimeData.regime === 'Risk-On' ? <TrendingUp className="w-5 h-5 text-emerald-400" /> :
+                             regimeData.regime === 'Risk-Off' ? <TrendingDown className="w-5 h-5 text-red-400" /> :
+                             <BarChart3 className="w-5 h-5 text-blue-400" />}
+                            <span className={`text-lg font-bold ${
+                              regimeData.regime === 'Risk-On' ? 'text-emerald-400' :
+                              regimeData.regime === 'Risk-Off' ? 'text-red-400' : 'text-blue-400'
+                            }`}>{regimeData.regime}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-0.5">Score: {regimeData.score > 0 ? '+' : ''}{regimeData.score}</p>
+                        </div>
+                      )}
+                      {/* Overheating */}
+                      {flameData && (
+                        <div className={`rounded-lg px-4 py-3 border ${
+                          flameData.level >= 0.7 ? 'bg-red-500/10 border-red-500/20' :
+                          flameData.level >= 0.4 ? 'bg-amber-500/10 border-amber-500/20' :
+                          'bg-emerald-500/10 border-emerald-500/20'
+                        }`}>
+                          <p className="text-[9px] text-gray-500 uppercase tracking-wider">Overheating</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-2xl font-bold tabular-nums ${
+                              flameData.level >= 0.7 ? 'text-red-400' :
+                              flameData.level >= 0.4 ? 'text-amber-400' : 'text-emerald-400'
+                            }`}>{(flameData.level * 100).toFixed(0)}%</span>
+                          </div>
+                          <p className={`text-[10px] mt-0.5 ${
+                            flameData.level >= 0.7 ? 'text-red-400' :
+                            flameData.level >= 0.4 ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>{flameData.intensity}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Signals Row */}
+                    {regimeData?.signals && (
+                      <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 font-semibold">Regime Signals</p>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(regimeData.signals).map(([key, val]) => (
+                            <div key={key} className="text-center">
+                              <p className="text-[8px] text-gray-500 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                              <p className={`text-[10px] font-semibold ${
+                                String(val).toLowerCase().includes('bull') || String(val).toLowerCase().includes('positive') || String(val).toLowerCase().includes('strong') ? 'text-emerald-400' :
+                                String(val).toLowerCase().includes('bear') || String(val).toLowerCase().includes('negative') || String(val).toLowerCase().includes('weak') ? 'text-red-400' : 'text-amber-400'
+                              }`}>{String(val)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Flame components */}
+                    {flameData?.components && (
+                      <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 font-semibold">Overheating Components</p>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(flameData.components).map(([key, val]) => (
+                            <div key={key} className="text-center">
+                              <p className="text-[8px] text-gray-500 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                              <div className="w-full bg-gray-800 rounded-full h-1.5 mt-1">
+                                <div className={`h-1.5 rounded-full ${Number(val) >= 0.7 ? 'bg-red-500' : Number(val) >= 0.4 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                  style={{ width: `${Math.min(Number(val) * 100, 100)}%` }} />
+                              </div>
+                              <p className="text-[9px] text-gray-400 mt-0.5 tabular-nums">{(Number(val) * 100).toFixed(0)}%</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional AI summary from OpenAI if available */}
+                    {aiAnalysis?.summary && (
+                      <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 font-semibold">AI Quick Take</p>
+                        <p className="text-xs text-gray-300 leading-relaxed">{aiAnalysis.summary}</p>
+                      </div>
+                    )}
+
+                    {/* Sentiment trend + prediction */}
+                    {sentimentData && (
+                      <div className="flex items-center gap-4 text-[10px] text-gray-500">
+                        <span>Trend: <span className={sentimentData.trend === 'up' ? 'text-emerald-400' : sentimentData.trend === 'down' ? 'text-red-400' : 'text-amber-400'}>{sentimentData.trend}</span></span>
+                        <span>Volatility: <span className="text-gray-300">{typeof sentimentData.volatility === 'number' ? sentimentData.volatility.toFixed(1) : sentimentData.volatility}</span></span>
+                        {sentimentData.aiPrediction && <span className="text-gray-400 italic truncate max-w-[300px]">{sentimentData.aiPrediction}</span>}
+                      </div>
+                    )}
+                  </div>
+                ) : aiAnalysis ? (
                   <div className="p-4 space-y-4">
                     <div className="flex items-start gap-4 flex-wrap">
                       <div className={`rounded-lg px-4 py-3 border ${
@@ -622,72 +785,18 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         <p className="text-[9px] text-gray-500 uppercase tracking-wider">Confidence</p>
                         <p className="text-xl font-bold text-blue-400 tabular-nums mt-1">{aiAnalysis.confidence}%</p>
                       </div>
-                      <div className="rounded-lg px-4 py-3 border border-[#1e293b] bg-white/[0.02]">
-                        <p className="text-[9px] text-gray-500 uppercase tracking-wider">Timeframe</p>
-                        <p className="text-xl font-bold text-purple-400 mt-1">{aiAnalysis.timeframe}</p>
-                      </div>
                     </div>
-
                     {aiAnalysis.summary && (
                       <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 font-semibold">Quick Take</p>
                         <p className="text-xs text-gray-300 leading-relaxed">{aiAnalysis.summary}</p>
                       </div>
                     )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {aiAnalysis.keyFactors?.length > 0 && (
-                        <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
-                            <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Key Factors</span>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {aiAnalysis.keyFactors.slice(0, 4).map((f, i) => (
-                              <li key={i} className="flex gap-1.5 text-[10px] text-gray-300 leading-snug">
-                                <span className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 shrink-0" />{f}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {aiAnalysis.risks?.length > 0 && (
-                        <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                            <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Risks</span>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {aiAnalysis.risks.slice(0, 4).map((r, i) => (
-                              <li key={i} className="flex gap-1.5 text-[10px] text-gray-300 leading-snug">
-                                <span className="w-1 h-1 rounded-full bg-red-400 mt-1.5 shrink-0" />{r}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {aiAnalysis.opportunities?.length > 0 && (
-                        <div className="bg-white/[0.02] rounded-lg p-3 border border-[#1e293b]">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <Target className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Opportunities</span>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {aiAnalysis.opportunities.slice(0, 4).map((o, i) => (
-                              <li key={i} className="flex gap-1.5 text-[10px] text-gray-300 leading-snug">
-                                <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />{o}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 ) : aiError ? (
                   <div className="p-6 text-center">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-amber-500/40" />
                     <p className="text-sm text-gray-400 mb-1">AI analysis temporarily unavailable</p>
-                    <p className="text-[10px] text-gray-600 mb-3">The service may be starting up or the API key is not configured.</p>
+                    <p className="text-[10px] text-gray-600 mb-3">Check back shortly — data services may be initializing.</p>
                     <button onClick={fetchAIAnalysis}
                       className="px-3 py-1.5 text-[10px] rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-colors">
                       Retry
@@ -699,7 +808,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 animate-spin" />
                       <Zap className="absolute inset-0 m-auto w-4 h-4 text-blue-400/40" />
                     </div>
-                    <p className="text-sm">Loading AI analysis...</p>
+                    <p className="text-sm">Loading market intelligence...</p>
                   </div>
                 )}
               </Panel>
@@ -709,24 +818,24 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
               {/* 7. RRG QUADRANT */}
-              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-5 min-h-[300px]">
+              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-7 min-h-[360px]">
                 <div className="p-3">
-                  <svg viewBox="0 0 400 300" className="w-full" style={{ maxHeight: '280px' }}>
-                    <rect x="200" y="0" width="200" height="150" fill="#065f4615" />
-                    <rect x="0" y="0" width="200" height="150" fill="#f5930815" />
-                    <rect x="0" y="150" width="200" height="150" fill="#ef444415" />
-                    <rect x="200" y="150" width="200" height="150" fill="#3b82f615" />
-                    <line x1="0" y1="150" x2="400" y2="150" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-                    <line x1="200" y1="0" x2="200" y2="300" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-                    <text x="300" y="20" textAnchor="middle" fontSize="10" fill="#34d399" fontWeight="600">Leading</text>
-                    <text x="100" y="20" textAnchor="middle" fontSize="10" fill="#f59e0b" fontWeight="600">Weakening</text>
-                    <text x="100" y="290" textAnchor="middle" fontSize="10" fill="#ef4444" fontWeight="600">Lagging</text>
-                    <text x="300" y="290" textAnchor="middle" fontSize="10" fill="#3b82f6" fontWeight="600">Improving</text>
-                    <text x="200" y="298" textAnchor="middle" fontSize="8" fill="#475569">RS Rating</text>
-                    <text x="6" y="150" fontSize="8" fill="#475569" transform="rotate(-90,6,150)">Momentum</text>
+                  <svg viewBox="0 0 600 450" className="w-full" style={{ maxHeight: '420px' }}>
+                    <rect x="300" y="0" width="300" height="225" fill="#065f4615" />
+                    <rect x="0" y="0" width="300" height="225" fill="#f5930815" />
+                    <rect x="0" y="225" width="300" height="225" fill="#ef444415" />
+                    <rect x="300" y="225" width="300" height="225" fill="#3b82f615" />
+                    <line x1="0" y1="225" x2="600" y2="225" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+                    <line x1="300" y1="0" x2="300" y2="450" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+                    <text x="450" y="24" textAnchor="middle" fontSize="13" fill="#34d399" fontWeight="600">Leading</text>
+                    <text x="150" y="24" textAnchor="middle" fontSize="13" fill="#f59e0b" fontWeight="600">Weakening</text>
+                    <text x="150" y="440" textAnchor="middle" fontSize="13" fill="#ef4444" fontWeight="600">Lagging</text>
+                    <text x="450" y="440" textAnchor="middle" fontSize="13" fill="#3b82f6" fontWeight="600">Improving</text>
+                    <text x="300" y="448" textAnchor="middle" fontSize="10" fill="#475569">RS Rating</text>
+                    <text x="8" y="225" fontSize="10" fill="#475569" transform="rotate(-90,8,225)">Momentum</text>
                     {rrg.map(pt => {
-                      const x = (pt.rs / 100) * 400;
-                      const y = 300 - (pt.mom / 100) * 300;
+                      const x = (pt.rs / 100) * 600;
+                      const y = 450 - (pt.mom / 100) * 450;
                       const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
                       const short = pt.sector
                         .replace('Technology', 'Tech')
@@ -738,8 +847,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         .replace('Financial', 'Fin');
                       return (
                         <g key={pt.sector}>
-                          <circle cx={x} cy={y} r="5" fill={color} fillOpacity="0.7" stroke={color} strokeWidth="1" />
-                          <text x={x} y={y - 8} textAnchor="middle" fontSize="8" fill="#94a3b8" fontWeight="600">{short}</text>
+                          <circle cx={x} cy={y} r="7" fill={color} fillOpacity="0.7" stroke={color} strokeWidth="1.5" />
+                          <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fill="#94a3b8" fontWeight="600">{short}</text>
                           <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, Daily ${fmtPct(pt.daily)}%`}</title>
                         </g>
                       );
@@ -757,7 +866,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
 
               {/* 8. MARKET BRIEF + NEWS */}
-              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-7 min-h-[300px]">
+              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-5 min-h-[360px]">
                 <div className="p-3 space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-2.5 text-center">

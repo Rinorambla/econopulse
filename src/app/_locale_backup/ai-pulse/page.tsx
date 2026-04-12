@@ -977,28 +977,40 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3: RRG Quadrant | Market Brief ─── */}
+            {/* ─── ROW 3: RRG Quadrant (full-width) | Market Brief ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
-              {/* 7. RRG QUADRANT */}
-              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-7 min-h-[360px]">
-                <div className="p-3">
-                  <svg viewBox="0 0 600 450" className="w-full" style={{ maxHeight: '420px' }}>
-                    <rect x="300" y="0" width="300" height="225" fill="#065f4615" />
-                    <rect x="0" y="0" width="300" height="225" fill="#f5930815" />
-                    <rect x="0" y="225" width="300" height="225" fill="#ef444415" />
-                    <rect x="300" y="225" width="300" height="225" fill="#3b82f615" />
-                    <line x1="0" y1="225" x2="600" y2="225" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-                    <line x1="300" y1="0" x2="300" y2="450" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-                    <text x="450" y="24" textAnchor="middle" fontSize="13" fill="#34d399" fontWeight="600">Leading</text>
-                    <text x="150" y="24" textAnchor="middle" fontSize="13" fill="#f59e0b" fontWeight="600">Weakening</text>
-                    <text x="150" y="440" textAnchor="middle" fontSize="13" fill="#ef4444" fontWeight="600">Lagging</text>
-                    <text x="450" y="440" textAnchor="middle" fontSize="13" fill="#3b82f6" fontWeight="600">Improving</text>
-                    <text x="300" y="448" textAnchor="middle" fontSize="10" fill="#475569">RS Rating</text>
-                    <text x="8" y="225" fontSize="10" fill="#475569" transform="rotate(-90,8,225)">Momentum</text>
+              {/* 7. RRG QUADRANT — full-width */}
+              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-12 min-h-[500px]">
+                <div className="p-4">
+                  <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '580px' }} preserveAspectRatio="xMidYMid meet">
+                    {/* Quadrant backgrounds */}
+                    <rect x="450" y="0" width="450" height="300" fill="#065f4618" />
+                    <rect x="0" y="0" width="450" height="300" fill="#f5930818" />
+                    <rect x="0" y="300" width="450" height="300" fill="#ef444418" />
+                    <rect x="450" y="300" width="450" height="300" fill="#3b82f618" />
+                    {/* Grid lines */}
+                    <line x1="0" y1="300" x2="900" y2="300" stroke="#1e293b" strokeWidth="1" strokeDasharray="6 4" />
+                    <line x1="450" y1="0" x2="450" y2="600" stroke="#1e293b" strokeWidth="1" strokeDasharray="6 4" />
+                    {/* Sub-grid */}
+                    <line x1="225" y1="0" x2="225" y2="600" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
+                    <line x1="675" y1="0" x2="675" y2="600" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
+                    <line x1="0" y1="150" x2="900" y2="150" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
+                    <line x1="0" y1="450" x2="900" y2="450" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
+                    {/* Quadrant labels */}
+                    <text x="675" y="30" textAnchor="middle" fontSize="16" fill="#34d399" fontWeight="700">Leading</text>
+                    <text x="225" y="30" textAnchor="middle" fontSize="16" fill="#f59e0b" fontWeight="700">Weakening</text>
+                    <text x="225" y="590" textAnchor="middle" fontSize="16" fill="#ef4444" fontWeight="700">Lagging</text>
+                    <text x="675" y="590" textAnchor="middle" fontSize="16" fill="#3b82f6" fontWeight="700">Improving</text>
+                    {/* Axis labels */}
+                    <text x="450" y="22" textAnchor="middle" fontSize="11" fill="#475569">100</text>
+                    <text x="900" y="315" textAnchor="end" fontSize="11" fill="#475569">100</text>
+                    <text x="10" y="315" fontSize="11" fill="#475569">0</text>
+                    <text x="450" y="598" textAnchor="middle" fontSize="12" fill="#64748b" fontWeight="500">RS Rating →</text>
+                    <text x="12" y="300" fontSize="12" fill="#64748b" fontWeight="500" transform="rotate(-90,12,300)">Momentum →</text>
                     {rrg.map(pt => {
-                      const x = (pt.rs / 100) * 600;
-                      const y = 450 - (pt.mom / 100) * 450;
+                      const x = (pt.rs / 100) * 900;
+                      const y = 600 - (pt.mom / 100) * 600;
                       const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
                       const short = pt.sector
                         .replace('Technology', 'Tech')
@@ -1010,18 +1022,19 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         .replace('Financial', 'Fin');
                       return (
                         <g key={pt.sector}>
-                          <circle cx={x} cy={y} r="7" fill={color} fillOpacity="0.7" stroke={color} strokeWidth="1.5" />
-                          <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fill="#94a3b8" fontWeight="600">{short}</text>
+                          <circle cx={x} cy={y} r="10" fill={color} fillOpacity="0.75" stroke={color} strokeWidth="2" />
+                          <text x={x} y={y - 14} textAnchor="middle" fontSize="13" fill="#e2e8f0" fontWeight="700">{short}</text>
+                          <text x={x} y={y + 22} textAnchor="middle" fontSize="10" fill="#94a3b8">{fmtPct(pt.daily)}%</text>
                           <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, Daily ${fmtPct(pt.daily)}%`}</title>
                         </g>
                       );
                     })}
                   </svg>
-                  <div className="flex items-center justify-center gap-4 mt-1.5">
+                  <div className="flex items-center justify-center gap-6 mt-2">
                     {[['Leading', '#34d399'], ['Weakening', '#f59e0b'], ['Lagging', '#ef4444'], ['Improving', '#3b82f6']].map(([label, color]) => (
-                      <div key={String(label)} className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: String(color) }} />
-                        <span className="text-[8px] text-gray-500">{label}</span>
+                      <div key={String(label)} className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: String(color) }} />
+                        <span className="text-[10px] text-gray-400 font-medium">{label}</span>
                       </div>
                     ))}
                   </div>
@@ -1029,7 +1042,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
 
               {/* 8. MARKET BRIEF + NEWS */}
-              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-5 min-h-[360px]">
+              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-12 min-h-[300px]">
                 <div className="p-3 space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-2.5 text-center">

@@ -21,34 +21,26 @@ interface COTFlowRecord {
 let cache: { timestamp: number; data: COTFlowRecord[] } | null = null
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6 // 6 hours
 
-// Mapping from CFTC market name fragments to a short symbol we show in UI
-const SYMBOL_MAP: Record<string,string> = {
-  'E-MINI S&P': 'ES',
-  'NASDAQ 100': 'NQ',
-  'CRUDE OIL': 'CL',
-  'WTI CRUDE': 'CL',
-  'GOLD': 'GC',
-  'SILVER': 'SI',
-  'DOLLAR INDEX': 'DX',
-  'EURO FX': '6E',
-  'BRITISH POUND STERLING': '6B',
-  'NATURAL GAS': 'NG',
-  'COPPER': 'HG',
-  'BRENT CRUDE': 'BZ',
-  'SOYBEANS': 'ZS',
-  'CORN': 'ZC',
-  'WHEAT': 'ZW',
-  '10-YEAR U.S. TREASURY NOTES': 'ZN',
-  '5-YEAR U.S. TREASURY NOTES': 'ZF'
-}
+// Exact CFTC Socrata market names → UI symbols
+const MARKET_TARGETS: { name: string; symbol: string; label: string }[] = [
+  { name: 'E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE', symbol: 'ES', label: 'E-MINI S&P 500' },
+  { name: 'NASDAQ MINI - CHICAGO MERCANTILE EXCHANGE', symbol: 'NQ', label: 'E-MINI NASDAQ 100' },
+  { name: 'WTI FINANCIAL CRUDE OIL - NEW YORK MERCANTILE EXCHANGE', symbol: 'CL', label: 'CRUDE OIL WTI' },
+  { name: 'BRENT LAST DAY - NEW YORK MERCANTILE EXCHANGE', symbol: 'BZ', label: 'BRENT CRUDE' },
+  { name: 'GOLD - COMMODITY EXCHANGE INC.', symbol: 'GC', label: 'GOLD' },
+  { name: 'SILVER - COMMODITY EXCHANGE INC.', symbol: 'SI', label: 'SILVER' },
+  { name: 'HENRY HUB - NEW YORK MERCANTILE EXCHANGE', symbol: 'NG', label: 'NATURAL GAS' },
+  { name: 'COPPER- #1 - COMMODITY EXCHANGE INC.', symbol: 'HG', label: 'COPPER' },
+  { name: 'EURO FX - CHICAGO MERCANTILE EXCHANGE', symbol: '6E', label: 'EURO FX' },
+  { name: 'BRITISH POUND - CHICAGO MERCANTILE EXCHANGE', symbol: '6B', label: 'BRITISH POUND' },
+  { name: 'UST 10Y NOTE - CHICAGO BOARD OF TRADE', symbol: 'ZN', label: '10-YEAR U.S. TREASURY NOTES' },
+  { name: 'UST 5Y NOTE - CHICAGO BOARD OF TRADE', symbol: 'ZF', label: '5-YEAR U.S. TREASURY NOTES' },
+  { name: 'CORN - CHICAGO BOARD OF TRADE', symbol: 'ZC', label: 'CORN' },
+  { name: 'SOYBEANS - CHICAGO BOARD OF TRADE', symbol: 'ZS', label: 'SOYBEANS' },
+  { name: 'WHEAT-SRW - CHICAGO BOARD OF TRADE', symbol: 'ZW', label: 'WHEAT' },
+]
 
-function pickSymbol(market: string): string {
-  const upper = market.toUpperCase()
-  for (const key of Object.keys(SYMBOL_MAP)) {
-    if (upper.includes(key)) return SYMBOL_MAP[key]
-  }
-  return market.slice(0,6).toUpperCase()
-}
+const MARKET_BY_NAME = Object.fromEntries(MARKET_TARGETS.map(m => [m.name, m]))
 
 // Fallback mock data if remote fetch fails
 function fallbackData(): COTFlowRecord[] {
@@ -65,89 +57,71 @@ function fallbackData(): COTFlowRecord[] {
   ]
 }
 
-// Parse CFTC legacy futures-only CSV lines (public weekly report). We pick a subset of markets.
-function parseCSV(csv: string): COTFlowRecord[] {
-  const lines = csv.split(/\r?\n/).filter(l=>l.trim().length>0)
-  // Identify header indices (legacy format). We search by column names.
-  const header = lines[0].split(',')
-  const idx = (name: string) => header.findIndex(h => h.trim().toLowerCase() === name.toLowerCase())
-  const marketIdx = idx('Market_and_Exchange_Names')
-  const dateIdx = idx('Report_Date_as_YYYY-MM-DD')
-  const ncLongIdx = idx('Noncomm_Positions_Long_All')
-  const ncShortIdx = idx('Noncomm_Positions_Short_All')
-  const ncChangeLongIdx = idx('Change_in_Noncomm_Long_All')
-  const ncChangeShortIdx = idx('Change_in_Noncomm_Short_All')
-  const commLongIdx = idx('Comm_Positions_Long_All')
-  const commShortIdx = idx('Comm_Positions_Short_All')
-  const commChangeLongIdx = idx('Change_in_Comm_Long_All')
-  const commChangeShortIdx = idx('Change_in_Comm_Short_All')
-  const oiIdx = idx('Open_Interest_All')
+// Fetch COT data from CFTC Socrata Open Data API (Legacy Futures-Only format)
+// Dataset 6dca-aqww = traditional Non-Commercial / Commercial split
+async function fetchCOT(): Promise<COTFlowRecord[]> {
+  const where = MARKET_TARGETS.map(m => `market_and_exchange_names='${m.name}'`).join(' OR ')
+  const select = [
+    'market_and_exchange_names',
+    'report_date_as_yyyy_mm_dd',
+    'open_interest_all',
+    'noncomm_positions_long_all',
+    'noncomm_positions_short_all',
+    'comm_positions_long_all',
+    'comm_positions_short_all',
+    'change_in_noncomm_long_all',
+    'change_in_noncomm_short_all',
+    'change_in_comm_long_all',
+    'change_in_comm_short_all',
+  ].join(',')
+  const url = `https://publicreporting.cftc.gov/resource/6dca-aqww.json?$where=${encodeURIComponent(where)}&$order=report_date_as_yyyy_mm_dd DESC&$limit=100&$select=${select}`
+  console.log('📊 COT: Fetching from CFTC Socrata API')
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+  if (!res.ok) throw new Error(`CFTC Socrata HTTP ${res.status}`)
+  const rows: Record<string, string>[] = await res.json()
+  console.log(`📊 COT: Got ${rows.length} rows from Socrata`)
 
-  if ([marketIdx,dateIdx,ncLongIdx,ncShortIdx,commLongIdx,commShortIdx,oiIdx].some(i=>i===-1)) {
-    throw new Error('Unexpected CSV header format')
+  // Group by market: keep only the latest report per market
+  const latestByMarket: Record<string, Record<string, string>> = {}
+  for (const row of rows) {
+    const name = row.market_and_exchange_names
+    if (!latestByMarket[name]) latestByMarket[name] = row
   }
 
-  const focusMarkets = Object.keys(SYMBOL_MAP)
   const out: COTFlowRecord[] = []
-  for (let i=1;i<lines.length;i++) {
-    const cols = lines[i].split(',')
-    const market = cols[marketIdx]?.trim()
-    if (!market) continue
-    if (!focusMarkets.some(f=> market.toUpperCase().includes(f))) continue
-    const date = cols[dateIdx]?.trim()
-    const ncLong = parseInt(cols[ncLongIdx]||'0',10)
-    const ncShort = parseInt(cols[ncShortIdx]||'0',10)
-    const ncChangeLong = parseInt(cols[ncChangeLongIdx]||'0',10)
-    const ncChangeShort = parseInt(cols[ncChangeShortIdx]||'0',10)
-    const commLong = parseInt(cols[commLongIdx]||'0',10)
-    const commShort = parseInt(cols[commShortIdx]||'0',10)
-    const commChangeLong = parseInt(cols[commChangeLongIdx]||'0',10)
-    const commChangeShort = parseInt(cols[commChangeShortIdx]||'0',10)
-    const oi = parseInt(cols[oiIdx]||'0',10)
-
+  for (const [name, row] of Object.entries(latestByMarket)) {
+    const target = MARKET_BY_NAME[name]
+    if (!target) continue
+    const ncLong = parseInt(row.noncomm_positions_long_all || '0', 10)
+    const ncShort = parseInt(row.noncomm_positions_short_all || '0', 10)
+    const commLong = parseInt(row.comm_positions_long_all || '0', 10)
+    const commShort = parseInt(row.comm_positions_short_all || '0', 10)
+    const changeNcLong = parseInt(row.change_in_noncomm_long_all || '0', 10)
+    const changeNcShort = parseInt(row.change_in_noncomm_short_all || '0', 10)
+    const changeCommLong = parseInt(row.change_in_comm_long_all || '0', 10)
+    const changeCommShort = parseInt(row.change_in_comm_short_all || '0', 10)
     const nonCommercialNet = ncLong - ncShort
     const commercialNet = commLong - commShort
-    const changeNonCommercial = (ncChangeLong - ncChangeShort)
-    const changeCommercial = (commChangeLong - commChangeShort)
+    const date = (row.report_date_as_yyyy_mm_dd || '').slice(0, 10)
+
     let direction: COTFlowRecord['direction'] = 'neutral'
     if (nonCommercialNet > 0) direction = 'long'
     else if (nonCommercialNet < 0) direction = 'short'
+
     out.push({
-      market,
-      symbol: pickSymbol(market),
+      market: target.label,
+      symbol: target.symbol,
       date,
       nonCommercialNet,
       commercialNet,
-      changeNonCommercial,
-      changeCommercial,
-      openInterest: oi,
-      direction
+      changeNonCommercial: changeNcLong - changeNcShort,
+      changeCommercial: changeCommLong - changeCommShort,
+      openInterest: parseInt(row.open_interest_all || '0', 10),
+      direction,
     })
   }
-
-  return out.sort((a,b)=> a.market.localeCompare(b.market))
-}
-
-async function fetchCOT(): Promise<COTFlowRecord[]> {
-  // CFTC publishes multiple CSVs. We use a common legacy futures-only file (financial futures example)
-  // NOTE: URLs can change; adjust if 404. Provide two attempts.
-  const urls = [
-    'https://www.cftc.gov/dea/newcot/f_disagg.csv', // disaggregated
-    'https://www.cftc.gov/dea/newcot/f_fin.csv' // financial futures
-  ]
-  let lastErr: any = null
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { next: { revalidate: 0 } })
-      if (!res.ok) { lastErr = new Error('HTTP '+res.status); continue }
-      const text = await res.text()
-      const parsed = parseCSV(text)
-      if (parsed.length) return parsed
-    } catch (e) {
-      lastErr = e
-    }
-  }
-  throw lastErr || new Error('All COT fetch attempts failed')
+  console.log(`📊 COT: Processed ${out.length} markets`)
+  return out.sort((a, b) => a.symbol.localeCompare(b.symbol))
 }
 
 export async function GET() {

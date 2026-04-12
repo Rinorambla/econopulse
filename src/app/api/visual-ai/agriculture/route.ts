@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchYahooBatchQuotes } from '@/lib/yahoo-quote-batch';
+import { fetchYahooChartQuotes } from '@/lib/yahoo-chart-quotes';
 
 interface CommodityData {
   commodity: string;
@@ -39,13 +39,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log('🌾 Fetching agricultural commodity data via Yahoo Finance...');
+    console.log('🌾 Fetching agricultural commodity data via Yahoo v8/chart...');
 
     let yahooData: Record<string, any> = {};
     try {
-      const quotes = await fetchYahooBatchQuotes(Object.keys(COMMODITY_MAP));
-      quotes.forEach(q => { yahooData[q.symbol] = q; });
-      console.log('✅ Agriculture Yahoo quotes:', quotes.length);
+      yahooData = await fetchYahooChartQuotes(Object.keys(COMMODITY_MAP));
+      console.log('✅ Agriculture Yahoo quotes:', Object.keys(yahooData).length);
     } catch (e) {
       console.warn('⚠️ Agriculture Yahoo fetch failed, using fallback');
     }
@@ -55,10 +54,10 @@ export async function GET(req: NextRequest) {
       const quote = yahooData[symbol];
       processedData.push({
         commodity: info.name,
-        price: quote?.regularMarketPrice ?? getFallbackPrice(info.name),
+        price: quote?.price ?? getFallbackPrice(info.name),
         currency: 'USD',
         unit: info.unit,
-        dailyChangePct: quote?.regularMarketChangePercent ?? 0,
+        dailyChangePct: quote?.changePercent ?? 0,
         majorProducers: info.producers,
       });
     }

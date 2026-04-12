@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchYahooBatchQuotes } from '@/lib/yahoo-quote-batch';
+import { fetchYahooChartQuotes } from '@/lib/yahoo-chart-quotes';
 
 interface CurrencyData {
   currency: string;
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log('💰 Fetching FX spot proxies via Yahoo Finance...');
+    console.log('💰 Fetching FX spot proxies via Yahoo v8/chart...');
     const pairMap: Record<string,string> = {
       'EURUSD':'EURUSD=X',
       'GBPUSD':'GBPUSD=X',
@@ -57,9 +57,8 @@ export async function GET(req: NextRequest) {
     };
     let fxQuotes: Record<string, any> = {};
     try {
-      const quotes = await fetchYahooBatchQuotes(Object.values(pairMap));
-      quotes.forEach(q => fxQuotes[q.symbol] = q);
-      console.log('✅ Yahoo FX quotes', quotes.length);
+      fxQuotes = await fetchYahooChartQuotes(Object.values(pairMap));
+      console.log('✅ Yahoo FX quotes', Object.keys(fxQuotes).length);
     } catch(e) { console.log('⚠️ Yahoo FX fetch failed'); }
 
   // Dati valutari (spot proxies vs USD). Prezzi = Yahoo; altri campi baseline documentati.
@@ -90,7 +89,7 @@ export async function GET(req: NextRequest) {
         currency: 'Euro',
         currencyCode: 'EUR',
         country: 'Eurozone',
-  exchangeRate: fxQuotes['EURUSD=X']?.regularMarketPrice ? 1/ fxQuotes['EURUSD=X'].regularMarketPrice : 0.9185,
+  exchangeRate: fxQuotes['EURUSD=X']?.price ? 1/ fxQuotes['EURUSD=X'].price : 0.9185,
         baseCurrency: 'USD',
         dailyChange: -0.4,
         weeklyChange: -1.2,
@@ -112,7 +111,7 @@ export async function GET(req: NextRequest) {
         currency: 'Japanese Yen',
         currencyCode: 'JPY',
         country: 'Japan',
-  exchangeRate: fxQuotes['JPY=X']?.regularMarketPrice ?? 148.65,
+  exchangeRate: fxQuotes['JPY=X']?.price ?? 148.65,
         baseCurrency: 'USD',
         dailyChange: 0.6,
         weeklyChange: 2.1,
@@ -134,7 +133,7 @@ export async function GET(req: NextRequest) {
         currency: 'British Pound',
         currencyCode: 'GBP',
         country: 'United Kingdom',
-  exchangeRate: fxQuotes['GBPUSD=X']?.regularMarketPrice ? 1/ fxQuotes['GBPUSD=X'].regularMarketPrice : 0.8024,
+  exchangeRate: fxQuotes['GBPUSD=X']?.price ? 1/ fxQuotes['GBPUSD=X'].price : 0.8024,
         baseCurrency: 'USD',
         dailyChange: -0.2,
         weeklyChange: 0.4,
@@ -156,7 +155,7 @@ export async function GET(req: NextRequest) {
         currency: 'Chinese Yuan',
         currencyCode: 'CNY',
         country: 'China',
-  exchangeRate: fxQuotes['CNY=X']?.regularMarketPrice ?? 7.2450,
+  exchangeRate: fxQuotes['CNY=X']?.price ?? 7.2450,
         baseCurrency: 'USD',
         dailyChange: 0.1,
         weeklyChange: -0.6,
@@ -178,7 +177,7 @@ export async function GET(req: NextRequest) {
         currency: 'Swiss Franc',
         currencyCode: 'CHF',
         country: 'Switzerland',
-  exchangeRate: fxQuotes['CHF=X']?.regularMarketPrice ? 1/ fxQuotes['CHF=X'].regularMarketPrice : 0.8895,
+  exchangeRate: fxQuotes['CHF=X']?.price ? 1/ fxQuotes['CHF=X'].price : 0.8895,
         baseCurrency: 'USD',
         dailyChange: 0.3,
         weeklyChange: 1.2,
@@ -200,7 +199,7 @@ export async function GET(req: NextRequest) {
         currency: 'Australian Dollar',
         currencyCode: 'AUD',
         country: 'Australia',
-  exchangeRate: fxQuotes['AUDUSD=X']?.regularMarketPrice ? 1/ fxQuotes['AUDUSD=X'].regularMarketPrice : 1.5248,
+  exchangeRate: fxQuotes['AUDUSD=X']?.price ? 1/ fxQuotes['AUDUSD=X'].price : 1.5248,
         baseCurrency: 'USD',
         dailyChange: -0.8,
         weeklyChange: -1.8,
@@ -222,7 +221,7 @@ export async function GET(req: NextRequest) {
         currency: 'Canadian Dollar',
         currencyCode: 'CAD',
         country: 'Canada',
-  exchangeRate: fxQuotes['CAD=X']?.regularMarketPrice ?? 1.3485,
+  exchangeRate: fxQuotes['CAD=X']?.price ?? 1.3485,
         baseCurrency: 'USD',
         dailyChange: -0.1,
         weeklyChange: 0.6,
@@ -258,8 +257,8 @@ export async function GET(req: NextRequest) {
         }
       })();
       let pct = row.dailyChange;
-      if (symbolKey && fxQuotes[symbolKey]?.regularMarketChangePercent !== undefined) {
-        pct = fxQuotes[symbolKey].regularMarketChangePercent;
+      if (symbolKey && fxQuotes[symbolKey]?.changePercent !== undefined) {
+        pct = fxQuotes[symbolKey].changePercent;
       }
       const volatility = Math.round(Math.min(40, Math.max(5, Math.abs(pct) * 3 + 5))*10)/10;
       // StrengthIndex adjust: baseline +/- pct * 2

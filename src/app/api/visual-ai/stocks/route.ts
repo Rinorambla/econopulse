@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchYahooBatchQuotes } from '@/lib/yahoo-quote-batch';
+import { fetchYahooChartQuotes } from '@/lib/yahoo-chart-quotes';
 
 interface StockValuationData {
   country: string;
@@ -57,10 +57,10 @@ export async function GET(req: NextRequest) {
 
     let realDataMap: Record<string, any> = {};
     try {
-      const quotes = await fetchYahooBatchQuotes(Object.values(marketSymbols));
-      quotes.forEach(q => {
-        const country = Object.keys(marketSymbols).find(c => marketSymbols[c] === q.symbol);
-        if (country) realDataMap[country] = q;
+      const quotes = await fetchYahooChartQuotes(Object.values(marketSymbols));
+      Object.keys(marketSymbols).forEach(country => {
+        const sym = marketSymbols[country];
+        if (quotes[sym]) realDataMap[country] = quotes[sym];
       });
       console.log('✅ Yahoo quotes retrieved for', Object.keys(realDataMap).length, 'markets');
     } catch (e) {
@@ -210,9 +210,8 @@ export async function GET(req: NextRequest) {
     // Simula variazioni di mercato usando dati reali quando disponibili
     const processedData = mockData.map(market => {
       const q = realDataMap[market.country];
-      const yahooChangePct = typeof q?.regularMarketChangePercent === 'number' ? q.regularMarketChangePercent : undefined;
-      const yahooPrice = typeof q?.regularMarketPrice === 'number' ? q.regularMarketPrice : undefined;
-      const yahooVol = typeof q?.regularMarketVolume === 'number' ? q.regularMarketVolume : undefined;
+      const yahooChangePct = typeof q?.changePercent === 'number' ? q.changePercent : undefined;
+      const yahooPrice = typeof q?.price === 'number' ? q.price : undefined;
       let momentum = market.momentum;
       if (yahooChangePct !== undefined) momentum = yahooChangePct;
       const randomFactor = 1 + (momentum/100) * 0.3; // scale valuation slightly toward price action
@@ -223,7 +222,6 @@ export async function GET(req: NextRequest) {
         dailyChangePct: yahooChangePct ?? momentum,
         volatility: Math.max(10, market.volatility + Math.abs(momentum) * 0.4),
         realPrice: yahooPrice,
-        realVolume: yahooVol
       };
     });
 

@@ -43,20 +43,19 @@ interface FlameData {
   components: Record<string, number>;
 }
 
-// ─── S&P 500 Sector → Top Stocks Map ────────────────────────────────
-// Keys match the sector-performance API names
+// ─── S&P 500 Sector → Stocks (expanded) ─────────────────────────────
 const SECTOR_STOCKS: Record<string, string[]> = {
-  'Technology': ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'CRM', 'ADBE', 'CSCO', 'ACN', 'ORCL', 'INTC', 'AMD', 'QCOM'],
-  'Healthcare': ['UNH', 'JNJ', 'LLY', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY'],
-  'Financial': ['BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK'],
-  'Consumer Discretionary': ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'LOW', 'SBUX', 'TJX', 'BKNG', 'CMG'],
-  'Communication': ['GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'T', 'VZ', 'TMUS'],
-  'Industrials': ['GE', 'CAT', 'UNP', 'HON', 'UPS', 'BA', 'RTX', 'DE', 'LMT'],
-  'Consumer Staples': ['PG', 'KO', 'PEP', 'COST', 'WMT', 'PM', 'MO', 'MDLZ'],
-  'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PXD', 'VLO'],
-  'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE', 'EXC'],
-  'Real Estate': ['PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O'],
-  'Materials': ['LIN', 'APD', 'SHW', 'FCX', 'NEM', 'ECL', 'DD'],
+  'Technology': ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'ORCL', 'CRM', 'ADBE', 'CSCO', 'ACN', 'INTC', 'AMD', 'QCOM', 'TXN', 'NOW', 'INTU', 'IBM', 'AMAT', 'MU', 'LRCX', 'KLAC', 'ADI', 'SNPS', 'PANW', 'FTNT', 'MSI', 'CDNS', 'FI', 'KEYS', 'CTSH'],
+  'Healthcare': ['UNH', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'ISRG', 'VRTX', 'CI', 'CVS', 'SYK', 'BSX', 'MDT', 'MCK', 'HCA', 'ELV'],
+  'Financial': ['BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK', 'AXP', 'PYPL', 'SCHW', 'CME', 'ICE', 'CB', 'PGR', 'AON', 'MMC', 'COF', 'USB'],
+  'Consumer Discretionary': ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'LOW', 'SBUX', 'TJX', 'BKNG', 'CMG', 'GM', 'F', 'ORLY', 'AZO', 'ROST', 'MAR', 'HLT', 'YUM', 'LULU'],
+  'Communication': ['GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'T', 'VZ', 'TMUS', 'CHTR', 'EA', 'TTWO', 'WBD'],
+  'Industrials': ['GE', 'CAT', 'UNP', 'HON', 'UPS', 'BA', 'RTX', 'DE', 'LMT', 'ETN', 'ITW', 'EMR', 'NOC', 'GD', 'CSX', 'FDX', 'WM', 'NSC', 'PCAR', 'TT'],
+  'Consumer Staples': ['PG', 'KO', 'PEP', 'COST', 'WMT', 'PM', 'MO', 'MDLZ', 'CL', 'KMB', 'TGT', 'SYY', 'STZ', 'KHC', 'GIS', 'KR'],
+  'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PXD', 'VLO', 'PSX', 'OXY', 'HAL', 'DVN'],
+  'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE', 'EXC', 'XEL', 'WEC', 'ED'],
+  'Real Estate': ['PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'DLR', 'WELL', 'AVB'],
+  'Materials': ['LIN', 'APD', 'SHW', 'FCX', 'NEM', 'ECL', 'DD', 'NUE', 'VMC', 'MLM'],
 };
 
 const STOCK_WEIGHTS: Record<string, number> = {
@@ -68,7 +67,119 @@ const STOCK_WEIGHTS: Record<string, number> = {
   INTC: 2, AMD: 4, QCOM: 3, IBM: 2, PLD: 2, AMT: 2, SPG: 2, LIN: 3, BLK: 3,
   SPGI: 3, ORCL: 4, DIS: 2, CMCSA: 2, T: 2, VZ: 2, SLB: 2, COP: 3, EOG: 2,
   FCX: 2, NEM: 2, DUK: 2, SO: 2, D: 2, AEP: 2, SRE: 2,
+  NOW: 3, INTU: 3, AMAT: 2, MU: 2, LRCX: 2, KLAC: 2, ADI: 2, SNPS: 2, PANW: 2, FTNT: 2,
+  MSI: 1, CDNS: 2, FI: 2, KEYS: 1, CTSH: 1,
+  AMGN: 3, GILD: 2, ISRG: 3, VRTX: 2, CI: 2, CVS: 2, SYK: 2, BSX: 2, MDT: 2, MCK: 2, HCA: 2, ELV: 2,
+  AXP: 2, PYPL: 2, SCHW: 2, CME: 2, ICE: 2, CB: 2, PGR: 2, AON: 2, MMC: 2, COF: 1, USB: 1, MS: 3, WFC: 3, BAC: 4,
+  SBUX: 2, TJX: 2, BKNG: 2, CMG: 2, GM: 1, F: 1, ORLY: 1, AZO: 1, ROST: 1, MAR: 1, HLT: 1, YUM: 1, LULU: 1,
+  TMO: 3, BMY: 2, PFE: 3,
+  TMUS: 2, CHTR: 1, EA: 1, TTWO: 1, WBD: 1,
+  ETN: 2, ITW: 2, EMR: 1, NOC: 2, GD: 2, CSX: 2, FDX: 2, WM: 2, NSC: 1, PCAR: 1, TT: 1, RTX: 3, DE: 2,
+  CL: 1, KMB: 1, TGT: 2, SYY: 1, STZ: 1, KHC: 1, GIS: 1, KR: 1, MO: 2, MDLZ: 2,
+  MPC: 2, PXD: 1, VLO: 1, PSX: 1, OXY: 1, HAL: 1, DVN: 1,
+  EXC: 1, XEL: 1, WEC: 1, ED: 1,
+  CCI: 2, EQIX: 2, PSA: 1, O: 1, DLR: 1, WELL: 1, AVB: 1,
+  APD: 2, SHW: 2, ECL: 1, DD: 1, NUE: 1, VMC: 1, MLM: 1,
 };
+
+// ─── Treemap layout (squarified) ────────────────────────────────────
+interface TRect { x: number; y: number; w: number; h: number; }
+interface TreemapItem { symbol: string; sector: string; pct: number; weight: number; }
+interface TreemapCell extends TRect { symbol: string; sector: string; pct: number; weight: number; }
+
+function squarify(items: TreemapItem[], rect: TRect): TreemapCell[] {
+  if (items.length === 0) return [];
+  const totalArea = rect.w * rect.h;
+  const totalWeight = items.reduce((s, i) => s + i.weight, 0) || 1;
+  const sorted = [...items].sort((a, b) => b.weight - a.weight);
+
+  const cells: TreemapCell[] = [];
+  let remaining = [...sorted];
+  let { x, y, w, h } = rect;
+
+  while (remaining.length > 0) {
+    const isHorizontal = w >= h;
+    const side = isHorizontal ? h : w;
+    const totalRemaining = remaining.reduce((s, i) => s + i.weight, 0) || 1;
+    const areaRemaining = w * h;
+
+    // Find how many items to pack in this row/column
+    let row: TreemapItem[] = [remaining[0]];
+    let rowWeight = remaining[0].weight;
+    let bestAspect = Infinity;
+
+    for (let i = 1; i < remaining.length; i++) {
+      const testRow = [...row, remaining[i]];
+      const testWeight = rowWeight + remaining[i].weight;
+      const rowArea = (testWeight / totalRemaining) * areaRemaining;
+      const rowSide = rowArea / side;
+      // Worst aspect ratio in this row
+      let worst = 0;
+      for (const item of testRow) {
+        const itemArea = (item.weight / testWeight) * rowArea;
+        const itemSide = itemArea / rowSide;
+        const aspect = Math.max(itemSide / rowSide, rowSide / itemSide);
+        worst = Math.max(worst, aspect);
+      }
+      if (worst < bestAspect) {
+        bestAspect = worst;
+        row = testRow;
+        rowWeight = testWeight;
+      } else {
+        break;
+      }
+    }
+
+    // Lay out this row/column
+    const rowArea = (rowWeight / totalRemaining) * areaRemaining;
+    const rowSize = rowArea / side;
+
+    let offset = 0;
+    for (const item of row) {
+      const itemFrac = item.weight / rowWeight;
+      const itemLen = itemFrac * side;
+      if (isHorizontal) {
+        cells.push({ ...item, x: x, y: y + offset, w: rowSize, h: itemLen });
+      } else {
+        cells.push({ ...item, x: x + offset, y: y, w: itemLen, h: rowSize });
+      }
+      offset += itemLen;
+    }
+
+    // Shrink remaining rect
+    if (isHorizontal) {
+      x += rowSize; w -= rowSize;
+    } else {
+      y += rowSize; h -= rowSize;
+    }
+    remaining = remaining.filter(i => !row.includes(i));
+  }
+  return cells;
+}
+
+function layoutSectorTreemap(
+  sectors: { sector: string; stocks: TreemapItem[] }[],
+  containerW: number, containerH: number
+): { sectorRects: (TRect & { sector: string })[]; cells: TreemapCell[] } {
+  // First level: lay out sector rectangles
+  const sectorItems = sectors.map(s => ({
+    symbol: s.sector, sector: s.sector, pct: 0,
+    weight: s.stocks.reduce((sum, st) => sum + st.weight, 0),
+  }));
+  const sectorCells = squarify(sectorItems, { x: 0, y: 0, w: containerW, h: containerH });
+
+  // Second level: within each sector rect, lay out individual stocks
+  const allCells: TreemapCell[] = [];
+  const sectorRects: (TRect & { sector: string })[] = [];
+  for (const sc of sectorCells) {
+    const sectorDef = sectors.find(s => s.sector === sc.symbol);
+    if (!sectorDef) continue;
+    sectorRects.push({ x: sc.x, y: sc.y, w: sc.w, h: sc.h, sector: sc.sector });
+    const inner = squarify(sectorDef.stocks, { x: sc.x, y: sc.y, w: sc.w, h: sc.h });
+    allCells.push(...inner);
+  }
+  return { sectorRects, cells: allCells };
+}
 
 // ─── Panel (terminal style) ─────────────────────────────────────────
 function Panel({ children, className = '', title, badge, actions }: {
@@ -406,42 +517,94 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           {/* ═══ MAIN GRID ═══ */}
           <main className="p-2 space-y-2">
 
-            {/* ─── ROW 1: Heatmap | Screener | Company + Industry ─── */}
+            {/* ─── ROW 0: Full-width Treemap Heatmap ─── */}
+            <Panel title="S&P 500 Heatmap" badge={`${heatmapQuotes.length} STOCKS`} className="min-h-[480px]">
+              {(() => {
+                const W = 1200, H = 600;
+                // Build sector groups with live data
+                const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
+                  sector,
+                  stocks: syms.map(sym => {
+                    const mover = stockMap[sym];
+                    const pct = mover?.changePercent ?? 0;
+                    const weight = STOCK_WEIGHTS[sym] || 1;
+                    return { symbol: sym, sector, pct, weight };
+                  }),
+                })).filter(g => g.stocks.length > 0).sort((a, b) =>
+                  b.stocks.reduce((s, st) => s + st.weight, 0) - a.stocks.reduce((s, st) => s + st.weight, 0)
+                );
+                const { sectorRects, cells } = layoutSectorTreemap(sectorGroups, W, H);
+                const colorForPct = (p: number) =>
+                  p > 3 ? '#16a34a' : p > 2 ? '#22c55e' : p > 1 ? '#15803d' : p > 0.5 ? '#166534' :
+                  p > 0 ? '#14532d' : p > -0.5 ? '#7f1d1d' : p > -1 ? '#991b1b' :
+                  p > -2 ? '#dc2626' : p > -3 ? '#ef4444' : '#f87171';
+                const SECTOR_SHORT: Record<string, string> = {
+                  'Technology': 'TECHNOLOGY', 'Healthcare': 'HEALTHCARE', 'Financial': 'FINANCIAL',
+                  'Consumer Discretionary': 'CONSUMER CYCLICAL', 'Communication': 'COMMUNICATION',
+                  'Industrials': 'INDUSTRIALS', 'Consumer Staples': 'CONSUMER STAPLES',
+                  'Energy': 'ENERGY', 'Utilities': 'UTILITIES', 'Real Estate': 'REAL ESTATE', 'Materials': 'BASIC MATERIALS',
+                };
+                return (
+                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
+                    <rect width={W} height={H} fill="#0b1120" />
+                    {/* Sector boundaries + labels */}
+                    {sectorRects.map(sr => (
+                      <g key={sr.sector}>
+                        <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke="#1e293b" strokeWidth="2" />
+                        {sr.w > 80 && sr.h > 30 && (
+                          <text x={sr.x + 4} y={sr.y + 12} fontSize="9" fill="#475569" fontWeight="700" opacity="0.7">
+                            {SECTOR_SHORT[sr.sector] || sr.sector.toUpperCase()}
+                          </text>
+                        )}
+                      </g>
+                    ))}
+                    {/* Individual stock cells */}
+                    {cells.map(cell => {
+                      const minDim = Math.min(cell.w, cell.h);
+                      const showSymbol = cell.w > 20 && cell.h > 14;
+                      const showPct = cell.w > 30 && cell.h > 24;
+                      const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : 7;
+                      const pctSize = minDim > 60 ? 11 : minDim > 40 ? 9 : 7;
+                      return (
+                        <g key={cell.symbol} className="cursor-pointer" onClick={() => setSelectedSymbol(cell.symbol)}>
+                          <rect x={cell.x + 0.5} y={cell.y + 0.5} width={Math.max(0, cell.w - 1)} height={Math.max(0, cell.h - 1)}
+                            fill={colorForPct(cell.pct)} rx="1" stroke="#0b1120" strokeWidth="1"
+                            className="hover:brightness-125 transition-all"
+                            opacity={selectedSymbol === cell.symbol ? 1 : 0.85} />
+                          {showSymbol && (
+                            <text x={cell.x + cell.w / 2} y={cell.y + cell.h / 2 - (showPct ? pctSize * 0.4 : 0)}
+                              textAnchor="middle" dominantBaseline="central"
+                              fontSize={symbolSize} fill="white" fontWeight="700">
+                              {cell.symbol}
+                            </text>
+                          )}
+                          {showPct && (
+                            <text x={cell.x + cell.w / 2} y={cell.y + cell.h / 2 + symbolSize * 0.6}
+                              textAnchor="middle" dominantBaseline="central"
+                              fontSize={pctSize} fill="rgba(255,255,255,0.8)" fontWeight="500">
+                              {cell.pct >= 0 ? '+' : ''}{cell.pct.toFixed(2)}%
+                            </text>
+                          )}
+                          <title>{`${cell.symbol} (${cell.sector}): ${cell.pct >= 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}</title>
+                        </g>
+                      );
+                    })}
+                    {selectedSymbol && (() => {
+                      const sel = cells.find(c => c.symbol === selectedSymbol);
+                      return sel ? (
+                        <rect x={sel.x} y={sel.y} width={sel.w} height={sel.h} fill="none" stroke="#3b82f6" strokeWidth="2" rx="1" />
+                      ) : null;
+                    })()}
+                  </svg>
+                );
+              })()}
+            </Panel>
+
+            {/* ─── ROW 1: Screener | Company + Industry ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
-              {/* 1. SECTOR HEATMAP — true treemap layout */}
-              <Panel title="S&P 500 Sector Heatmap" badge="LIVE" className="lg:col-span-4 min-h-[340px]">
-                <div className="p-1.5">
-                  <div className="flex flex-wrap gap-px">
-                    {sectorData.map(sector => {
-                      const stocks = SECTOR_STOCKS[sector.sector] || sector.topStocks || [];
-                      return stocks.map(sym => {
-                        const mover = stockMap[sym];
-                        const pct = mover?.changePercent ?? sector.daily;
-                        const weight = STOCK_WEIGHTS[sym] || 2;
-                        // treemap: bigger weight = bigger tile
-                        const size = Math.max(36, Math.min(90, weight * 2.8));
-                        const h = Math.max(28, Math.min(48, weight * 1.6));
-                        const bgColor = pct > 2 ? 'bg-emerald-600/80' : pct > 0.5 ? 'bg-emerald-500/50' : pct > 0 ? 'bg-emerald-500/25' : pct > -0.5 ? 'bg-red-500/25' : pct > -2 ? 'bg-red-500/50' : 'bg-red-600/80';
-                        return (
-                          <button key={sym} onClick={() => setSelectedSymbol(sym)}
-                            className={`rounded-sm text-center transition-all hover:brightness-125 hover:z-10 ${selectedSymbol === sym ? 'ring-1 ring-blue-400 z-10' : ''} ${bgColor}`}
-                            style={{ width: `${size}px`, height: `${h}px` }}
-                            title={`${sym} (${sector.sector}): ${fmtPct(pct)}%`}>
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <span className={`font-bold text-white leading-none ${weight > 10 ? 'text-[10px]' : 'text-[8px]'}`}>{sym}</span>
-                              <span className={`font-mono leading-none mt-0.5 ${weight > 10 ? 'text-[9px]' : 'text-[7px]'} ${pctColor(pct)}`}>{fmtPct(pct)}%</span>
-                            </div>
-                          </button>
-                        );
-                      });
-                    })}
-                  </div>
-                </div>
-              </Panel>
-
               {/* 2. STOCK SCREENER + PRICE BARS */}
-              <Panel title="Stock Screener" badge={`${allMovers.length} stocks`} className="lg:col-span-4 min-h-[340px]"
+              <Panel title="Stock Screener" badge={`${allMovers.length} stocks`} className="lg:col-span-6 min-h-[340px]"
                 actions={<span className="text-[9px] text-gray-500">S&P 500</span>}>
                 <div className="divide-y divide-[#1e293b]/50">
                   <div className="overflow-auto max-h-[180px]">
@@ -497,7 +660,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
 
               {/* 3+4. COMPANY DETAIL + INDUSTRY RANKS */}
-              <div className="lg:col-span-4 flex flex-col gap-2">
+              <div className="lg:col-span-6 flex flex-col gap-2">
                 {/* Company Detail */}
                 <Panel title={selectedSymbol ? `Company: ${selectedSymbol}` : 'Company Info'} badge={stockDetail ? 'LIVE' : undefined} className="flex-1 min-h-[160px]">
                   {detailLoading ? (

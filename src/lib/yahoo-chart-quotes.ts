@@ -15,18 +15,22 @@ export interface YahooChartQuote {
 
 /**
  * Fetch quotes for multiple symbols via Yahoo v8/chart (one call per symbol, batched with small delay).
- * Limit concurrency to avoid rate-limiting.
+ * @param range — Yahoo chart range: '1d','5d','1mo','3mo','6mo','1y','ytd' etc.
+ *   chartPreviousClose adapts to the range, giving period return automatically.
  */
-export async function fetchYahooChartQuotes(symbols: string[]): Promise<Record<string, YahooChartQuote>> {
+export async function fetchYahooChartQuotes(
+  symbols: string[],
+  range = '2d',
+  concurrency = 5,
+  delay = 120,
+): Promise<Record<string, YahooChartQuote>> {
   const result: Record<string, YahooChartQuote> = {}
-  const CONCURRENCY = 5
-  const DELAY = 120 // ms between batches
 
-  for (let i = 0; i < symbols.length; i += CONCURRENCY) {
-    const batch = symbols.slice(i, i + CONCURRENCY)
+  for (let i = 0; i < symbols.length; i += concurrency) {
+    const batch = symbols.slice(i, i + concurrency)
     const promises = batch.map(async (symbol) => {
       try {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2d&interval=1d`
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`
         const res = await fetch(url, {
           headers: { 'User-Agent': 'Mozilla/5.0' },
           signal: AbortSignal.timeout(8000),
@@ -54,8 +58,8 @@ export async function fetchYahooChartQuotes(symbols: string[]): Promise<Record<s
       }
     })
     await Promise.all(promises)
-    if (i + CONCURRENCY < symbols.length) {
-      await new Promise(r => setTimeout(r, DELAY))
+    if (i + concurrency < symbols.length) {
+      await new Promise(r => setTimeout(r, delay))
     }
   }
 

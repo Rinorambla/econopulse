@@ -8,6 +8,8 @@ import Link from 'next/link';
 import { RefreshCw, ArrowLeft, Clock, Zap, TrendingUp, TrendingDown, BarChart3, Activity, AlertTriangle, Target, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
+import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from '@/lib/sp500-stocks';
+
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -43,44 +45,8 @@ interface FlameData {
   components: Record<string, number>;
 }
 
-// ─── S&P 500 Sector → Stocks (expanded) ─────────────────────────────
-const SECTOR_STOCKS: Record<string, string[]> = {
-  'Technology': ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'ORCL', 'CRM', 'ADBE', 'CSCO', 'ACN', 'INTC', 'AMD', 'QCOM', 'TXN', 'NOW', 'INTU', 'IBM', 'AMAT', 'MU', 'LRCX', 'KLAC', 'ADI', 'SNPS', 'PANW', 'FTNT', 'MSI', 'CDNS', 'FI', 'KEYS', 'CTSH'],
-  'Healthcare': ['UNH', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'ISRG', 'VRTX', 'CI', 'CVS', 'SYK', 'BSX', 'MDT', 'MCK', 'HCA', 'ELV'],
-  'Financial': ['BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SPGI', 'BLK', 'AXP', 'PYPL', 'SCHW', 'CME', 'ICE', 'CB', 'PGR', 'AON', 'MMC', 'COF', 'USB'],
-  'Consumer Discretionary': ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'LOW', 'SBUX', 'TJX', 'BKNG', 'CMG', 'GM', 'F', 'ORLY', 'AZO', 'ROST', 'MAR', 'HLT', 'YUM', 'LULU'],
-  'Communication': ['GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'T', 'VZ', 'TMUS', 'CHTR', 'EA', 'TTWO', 'WBD'],
-  'Industrials': ['GE', 'CAT', 'UNP', 'HON', 'UPS', 'BA', 'RTX', 'DE', 'LMT', 'ETN', 'ITW', 'EMR', 'NOC', 'GD', 'CSX', 'FDX', 'WM', 'NSC', 'PCAR', 'TT'],
-  'Consumer Staples': ['PG', 'KO', 'PEP', 'COST', 'WMT', 'PM', 'MO', 'MDLZ', 'CL', 'KMB', 'TGT', 'SYY', 'STZ', 'KHC', 'GIS', 'KR'],
-  'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PXD', 'VLO', 'PSX', 'OXY', 'HAL', 'DVN'],
-  'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE', 'EXC', 'XEL', 'WEC', 'ED'],
-  'Real Estate': ['PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'DLR', 'WELL', 'AVB'],
-  'Materials': ['LIN', 'APD', 'SHW', 'FCX', 'NEM', 'ECL', 'DD', 'NUE', 'VMC', 'MLM'],
-};
-
-const STOCK_WEIGHTS: Record<string, number> = {
-  AAPL: 30, MSFT: 28, NVDA: 26, AMZN: 18, GOOGL: 18, META: 14, TSLA: 10, 'BRK-B': 9,
-  UNH: 8, JNJ: 7, LLY: 8, JPM: 7, V: 6, XOM: 6, PG: 5, MA: 5, HD: 5, CVX: 5,
-  MRK: 5, ABBV: 5, KO: 4, PEP: 4, AVGO: 7, CRM: 4, COST: 4, WMT: 4, NFLX: 4,
-  ADBE: 4, CSCO: 4, ACN: 4, MCD: 4, ABT: 4, DHR: 4, TXN: 3, NEE: 3, PM: 3,
-  UNP: 3, HON: 3, LOW: 3, NKE: 3, CAT: 3, BA: 3, GE: 3, LMT: 3, GS: 3,
-  INTC: 2, AMD: 4, QCOM: 3, IBM: 2, PLD: 2, AMT: 2, SPG: 2, LIN: 3, BLK: 3,
-  SPGI: 3, ORCL: 4, DIS: 2, CMCSA: 2, T: 2, VZ: 2, SLB: 2, COP: 3, EOG: 2,
-  FCX: 2, NEM: 2, DUK: 2, SO: 2, D: 2, AEP: 2, SRE: 2,
-  NOW: 3, INTU: 3, AMAT: 2, MU: 2, LRCX: 2, KLAC: 2, ADI: 2, SNPS: 2, PANW: 2, FTNT: 2,
-  MSI: 1, CDNS: 2, FI: 2, KEYS: 1, CTSH: 1,
-  AMGN: 3, GILD: 2, ISRG: 3, VRTX: 2, CI: 2, CVS: 2, SYK: 2, BSX: 2, MDT: 2, MCK: 2, HCA: 2, ELV: 2,
-  AXP: 2, PYPL: 2, SCHW: 2, CME: 2, ICE: 2, CB: 2, PGR: 2, AON: 2, MMC: 2, COF: 1, USB: 1, MS: 3, WFC: 3, BAC: 4,
-  SBUX: 2, TJX: 2, BKNG: 2, CMG: 2, GM: 1, F: 1, ORLY: 1, AZO: 1, ROST: 1, MAR: 1, HLT: 1, YUM: 1, LULU: 1,
-  TMO: 3, BMY: 2, PFE: 3,
-  TMUS: 2, CHTR: 1, EA: 1, TTWO: 1, WBD: 1,
-  ETN: 2, ITW: 2, EMR: 1, NOC: 2, GD: 2, CSX: 2, FDX: 2, WM: 2, NSC: 1, PCAR: 1, TT: 1, RTX: 3, DE: 2,
-  CL: 1, KMB: 1, TGT: 2, SYY: 1, STZ: 1, KHC: 1, GIS: 1, KR: 1, MO: 2, MDLZ: 2,
-  MPC: 2, PXD: 1, VLO: 1, PSX: 1, OXY: 1, HAL: 1, DVN: 1,
-  EXC: 1, XEL: 1, WEC: 1, ED: 1,
-  CCI: 2, EQIX: 2, PSA: 1, O: 1, DLR: 1, WELL: 1, AVB: 1,
-  APD: 2, SHW: 2, ECL: 1, DD: 1, NUE: 1, VMC: 1, MLM: 1,
-};
+// ─── S&P 500 Sector → Stocks (from centralized config) ──────────────
+const SECTOR_STOCKS = SP500_SECTORS;
 
 // ─── Treemap layout (squarified) ────────────────────────────────────
 interface TRect { x: number; y: number; w: number; h: number; }
@@ -230,6 +196,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [perfPeriod, setPerfPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'yearly'>('daily');
   const [detailLoading, setDetailLoading] = useState(false);
   const [heatmapQuotes, setHeatmapQuotes] = useState<Mover[]>([]);
+  const [heatmapPeriod, setHeatmapPeriod] = useState<'daily' | 'weekly' | 'monthly' | '3month' | '6month' | 'ytd' | 'yearly'>('daily');
+  const [heatmapLoading, setHeatmapLoading] = useState(false);
 
   // ─── Fetchers ──────────────────────────────────────────────────
   const fetchSectorData = useCallback(async () => {
@@ -336,9 +304,10 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     finally { setDetailLoading(false); }
   }, [fetchT]);
 
-  const fetchHeatmapQuotes = useCallback(async () => {
+  const fetchHeatmapQuotes = useCallback(async (period = 'daily') => {
     try {
-      const r = await fetchT('/api/heatmap-quotes', 15000, { cache: 'no-store' });
+      setHeatmapLoading(true);
+      const r = await fetchT(`/api/heatmap-quotes?period=${period}`, 55000, { cache: 'no-store' });
       if (!r.ok) return;
       const j = await r.json();
       if (j.ok && j.data) {
@@ -346,20 +315,24 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
         setDataHealth(h => ({ ...h, heatmap: j.data.length > 0 }));
       }
     } catch (e) { console.error(e); }
+    finally { setHeatmapLoading(false); }
   }, [fetchT]);
 
   // ─── Effects ───────────────────────────────────────────────────
-  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchHeatmapQuotes]);
+  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes('daily'); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchHeatmapQuotes]);
+
+  // Re-fetch heatmap when period changes
+  useEffect(() => { fetchHeatmapQuotes(heatmapPeriod); }, [heatmapPeriod, fetchHeatmapQuotes]);
 
   useEffect(() => {
     const heavy = setInterval(() => {
-      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(); }
+      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); }
     }, 600000);
     const movers = setInterval(() => {
       if (document.visibilityState === 'visible') fetchTopMovers();
     }, 180000);
     return () => { clearInterval(heavy); clearInterval(movers); };
-  }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis]);
+  }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, heatmapPeriod]);
 
   useEffect(() => { if (selectedSymbol) fetchStockDetail(selectedSymbol); }, [selectedSymbol, fetchStockDetail]);
 
@@ -518,7 +491,18 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           <main className="p-2 space-y-2">
 
             {/* ─── ROW 0: Full-width Treemap Heatmap ─── */}
-            <Panel title="S&P 500 Heatmap" badge={`${heatmapQuotes.length} STOCKS`} className="min-h-[480px]">
+            <Panel title="S&P 500 Heatmap" badge={`${heatmapQuotes.length} STOCKS`} className="min-h-[480px]"
+              actions={
+                <div className="flex items-center gap-1">
+                  {heatmapLoading && <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin mr-1" />}
+                  {(['daily','weekly','monthly','3month','6month','ytd','yearly'] as const).map(p => (
+                    <button key={p} onClick={() => setHeatmapPeriod(p)}
+                      className={`px-1.5 py-0.5 text-[9px] font-semibold rounded transition-colors ${heatmapPeriod === p ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}`}>
+                      {{ daily:'1D', weekly:'1W', monthly:'1M', '3month':'3M', '6month':'6M', ytd:'YTD', yearly:'1Y' }[p]}
+                    </button>
+                  ))}
+                </div>
+              }>
               {(() => {
                 const W = 1200, H = 600;
                 // Build sector groups with live data
@@ -527,7 +511,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   stocks: syms.map(sym => {
                     const mover = stockMap[sym];
                     const pct = mover?.changePercent ?? 0;
-                    const weight = STOCK_WEIGHTS[sym] || 1;
+                    const weight = getStockWeight(sym);
                     return { symbol: sym, sector, pct, weight };
                   }),
                 })).filter(g => g.stocks.length > 0).sort((a, b) =>
@@ -538,12 +522,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   p > 3 ? '#16a34a' : p > 2 ? '#22c55e' : p > 1 ? '#15803d' : p > 0.5 ? '#166534' :
                   p > 0 ? '#14532d' : p > -0.5 ? '#7f1d1d' : p > -1 ? '#991b1b' :
                   p > -2 ? '#dc2626' : p > -3 ? '#ef4444' : '#f87171';
-                const SECTOR_SHORT: Record<string, string> = {
-                  'Technology': 'TECHNOLOGY', 'Healthcare': 'HEALTHCARE', 'Financial': 'FINANCIAL',
-                  'Consumer Discretionary': 'CONSUMER CYCLICAL', 'Communication': 'COMMUNICATION',
-                  'Industrials': 'INDUSTRIALS', 'Consumer Staples': 'CONSUMER STAPLES',
-                  'Energy': 'ENERGY', 'Utilities': 'UTILITIES', 'Real Estate': 'REAL ESTATE', 'Materials': 'BASIC MATERIALS',
-                };
                 return (
                   <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
                     <rect width={W} height={H} fill="#0b1120" />
@@ -553,7 +531,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke="#1e293b" strokeWidth="2" />
                         {sr.w > 80 && sr.h > 30 && (
                           <text x={sr.x + 4} y={sr.y + 12} fontSize="9" fill="#475569" fontWeight="700" opacity="0.7">
-                            {SECTOR_SHORT[sr.sector] || sr.sector.toUpperCase()}
+                            {SECTOR_SHORT_MAP[sr.sector] || sr.sector.toUpperCase()}
                           </text>
                         )}
                       </g>
@@ -561,14 +539,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     {/* Individual stock cells */}
                     {cells.map(cell => {
                       const minDim = Math.min(cell.w, cell.h);
-                      const showSymbol = cell.w > 20 && cell.h > 14;
-                      const showPct = cell.w > 30 && cell.h > 24;
-                      const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : 7;
+                      const showSymbol = cell.w > 18 && cell.h > 12;
+                      const showPct = cell.w > 28 && cell.h > 22;
+                      const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : minDim > 15 ? 7 : 5;
                       const pctSize = minDim > 60 ? 11 : minDim > 40 ? 9 : 7;
                       return (
                         <g key={cell.symbol} className="cursor-pointer" onClick={() => setSelectedSymbol(cell.symbol)}>
                           <rect x={cell.x + 0.5} y={cell.y + 0.5} width={Math.max(0, cell.w - 1)} height={Math.max(0, cell.h - 1)}
-                            fill={colorForPct(cell.pct)} rx="1" stroke="#0b1120" strokeWidth="1"
+                            fill={colorForPct(cell.pct)} rx="1" stroke="#0b1120" strokeWidth="0.5"
                             className="hover:brightness-125 transition-all"
                             opacity={selectedSymbol === cell.symbol ? 1 : 0.85} />
                           {showSymbol && (

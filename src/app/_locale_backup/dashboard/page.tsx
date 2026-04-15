@@ -670,8 +670,9 @@ export default function DashboardPage() {
 															{k:'volume', l:'Volume'},
 															{k:'trend', l:'Trend'},
 															{k:'demandSupply', l:'D/S'},
-															{k:'optionsSentiment', l:'Opt Sent'},
-															{k:'gammaRisk', l:'Gamma'},
+														{k:'dex', l:'DEX'},
+														{k:'optionsSentiment', l:'Opt Sent'},
+														{k:'gammaRisk', l:'GEX'},
 															{k:'putCallRatio', l:'P/C'},
 															{k:'unusualCombo', l:'Unusual'},
 															{k:'unusualOtm', l:'OTM'},
@@ -748,9 +749,20 @@ export default function DashboardPage() {
 																			)}
 																		</span>
 																			</td>
-																			<td className="px-2 py-1 text-gray-300">
+																			<td className="px-2 py-1">
 																				<span className="relative group inline-flex items-center gap-1">
-																					{opt?.gammaLabel || item.gammaRisk}
+																					{(() => {
+																						const gex = opt?.gammaExposure;
+																						if (gex != null && isFinite(gex)) {
+																							const abs = Math.abs(gex);
+																							const fmt = abs >= 1e9 ? `${(gex / 1e9).toFixed(1)}B` : abs >= 1e6 ? `${(gex / 1e6).toFixed(0)}M` : `${(gex / 1e3).toFixed(0)}K`;
+																							const cls = gex > 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold';
+																							return <span className={cls}>{gex > 0 ? '+' : ''}{fmt}</span>;
+																						}
+																						const label = opt?.gammaLabel || item.gammaRisk;
+																						const cls = label === 'High' || label === 'Extreme' ? 'text-amber-400' : 'text-gray-300';
+																						return <span className={cls}>{label}</span>;
+																					})()}
 																					{opt?.gammaExposure != null && (
 																						<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">
 																							<SmallTooltip lines={[
@@ -802,7 +814,7 @@ export default function DashboardPage() {
 																	);
 																})}
 													{!filteredData.length && (
-														<tr><td colSpan={16} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
+														<tr><td colSpan={17} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}
 												</tbody>
 											</table>

@@ -94,6 +94,7 @@ export default function DashboardPage() {
 	const [perfMax, setPerfMax] = useState<string>('');
 	const [sortKey, setSortKey] = useState<string>('performance');
 	const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
+	const [showInfo, setShowInfo] = useState(false);
 	const [autoRefreshSec, setAutoRefreshSec] = useState<number>(420); // 7 min default to reduce load
 	// Lazy charts (dynamic import + intersection observer)
 	const [chartsReady, setChartsReady] = useState(false);
@@ -606,6 +607,10 @@ export default function DashboardPage() {
 							<div className="max-w-7xl mx-auto px-3 py-3 flex flex-wrap items-center gap-3 text-xs">
 								{/* toolbar actions removed per request (Symbols Compact / Export CSV) */}
 								<div className="ml-auto" />
+								<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Column guide">
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
+									<span className="text-[10px]">Guide</span>
+								</button>
 							</div>
 						</div>
 				{summary && (
@@ -814,7 +819,7 @@ export default function DashboardPage() {
 																	);
 																})}
 													{!filteredData.length && (
-														<tr><td colSpan={17} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
+														<tr><td colSpan={15} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}
 												</tbody>
 											</table>
@@ -827,6 +832,57 @@ export default function DashboardPage() {
 									<DashboardCharts enrichedData={enrichedData as any} />
 								)}
 								</div>
+
+				{/* Info Guide Modal */}
+				{showInfo && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
+						<div className="bg-slate-800 border border-slate-600 rounded-lg shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+							<div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+								<h3 className="text-sm font-bold text-white">Column Guide</h3>
+								<button onClick={() => setShowInfo(false)} className="text-gray-400 hover:text-white text-lg leading-none">&times;</button>
+							</div>
+							<div className="px-4 py-3 space-y-3 text-[11px] text-gray-300">
+								<div>
+									<span className="text-blue-400 font-bold">GEX</span> — <span className="text-white font-semibold">Gamma Exposure</span><br/>
+									Net gamma dealers hold. <span className="text-emerald-400">+GEX</span> = dealers are long gamma → they sell into rallies &amp; buy dips → <span className="text-emerald-400">stabilizing, low-vol</span>. <span className="text-red-400">−GEX</span> = dealers short gamma → they chase moves → <span className="text-red-400">volatile, big swings</span>.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">DEX</span> — <span className="text-white font-semibold">Directional Exposure Index</span><br/>
+									Composite score (−100 to +100) combining trend, demand/supply, volume, and performance. <span className="text-emerald-400">&gt;+20</span> = strong bullish pressure. <span className="text-red-400">&lt;−20</span> = strong bearish pressure. Near 0 = neutral.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">P/C</span> — <span className="text-white font-semibold">Put/Call Ratio</span><br/>
+									Ratio of put volume to call volume. <span className="text-emerald-400">&lt;0.7</span> = bullish (more calls). <span className="text-red-400">&gt;1.0</span> = bearish (more puts). Between = neutral.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">Opt Sent</span> — <span className="text-white font-semibold">Options Sentiment</span><br/>
+									Classified from P/C ratio + GEX: FOMO Buying, Stealth Bull, Hedging, Panic Selling, etc.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">Skew</span> — <span className="text-white font-semibold">OTM Skew</span><br/>
+									Call Skew = OTM calls costlier (bullish bets). Put Skew = OTM puts costlier (downside hedging).
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">Intra</span> — <span className="text-white font-semibold">Intraday Flow</span><br/>
+									Gamma Bull = positive GEX (dealers stabilize). Gamma Bear = negative GEX (dealers amplify moves).
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">D/S</span> — <span className="text-white font-semibold">Demand / Supply</span><br/>
+									Order flow imbalance. High Demand = buyers dominate. High Supply = sellers dominate.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">Unusual</span> — <span className="text-white font-semibold">Unusual Activity</span><br/>
+									ATM / OTM unusual volume levels (Low/Medium/High). High = potential institutional positioning.
+								</div>
+								<div>
+									<span className="text-blue-400 font-bold">AI Score</span> — <span className="text-white font-semibold">Composite AI Score</span><br/>
+									0-100 score combining momentum, relative strength, volatility, and mean reversion signals.
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
+
 				<Footer />
 			</div>
 		</RequirePlan>

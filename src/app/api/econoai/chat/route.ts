@@ -6,6 +6,7 @@ import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'auto'
+export const maxDuration = 55
 
 // Initialize OpenAI client
 function getOpenAIClient() {
@@ -14,6 +15,14 @@ function getOpenAIClient() {
   }
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+  })
+}
+
+// Helper to timeout a promise
+const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error('openai_timeout')), ms)
+    p.then((v) => { clearTimeout(id); resolve(v) }).catch((e) => { clearTimeout(id); reject(e) })
   })
 }
 
@@ -140,14 +149,7 @@ Keep prose crisp and professional.`
     const fallbackModel = 'gpt-4o-mini';
 
     let completion: any
-    const TIMEOUT_MS = 25000
-    // Helper to timeout the OpenAI request
-    const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
-      return new Promise<T>((resolve, reject) => {
-        const id = setTimeout(() => reject(new Error('openai_timeout')), ms)
-        p.then((v) => { clearTimeout(id); resolve(v) }).catch((e) => { clearTimeout(id); reject(e) })
-      })
-    }
+    const TIMEOUT_MS = 45000
     try {
       // Primary attempt
       completion = await withTimeout(
@@ -231,31 +233,39 @@ Keep prose crisp and professional.`
 
     // Handle specific OpenAI errors with retry logic
     if (error?.status === 429) {
-      // Rate limited on primary model – retry once with smaller/fallback model
-      console.warn('OpenAI 429 rate limit on primary model, retrying with gpt-4o-mini...')
-      try {
-        const openai = getOpenAIClient()
-        const retryCompletion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
-            { role: 'user', content: parsedQuestion || 'market overview' }
-          ],
-          temperature: 0.7,
-          max_tokens: 800,
-        })
-        const retryAnswer = retryCompletion.choices[0]?.message?.content
-        if (retryAnswer) {
-          return NextResponse.json({
-            answer: retryAnswer,
-            question: parsedQuestion,
-            usedContext: false,
-            timestamp: new Date().toISOString(),
-            model: 'gpt-4o-mini',
-          }, { status: 200 })
+      // Rate limited – wait briefly, then retry up to 2x with gpt-4o-mini
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+      const openai = getOpenAIClient()
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const waitMs = attempt * 2000; // 2s, 4s
+        console.warn(`OpenAI 429 rate limit, waiting ${waitMs}ms then retry #${attempt} with gpt-4o-mini...`)
+        await delay(waitMs);
+        try {
+          const retryCompletion = await withTimeout(
+            openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
+                { role: 'user', content: parsedQuestion || 'market overview' }
+              ],
+              temperature: 0.7,
+              max_tokens: 800,
+            }),
+            15000
+          )
+          const retryAnswer = retryCompletion.choices[0]?.message?.content
+          if (retryAnswer) {
+            return NextResponse.json({
+              answer: retryAnswer,
+              question: parsedQuestion,
+              usedContext: false,
+              timestamp: new Date().toISOString(),
+              model: 'gpt-4o-mini',
+            }, { status: 200 })
+          }
+        } catch (retryErr: any) {
+          console.warn(`Retry #${attempt} failed:`, retryErr?.message || retryErr)
         }
-      } catch (retryErr) {
-        console.warn('Retry also failed:', retryErr)
       }
       return NextResponse.json({
         answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',

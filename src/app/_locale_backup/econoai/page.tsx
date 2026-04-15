@@ -105,13 +105,18 @@ export default function EconoAIPage() {
         }
       }
 
-      // Build lightweight context: market snapshot, macro, and top news
-      const [marketRes, recessionRes, newsRes] = await Promise.all([
-        fetchT('/api/yahoo-unified?category=all&limit=20', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null),
-        fetchT('/api/recession-index?limit=60', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null),
-        fetchT('/api/news/top?limit=6', { cache:'no-store', timeoutMs: 8000 }).catch(()=>null)
-      ])
-      const context: any = {}
+      // Build lightweight context: market snapshot, macro, and top news (non-blocking with tight deadline)
+      let context: any = {}
+      try {
+        const ctxResults = await Promise.race([
+          Promise.all([
+            fetchT('/api/yahoo-unified?category=all&limit=20', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null),
+            fetchT('/api/recession-index?limit=60', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null),
+            fetchT('/api/news/top?limit=6', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null)
+          ]),
+          new Promise<null[]>(r => setTimeout(() => r([null, null, null]), 6000)) // hard 6s cap
+        ]) as (Response | null)[]
+        const [marketRes, recessionRes, newsRes] = ctxResults
       try {
         const js = marketRes && marketRes.ok ? await marketRes.json() : null
         if (js?.ok && Array.isArray(js.data)) {
@@ -123,6 +128,7 @@ export default function EconoAIPage() {
       } catch {}
       try { const rj = recessionRes && recessionRes.ok ? await recessionRes.json() : null; if (rj?.latest) context.macro = { recession: rj.latest, seriesLen: (rj.series||[]).length } } catch {}
       try { const nj = newsRes && newsRes.ok ? await newsRes.json() : null; if (nj?.data) context.news = nj.data } catch {}
+      } catch { /* context fetch failed entirely, proceed without */ }
 
       const response = await fetchT('/api/econoai/chat', {
         method: 'POST',
@@ -135,7 +141,7 @@ export default function EconoAIPage() {
           context
         }),
         cache: 'no-store',
-        timeoutMs: 25000,
+        timeoutMs: 50000,
       })
 
       if (!response) {

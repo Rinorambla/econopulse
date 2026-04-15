@@ -505,7 +505,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               }>
               {(() => {
                 const W = 1200, H = 600;
-                const SECTOR_HEADER = 16; // px height for sector label bar
+                const SECTOR_HEADER = 20; // px height for sector label bar
                 // Build sector groups with live data
                 const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
                   sector,
@@ -558,16 +558,17 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           {/* Sector background tint */}
                           <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill={tint} />
                           {/* Sector border */}
-                          <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke={borderColor} strokeWidth="2.5" strokeOpacity="0.5" />
+                          <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke={borderColor} strokeWidth="3" strokeOpacity="0.7" />
                           {/* Sector header bar */}
                           {showLabel && (
                             <>
-                              <rect x={sr.x + 1} y={sr.y + 1} width={sr.w - 2} height={SECTOR_HEADER} fill="rgba(0,0,0,0.55)" rx="1" />
-                              <text x={sr.x + 5} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="9" fill={borderColor} fontWeight="800" dominantBaseline="central">
+                              <rect x={sr.x + 1} y={sr.y + 1} width={sr.w - 2} height={SECTOR_HEADER} fill="rgba(0,0,0,0.8)" rx="1" />
+                              <circle cx={sr.x + 10} cy={sr.y + SECTOR_HEADER / 2 + 1} r="3.5" fill={borderColor} />
+                              <text x={sr.x + 18} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="11" fill="white" fontWeight="800" dominantBaseline="central" letterSpacing="0.5">
                                 {SECTOR_SHORT_MAP[sr.sector] || sr.sector.toUpperCase()}
                               </text>
                               {sr.w > 140 && (
-                                <text x={sr.x + sr.w - 5} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="8" fill={avgPct >= 0 ? '#22c55e' : '#ef4444'} fontWeight="600" textAnchor="end" dominantBaseline="central">
+                                <text x={sr.x + sr.w - 6} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="10" fill={avgPct >= 0 ? '#4ade80' : '#f87171'} fontWeight="700" textAnchor="end" dominantBaseline="central">
                                   {avgPct >= 0 ? '+' : ''}{avgPct.toFixed(2)}%
                                 </text>
                               )}

@@ -685,9 +685,7 @@ export default function DashboardPage() {
 															{k:'intradayFlow', l:'Intra'},
 															{k:'unusualAtm', l:'ATM'},
 															// RS% removed per request
-															{k:'aiScore', l:'AI Score'},
-															{k:'aiLabel', l:'AI Signal'},
-															{k:'category', l:'Cat'}
+															{k:'aiScore', l:'AI Score'}
 														].map(col => (
 															<th key={col.k} onClick={()=> toggleSort(col.k)} className="px-2 py-1 text-left font-semibold text-gray-300 cursor-pointer select-none whitespace-nowrap">
 																<div className="flex items-center gap-1">

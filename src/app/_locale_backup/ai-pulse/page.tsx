@@ -491,7 +491,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           <main className="p-2 space-y-2">
 
             {/* ─── ROW 0: Full-width Treemap Heatmap ─── */}
-            <Panel title="S&P 500 Heatmap" badge={`${heatmapQuotes.length} STOCKS`} className="min-h-[480px]"
+            <Panel title="S&P 500 Heatmap" className="min-h-[480px]"
               actions={
                 <div className="flex items-center gap-1">
                   {heatmapLoading && <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin mr-1" />}
@@ -505,6 +505,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               }>
               {(() => {
                 const W = 1200, H = 600;
+                const SECTOR_HEADER = 16; // px height for sector label bar
                 // Build sector groups with live data
                 const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
                   sector,
@@ -518,6 +519,23 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   b.stocks.reduce((s, st) => s + st.weight, 0) - a.stocks.reduce((s, st) => s + st.weight, 0)
                 );
                 const { sectorRects, cells } = layoutSectorTreemap(sectorGroups, W, H);
+                // Sector tint colors for background differentiation
+                const SECTOR_TINTS: Record<string, string> = {
+                  'Technology': 'rgba(59,130,246,0.06)', 'Healthcare': 'rgba(168,85,247,0.06)',
+                  'Financial': 'rgba(234,179,8,0.06)', 'Consumer Discretionary': 'rgba(249,115,22,0.06)',
+                  'Communication': 'rgba(236,72,153,0.06)', 'Industrials': 'rgba(107,114,128,0.06)',
+                  'Consumer Staples': 'rgba(34,197,94,0.06)', 'Energy': 'rgba(239,68,68,0.06)',
+                  'Utilities': 'rgba(14,165,233,0.06)', 'Real Estate': 'rgba(168,162,158,0.06)',
+                  'Materials': 'rgba(180,83,9,0.06)',
+                };
+                const SECTOR_BORDER: Record<string, string> = {
+                  'Technology': '#3b82f6', 'Healthcare': '#a855f7',
+                  'Financial': '#eab308', 'Consumer Discretionary': '#f97316',
+                  'Communication': '#ec4899', 'Industrials': '#6b7280',
+                  'Consumer Staples': '#22c55e', 'Energy': '#ef4444',
+                  'Utilities': '#0ea5e9', 'Real Estate': '#a8a29e',
+                  'Materials': '#b45309',
+                };
                 const colorForPct = (p: number) =>
                   p > 3 ? '#16a34a' : p > 2 ? '#22c55e' : p > 1 ? '#15803d' : p > 0.5 ? '#166534' :
                   p > 0 ? '#14532d' : p > -0.5 ? '#7f1d1d' : p > -1 ? '#991b1b' :
@@ -525,17 +543,39 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 return (
                   <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
                     <rect width={W} height={H} fill="#0b1120" />
-                    {/* Sector boundaries + labels */}
-                    {sectorRects.map(sr => (
-                      <g key={sr.sector}>
-                        <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke="#1e293b" strokeWidth="2" />
-                        {sr.w > 80 && sr.h > 30 && (
-                          <text x={sr.x + 4} y={sr.y + 12} fontSize="9" fill="#475569" fontWeight="700" opacity="0.7">
-                            {SECTOR_SHORT_MAP[sr.sector] || sr.sector.toUpperCase()}
-                          </text>
-                        )}
-                      </g>
-                    ))}
+                    {/* Sector regions: tinted background + header bar + border */}
+                    {sectorRects.map(sr => {
+                      const borderColor = SECTOR_BORDER[sr.sector] || '#334155';
+                      const tint = SECTOR_TINTS[sr.sector] || 'rgba(255,255,255,0.03)';
+                      const showLabel = sr.w > 50 && sr.h > 24;
+                      const avgPct = (() => {
+                        const sectorCells = cells.filter(c => c.sector === sr.sector);
+                        if (!sectorCells.length) return 0;
+                        return sectorCells.reduce((s, c) => s + c.pct, 0) / sectorCells.length;
+                      })();
+                      return (
+                        <g key={sr.sector}>
+                          {/* Sector background tint */}
+                          <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill={tint} />
+                          {/* Sector border */}
+                          <rect x={sr.x} y={sr.y} width={sr.w} height={sr.h} fill="none" stroke={borderColor} strokeWidth="2.5" strokeOpacity="0.5" />
+                          {/* Sector header bar */}
+                          {showLabel && (
+                            <>
+                              <rect x={sr.x + 1} y={sr.y + 1} width={sr.w - 2} height={SECTOR_HEADER} fill="rgba(0,0,0,0.55)" rx="1" />
+                              <text x={sr.x + 5} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="9" fill={borderColor} fontWeight="800" dominantBaseline="central">
+                                {SECTOR_SHORT_MAP[sr.sector] || sr.sector.toUpperCase()}
+                              </text>
+                              {sr.w > 140 && (
+                                <text x={sr.x + sr.w - 5} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="8" fill={avgPct >= 0 ? '#22c55e' : '#ef4444'} fontWeight="600" textAnchor="end" dominantBaseline="central">
+                                  {avgPct >= 0 ? '+' : ''}{avgPct.toFixed(2)}%
+                                </text>
+                              )}
+                            </>
+                          )}
+                        </g>
+                      );
+                    })}
                     {/* Individual stock cells */}
                     {cells.map(cell => {
                       const minDim = Math.min(cell.w, cell.h);

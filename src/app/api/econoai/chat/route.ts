@@ -8,14 +8,26 @@ export const dynamic = 'force-dynamic'
 export const preferredRegion = 'auto'
 export const maxDuration = 55
 
-// Initialize OpenAI client
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured')
+// Initialize AI client — supports OpenAI and Groq (free)
+function getAIClient(): { client: OpenAI; model: string; fallbackModel: string; provider: string } {
+  // Priority: OpenAI → Groq (free)
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      fallbackModel: 'gpt-4o-mini',
+      provider: 'openai',
+    }
   }
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
+  if (process.env.GROQ_API_KEY) {
+    return {
+      client: new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' }),
+      model: 'llama-3.3-70b-versatile',
+      fallbackModel: 'llama-3.1-8b-instant',
+      provider: 'groq',
+    }
+  }
+  throw new Error('No AI provider configured (set OPENAI_API_KEY or GROQ_API_KEY)')
 }
 
 // Helper to timeout a promise
@@ -78,17 +90,17 @@ export async function POST(req: NextRequest) {
       return res
     }
 
-    // If OpenAI is not configured, return a graceful fallback instead of 503
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('❌ OpenAI API key not configured')
+    // If no AI provider is configured, return graceful fallback
+    if (!process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) {
+      console.error('❌ No AI provider configured (need OPENAI_API_KEY or GROQ_API_KEY)')
       const res = fallbackResponse('openai_not_configured')
       const headers = rateLimitHeaders(rl)
       Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
       return res
     }
 
-    console.log('✅ OpenAI client initialized')
-    const openai = getOpenAIClient()
+    const { client: aiClient, model: primaryModel, fallbackModel, provider } = getAIClient()
+    console.log(`✅ AI client initialized (${provider}: ${primaryModel})`)
 
   // System prompt for financial analysis
   const systemPrompt = `You are EconoAI, an expert financial analyst and market strategist at EconoPulse with 20+ years of Wall Street experience. You provide comprehensive market intelligence across ALL asset classes and market topics.
@@ -144,16 +156,12 @@ When helpful, structure the output JSON-like sections:
 }
 Keep prose crisp and professional.`
 
-    // Choose model: allow override via env, default to gpt-4o (fallback to gpt-4o-mini on 404)
-    const primaryModel = process.env.OPENAI_MODEL || 'gpt-4o';
-    const fallbackModel = 'gpt-4o-mini';
-
     let completion: any
     const TIMEOUT_MS = 45000
     try {
       // Primary attempt
       completion = await withTimeout(
-        openai.chat.completions.create({
+        aiClient.chat.completions.create({
         model: primaryModel,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -181,7 +189,7 @@ Keep prose crisp and professional.`
       if (!isModelNotFound) throw err;
       console.warn(`Model ${primaryModel} unavailable, retrying with ${fallbackModel}...`);
       completion = await withTimeout(
-        openai.chat.completions.create({
+        aiClient.chat.completions.create({
         model: fallbackModel,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -233,17 +241,29 @@ Keep prose crisp and professional.`
 
     // Handle specific OpenAI errors with retry logic
     if (error?.status === 429) {
-      // Rate limited – wait briefly, then retry up to 2x with gpt-4o-mini
+      // Rate limited – wait briefly, then retry up to 2x with fallback model
       const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-      const openai = getOpenAIClient()
+      let retryClient: OpenAI;
+      let retryModel: string;
+      try {
+        const ai = getAIClient();
+        retryClient = ai.client;
+        retryModel = ai.fallbackModel;
+      } catch { 
+        // No provider available at all
+        return NextResponse.json({
+          answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
+          question: 'rate_limited', usedContext: false, fallback: true, reason: 'rate_limited', timestamp: new Date().toISOString(),
+        }, { status: 200 })
+      }
       for (let attempt = 1; attempt <= 2; attempt++) {
         const waitMs = attempt * 2000; // 2s, 4s
-        console.warn(`OpenAI 429 rate limit, waiting ${waitMs}ms then retry #${attempt} with gpt-4o-mini...`)
+        console.warn(`429 rate limit, waiting ${waitMs}ms then retry #${attempt} with ${retryModel}...`)
         await delay(waitMs);
         try {
           const retryCompletion = await withTimeout(
-            openai.chat.completions.create({
-              model: 'gpt-4o-mini',
+            retryClient.chat.completions.create({
+              model: retryModel,
               messages: [
                 { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
                 { role: 'user', content: parsedQuestion || 'market overview' }
@@ -260,7 +280,7 @@ Keep prose crisp and professional.`
               question: parsedQuestion,
               usedContext: false,
               timestamp: new Date().toISOString(),
-              model: 'gpt-4o-mini',
+              model: retryModel,
             }, { status: 200 })
           }
         } catch (retryErr: any) {

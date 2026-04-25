@@ -3,7 +3,6 @@ export const runtime = 'nodejs'
 export const maxDuration = 55
 
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { getYahooQuotes } from '@/lib/yahooFinance'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
@@ -23,24 +22,6 @@ const INDEX_MAP: Array<{ symbol: string; name: string }> = [
   { symbol: 'ETH-USD', name: 'Ethereum' },
   { symbol: 'EURUSD=X', name: 'EUR/USD' },
 ]
-
-function getAIClient(): { client: OpenAI; model: string; provider: string } | null {
-  if (process.env.OPENAI_API_KEY) {
-    return {
-      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      provider: 'openai',
-    }
-  }
-  if (process.env.GROQ_API_KEY) {
-    return {
-      client: new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' }),
-      model: 'llama-3.3-70b-versatile',
-      provider: 'groq',
-    }
-  }
-  return null
-}
 
 async function fetchQuotes(): Promise<IndexQuote[]> {
   try {
@@ -120,67 +101,169 @@ function fmtPrice(n: number | null | undefined): string {
   return n.toFixed(4)
 }
 
-async function generateBrief(quotes: IndexQuote[], movers: { top: any[]; bottom: any[] }, sectors: any[], news: any[]): Promise<{ brief: string; provider: string | null }> {
-  const ai = getAIClient()
-  if (!ai) return { brief: '', provider: null }
+// ====== EconoPulse Brief Engine (rule-based, deterministic, no external LLM) ======
+function pickQuote(quotes: IndexQuote[], symbol: string): IndexQuote | undefined {
+  return quotes.find(q => q.symbol.toUpperCase() === symbol.toUpperCase())
+}
 
-  const indexLines = quotes.map(q => `- ${q.name} (${q.symbol}): ${fmtPrice(q.price)} (${fmtPct(q.changePct)})`).join('\n')
-  const topLines = movers.top.map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent ?? m.performance)}`).join(', ') || '—'
-  const bottomLines = movers.bottom.map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent ?? m.performance)}`).join(', ') || '—'
-  const sectorLines = sectors.slice(0, 11).map((s: any) => `${s.name || s.sector || s.symbol}: ${fmtPct(s.changePercent ?? s.performance)}`).join(', ') || '—'
-  const newsLines = news.slice(0, 6).map((n: any, i: number) => `${i + 1}. ${n.title}`).join('\n') || '—'
+function describeMove(pct: number | null | undefined): string {
+  if (pct == null || !isFinite(pct)) return 'flat'
+  const a = Math.abs(pct)
+  const dir = pct > 0 ? 'up' : 'down'
+  if (a < 0.15) return 'flat'
+  if (a < 0.5) return `${dir} modestly`
+  if (a < 1.2) return `${dir}`
+  if (a < 2.5) return `${dir} sharply`
+  return `${dir} strongly`
+}
 
-  const userMessage = `You are writing today's market wrap for EconoPulse. Use ONLY the data below. Today: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+function buildBrief(quotes: IndexQuote[], movers: { top: any[]; bottom: any[] }, sectors: any[], news: any[]): string {
+  const spx = pickQuote(quotes, 'SPY')
+  const ndx = pickQuote(quotes, 'QQQ')
+  const dji = pickQuote(quotes, 'DIA')
+  const rty = pickQuote(quotes, 'IWM')
+  const vix = pickQuote(quotes, '^VIX')
+  const tlt = pickQuote(quotes, 'TLT')
+  const dxy = pickQuote(quotes, 'DX-Y.NYB')
+  const gold = pickQuote(quotes, 'GC=F')
+  const oil = pickQuote(quotes, 'CL=F')
+  const btc = pickQuote(quotes, 'BTC-USD')
+  const eth = pickQuote(quotes, 'ETH-USD')
+  const eur = pickQuote(quotes, 'EURUSD=X')
 
-INDICES & MACRO:
-${indexLines}
+  const equityAvg = [spx, ndx, dji, rty]
+    .map(q => q?.changePct)
+    .filter((x): x is number => x != null && isFinite(x))
+  const equityMean = equityAvg.length ? equityAvg.reduce((s, x) => s + x, 0) / equityAvg.length : null
 
-SECTORS: ${sectorLines}
+  // === Section 1: Today at a Glance ===
+  const idxBits: string[] = []
+  if (spx?.changePct != null) idxBits.push(`S&P 500 ${describeMove(spx.changePct)} ${fmtPct(spx.changePct)}`)
+  if (ndx?.changePct != null) idxBits.push(`Nasdaq 100 ${fmtPct(ndx.changePct)}`)
+  if (dji?.changePct != null) idxBits.push(`Dow ${fmtPct(dji.changePct)}`)
+  if (rty?.changePct != null) idxBits.push(`Russell 2000 ${fmtPct(rty.changePct)}`)
 
-TOP GAINERS (S&P 500): ${topLines}
-TOP LOSERS (S&P 500): ${bottomLines}
-
-HEADLINES:
-${newsLines}
-
-Write a concise, professional market wrap with these EXACT sections (use markdown headings):
-
-## 📊 Today at a Glance
-2–3 sentences covering equity indices, VIX, dollar, yields, gold, oil, crypto. Cite the actual numbers.
-
-## 🔄 Sector Rotation
-What's leading and lagging today; what does it imply (risk-on / risk-off / late cycle / defensive).
-
-## 📰 What Moved Markets
-Tie the headlines to the price action above. Be concrete.
-
-## 🎯 Key Takeaways
-3 bullet points: (1) a tactical observation, (2) a risk to watch, (3) a level or theme to watch tomorrow.
-
-Constraints:
-- Total ≤ 350 words.
-- No disclaimers, no greetings, no "as an AI".
-- Be specific, data-driven, professional. No hype.`
-
-  try {
-    const completion = await Promise.race([
-      ai.client.chat.completions.create({
-        model: ai.model,
-        messages: [
-          { role: 'system', content: 'You are a senior market strategist writing daily market wraps for institutional investors. Concise, data-driven, no fluff.' },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: 0.4,
-        max_tokens: 800,
-      }),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), 30000)),
-    ])
-    const text = (completion as any)?.choices?.[0]?.message?.content || ''
-    return { brief: text, provider: ai.provider }
-  } catch (e) {
-    console.warn('[updateai] AI brief failed:', (e as any)?.message)
-    return { brief: '', provider: ai.provider }
+  const macroBits: string[] = []
+  if (vix?.price != null) {
+    const vixLevel = vix.price < 15 ? 'complacent' : vix.price < 20 ? 'calm' : vix.price < 25 ? 'elevated' : vix.price < 30 ? 'stressed' : 'panic'
+    macroBits.push(`VIX at ${fmtPrice(vix.price)} (${vixLevel}, ${fmtPct(vix.changePct)})`)
   }
+  if (dxy?.changePct != null) macroBits.push(`USD ${fmtPct(dxy.changePct)}`)
+  if (tlt?.changePct != null) macroBits.push(`20Y Treasuries ${fmtPct(tlt.changePct)} (yields ${tlt.changePct > 0 ? 'lower' : 'higher'})`)
+  if (gold?.changePct != null) macroBits.push(`Gold ${fmtPct(gold.changePct)} at ${fmtPrice(gold.price)}`)
+  if (oil?.changePct != null) macroBits.push(`WTI Crude ${fmtPct(oil.changePct)}`)
+  const cryptoBits: string[] = []
+  if (btc?.changePct != null) cryptoBits.push(`BTC ${fmtPct(btc.changePct)} ($${fmtPrice(btc.price)})`)
+  if (eth?.changePct != null) cryptoBits.push(`ETH ${fmtPct(eth.changePct)}`)
+  if (eur?.changePct != null) cryptoBits.push(`EUR/USD ${fmtPct(eur.changePct)}`)
+
+  const glance = [
+    idxBits.length ? `**Equities:** ${idxBits.join(', ')}.` : '',
+    macroBits.length ? `**Macro:** ${macroBits.join('; ')}.` : '',
+    cryptoBits.length ? `**Crypto / FX:** ${cryptoBits.join(', ')}.` : '',
+  ].filter(Boolean).join(' ')
+
+  // === Section 2: Sector Rotation ===
+  const sortedSec = [...sectors]
+    .filter(s => s?.changePercent != null && isFinite(s.changePercent))
+    .sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0))
+  const leaders = sortedSec.slice(0, 3)
+  const laggards = sortedSec.slice(-3).reverse()
+
+  const cyclicalNames = new Set(['Technology', 'Consumer Discretionary', 'Communication', 'Financial', 'Industrials', 'Materials', 'Energy'])
+  const defensiveNames = new Set(['Consumer Staples', 'Utilities', 'Healthcare', 'Real Estate'])
+  const cyclicalAvg = sortedSec.filter(s => cyclicalNames.has(s.name || s.sector)).map(s => s.changePercent)
+  const defensiveAvg = sortedSec.filter(s => defensiveNames.has(s.name || s.sector)).map(s => s.changePercent)
+  const cycMean = cyclicalAvg.length ? cyclicalAvg.reduce((a: number, b: number) => a + b, 0) / cyclicalAvg.length : null
+  const defMean = defensiveAvg.length ? defensiveAvg.reduce((a: number, b: number) => a + b, 0) / defensiveAvg.length : null
+
+  let regime = 'mixed'
+  if (cycMean != null && defMean != null) {
+    const spread = cycMean - defMean
+    if (spread > 0.4) regime = 'risk-on (cyclicals leading defensives)'
+    else if (spread < -0.4) regime = 'risk-off (defensives bid, cyclicals under pressure)'
+    else regime = 'neutral / consolidating'
+  }
+  const techLed = leaders.some(s => (s.name || s.sector) === 'Technology' || (s.name || s.sector) === 'Communication')
+  const energyLed = leaders.some(s => (s.name || s.sector) === 'Energy')
+  const stapleLed = leaders.some(s => (s.name || s.sector) === 'Consumer Staples' || (s.name || s.sector) === 'Utilities')
+
+  const rotationBits: string[] = []
+  if (leaders.length) rotationBits.push(`**Leaders:** ${leaders.map(s => `${s.name || s.sector} ${fmtPct(s.changePercent)}`).join(', ')}.`)
+  if (laggards.length) rotationBits.push(`**Laggards:** ${laggards.map(s => `${s.name || s.sector} ${fmtPct(s.changePercent)}`).join(', ')}.`)
+  rotationBits.push(`Tape reads **${regime}**.`)
+  if (techLed) rotationBits.push('Growth/Tech leadership signals appetite for duration and AI-linked beta.')
+  else if (energyLed) rotationBits.push('Energy strength implies a commodity / inflation tilt.')
+  else if (stapleLed) rotationBits.push('Defensive bid points to late-cycle caution.')
+
+  const rotation = rotationBits.join(' ')
+
+  // === Section 3: What Moved Markets ===
+  const moversBits: string[] = []
+  if (movers.top?.length) {
+    moversBits.push(`Best in S&P: ${movers.top.slice(0, 5).map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent)}`).join(', ')}.`)
+  }
+  if (movers.bottom?.length) {
+    moversBits.push(`Worst: ${movers.bottom.slice(0, 5).map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent)}`).join(', ')}.`)
+  }
+  const headlineHits: string[] = []
+  const headlines = (news || []).slice(0, 5).map((n: any) => String(n?.title || '')).filter(Boolean)
+  for (const h of headlines.slice(0, 3)) {
+    headlineHits.push(`• ${h}`)
+  }
+  const moved = [
+    moversBits.join(' '),
+    headlineHits.length ? `\n${headlineHits.join('\n')}` : '',
+  ].filter(Boolean).join(' ')
+
+  // === Section 4: Key Takeaways (rule-based) ===
+  const takes: string[] = []
+  // Tactical
+  if (equityMean != null) {
+    if (equityMean > 0.5) takes.push(`Tape is on offer — broad equity strength averaged ${fmtPct(equityMean)} across the four headline indices.`)
+    else if (equityMean < -0.5) takes.push(`Risk-off bias — headline indices averaged ${fmtPct(equityMean)}; reduce gross exposure into weakness if VIX is rising.`)
+    else takes.push(`Indices little changed (${fmtPct(equityMean)} avg) — leadership rotation matters more than index direction today.`)
+  }
+  // Risk
+  if (vix?.price != null) {
+    if (vix.price > 25) takes.push(`Risk to watch: **VIX at ${fmtPrice(vix.price)}** signals stressed positioning — expect outsized intraday swings; keep stops tight.`)
+    else if (vix.price < 14) takes.push(`Risk to watch: **VIX compressed at ${fmtPrice(vix.price)}** — complacency can precede sharp re-pricings; consider cheap protection.`)
+    else takes.push(`Risk to watch: **VIX ${fmtPrice(vix.price)}** is in the normal regime; keep volatility budget intact.`)
+  } else {
+    takes.push(`Risk to watch: monitor VIX, USD strength, and 10Y yield direction — those drive cross-asset correlations.`)
+  }
+  // Level / theme tomorrow
+  const themeBits: string[] = []
+  if (gold?.changePct != null && Math.abs(gold.changePct) > 1) themeBits.push(`gold momentum (${fmtPct(gold.changePct)})`)
+  if (oil?.changePct != null && Math.abs(oil.changePct) > 1.5) themeBits.push(`crude trajectory (${fmtPct(oil.changePct)})`)
+  if (btc?.changePct != null && Math.abs(btc.changePct) > 2) themeBits.push(`BTC follow-through (${fmtPct(btc.changePct)})`)
+  if (dxy?.changePct != null && Math.abs(dxy.changePct) > 0.4) themeBits.push(`USD ${dxy.changePct > 0 ? 'breakout' : 'breakdown'}`)
+  if (tlt?.changePct != null && Math.abs(tlt.changePct) > 0.7) themeBits.push(`long-end yield ${tlt.changePct > 0 ? 'compression' : 'expansion'}`)
+  if (themeBits.length) takes.push(`Watch tomorrow: ${themeBits.join(', ')} — these are the cross-asset drivers in play.`)
+  else takes.push(`Watch tomorrow: sector breadth and any follow-through in today's leaders/laggards before adding risk.`)
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  return [
+    `## 📊 Today at a Glance`,
+    glance || '_Live indices unavailable._',
+    ``,
+    `## 🔄 Sector Rotation`,
+    rotation,
+    ``,
+    `## 📰 What Moved Markets`,
+    moved || '_No standout movers or headlines._',
+    ``,
+    `## 🎯 Key Takeaways`,
+    ...takes.map(t => `- ${t}`),
+    ``,
+    `_${today} · EconoPulse market wrap_`,
+  ].join('\n')
+}
+
+async function generateBrief(quotes: IndexQuote[], movers: { top: any[]; bottom: any[] }, sectors: any[], news: any[]): Promise<{ brief: string; provider: string }> {
+  // Deterministic, in-house brief — no external LLM dependency.
+  return { brief: buildBrief(quotes, movers, sectors, news), provider: 'econopulse-engine' }
 }
 
 export async function GET(req: NextRequest) {

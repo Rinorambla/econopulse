@@ -143,7 +143,6 @@ export default function UpdateAIPage() {
   const top = data?.movers?.top || []
   const bottom = data?.movers?.bottom || []
   const news = data?.news || []
-  const aiAvailable = (data?.provider && data.provider !== 'none')
 
   return (
     <RequirePlan min="free">
@@ -177,12 +176,6 @@ export default function UpdateAIPage() {
           </div>
 
           {/* AI provider status */}
-          {!loading && data && !aiAvailable && (
-            <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm">
-              <strong className="text-amber-100">⚠️ AI brief unavailable:</strong> No AI provider detected on this deployment. Add <code className="px-1 rounded bg-amber-500/20 text-amber-100">GROQ_API_KEY</code> (free, get one at console.groq.com) or <code className="px-1 rounded bg-amber-500/20 text-amber-100">OPENAI_API_KEY</code> in Vercel → Settings → Environment Variables (Production scope) and redeploy. Live market data still works below.
-            </div>
-          )}
-
           {error && (
             <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-200 text-sm">
               Failed to load market wrap: {error}
@@ -216,7 +209,7 @@ export default function UpdateAIPage() {
                   <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">AI Daily Brief</h2>
                 </div>
                 {data?.provider && data.provider !== 'none' && (
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">via {data.provider}</span>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">EconoPulse engine</span>
                 )}
               </div>
               {loading && !data?.brief && (

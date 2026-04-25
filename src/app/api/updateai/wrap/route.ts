@@ -47,14 +47,23 @@ async function fetchQuotes(): Promise<IndexQuote[]> {
     const symbols = INDEX_MAP.map(x => x.symbol)
     const quotes = await getYahooQuotes(symbols)
     const byKey: Record<string, any> = {}
-    for (const q of quotes || []) byKey[(q as any).symbol] = q
+    for (const q of quotes || []) {
+      const key = String((q as any).ticker || (q as any).symbol || '').toUpperCase()
+      if (key) byKey[key] = q
+    }
     return INDEX_MAP.map(({ symbol, name }) => {
-      const q = byKey[symbol]
-      const price = q?.regularMarketPrice ?? q?.price ?? null
-      const changePct = q?.regularMarketChangePercent ?? q?.changePercent ?? null
-      return { symbol, name, price: price != null && isFinite(price) ? Number(price) : null, changePct: changePct != null && isFinite(changePct) ? Number(changePct) : null }
+      const q = byKey[symbol.toUpperCase()]
+      const price = q?.price ?? q?.regularMarketPrice ?? null
+      const changePct = q?.changePercent ?? q?.regularMarketChangePercent ?? null
+      return {
+        symbol,
+        name,
+        price: price != null && isFinite(Number(price)) && Number(price) !== 0 ? Number(price) : null,
+        changePct: changePct != null && isFinite(Number(changePct)) ? Number(changePct) : null,
+      }
     })
-  } catch {
+  } catch (e) {
+    console.warn('[updateai] fetchQuotes failed:', (e as any)?.message)
     return INDEX_MAP.map(({ symbol, name }) => ({ symbol, name, price: null, changePct: null }))
   }
 }
@@ -64,7 +73,13 @@ async function fetchTopMovers(origin: string): Promise<{ top: any[]; bottom: any
     const r = await fetch(`${origin}/api/top-movers?period=daily`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
     if (!r.ok) return { top: [], bottom: [] }
     const j = await r.json()
-    return { top: (j?.top || []).slice(0, 5), bottom: (j?.bottom || []).slice(0, 5) }
+    const norm = (arr: any[]) => (arr || []).slice(0, 5).map((m: any) => ({
+      symbol: m.symbol || m.ticker,
+      ticker: m.ticker || m.symbol,
+      name: m.name,
+      changePercent: m.changePercent ?? m.performance ?? m.dailyChange ?? null,
+    }))
+    return { top: norm(j?.top), bottom: norm(j?.bottom) }
   } catch { return { top: [], bottom: [] } }
 }
 
@@ -73,7 +88,13 @@ async function fetchSectorPerf(origin: string): Promise<any[]> {
     const r = await fetch(`${origin}/api/sector-performance`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
     if (!r.ok) return []
     const j = await r.json()
-    return (j?.sectors || j?.data || []).slice(0, 11)
+    const raw = j?.sectors || j?.data || []
+    return raw.slice(0, 11).map((s: any) => ({
+      name: s.name || s.sector || s.symbol,
+      sector: s.sector || s.name,
+      symbol: s.symbol,
+      changePercent: s.changePercent ?? s.daily ?? s.performance ?? null,
+    }))
   } catch { return [] }
 }
 

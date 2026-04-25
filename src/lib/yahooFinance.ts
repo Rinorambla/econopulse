@@ -15,7 +15,7 @@ export async function getYahooQuote(ticker: string): Promise<YahooQuote | null> 
     console.log(`🔍 Fetching ${ticker} from Yahoo Finance...`);
     
     const response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d`,
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'

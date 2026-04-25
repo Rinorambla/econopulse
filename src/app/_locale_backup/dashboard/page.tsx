@@ -148,7 +148,7 @@ export default function DashboardPage() {
 			// Request a larger universe of symbols for richer coverage
 			const ctrl = new AbortController();
 			const t = setTimeout(() => ctrl.abort(), 15000);
-			const response = await fetch('/api/dashboard-data?scope=full&limit=600&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
+			const response = await fetch('/api/dashboard-data?scope=full&limit=900&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
 			// Also refresh sector snapshots for weekly/monthly panels
 			await Promise.all([
 				fetch('/api/sector-performance?period=weekly', { cache:'no-store' }),
@@ -373,235 +373,19 @@ export default function DashboardPage() {
 
 	// export CSV removed per request
 
-	// Market Extremes state
-	const [extremes, setExtremes] = useState<{ flame: number; bottom: number; asOf: string } | null>(null);
-	const [riskRegime, setRiskRegime] = useState<{ regime: string; score: number } | null>(null);
-	const [recessionIndex, setRecessionIndex] = useState<{ value: number; date: string } | null>(null);
+	// (Market Sentiment & Risk block moved to /market-dna)
 
-	// Fetch market extremes on mount
-	useEffect(() => {
-		const fetchExtremes = async () => {
-			try {
-				const res = await fetch('/api/market-extremes', { cache: 'no-store' });
-				if (res.ok) {
-					const json = await res.json();
-					if (json.success && json.data) {
-						setExtremes({
-							flame: json.data.flameScore ?? 0,
-							bottom: json.data.bottomScore ?? 0,
-							asOf: json.data.asOf ?? new Date().toISOString()
-						});
-						// Calculate simple regime from pairs
-						if (json.data.pairs && Array.isArray(json.data.pairs)) {
-							const pairs = json.data.pairs.filter((p: any) => p.value != null);
-							let onCount = 0, offCount = 0;
-							pairs.forEach((p: any) => {
-								if (p.label === 'SPHB/SPLV' && p.value > 1.05) onCount++;
-								else if (p.label === 'SPHB/SPLV' && p.value < 0.95) offCount++;
-								if (p.label === 'XLY/XLP' && p.value > 1.15) onCount++;
-								else if (p.label === 'XLY/XLP' && p.value < 1.0) offCount++;
-								if (p.label === 'HYG/IEF' && p.value > 0.90) onCount++;
-								else if (p.label === 'HYG/IEF' && p.value < 0.75) offCount++;
-							});
-							const score = onCount - offCount;
-							const regime = score >= 2 ? 'Risk-On' : score <= -2 ? 'Risk-Off' : 'Neutral';
-							setRiskRegime({ regime, score });
-						}
-					}
-				}
-			} catch (e) {
-				console.error('Failed to fetch market extremes:', e);
-			}
-		};
-		const fetchRecession = async () => {
-			try {
-				const res = await fetch('/api/recession-index?limit=1', { cache: 'no-store' });
-				if (res.ok) {
-					const json = await res.json();
-					if (json.latest) setRecessionIndex(json.latest);
-				}
-			} catch (e) {
-				console.error('Failed to fetch recession index:', e);
-			}
-		};
-		fetchExtremes();
-		fetchRecession();
-		// Refresh these metrics periodically (independent from dashboard universe refresh)
-		const id = setInterval(() => {
-			fetchExtremes();
-			fetchRecession();
-		}, 5 * 60 * 1000);
-		return () => clearInterval(id);
-	}, []);
-
-	// Helper functions for FLAME/BOTTOM interpretation
-	const getFlameLevel = (score: number) => {
-		if (score >= 0.75) return { label: 'Extreme', color: 'text-red-400', bg: 'bg-red-500' };
-		if (score >= 0.50) return { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500' };
-		if (score >= 0.25) return { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-500' };
-		return { label: 'Low', color: 'text-green-400', bg: 'bg-green-500' };
-	};
-
-	const getBottomLevel = (score: number) => {
-		if (score >= 0.75) return { label: 'Extreme', color: 'text-red-400', bg: 'bg-red-500' };
-		if (score >= 0.50) return { label: 'High', color: 'text-orange-400', bg: 'bg-orange-500' };
-		if (score >= 0.25) return { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-500' };
-		return { label: 'Low', color: 'text-green-400', bg: 'bg-green-500' };
-	};
+	// Selected ticker for DEX/GEX modal
+	const [selectedRow, setSelectedRow] = useState<null | { item: MarketData; opt: any; dex: number }>(null);
 
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
-
-	const flameScore = extremes?.flame ?? 0;
-	const bottomScore = extremes?.bottom ?? 0;
-	const flameLevel = getFlameLevel(flameScore);
-	const bottomLevel = getBottomLevel(bottomScore);
-	const regimeLabel = riskRegime?.regime || '—';
-	const regimeScore = typeof riskRegime?.score === 'number' ? riskRegime.score : null;
-	const regimeColor = regimeLabel === 'Risk-On' ? 'text-emerald-400' : regimeLabel === 'Risk-Off' ? 'text-red-400' : 'text-gray-300';
-	const recessionValue = typeof recessionIndex?.value === 'number' ? recessionIndex.value : null;
-	const recessionRisk = (() => {
-		if (recessionValue === null) return { label: '—', color: 'text-gray-300' };
-		// Keep same heuristic used in AI Pulse for consistency
-		if (recessionValue < 0.15) return { label: 'High', color: 'text-red-400' };
-		if (recessionValue < 0.25) return { label: 'Elevated', color: 'text-orange-300' };
-		if (recessionValue < 0.4) return { label: 'Moderate', color: 'text-yellow-300' };
-		return { label: 'Low', color: 'text-emerald-400' };
-	})();
 
 	return (
 		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
-				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1></div></div>
-				
-				{/* Market Sentiment & Risk Metrics (Top) */}
-				{(extremes || riskRegime || recessionIndex) && (
-					<div className="max-w-7xl mx-auto px-3 pt-3 pb-2">
-						<div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 rounded-xl p-4 ring-1 ring-white/10">
-							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-xs font-bold text-gray-300 flex items-center gap-1">
-									<span>📊</span> Market Sentiment & Risk Dashboard
-								</h3>
-								<span className="text-[9px] text-gray-500">Updated: {new Date((extremes?.asOf || new Date().toISOString())).toLocaleTimeString()}</span>
-							</div>
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-								{/* FLAME - Euphoria */}
-								<div className="space-y-1.5">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-1.5">
-											<span className="text-base">🔥</span>
-											<div>
-												<div className="text-[11px] font-semibold text-white">FLAME</div>
-												<div className="text-[9px] text-gray-500">Euphoria Level</div>
-											</div>
-										</div>
-										<div className="text-right">
-											<div className="text-sm font-bold font-mono text-gray-200">{flameScore.toFixed(2)}</div>
-											<div className={`text-[10px] font-medium ${flameLevel.color}`}>{flameLevel.label}</div>
-										</div>
-									</div>
-									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-										<div className={`absolute inset-y-0 left-0 ${flameLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(flameScore * 100, 100)}%` }} />
-									</div>
-									<p className="text-[9px] text-gray-400 leading-tight">
-										{flameScore >= 0.75 && "Extreme bullish sentiment. High-beta outperforming."}
-										{flameScore >= 0.50 && flameScore < 0.75 && "Strong risk-on. Cyclicals leading."}
-										{flameScore >= 0.25 && flameScore < 0.50 && "Moderate optimism. Balanced rotation."}
-										{flameScore < 0.25 && "Subdued risk appetite. Defensive positioning."}
-									</p>
-								</div>
-								{/* BOTTOM - Panic */}
-								<div className="space-y-1.5">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-1.5">
-											<span className="text-base">⚠️</span>
-											<div>
-												<div className="text-[11px] font-semibold text-white">BOTTOM</div>
-												<div className="text-[9px] text-gray-500">Panic Level</div>
-											</div>
-										</div>
-										<div className="text-right">
-											<div className="text-sm font-bold font-mono text-gray-200">{bottomScore.toFixed(2)}</div>
-											<div className={`text-[10px] font-medium ${bottomLevel.color}`}>{bottomLevel.label}</div>
-										</div>
-									</div>
-									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-										<div className={`absolute inset-y-0 left-0 ${bottomLevel.bg} rounded-full transition-all duration-500`} style={{ width: `${Math.min(bottomScore * 100, 100)}%` }} />
-									</div>
-									<p className="text-[9px] text-gray-400 leading-tight">
-										{bottomScore >= 0.75 && "Extreme fear. Flight to safety, credit frozen."}
-										{bottomScore >= 0.50 && bottomScore < 0.75 && "High stress. Defensives outperforming."}
-										{bottomScore >= 0.25 && bottomScore < 0.50 && "Moderate caution. Quality over growth."}
-										{bottomScore < 0.25 && "Low fear. Market functioning normally."}
-									</p>
-								</div>
-								{/* REGIME */}
-								<div className="space-y-1.5">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-1.5">
-											<span className="text-base">🎯</span>
-											<div>
-												<div className="text-[11px] font-semibold text-white">Regime</div>
-												<div className="text-[9px] text-gray-500">Risk-on / off</div>
-											</div>
-										</div>
-										<div className="text-right">
-											<div className="text-sm font-bold font-mono text-gray-200">{regimeScore === null ? '—' : regimeScore}</div>
-											<div className={`text-[10px] font-medium ${regimeColor}`}>{regimeLabel}</div>
-										</div>
-									</div>
-									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-										{/* Center-based gradient bar: on=green right, off=red left */}
-										{regimeScore !== null && (
-											<div
-												className={`absolute inset-y-0 ${regimeLabel === 'Risk-On' ? 'bg-emerald-500' : regimeLabel === 'Risk-Off' ? 'bg-red-500' : 'bg-gray-500'} rounded-full transition-all duration-500`}
-												style={{
-													left: '50%',
-													width: `${Math.min(Math.abs(regimeScore) * 20, 50)}%`,
-													transform: `translateX(${regimeScore >= 0 ? '0%' : '-100%'})`
-												}}
-											/>
-										)}
-									</div>
-									<p className="text-[9px] text-gray-400 leading-tight">
-										{regimeLabel === 'Risk-On' && 'Breadth + cyclicals supportive.'}
-										{regimeLabel === 'Risk-Off' && 'Defensives + credit caution.'}
-										{regimeLabel === 'Neutral' && 'Mixed signals. Wait for confirmation.'}
-										{regimeLabel === '—' && 'Regime data unavailable.'}
-									</p>
-								</div>
-								{/* RECESSION */}
-								<div className="space-y-1.5">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-1.5">
-											<span className="text-base">📉</span>
-											<div>
-												<div className="text-[11px] font-semibold text-white">Recession</div>
-												<div className="text-[9px] text-gray-500">Signal index</div>
-											</div>
-										</div>
-										<div className="text-right">
-											<div className="text-sm font-bold font-mono text-gray-200">{recessionValue === null ? '—' : recessionValue.toFixed(3)}</div>
-											<div className={`text-[10px] font-medium ${recessionRisk.color}`}>{recessionRisk.label} risk</div>
-										</div>
-									</div>
-									<div className="relative h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
-										<div
-											className={`absolute inset-y-0 left-0 ${recessionRisk.label === 'Low' ? 'bg-emerald-500' : recessionRisk.label === 'Moderate' ? 'bg-yellow-500' : recessionRisk.label === 'Elevated' ? 'bg-orange-500' : recessionRisk.label === 'High' ? 'bg-red-500' : 'bg-slate-600'} rounded-full transition-all duration-500`}
-											style={{ width: `${recessionValue === null ? 0 : Math.min((1 - recessionValue) * 100, 100)}%` }}
-										/>
-									</div>
-									<p className="text-[9px] text-gray-400 leading-tight">
-										{recessionRisk.label === 'High' && 'Credit/rates signaling near-term contraction risk.'}
-										{recessionRisk.label === 'Elevated' && 'Leading indicators show modest stress.'}
-										{recessionRisk.label === 'Moderate' && 'Neutral signals; growth still positive.'}
-										{recessionRisk.label === 'Low' && 'Solid macro backdrop, low recession odds.'}
-										{recessionRisk.label === '—' && 'Index unavailable.'}
-									</p>
-								</div>
-							</div>
-						</div>
-					</div>
-				)}
+				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1><span className="ml-3 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-400 hover:underline">Market DNA</NavigationLink></span></div></div>
+
+				{/* Market Sentiment & Risk block moved to /market-dna */}
 						{/* Toolbar */}
 						<div className="bg-slate-800 border-b border-slate-700">
 							<div className="max-w-7xl mx-auto px-3 py-3 flex flex-wrap items-center gap-3 text-xs">
@@ -664,7 +448,7 @@ export default function DashboardPage() {
 									</div>
 									{/* Data Table */}
 									<div className="bg-slate-800 rounded border border-slate-700 overflow-hidden">
-										<div className="overflow-auto max-h-[70vh]">
+										<div className="overflow-auto max-h-[55vh]">
 											<table className="w-full text-[11px] leading-tight">
 												<thead className="bg-slate-700 sticky top-0 z-10 shadow">
 													<tr>
@@ -699,8 +483,18 @@ export default function DashboardPage() {
 												<tbody className="divide-y divide-slate-700">
 																{filteredData.map(item => {
 																	const opt = optsByTicker[item.ticker];
+																	const computeDex = () => {
+																		const perf = parsePerf(item.performance);
+																		const volStr = item.volume || '0';
+																		const volNum = parseFloat(volStr) * (volStr.includes('B') ? 1e9 : volStr.includes('M') ? 1e6 : volStr.includes('K') ? 1e3 : 1);
+																		const trendW = item.trend === 'Strong Up' ? 1 : item.trend === 'Strong Down' ? -1 : item.trend === 'Up' ? 0.4 : item.trend === 'Down' ? -0.4 : 0;
+																		const dsW = item.demandSupply === 'High Demand' ? 1 : item.demandSupply === 'Moderate Demand' ? 0.4 : item.demandSupply === 'High Supply' ? -1 : item.demandSupply === 'Moderate Supply' ? -0.4 : 0;
+																		const volW = volNum > 50e6 ? 8 : volNum > 10e6 ? 5 : volNum > 1e6 ? 2 : 0;
+																		const raw = (perf * 8) + (trendW * 18) + (dsW * 14) + (perf > 0 ? volW : -volW);
+																		return Math.max(-100, Math.min(100, Math.round(raw)));
+																	};
 																	return (
-														<tr key={item.ticker} className="hover:bg-slate-700/40">
+														<tr key={item.ticker} onClick={() => setSelectedRow({ item, opt, dex: computeDex() })} className="hover:bg-slate-700/40 cursor-pointer">
 															<td className="px-2 py-1 min-w-[110px]">
 																<div className="flex items-center gap-1.5">
 																	<img
@@ -880,6 +674,105 @@ export default function DashboardPage() {
 						</div>
 					</div>
 				)}
+
+				{/* DEX / GEX detail modal */}
+				{selectedRow && (() => {
+					const { item, opt, dex } = selectedRow;
+					const perf = parsePerf(item.performance);
+					const volStr = item.volume || '0';
+					const volNum = parseFloat(volStr) * (volStr.includes('B') ? 1e9 : volStr.includes('M') ? 1e6 : volStr.includes('K') ? 1e3 : 1);
+					const trendW = item.trend === 'Strong Up' ? 1 : item.trend === 'Strong Down' ? -1 : item.trend === 'Up' ? 0.4 : item.trend === 'Down' ? -0.4 : 0;
+					const dsW = item.demandSupply === 'High Demand' ? 1 : item.demandSupply === 'Moderate Demand' ? 0.4 : item.demandSupply === 'High Supply' ? -1 : item.demandSupply === 'Moderate Supply' ? -0.4 : 0;
+					const volW = volNum > 50e6 ? 8 : volNum > 10e6 ? 5 : volNum > 1e6 ? 2 : 0;
+					const components = [
+						{ label: 'Performance', value: perf * 8, raw: `${perf.toFixed(2)}%` },
+						{ label: 'Trend', value: trendW * 18, raw: item.trend },
+						{ label: 'Demand/Supply', value: dsW * 14, raw: item.demandSupply },
+						{ label: 'Volume', value: perf > 0 ? volW : -volW, raw: item.volume || '—' },
+					];
+					const maxAbs = Math.max(...components.map(c => Math.abs(c.value)), 1);
+					const gex = opt?.gammaExposure;
+					const gexAbs = gex != null && isFinite(gex) ? Math.abs(gex) : 0;
+					const gexFmt = gex != null && isFinite(gex)
+						? (gexAbs >= 1e9 ? `${(gex / 1e9).toFixed(2)}B` : gexAbs >= 1e6 ? `${(gex / 1e6).toFixed(1)}M` : `${(gex / 1e3).toFixed(0)}K`)
+						: null;
+					return (
+						<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setSelectedRow(null)}>
+							<div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-2xl w-[92%] max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+								<div className="flex items-start justify-between mb-4">
+									<div>
+										<div className="flex items-center gap-2">
+											<img src={`https://assets.parqet.com/logos/symbol/${item.ticker}?format=jpg`} alt="" className="w-7 h-7 rounded-full bg-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+											<h3 className="text-lg font-bold text-white">{item.ticker}</h3>
+											{item.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">{item.sector}</span>}
+										</div>
+										<p className="text-[11px] text-gray-400 mt-1">{item.name}</p>
+									</div>
+									<button onClick={() => setSelectedRow(null)} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+								</div>
+
+								<div className="grid grid-cols-2 gap-3 mb-4">
+									<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
+										<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">DEX (Demand Exposure)</div>
+										<div className={`text-3xl font-bold tabular-nums ${dex > 20 ? 'text-emerald-400' : dex < -20 ? 'text-red-400' : 'text-gray-300'}`}>{dex > 0 ? '+' : ''}{dex}</div>
+										<div className="text-[10px] text-gray-500 mt-1">
+											{dex > 50 ? 'Strong demand pressure' : dex > 20 ? 'Net buying' : dex < -50 ? 'Strong supply pressure' : dex < -20 ? 'Net selling' : 'Balanced'}
+										</div>
+									</div>
+									<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
+										<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">GEX (Gamma Exposure)</div>
+										{gexFmt ? (
+											<>
+												<div className={`text-3xl font-bold tabular-nums ${gex! > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{gex! > 0 ? '+' : '−'}{gexFmt}</div>
+												<div className="text-[10px] text-gray-500 mt-1">{gex! > 0 ? 'Dealers long gamma → stabilizing' : 'Dealers short gamma → volatile'}</div>
+											</>
+										) : (
+											<>
+												<div className="text-2xl font-bold text-gray-400">{opt?.gammaLabel || item.gammaRisk || '—'}</div>
+												<div className="text-[10px] text-gray-500 mt-1">No live exposure value</div>
+											</>
+										)}
+									</div>
+								</div>
+
+								<div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5 mb-3">
+									<div className="text-[11px] font-semibold text-gray-300 mb-2">DEX components</div>
+									<div className="space-y-2">
+										{components.map(c => {
+											const pct = (Math.abs(c.value) / maxAbs) * 100;
+											const positive = c.value >= 0;
+											return (
+												<div key={c.label}>
+													<div className="flex justify-between text-[10px] mb-1">
+														<span className="text-gray-400">{c.label} <span className="text-gray-500">({c.raw})</span></span>
+														<span className={`tabular-nums ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{positive ? '+' : ''}{c.value.toFixed(1)}</span>
+													</div>
+													<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+														<div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600" />
+														<div className={`absolute top-0 bottom-0 ${positive ? 'left-1/2 bg-emerald-500' : 'right-1/2 bg-red-500'} rounded-full`} style={{ width: `${pct / 2}%` }} />
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								</div>
+
+								{opt && (
+									<div className="grid grid-cols-3 gap-2 text-[10px]">
+										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Vol P/C</div><div className="text-white font-semibold">{opt.putCallRatioVol ?? '—'}</div></div>
+										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">OI P/C</div><div className="text-white font-semibold">{opt.putCallRatioOI ?? '—'}</div></div>
+										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Source</div><div className="text-white font-semibold uppercase">{opt.dataSource || '—'}</div></div>
+									</div>
+								)}
+
+								<p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
+									DEX combines short-term performance, trend strength, demand/supply pressure, and signed volume into a −100…+100 score of net buying/selling pressure.
+									GEX (when available) reflects dealer gamma positioning: positive values dampen volatility (dealers buy dips/sell rips), negative values amplify it.
+								</p>
+							</div>
+						</div>
+					);
+				})()}
 
 				<Footer />
 			</div>

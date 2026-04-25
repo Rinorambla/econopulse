@@ -11,6 +11,7 @@ import dynamic from 'next/dynamic';
 import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from '@/lib/sp500-stocks';
 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
+const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1057,6 +1058,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       </div>
                     ))}
                   </div>
+                </div>
+              </Panel>
+
+              {/* CROSS-ASSET TILES — commodities, bonds, crypto, forex */}
+              <Panel title="Cross-Asset Markets" badge="LIVE" className="lg:col-span-12 min-h-[280px]">
+                <div className="p-3">
+                  <CrossAssetTiles />
                 </div>
               </Panel>
 

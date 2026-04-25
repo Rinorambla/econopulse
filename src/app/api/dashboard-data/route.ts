@@ -124,7 +124,7 @@ function buildUniverse(scope: string, limit?: number) {
   if (scope === 'full') base.push(...EXTENDED_SYMBOLS);
   const uniq = [...new Set(base)];
   const maxEnv = parseInt(process.env.MAX_SYMBOL_UNIVERSE || '',10);
-  const hardCap = !isNaN(maxEnv) ? maxEnv : 320; // tighter safety cap to reduce latency
+  const hardCap = !isNaN(maxEnv) ? maxEnv : 600; // raised to maximize ticker breadth on dashboard
   const appliedLimit = Math.min(limit || hardCap, hardCap);
   return uniq.slice(0, appliedLimit);
 }

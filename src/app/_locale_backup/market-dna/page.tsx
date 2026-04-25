@@ -5,6 +5,7 @@ import { ArrowLeftIcon, ChartBarIcon, ExclamationTriangleIcon } from '@heroicons
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
+import MarketSentimentBlock from '@/components/MarketSentimentBlock';
 import dynamic from 'next/dynamic';
 import LazyVisible from '@/components/LazyVisible';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LabelList, ScatterChart, Scatter } from 'recharts';
@@ -57,6 +58,8 @@ interface MarketDNAData {
   lastUpdated: string;
   marketMetrics?: { spyPrice:number; vixLevel:number; dollarIndex:number; goldPrice:number };
   riskRatios?: Record<string, number | null>;
+  syntheticSeries?: { historicalSimilaritySeries?: boolean; marketRegimeSeries?: boolean; correlationMatrix?: boolean; sectorRadar?: boolean };
+  _isFallback?: boolean;
   riskSummary?: {
     regime: 'Risk-On' | 'Neutral' | 'Risk-Off';
     score: number;
@@ -286,10 +289,10 @@ export default function MarketDNAPage() {
             anomalyLevel: 'WARNING'
           }
         ],
-        aiInsight: 'The current market DNA shows 91% similarity to July 2007, just before the financial crisis. Key warning signals include the breakdown of traditional bond-equity negative correlation, rising credit spreads, and sector rotation patterns consistent with late-cycle behavior. The AI model suggests heightened caution, particularly in financial and real estate sectors.',
+        aiInsight: 'Live Market DNA analysis is temporarily unavailable. Showing illustrative reference data. Refresh to retry.',
         lastUpdated: new Date().toISOString()
       };
-      setData(normalizeMarketDNA(fallback));
+      setData(normalizeMarketDNA({ ...fallback, _isFallback: true }));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -435,6 +438,21 @@ export default function MarketDNAPage() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+          {/* Market Sentiment & Risk (moved from /dashboard) */}
+          <MarketSentimentBlock />
+
+          {/* Data quality disclosures */}
+          {data?._isFallback && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-200">
+              ⚠️ Live Market DNA service is unavailable — showing reference/illustrative data. Use the Refresh button to retry.
+            </div>
+          )}
+          {!data?._isFallback && (data?.syntheticSeries?.historicalSimilaritySeries || data?.syntheticSeries?.marketRegimeSeries) && (
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-[11px] text-blue-200">
+              ℹ️ Similarity & regime time-series are <strong>pattern visualizations</strong> anchored to the live top-match score, not raw historical re-runs. Headline metrics (DNA score, sector vulnerabilities, correlations, risk ratios) are computed from live market data.
+            </div>
+          )}
 
           {/* ═══════ HERO: DNA SCORE + PATTERN MATCH ═══════ */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

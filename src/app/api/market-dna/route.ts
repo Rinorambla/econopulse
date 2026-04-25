@@ -762,6 +762,9 @@ export async function GET(request: NextRequest) {
       aiInsight,
       lastUpdated: new Date().toISOString(),
   dataSource: 'Real-Time Market Analysis',
+  // Disclosure: time-series for similarity & regime are pattern visualizations
+  // anchored to the (real) top historical match score; not raw historical reruns.
+  syntheticSeries: { historicalSimilaritySeries: true, marketRegimeSeries: true, correlationMatrix: false, sectorRadar: false },
   marketMetrics: currentFeatures.marketMetrics,
   riskRatios,
   riskSummary

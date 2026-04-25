@@ -26,6 +26,8 @@ export default function EconoAIPage() {
   const [userAnswer, setUserAnswer] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [error, setError] = useState('')
+  const [isFallback, setIsFallback] = useState(false)
+  const [fallbackReason, setFallbackReason] = useState('')
   const [online, setOnline] = useState(true)
   const [openaiConfigured, setOpenaiConfigured] = useState(false)
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
@@ -86,6 +88,8 @@ export default function EconoAIPage() {
     setIsAsking(true)
     setError('')
     setUserAnswer('')
+    setIsFallback(false)
+    setFallbackReason('')
     setTyping(true)
 
     const start = performance.now()
@@ -162,6 +166,8 @@ export default function EconoAIPage() {
       // Accept both normal and fallback answers
       if (data?.answer) {
         setUserAnswer(data.answer)
+        setIsFallback(Boolean(data.fallback))
+        setFallbackReason(typeof data.reason === 'string' ? data.reason : '')
         // Always stay online - backend always returns an answer (real or fallback)
         setOnline(true)
       } else if (!response.ok) {
@@ -341,6 +347,11 @@ export default function EconoAIPage() {
                       <SparklesIcon className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex-1 rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 ring-1 ring-white/5">
+                      {userAnswer && isFallback && (
+                        <div className="mb-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title={fallbackReason || 'Fallback answer'}>
+                          ⚠️ Fallback answer{fallbackReason ? ` — ${fallbackReason.replace(/_/g,' ')}` : ''}
+                        </div>
+                      )}
                       <p className="text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
                         {userAnswer || demoAnswers[currentQuestion]}
                       </p>

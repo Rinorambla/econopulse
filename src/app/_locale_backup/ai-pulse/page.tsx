@@ -997,13 +997,20 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3: RRG Quadrant (full-width) | Market Brief ─── */}
+            {/* ─── ROW 3: Cross-Asset Markets, then RRG (compact) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
-              {/* 7. RRG QUADRANT — full-width */}
-              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-12 min-h-[500px]">
-                <div className="p-4">
-                  <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '580px' }} preserveAspectRatio="xMidYMid meet">
+              {/* CROSS-ASSET TILES — commodities, bonds, crypto, forex (with timeframe selector) */}
+              <Panel title="Cross-Asset Markets" badge="LIVE" className="lg:col-span-12 min-h-[280px]">
+                <div className="p-3">
+                  <CrossAssetTiles />
+                </div>
+              </Panel>
+
+              {/* 7. RRG QUADRANT — compact, sized like other panels */}
+              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-6 min-h-[360px]">
+                <div className="p-3">
+                  <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '320px' }} preserveAspectRatio="xMidYMid meet">
                     {/* Quadrant backgrounds */}
                     <rect x="450" y="0" width="450" height="300" fill="#065f4618" />
                     <rect x="0" y="0" width="450" height="300" fill="#f5930818" />
@@ -1061,15 +1068,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               </Panel>
 
-              {/* CROSS-ASSET TILES — commodities, bonds, crypto, forex */}
-              <Panel title="Cross-Asset Markets" badge="LIVE" className="lg:col-span-12 min-h-[280px]">
-                <div className="p-3">
-                  <CrossAssetTiles />
-                </div>
-              </Panel>
-
               {/* 8. MARKET BRIEF + NEWS */}
-              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-12 min-h-[300px]">
+              <Panel title="Market Brief" badge="NEWS" className="lg:col-span-6 min-h-[360px]">
                 <div className="p-3 space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-2.5 text-center">

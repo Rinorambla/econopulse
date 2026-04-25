@@ -448,7 +448,7 @@ export default function DashboardPage() {
 									</div>
 									{/* Data Table */}
 									<div className="bg-slate-800 rounded border border-slate-700 overflow-hidden">
-										<div className="overflow-auto max-h-[55vh]">
+										<div className="overflow-auto max-h-[42vh]">
 											<table className="w-full text-[11px] leading-tight">
 												<thead className="bg-slate-700 sticky top-0 z-10 shadow">
 													<tr>

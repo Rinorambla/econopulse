@@ -241,37 +241,38 @@ Keep prose crisp and professional.`
 
     // Handle specific OpenAI errors with retry logic
     if (error?.status === 429) {
-      // Rate limited – wait briefly, then retry up to 2x with fallback model
+      // Rate limited – try cross-provider failover (e.g. OpenAI → Groq) and smaller models.
       const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-      let retryClient: OpenAI;
-      let retryModel: string;
-      try {
-        const ai = getAIClient();
-        retryClient = ai.client;
-        retryModel = ai.fallbackModel;
-      } catch { 
-        // No provider available at all
-        return NextResponse.json({
-          answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
-          question: 'rate_limited', usedContext: false, fallback: true, reason: 'rate_limited', timestamp: new Date().toISOString(),
-        }, { status: 200 })
+
+      // Build candidate (client, model) pairs in order: alternate provider first, then own fallback.
+      const candidates: Array<{ client: OpenAI; model: string; label: string }> = [];
+      if (process.env.GROQ_API_KEY) {
+        const groq = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
+        candidates.push({ client: groq, model: 'llama-3.3-70b-versatile', label: 'groq:llama-3.3-70b' });
+        candidates.push({ client: groq, model: 'llama-3.1-8b-instant', label: 'groq:llama-3.1-8b' });
       }
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        const waitMs = attempt * 2000; // 2s, 4s
-        console.warn(`429 rate limit, waiting ${waitMs}ms then retry #${attempt} with ${retryModel}...`)
-        await delay(waitMs);
+      if (process.env.OPENAI_API_KEY) {
+        const oa = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        candidates.push({ client: oa, model: 'gpt-4o-mini', label: 'openai:gpt-4o-mini' });
+      }
+
+      for (let i = 0; i < candidates.length; i++) {
+        const { client, model, label } = candidates[i];
+        const waitMs = i === 0 ? 0 : 1500;
+        if (waitMs) await delay(waitMs);
+        console.warn(`429 failover attempt #${i + 1} via ${label}`);
         try {
           const retryCompletion = await withTimeout(
-            retryClient.chat.completions.create({
-              model: retryModel,
+            client.chat.completions.create({
+              model,
               messages: [
                 { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
                 { role: 'user', content: parsedQuestion || 'market overview' }
               ],
               temperature: 0.7,
-              max_tokens: 800,
+              max_tokens: 700,
             }),
-            15000
+            18000
           )
           const retryAnswer = retryCompletion.choices[0]?.message?.content
           if (retryAnswer) {
@@ -280,11 +281,11 @@ Keep prose crisp and professional.`
               question: parsedQuestion,
               usedContext: false,
               timestamp: new Date().toISOString(),
-              model: retryModel,
+              model: label,
             }, { status: 200 })
           }
         } catch (retryErr: any) {
-          console.warn(`Retry #${attempt} failed:`, retryErr?.message || retryErr)
+          console.warn(`Failover ${label} failed:`, retryErr?.status, retryErr?.message)
         }
       }
       return NextResponse.json({

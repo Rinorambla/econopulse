@@ -121,21 +121,8 @@ export default function DashboardPage() {
 		dataSource?: string;
 	}>>({});
 	useEffect(() => {
-		if (chartsReady) return;
-		const el = chartsRef.current;
-		if (!el) return;
-		if ('IntersectionObserver' in window) {
-			const obs = new IntersectionObserver(entries => {
-				entries.forEach(e => {
-					if (e.isIntersecting) { setChartsReady(true); obs.disconnect(); }
-				});
-			}, { rootMargin: '250px' });
-			obs.observe(el);
-			return () => obs.disconnect();
-		} else {
-			const id = setTimeout(()=>setChartsReady(true), 800);
-			return () => clearTimeout(id);
-		}
+		// Charts are now opt-in via the "Show charts" toggle to keep dashboard fitting one screen.
+		// No auto-mount on scroll.
 	}, [chartsReady]);
 
 // ============================================================================
@@ -383,22 +370,11 @@ export default function DashboardPage() {
 	return (
 		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
-				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1><span className="ml-3 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-400 hover:underline">Market DNA</NavigationLink></span></div></div>
+				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1><span className="ml-3 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-400 hover:underline">Market DNA</NavigationLink></span><div className="ml-auto" /><button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-0.5 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Column guide"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg><span className="text-[10px]">Guide</span></button></div></div>
 
 				{/* Market Sentiment & Risk block moved to /market-dna */}
-						{/* Toolbar */}
-						<div className="bg-slate-800 border-b border-slate-700">
-							<div className="max-w-7xl mx-auto px-3 py-3 flex flex-wrap items-center gap-3 text-xs">
-								{/* toolbar actions removed per request (Symbols Compact / Export CSV) */}
-								<div className="ml-auto" />
-								<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Column guide">
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
-									<span className="text-[10px]">Guide</span>
-								</button>
-							</div>
-						</div>
 				{summary && (
-					<div className="max-w-7xl mx-auto px-3 py-1 grid grid-cols-5 gap-1 mb-2">
+					<div className="max-w-7xl mx-auto px-3 pt-1 grid grid-cols-5 gap-1">
 						{(() => {
 							const parseNum = (s: string) => {
 								const cleaned = s.replace(/[%+,\s]/g, '')
@@ -432,9 +408,9 @@ export default function DashboardPage() {
 			<ImportantNewsPopup />
 
 			{/* Advanced Filters */}
-								<div className="max-w-7xl mx-auto px-3 pb-4">
+								<div className="max-w-7xl mx-auto px-3 pt-2 pb-3">
 												{/* Sector diagnostics removed */}
-									<div className="bg-slate-800 rounded p-3 mb-3 grid gap-3 md:grid-cols-6 lg:grid-cols-8 text-[11px]">
+									<div className="bg-slate-800 rounded p-2 mb-2 grid gap-2 md:grid-cols-6 lg:grid-cols-8 text-[11px]">
 										<input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search Ticker / Name" className="px-2 py-1 bg-slate-700 border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
 										<select value={selectedSector} onChange={e=>setSelectedSector(e.target.value)} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded"><option value="All">Sector: All</option>{getUniqueSectors().map(s=> <option key={s}>{s}</option>)}</select>
 										{/* Market and Category filters removed per request */}
@@ -448,7 +424,7 @@ export default function DashboardPage() {
 									</div>
 									{/* Data Table */}
 									<div className="bg-slate-800 rounded border border-slate-700 overflow-hidden">
-										<div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '300px' }}>
+										<div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 220px)', minHeight: '300px' }}>
 											<table className="w-full text-[11px] leading-tight">
 												<thead className="bg-slate-700 sticky top-0 z-10 shadow">
 													<tr>
@@ -636,8 +612,16 @@ export default function DashboardPage() {
 										</div>
 									</div>
 									{/* Footnotes removed per request */}
-								{/* Lazy charts mount */}
-								<div ref={chartsRef} className="mt-6" />
+								{/* Lazy charts mount — collapsible to keep dashboard one-screen */}
+								<div className="mt-2 flex justify-center">
+									<button
+										onClick={() => setChartsReady(v => !v)}
+										className="text-[11px] text-gray-400 hover:text-white px-3 py-1 rounded border border-slate-700 hover:border-slate-500 bg-slate-800/60"
+									>
+										{chartsReady ? '▲ Hide charts' : '▼ Show charts'}
+									</button>
+								</div>
+								<div ref={chartsRef} className="mt-3" />
 								{chartsReady && (
 									<DashboardCharts enrichedData={enrichedData as any} />
 								)}

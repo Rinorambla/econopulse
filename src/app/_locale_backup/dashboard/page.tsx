@@ -494,7 +494,25 @@ export default function DashboardPage() {
 																		return Math.max(-100, Math.min(100, Math.round(raw)));
 																	};
 																	return (
-														<tr key={item.ticker} onClick={() => setSelectedRow({ item, opt, dex: computeDex() })} className="hover:bg-slate-700/40 cursor-pointer">
+														<tr key={item.ticker} onClick={() => {
+															setSelectedRow({ item, opt, dex: computeDex() });
+															// Lazy-load options metrics for this ticker if missing or stale
+															if (!opt || opt.gammaExposure == null) {
+																(async () => {
+																	try {
+																		const res = await fetch(`/api/options-metrics?symbol=${encodeURIComponent(item.ticker)}`, { cache: 'no-store' });
+																		if (!res.ok) return;
+																		const js = await res.json();
+																		const v = js?.data?.[item.ticker];
+																		if (!v) return;
+																		const combo = (v.unusualAtm || v.unusualOtm) ? `${v.unusualAtm || '—'} / ${v.unusualOtm || '—'}` : null;
+																		const enriched = { ...v, unusualCombo: combo };
+																		setOptsByTicker(prev => ({ ...prev, [item.ticker]: enriched }));
+																		setSelectedRow(prev => prev && prev.item.ticker === item.ticker ? { ...prev, opt: enriched } : prev);
+																	} catch {}
+																})();
+															}
+														}} className="hover:bg-slate-700/40 cursor-pointer">
 															<td className="px-2 py-1 min-w-[110px]">
 																<div className="flex items-center gap-1.5">
 																	<img
@@ -728,8 +746,11 @@ export default function DashboardPage() {
 											</>
 										) : (
 											<>
-												<div className="text-2xl font-bold text-gray-400">{opt?.gammaLabel || item.gammaRisk || '—'}</div>
-												<div className="text-[10px] text-gray-500 mt-1">No live exposure value</div>
+												<div className="text-2xl font-bold text-gray-400 flex items-center gap-2">
+													<span>{opt?.gammaLabel || item.gammaRisk || '—'}</span>
+													<span className="inline-block w-3 h-3 border-2 border-blue-400/60 border-t-transparent rounded-full animate-spin" />
+												</div>
+												<div className="text-[10px] text-gray-500 mt-1">Loading live exposure…</div>
 											</>
 										)}
 									</div>

@@ -113,7 +113,7 @@ export function Navigation({ className }: NavigationProps) {
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/econoai" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-sky-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-sky-500/25 hover:scale-105">
-          <span className="relative z-10">EconoAI</span>
+          <span className="relative z-10">UpdateAI</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
   <NavigationLink href="/news" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
@@ -188,7 +188,7 @@ export function Navigation({ className }: NavigationProps) {
                 Market DNA
               </NavigationLink>
               <NavigationLink href="/econoai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                EconoAI
+                UpdateAI
               </NavigationLink>
               <NavigationLink href="/news" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 News

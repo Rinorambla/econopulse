@@ -332,7 +332,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
     const cacheKey = `${upperSymbol}:${expirationsToUse}`;
     const nowTs = Date.now();
     const cached = CACHE.get(cacheKey);
-    if (cached && nowTs - cached.ts < TTL_MS) return cached.data;
+    // Only return cached if it has data; null entries shouldn't sticky-cache the "no data" state
+    if (cached && cached.data && nowTs - cached.ts < TTL_MS) return cached.data;
 
     // === ATTEMPT 0: Polygon.io (real options chain with OI/volume/greeks) ===
     const polygon = getPolygonClient();
@@ -340,7 +341,10 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       try {
         const pm = await polygon.getOptionsMetrics(upperSymbol);
         if (pm && (pm.totalCallVolume + pm.totalPutVolume) > 0) {
-          const result: OptionsMetrics = {
+          // If Polygon returned no greeks (free tier), gex will be 0 / non-finite — fall through to estimates
+          const gexUsable = pm.gex != null && isFinite(pm.gex) && Math.abs(pm.gex) > 0;
+          if (gexUsable) {
+            const result: OptionsMetrics = {
             symbol: upperSymbol,
             asOf: new Date().toISOString(),
             underlyingPrice: pm.underlyingPrice,
@@ -361,6 +365,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
           };
           CACHE.set(cacheKey, { ts: Date.now(), data: result });
           return result;
+          }
+          // else: fall through to estimates so user always sees a GEX number
         }
       } catch (e) {
         console.warn('Polygon options provider failed:', upperSymbol, e);

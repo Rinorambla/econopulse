@@ -1,498 +1,341 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import Footer from '@/components/Footer'
-import { NavigationLink } from '@/components/Navigation'
 import RequirePlan from '@/components/RequirePlan'
-import { useAuth } from '@/hooks/useAuth'
-import { 
-  SparklesIcon, 
-  ChartBarIcon, 
-  NewspaperIcon, 
-  MagnifyingGlassIcon,
+import {
+  ArrowPathIcon,
   ArrowTrendingUpIcon,
-  CurrencyDollarIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ChatBubbleLeftRightIcon,
-  ArrowRightIcon
+  ArrowTrendingDownIcon,
+  SparklesIcon,
+  NewspaperIcon,
+  ChartBarIcon,
+  GlobeAltIcon,
 } from '@heroicons/react/24/outline'
 
-export default function EconoAIPage() {
-  const { user } = useAuth()
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [typing, setTyping] = useState(false)
-  const [userQuestion, setUserQuestion] = useState('')
-  const [userAnswer, setUserAnswer] = useState('')
-  const [isAsking, setIsAsking] = useState(false)
-  const [error, setError] = useState('')
-  const [isFallback, setIsFallback] = useState(false)
-  const [fallbackReason, setFallbackReason] = useState('')
-  const [online, setOnline] = useState(true)
-  const [openaiConfigured, setOpenaiConfigured] = useState(false)
-  const [groqConfigured, setGroqConfigured] = useState(false)
-  const [aiReady, setAiReady] = useState<boolean | null>(null)
-  const [latencyMs, setLatencyMs] = useState<number | null>(null)
+type IndexQuote = { symbol: string; name: string; price: number | null; changePct: number | null }
+type Mover = { symbol?: string; ticker?: string; changePercent?: number; performance?: number; name?: string }
+type Sector = { name?: string; sector?: string; symbol?: string; changePercent?: number; performance?: number }
+type NewsItem = { id?: string; title: string; description?: string; url?: string; source?: string; publishedDate?: string }
 
-  // Demo questions that cycle
-  const demoQuestions = [
-    "What's the outlook for AAPL next quarter?",
-    "Should I buy NVDA at current levels?",
-    "Which sectors are rotating into strength?",
-    "Analyze my portfolio: MSFT 30%, GOOGL 25%, AMZN 20%, META 15%, TSLA 10%",
-    "What are the best dividend stocks in Europe?",
-    "Compare BABA vs JD fundamentals"
-  ]
+type WrapData = {
+  ok: boolean
+  asOf: string
+  provider: string
+  quotes: IndexQuote[]
+  movers: { top: Mover[]; bottom: Mover[] }
+  sectors: Sector[]
+  news: NewsItem[]
+  brief: string
+}
 
-  const demoAnswers = [
-    "Based on recent earnings momentum, supply chain improvements, and Services growth trajectory, AAPL shows strong fundamentals. Key levels: support at $165, resistance at $178. Analyst consensus: 65% buy ratings. Consider entry on pullback to $168-170 range. Risk/reward favorable for 6-12 month horizon.",
-    "NVDA trades at 28x forward sales, premium valuation reflects AI leadership. Technical: consolidating after 240% YTD gain. Wait for confirmation above $495 or accumulate on dips to $450 support. Strong institutional accumulation continues. AI demand cycle intact.",
-    "Current rotation favors Financials (+2.3% rel. strength) and Energy (+1.8%) as rates stabilize. Technology (-1.2% rel.) and Consumer Discretionary (-0.9%) underperforming. Defensive posture suggests late-cycle dynamics. Consider adding XLF, XLE exposure.",
-    "Portfolio Analysis: Tech-heavy (85%) with excellent quality names but concentrated risk. Sharpe ratio: 1.42. Volatility: 24% annualized. Suggestions: 1) Reduce to 60-65% tech 2) Add defensive: healthcare (XLV), staples (XLP) 3) International diversification (VEA, EEM) 4) Rebalance TSLA to 5-7%.",
-    "Top European dividend plays: TotalEnergies (TTE.PA) 5.2% yield, strong FCF | Shell (SHEL.L) 4.8%, buyback program | Unilever (ULVR.L) 3.9%, stable consumer | ASML (ASML.AS) 1.2% + growth | Novo Nordisk (NOVO-B.CO) 1.1% + innovation premium. Consider diversifying via VEUR or IEUR ETFs.",
-    "BABA vs JD: Valuation edge to BABA (P/E 9.2 vs 14.3), but regulatory overhang persists. JD shows stronger profitability (ROE 18% vs 12%) and logistics moat. E-commerce growth normalizing for both. Prefer JD for stability, BABA for contrarian value play. Allocation suggestion: 60/40 JD/BABA if entering China exposure."
-  ]
+function fmtPct(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return '—'
+  const s = n > 0 ? '+' : ''
+  return `${s}${n.toFixed(2)}%`
+}
 
-  useEffect(() => {
-    // Preflight check: detect if OpenAI is configured in this environment
-    ;(async () => {
-      try {
-        const r = await fetch('/api/health', { cache: 'no-store' })
-        if (r.ok) {
-          const j = await r.json()
-          const oa = Boolean(j?.services?.openai?.configured)
-          const gq = Boolean(j?.services?.groq?.configured)
-          const any = Boolean(j?.services?.ai?.anyProvider) || oa || gq
-          setOpenaiConfigured(oa)
-          setGroqConfigured(gq)
-          setAiReady(any)
-          // Always start online - let the actual chat call determine real status
-          setOnline(true)
-        }
-      } catch {
-        // Even if health check fails, stay online - let chat endpoint decide
-        setOnline(true)
-      }
-    })()
+function fmtPrice(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return '—'
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (n >= 1) return n.toFixed(2)
+  return n.toFixed(4)
+}
 
-    // Only cycle demo questions if user hasn't asked anything
-    if (userQuestion || userAnswer) return
+function pctClass(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return 'text-gray-400'
+  if (n > 0) return 'text-emerald-400'
+  if (n < 0) return 'text-red-400'
+  return 'text-gray-300'
+}
 
-    const interval = setInterval(() => {
-      setTyping(true)
-      setTimeout(() => {
-        setCurrentQuestion((prev) => (prev + 1) % demoQuestions.length)
-        setTyping(false)
-      }, 800)
-    }, 8000)
-    return () => clearInterval(interval)
-  }, [userQuestion, userAnswer])
+// Render brief markdown (## headings, **bold**, bullets) without external deps
+function renderBrief(text: string): React.ReactNode {
+  if (!text) return null
+  const lines = text.split('\n')
+  const blocks: React.ReactNode[] = []
+  let bullets: string[] = []
 
-  const handleAsk = async () => {
-    if (!userQuestion.trim() || isAsking) return
+  const flushBullets = () => {
+    if (bullets.length) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc pl-5 space-y-1.5 text-gray-200 text-[13.5px] leading-relaxed">
+          {bullets.map((b, i) => <li key={i} dangerouslySetInnerHTML={{ __html: inline(b) }} />)}
+        </ul>
+      )
+      bullets = []
+    }
+  }
 
-    setIsAsking(true)
-    setError('')
-    setUserAnswer('')
-    setIsFallback(false)
-    setFallbackReason('')
-    setTyping(true)
+  function inline(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em class="text-gray-300">$1</em>')
+  }
 
-    const start = performance.now()
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+    if (!line.trim()) { flushBullets(); continue }
+    if (line.startsWith('## ')) {
+      flushBullets()
+      blocks.push(
+        <h3 key={`h-${blocks.length}`} className="text-base font-bold text-white mt-5 mb-2 flex items-center gap-2">
+          <span dangerouslySetInnerHTML={{ __html: inline(line.replace(/^##\s+/, '')) }} />
+        </h3>
+      )
+      continue
+    }
+    if (line.startsWith('# ')) {
+      flushBullets()
+      blocks.push(<h2 key={`h2-${blocks.length}`} className="text-lg font-bold text-white mt-4 mb-2" dangerouslySetInnerHTML={{ __html: inline(line.replace(/^#\s+/, '')) }} />)
+      continue
+    }
+    if (/^[-*]\s+/.test(line)) {
+      bullets.push(line.replace(/^[-*]\s+/, ''))
+      continue
+    }
+    flushBullets()
+    blocks.push(<p key={`p-${blocks.length}`} className="text-gray-200 text-[13.5px] leading-relaxed mb-2" dangerouslySetInnerHTML={{ __html: inline(line) }} />)
+  }
+  flushBullets()
+  return blocks
+}
+
+export default function UpdateAIPage() {
+  const [data, setData] = useState<WrapData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshedAt, setRefreshedAt] = useState<number>(0)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      console.log('🚀 Sending question to EconoAI:', userQuestion)
-      
-      // Small helper with abort timeout to avoid hangs
-      const fetchT = async (input: RequestInfo | URL, init?: RequestInit & { timeoutMs?: number }) => {
-        const ms = init?.timeoutMs ?? 25000
-        const ctrl = new AbortController()
-        const id = setTimeout(() => ctrl.abort(), ms)
-        try {
-          const res = await fetch(input, { ...init, signal: ctrl.signal })
-          return res
-        } finally {
-          clearTimeout(id)
-        }
-      }
-
-      // Build lightweight context: market snapshot, macro, and top news (non-blocking with tight deadline)
-      let context: any = {}
-      try {
-        const ctxResults = await Promise.race([
-          Promise.all([
-            fetchT('/api/yahoo-unified?category=all&limit=20', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null),
-            fetchT('/api/recession-index?limit=60', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null),
-            fetchT('/api/news/top?limit=6', { cache:'no-store', timeoutMs: 5000 }).catch(()=>null)
-          ]),
-          new Promise<null[]>(r => setTimeout(() => r([null, null, null]), 6000)) // hard 6s cap
-        ]) as (Response | null)[]
-        const [marketRes, recessionRes, newsRes] = ctxResults
-      try {
-        const js = marketRes && marketRes.ok ? await marketRes.json() : null
-        if (js?.ok && Array.isArray(js.data)) {
-          context.market = {
-            summary: js.summary || null,
-            sample: js.data.slice(0, 10).map((a: any)=>({ symbol:a.symbol, name:a.name, price:a.price, change:a.changePercent }))
-          }
-        }
-      } catch {}
-      try { const rj = recessionRes && recessionRes.ok ? await recessionRes.json() : null; if (rj?.latest) context.macro = { recession: rj.latest, seriesLen: (rj.series||[]).length } } catch {}
-      try { const nj = newsRes && newsRes.ok ? await newsRes.json() : null; if (nj?.data) context.news = nj.data } catch {}
-      } catch { /* context fetch failed entirely, proceed without */ }
-
-      const response = await fetchT('/api/econoai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: userQuestion,
-          userId: user?.id || 'anonymous',
-          context
-        }),
-        cache: 'no-store',
-        timeoutMs: 50000,
-      })
-
-      if (!response) {
-        // Network-level failure (aborted or unreachable)
-        setUserAnswer('Network is busy right now. Quick take: focus on primary trend, major support/resistance, and risk limits. Try again in a few seconds for a full AI answer.')
-        setTyping(false)
-        return
-      }
-
-      console.log('📡 Response status:', response.status)
-      
-      let data: any = null
-      try {
-        data = await response.json()
-      } catch {}
-      console.log('📦 Response data:', data)
-
-      // Accept both normal and fallback answers
-      if (data?.answer) {
-        setUserAnswer(data.answer)
-        setIsFallback(Boolean(data.fallback))
-        setFallbackReason(typeof data.reason === 'string' ? data.reason : '')
-        // Always stay online - backend always returns an answer (real or fallback)
-        setOnline(true)
-      } else if (!response.ok) {
-        // Friendly fallback when server returns error without answer
-        setUserAnswer('Temporary issue retrieving the AI response. Quick framework: assess earnings momentum, breadth, and macro (10Y yield, USD). Re-try for detailed guidance.')
-        setOnline(true)
-      } else {
-        throw new Error('No answer received from AI')
-      }
-      setTyping(false)
-      setLatencyMs(Math.round(performance.now() - start))
-    } catch (err: any) {
-      console.error('❌ EconoAI error:', err)
-      // Show a soft inline answer instead of only an error banner
-      setUserAnswer('Quick guidance while we reconnect: define your time horizon, outline bull/bear scenarios with catalysts, and pick 2–3 levels to manage risk. Try again for the full AI view.')
-      setError('')
-      setTyping(false)
-      setOnline(true) // Stay online - next request may succeed
-      setLatencyMs(Math.round(performance.now() - start))
+      const r = await fetch('/api/updateai/wrap', { cache: 'no-store' })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const j = await r.json()
+      setData(j)
+      setRefreshedAt(Date.now())
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load market wrap')
     } finally {
-      setIsAsking(false)
+      setLoading(false)
     }
-  }
+  }, [])
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleAsk()
-    }
-  }
+  useEffect(() => { load() }, [load])
 
-  const capabilities = [
-    {
-      icon: ChartBarIcon,
-      title: 'Stock Picks & Analysis',
-      description: 'AI-powered screening across 5,000+ global equities. Get actionable buy/sell signals with multi-factor scoring, technical setups, and risk-adjusted entries.',
-      examples: ['Best breakout stocks today', 'Undervalued tech names', 'High-momentum small caps']
-    },
-    {
-      icon: ArrowTrendingUpIcon,
-      title: 'Market Trends & Flows',
-      description: 'Real-time tracking of institutional flows, sector rotation, options positioning, and momentum shifts. Identify regime changes before the crowd.',
-      examples: ['Smart money flows this week', 'Which sectors are rotating?', 'Unusual options activity']
-    },
-    {
-      icon: CurrencyDollarIcon,
-      title: 'Earnings & Fundamentals',
-      description: 'Deep-dive into financial statements, earnings quality, valuation multiples, and growth trajectories. Compare peers and spot mispricing.',
-      examples: ['AAPL earnings analysis', 'Compare GOOGL vs META', 'Best P/E ratios in tech']
-    },
-    {
-      icon: MagnifyingGlassIcon,
-      title: 'Technical Suggestions',
-      description: 'Chart pattern recognition, support/resistance levels, momentum indicators, and breakout alerts. Combine fundamentals with technicals for precision timing.',
-      examples: ['TSLA key support levels', 'Bullish chart patterns', 'Oversold bounce candidates']
-    },
-    {
-      icon: NewspaperIcon,
-      title: 'News & Catalysts',
-      description: 'AI-curated headlines with sentiment scoring and impact analysis. Never miss a catalyst—earnings, upgrades, regulatory changes, macro events.',
-      examples: ['Latest NVDA news', 'Fed policy impact', 'Sector-moving headlines']
-    },
-    {
-      icon: SparklesIcon,
-      title: 'Watchlist & Portfolio Review',
-      description: 'Upload your holdings for instant AI critique: risk concentration, diversification gaps, rebalancing suggestions, and correlation analysis.',
-      examples: ['Analyze my portfolio', 'Is my allocation optimal?', 'Reduce portfolio risk']
-    }
-  ]
+  // Auto refresh every 5 minutes
+  useEffect(() => {
+    const id = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [load])
 
-  const stats = [
-    { value: '5,000+', label: 'Stocks Covered' },
-    { value: '24/7', label: 'Real-Time Data' },
-    { value: '<2s', label: 'Response Time' },
-    { value: '95%', label: 'Accuracy Rate' }
-  ]
+  const dateLabel = useMemo(() => {
+    return new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  }, [refreshedAt])
+
+  const quotes = data?.quotes || []
+  const sectors = data?.sectors || []
+  const top = data?.movers?.top || []
+  const bottom = data?.movers?.bottom || []
+  const news = data?.news || []
+  const aiAvailable = (data?.provider && data.provider !== 'none')
 
   return (
-    <RequirePlan min="premium">
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      {/* Hero with Live Demo */}
-      <section className="relative overflow-hidden pt-20 pb-24 px-6">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-900/0 to-slate-900/0"></div>
-        
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white mb-6 leading-tight">
-              Your Personal Market Analyst,<br />
-              <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">
-                Powered by AI
-              </span>
-            </h1>
-            
-            <p className="text-xl text-white/70">
-              Ask anything about stocks, sectors, earnings, technicals, or your portfolio. 
-              Get instant, data-backed answers from EconoAI.
-            </p>
-          </div>
-
-          {/* Live Chat Demo */}
-          <div className="max-w-4xl mx-auto">
-            {/* AI provider status banner */}
-            {aiReady === false && (
-              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[12px] text-red-200">
-                ⚠️ <strong>No AI provider detected on this deployment.</strong> Add <code className="bg-black/30 px-1 rounded">OPENAI_API_KEY</code> or <code className="bg-black/30 px-1 rounded">GROQ_API_KEY</code> in your Vercel project → Settings → Environment Variables (Production), then redeploy.
+    <RequirePlan min="free">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sky-400 text-xs uppercase tracking-wider font-semibold mb-1">
+                <SparklesIcon className="h-4 w-4" />
+                <span>UpdateAI · Daily Market Wrap</span>
               </div>
-            )}
-            {aiReady === true && !openaiConfigured && groqConfigured && (
-              <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] text-emerald-200">
-                ✅ AI provider: <strong>Groq</strong> (free tier active). Add <code className="bg-black/30 px-1 rounded">OPENAI_API_KEY</code> for higher quality answers.
-              </div>
-            )}
-            <div className="rounded-2xl bg-slate-900/50 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden shadow-2xl">
-              {/* Chat Header */}
-              <div className="bg-slate-800/50 px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                    <SparklesIcon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-semibold">EconoAI Assistant</h3>
-                    {online ? (
-                      <p className="text-xs text-emerald-400 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Online • Real-time data {latencyMs!=null && <span className="text-white/40 ml-1">({latencyMs}ms)</span>}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-amber-300 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                        Limited mode • AI offline
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="text-xs text-white/50">Try it now ↓</div>
-              </div>
-
-              {/* Chat Messages */}
-              <div className="p-6 space-y-4 min-h-[320px] max-h-[400px] overflow-y-auto">
-                {/* Welcome message when no conversation started */}
-                {!userQuestion && !userAnswer && !error && (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-4">
-                      <SparklesIcon className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Ask me anything about markets!</h3>
-                    <p className="text-white/60 text-sm max-w-md mx-auto">
-                      Get instant AI-powered analysis on stocks, sectors, portfolio strategy, risks, earnings, and more.
-                    </p>
-                  </div>
-                )}
-
-                {/* Show error if any */}
-                {error && (
-                  <div className="bg-red-900/30 border border-red-500/50 rounded-xl px-4 py-3 flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
-                    <div className="flex-1">
-                      <p className="text-red-200 font-semibold text-sm mb-1">Error</p>
-                      <p className="text-red-300/80 text-sm">{error}</p>
-                      <button 
-                        onClick={() => {
-                          setError('')
-                          setIsAsking(false)
-                        }}
-                        className="text-xs text-red-400 hover:text-red-300 mt-2 underline"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* User Question - Real or Demo */}
-                {(userQuestion || (!error && !userAnswer)) && (
-                  <div className="flex justify-end">
-                    <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-blue-600 px-4 py-3">
-                      <p className={`text-white text-sm transition-opacity ${typing ? 'opacity-50' : 'opacity-100'}`}>
-                        {userQuestion || demoQuestions[currentQuestion]}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* AI Response - Real or Demo */}
-                {!typing && (userAnswer || !userQuestion) && (
-                  <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center">
-                      <SparklesIcon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 ring-1 ring-white/5">
-                      {userAnswer && isFallback && (
-                        <div className="mb-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title={fallbackReason || 'Fallback answer'}>
-                          ⚠️ Fallback answer{fallbackReason ? ` — ${fallbackReason.replace(/_/g,' ')}` : ''}
-                        </div>
-                      )}
-                      <p className="text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
-                        {userAnswer || demoAnswers[currentQuestion]}
-                      </p>
-                      {!userAnswer && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                          <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">📊 View Chart</button>
-                          <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">📈 Full Analysis</button>
-                          <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">💾 Save</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {typing && (
-                  <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center">
-                      <SparklesIcon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 ring-1 ring-white/5">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                        <span className="w-2 h-2 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                        <span className="w-2 h-2 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Chat Input */}
-              <div className="bg-slate-800/30 px-6 py-4 border-t border-white/10">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={userQuestion}
-                    onChange={(e) => setUserQuestion(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Ask about any stock, sector, or market trend..."
-                    className="flex-1 bg-slate-800 text-white placeholder:text-white/40 px-4 py-3 rounded-xl ring-1 ring-white/10 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    disabled={isAsking}
-                  />
-                  <button 
-                    onClick={handleAsk}
-                    disabled={isAsking || !userQuestion.trim()}
-                    className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChatBubbleLeftRightIcon className="w-5 h-5" />
-                    {isAsking ? 'Asking...' : 'Ask'}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-xs text-white/50">
-                    {isAsking ? '🤔 EconoAI is analyzing...' : '💡 Ask about any market topic • Press Enter to send'}
-                  </p>
-                  {user && (
-                    <p className="text-xs text-green-400">✓ Logged in as {user.email?.split('@')[0]}</p>
-                  )}
-                </div>
-              </div>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Today's Market Update</h1>
+              <p className="text-gray-400 text-sm mt-1">{dateLabel}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {data?.asOf && (
+                <span className="text-[11px] text-gray-500">
+                  Updated {new Date(data.asOf).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              <button
+                onClick={load}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-3 py-1.5 text-sm font-semibold text-sky-200 transition disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Stats Bar */}
-      <section className="py-12 border-y border-white/5">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">
-                  {stat.value}
+          {/* AI provider status */}
+          {!loading && data && !aiAvailable && (
+            <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-200 text-sm">
+              <strong className="text-amber-100">⚠️ AI brief unavailable:</strong> No AI provider detected on this deployment. Add <code className="px-1 rounded bg-amber-500/20 text-amber-100">GROQ_API_KEY</code> (free, get one at console.groq.com) or <code className="px-1 rounded bg-amber-500/20 text-amber-100">OPENAI_API_KEY</code> in Vercel → Settings → Environment Variables (Production scope) and redeploy. Live market data still works below.
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-200 text-sm">
+              Failed to load market wrap: {error}
+            </div>
+          )}
+
+          {/* Top: Indices grid */}
+          <section className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <GlobeAltIcon className="h-5 w-5 text-sky-400" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">At a Glance</h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {(loading && !data ? Array.from({ length: 12 }) : quotes).map((q: any, i: number) => (
+                <div key={q?.symbol || i} className="rounded-lg bg-slate-800/60 border border-slate-700/60 px-3 py-2.5 hover:border-sky-500/40 transition">
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider truncate">{q?.name || '—'}</div>
+                  <div className="text-base font-bold tabular-nums">{q ? fmtPrice(q.price) : <span className="text-gray-600">…</span>}</div>
+                  <div className={`text-xs font-semibold tabular-nums ${pctClass(q?.changePct)}`}>{fmtPct(q?.changePct)}</div>
                 </div>
-                <div className="text-sm text-white/60">{stat.label}</div>
+              ))}
+            </div>
+          </section>
+
+          {/* Two-column: AI Brief + Sectors/Movers */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+            {/* AI Brief */}
+            <section className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/70 to-slate-900/70 border border-slate-700/60 p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <SparklesIcon className="h-5 w-5 text-sky-400" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">AI Daily Brief</h2>
+                </div>
+                {data?.provider && data.provider !== 'none' && (
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">via {data.provider}</span>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Capabilities Grid */}
-      <section className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Everything you need for smarter investing
-            </h2>
-            <p className="text-lg text-white/60">
-              From screening to portfolio analysis, EconoAI covers your complete research workflow
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {capabilities.map((capability, idx) => (
-              <div 
-                key={capability.title}
-                className="group rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 p-6 ring-1 ring-white/5 hover:ring-white/10 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/10"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <capability.icon className="w-6 h-6 text-white" />
+              {loading && !data?.brief && (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-3 bg-slate-700/50 rounded w-1/3" />
+                  <div className="h-3 bg-slate-700/50 rounded w-full" />
+                  <div className="h-3 bg-slate-700/50 rounded w-11/12" />
+                  <div className="h-3 bg-slate-700/50 rounded w-3/4" />
+                  <div className="h-3 bg-slate-700/50 rounded w-1/4 mt-3" />
+                  <div className="h-3 bg-slate-700/50 rounded w-full" />
+                  <div className="h-3 bg-slate-700/50 rounded w-10/12" />
                 </div>
-                
-                <h3 className="text-white text-lg font-semibold mb-2">{capability.title}</h3>
-                <p className="text-white/60 text-sm mb-4 leading-relaxed">{capability.description}</p>
-                
-                <div className="space-y-2">
-                  <p className="text-xs text-white/40 font-medium">Try asking:</p>
-                  {capability.examples.map((ex) => (
-                    <div key={ex} className="text-xs text-blue-400 bg-blue-500/5 px-3 py-1.5 rounded-lg ring-1 ring-blue-500/10">
-                      "{ex}"
+              )}
+              {!loading && data?.brief && <div className="prose-invert">{renderBrief(data.brief)}</div>}
+              {!loading && data && !data.brief && (
+                <p className="text-gray-400 text-sm">AI brief unavailable. Live numbers, sectors, movers, and headlines are still updated below.</p>
+              )}
+            </section>
+
+            {/* Sectors */}
+            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ChartBarIcon className="h-5 w-5 text-emerald-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Sector Performance</h2>
+              </div>
+              <div className="space-y-1.5">
+                {(loading && !data ? Array.from({ length: 11 }) : sectors).map((s: any, i: number) => {
+                  const name = s?.name || s?.sector || s?.symbol || `…`
+                  const pct = s?.changePercent ?? s?.performance
+                  const wPct = pct == null ? 0 : Math.min(100, Math.abs(pct) * 12)
+                  const positive = (pct || 0) >= 0
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <div className="w-24 truncate text-gray-300">{name}</div>
+                      <div className="relative flex-1 h-2 bg-slate-700/40 rounded">
+                        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600/80" />
+                        {pct != null && isFinite(pct) && (
+                          <div
+                            className={`absolute top-0 bottom-0 ${positive ? 'left-1/2 bg-emerald-500/70' : 'right-1/2 bg-red-500/70'} rounded`}
+                            style={{ width: `${wPct / 2}%` }}
+                          />
+                        )}
+                      </div>
+                      <div className={`w-14 text-right tabular-nums font-semibold ${pctClass(pct)}`}>{fmtPct(pct)}</div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-            ))}
+            </section>
           </div>
+
+          {/* Movers + News */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ArrowTrendingUpIcon className="h-5 w-5 text-emerald-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Top Gainers</h2>
+              </div>
+              <div className="divide-y divide-slate-700/40">
+                {(top.length ? top : Array.from({ length: 5 })).map((m: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">{m?.symbol || m?.ticker || '…'}</span>
+                      {m?.name && <span className="text-[10px] text-gray-500 truncate max-w-[140px]">{m.name}</span>}
+                    </div>
+                    <span className={`font-semibold tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ArrowTrendingDownIcon className="h-5 w-5 text-red-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Top Losers</h2>
+              </div>
+              <div className="divide-y divide-slate-700/40">
+                {(bottom.length ? bottom : Array.from({ length: 5 })).map((m: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">{m?.symbol || m?.ticker || '…'}</span>
+                      {m?.name && <span className="text-[10px] text-gray-500 truncate max-w-[140px]">{m.name}</span>}
+                    </div>
+                    <span className={`font-semibold tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <NewspaperIcon className="h-5 w-5 text-sky-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Headlines</h2>
+              </div>
+              <div className="space-y-2">
+                {(news.length ? news : Array.from({ length: 5 })).slice(0, 6).map((n: any, i: number) => (
+                  <a
+                    key={n?.id || i}
+                    href={n?.url || '#'}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="block group"
+                  >
+                    <div className="text-[12.5px] text-gray-200 group-hover:text-sky-300 transition leading-snug font-medium line-clamp-2">
+                      {n?.title || <span className="text-gray-600">Loading headline…</span>}
+                    </div>
+                    {n?.source && <div className="text-[10px] text-gray-500 mt-0.5">{n.source}</div>}
+                  </a>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <p className="text-[11px] text-gray-500 text-center">
+            UpdateAI summarizes live market data with AI. Auto-refreshes every 5 minutes. For information only — not investment advice.
+          </p>
         </div>
-      </section>
-
-      {/* Final CTA removed per request */}
-
-      <Footer />
-    </div>
+        <Footer />
+      </div>
     </RequirePlan>
   )
 }

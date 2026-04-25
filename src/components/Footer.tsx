@@ -145,7 +145,7 @@ const Footer = () => {
                         link.key === 'ai_pulse' ? 'AI Pulse' :
                         link.key === 'visual_ai' ? 'Visual AI' :
                         link.key === 'market_dna' ? 'Market DNA' :
-                        link.key === 'econoai' ? 'EconoAI' :
+                        link.key === 'econoai' ? 'UpdateAI' :
                         link.key === 'about' ? 'About' :
                         link.key === 'news' ? 'News' :
                         link.key === 'pricing' ? 'Pricing' :

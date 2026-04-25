@@ -30,6 +30,8 @@ export default function EconoAIPage() {
   const [fallbackReason, setFallbackReason] = useState('')
   const [online, setOnline] = useState(true)
   const [openaiConfigured, setOpenaiConfigured] = useState(false)
+  const [groqConfigured, setGroqConfigured] = useState(false)
+  const [aiReady, setAiReady] = useState<boolean | null>(null)
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
 
   // Demo questions that cycle
@@ -58,8 +60,12 @@ export default function EconoAIPage() {
         const r = await fetch('/api/health', { cache: 'no-store' })
         if (r.ok) {
           const j = await r.json()
-          const configured = Boolean(j?.services?.openai?.configured)
-          setOpenaiConfigured(configured)
+          const oa = Boolean(j?.services?.openai?.configured)
+          const gq = Boolean(j?.services?.groq?.configured)
+          const any = Boolean(j?.services?.ai?.anyProvider) || oa || gq
+          setOpenaiConfigured(oa)
+          setGroqConfigured(gq)
+          setAiReady(any)
           // Always start online - let the actual chat call determine real status
           setOnline(true)
         }
@@ -269,6 +275,17 @@ export default function EconoAIPage() {
 
           {/* Live Chat Demo */}
           <div className="max-w-4xl mx-auto">
+            {/* AI provider status banner */}
+            {aiReady === false && (
+              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-[12px] text-red-200">
+                ⚠️ <strong>No AI provider detected on this deployment.</strong> Add <code className="bg-black/30 px-1 rounded">OPENAI_API_KEY</code> or <code className="bg-black/30 px-1 rounded">GROQ_API_KEY</code> in your Vercel project → Settings → Environment Variables (Production), then redeploy.
+              </div>
+            )}
+            {aiReady === true && !openaiConfigured && groqConfigured && (
+              <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] text-emerald-200">
+                ✅ AI provider: <strong>Groq</strong> (free tier active). Add <code className="bg-black/30 px-1 rounded">OPENAI_API_KEY</code> for higher quality answers.
+              </div>
+            )}
             <div className="rounded-2xl bg-slate-900/50 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden shadow-2xl">
               {/* Chat Header */}
               <div className="bg-slate-800/50 px-6 py-4 border-b border-white/10 flex items-center justify-between">

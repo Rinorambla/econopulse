@@ -516,23 +516,6 @@ export default function MarketDNAPage() {
                     {data.dominantPattern}
                   </span>
                 </div>
-
-                {/* Quick metrics */}
-                {data.marketMetrics && (
-                  <div className="grid grid-cols-2 gap-2 mt-5">
-                    {[
-                      { l: 'S&P 500', v: data.marketMetrics.spyPrice?.toFixed(0) },
-                      { l: 'VIX', v: data.marketMetrics.vixLevel?.toFixed(1) },
-                      { l: 'Dollar', v: data.marketMetrics.dollarIndex?.toFixed(1) },
-                      { l: 'Gold', v: data.marketMetrics.goldPrice ? `$${data.marketMetrics.goldPrice.toFixed(0)}` : '—' },
-                    ].map(m => (
-                      <div key={m.l} className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{m.l}</p>
-                        <p className="text-sm font-bold tabular-nums text-white">{m.v || '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 

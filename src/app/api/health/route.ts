@@ -62,6 +62,17 @@ export async function GET(request: NextRequest) {
         status: !!process.env.OPENAI_API_KEY ? 'enabled' : 'disabled',
         configured: !!process.env.OPENAI_API_KEY,
       },
+      groq: {
+        status: !!process.env.GROQ_API_KEY ? 'enabled' : 'disabled',
+        configured: !!process.env.GROQ_API_KEY,
+      },
+      ai: {
+        anyProvider: !!(process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY),
+        providers: [
+          process.env.OPENAI_API_KEY ? 'openai' : null,
+          process.env.GROQ_API_KEY ? 'groq' : null,
+        ].filter(Boolean),
+      },
     };
 
     // Overall health status

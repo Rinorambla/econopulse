@@ -2,51 +2,73 @@
 
 import { useEffect, useRef } from 'react';
 
-// TradingEconomics widget loader.
-// The official script auto-scans .te-embed divs on load and replaces them
-// with iframes. In a SPA we re-inject the script after the div is mounted
-// so it picks up our container.
+// Generic TradingView embed loader. Works reliably in SPAs because we mount
+// the script as a child of our own container with the config as its text body
+// (this is exactly how TradingView's official snippets work).
+
+type Variant = 'events' | 'timeline';
 
 interface Props {
-  widget: string; // e.g. 'cl-pro', 'ns-pro'
+  variant: Variant;
   height?: number | string;
   className?: string;
-  theme?: 'Dark' | 'Light';
+  config?: Record<string, unknown>;
 }
 
-export default function TradingEconomicsWidget({ widget, height = 360, className = '', theme = 'Dark' }: Props) {
+const SCRIPT_SRC: Record<Variant, string> = {
+  events: 'https://s3.tradingview.com/external-embedding/embed-widget-events.js',
+  timeline: 'https://s3.tradingview.com/external-embedding/embed-widget-timeline.js',
+};
+
+const DEFAULT_CONFIG: Record<Variant, Record<string, unknown>> = {
+  events: {
+    colorTheme: 'dark',
+    isTransparent: true,
+    width: '100%',
+    height: '100%',
+    locale: 'en',
+    importanceFilter: '0,1',
+    countryFilter: 'us,eu,de,it,fr,gb,jp,cn,au,ca,ch',
+  },
+  timeline: {
+    feedMode: 'all_symbols',
+    colorTheme: 'dark',
+    isTransparent: true,
+    displayMode: 'regular',
+    width: '100%',
+    height: '100%',
+    locale: 'en',
+  },
+};
+
+export default function TradingEconomicsWidget({ variant, height = 360, className = '', config }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    // Clear any prior render (StrictMode double-invoke / re-render)
     el.innerHTML = '';
 
-    // Build the widget div per TE spec
-    const div = document.createElement('div');
-    div.className = 'te-embed';
-    div.setAttribute('data-widget', widget);
-    div.setAttribute('data-color-theme', theme);
-    div.style.width = '100%';
-    div.style.height = '100%';
-    el.appendChild(div);
+    const inner = document.createElement('div');
+    inner.className = 'tradingview-widget-container__widget';
+    inner.style.width = '100%';
+    inner.style.height = '100%';
+    el.appendChild(inner);
 
-    // Inject a fresh script tag — TE script scans on each load
     const script = document.createElement('script');
-    script.src = 'https://widget.tradingeconomics.com/widget.js';
+    script.type = 'text/javascript';
     script.async = true;
+    script.src = SCRIPT_SRC[variant];
+    script.innerHTML = JSON.stringify({ ...DEFAULT_CONFIG[variant], ...(config || {}) });
     el.appendChild(script);
 
-    return () => {
-      try { el.innerHTML = ''; } catch { /* noop */ }
-    };
-  }, [widget, theme]);
+    return () => { try { el.innerHTML = ''; } catch { /* noop */ } };
+  }, [variant, config]);
 
   return (
     <div
       ref={containerRef}
-      className={`w-full overflow-hidden bg-[#0c1222] rounded-md ${className}`}
+      className={`tradingview-widget-container w-full overflow-hidden bg-[#0c1222] rounded-md ${className}`}
       style={{ height }}
     />
   );

@@ -1021,12 +1021,12 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
               <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
                 <div className="p-2">
-                  <TradingEconomicsWidget widget="cl-pro" height={360} theme="Dark" />
+                  <TradingEconomicsWidget variant="events" height={360} />
                 </div>
               </Panel>
               <Panel title="Economic News" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
                 <div className="p-2">
-                  <TradingEconomicsWidget widget="ns-pro" height={360} theme="Dark" />
+                  <TradingEconomicsWidget variant="timeline" height={360} />
                 </div>
               </Panel>
             </div>

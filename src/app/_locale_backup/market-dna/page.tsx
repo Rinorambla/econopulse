@@ -416,19 +416,6 @@ export default function MarketDNAPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {data.marketMetrics?.spyPrice && (
-                <div className="hidden sm:flex items-center gap-2 text-[11px]">
-                  <span className="text-gray-500">S&P</span>
-                  <span className="text-white font-semibold tabular-nums">{data.marketMetrics.spyPrice.toFixed(0)}</span>
-                  {data.marketMetrics.vixLevel && (
-                    <>
-                      <span className="w-px h-3 bg-white/10" />
-                      <span className="text-gray-500">VIX</span>
-                      <span className={`font-semibold tabular-nums ${data.marketMetrics.vixLevel > 25 ? 'text-red-400' : data.marketMetrics.vixLevel > 18 ? 'text-amber-400' : 'text-emerald-400'}`}>{data.marketMetrics.vixLevel.toFixed(1)}</span>
-                    </>
-                  )}
-                </div>
-              )}
               <button onClick={fetchMarketDNA} disabled={refreshing}
                 className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-gray-400 hover:text-white transition-all">
                 <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>

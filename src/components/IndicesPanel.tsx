@@ -21,38 +21,77 @@ const TF_TO_RANGE: Record<TF, { range: string; interval: string }> = {
   '1Y': { range: '1y', interval: '1d' },
 };
 
-// Curated index metadata: short label, full name, region, accent color, flag
 interface IndexMeta {
   symbol: string;
-  short: string;       // ticker-like display (logo text)
-  name: string;        // friendly name
-  region: 'US' | 'EU' | 'UK' | 'DE' | 'FR' | 'JP' | 'HK' | 'CN' | 'GLOBAL';
-  flag: string;        // emoji flag
-  accent: string;      // tailwind gradient classes
+  short: string;
+  name: string;
+  flag: string;
+  fallback?: string;
 }
 
-const US_INDICES: IndexMeta[] = [
-  { symbol: '^GSPC',  short: 'SPX',    name: 'S&P 500',         region: 'US', flag: '🇺🇸', accent: 'from-blue-500 to-indigo-600' },
-  { symbol: '^NDX',   short: 'NDX',    name: 'Nasdaq 100',      region: 'US', flag: '🇺🇸', accent: 'from-emerald-500 to-teal-600' },
-  { symbol: '^DJI',   short: 'DJIA',   name: 'Dow Jones',       region: 'US', flag: '🇺🇸', accent: 'from-amber-500 to-orange-600' },
-  { symbol: '^RUT',   short: 'RUT',    name: 'Russell 2000',    region: 'US', flag: '🇺🇸', accent: 'from-rose-500 to-pink-600' },
-  { symbol: '^VIX',   short: 'VIX',    name: 'Volatility',      region: 'US', flag: '🇺🇸', accent: 'from-fuchsia-500 to-purple-600' },
+interface RegionGroup {
+  key: string;
+  label: string;
+  icon: string;
+  items: IndexMeta[];
+}
+
+const REGIONS: RegionGroup[] = [
+  {
+    key: 'americas',
+    label: 'Americas',
+    icon: '🇺🇸',
+    items: [
+      { symbol: '^GSPC', short: 'SPX',  name: 'S&P 500',      flag: '🇺🇸' },
+      { symbol: '^NDX',  short: 'NDX',  name: 'Nasdaq 100',   flag: '🇺🇸' },
+      { symbol: '^DJI',  short: 'DJIA', name: 'Dow Jones',    flag: '🇺🇸' },
+      { symbol: '^RUT',  short: 'RUT',  name: 'Russell 2000', flag: '🇺🇸' },
+    ],
+  },
+  {
+    key: 'europe',
+    label: 'Europe',
+    icon: '🇪🇺',
+    items: [
+      { symbol: '^FTSE',      short: 'FTSE', name: 'FTSE 100',      flag: '🇬🇧' },
+      { symbol: '^GDAXI',     short: 'DAX',  name: 'DAX 40',        flag: '🇩🇪' },
+      { symbol: '^FCHI',      short: 'CAC',  name: 'CAC 40',        flag: '🇫🇷' },
+      { symbol: 'FTSEMIB.MI', short: 'MIB',  name: 'FTSE MIB',      flag: '🇮🇹', fallback: 'EWI' },
+      { symbol: '^STOXX50E',  short: 'SX5E', name: 'Euro Stoxx 50', flag: '🇪🇺' },
+      { symbol: '^IBEX',      short: 'IBEX', name: 'IBEX 35',       flag: '🇪🇸' },
+    ],
+  },
+  {
+    key: 'asia',
+    label: 'Asia-Pacific',
+    icon: '🌏',
+    items: [
+      { symbol: '^N225',     short: 'N225',   name: 'Nikkei 225', flag: '🇯🇵' },
+      { symbol: '^HSI',      short: 'HSI',    name: 'Hang Seng',  flag: '🇭🇰', fallback: 'EWH' },
+      { symbol: '000001.SS', short: 'SSE',    name: 'Shanghai',   flag: '🇨🇳', fallback: '^SSEC' },
+      { symbol: '^AXJO',     short: 'ASX',    name: 'ASX 200',    flag: '🇦🇺' },
+      { symbol: '^KS11',     short: 'KOSPI',  name: 'KOSPI',      flag: '🇰🇷' },
+      { symbol: '^BSESN',    short: 'SENSEX', name: 'BSE Sensex', flag: '🇮🇳' },
+    ],
+  },
+  {
+    key: 'volatility',
+    label: 'Volatility & USD',
+    icon: '⚡',
+    items: [
+      { symbol: '^VIX',     short: 'VIX',  name: 'CBOE Volatility', flag: '🇺🇸' },
+      { symbol: '^VVIX',    short: 'VVIX', name: 'VIX of VIX',      flag: '🇺🇸' },
+      { symbol: '^MOVE',    short: 'MOVE', name: 'Bond Volatility', flag: '🇺🇸', fallback: 'TLT' },
+      { symbol: '^V2TX',    short: 'V2X',  name: 'Euro VSTOXX',     flag: '🇪🇺' },
+      { symbol: 'DX-Y.NYB', short: 'DXY',  name: 'Dollar Index',    flag: '💵' },
+    ],
+  },
 ];
 
-const INTL_INDICES: IndexMeta[] = [
-  { symbol: '^FTSE',     short: 'FTSE',  name: 'FTSE 100',     region: 'UK',     flag: '🇬🇧', accent: 'from-red-600 to-blue-700' },
-  { symbol: '^GDAXI',    short: 'DAX',   name: 'DAX 40',       region: 'DE',     flag: '🇩🇪', accent: 'from-yellow-500 to-red-600' },
-  { symbol: '^FCHI',     short: 'CAC',   name: 'CAC 40',       region: 'FR',     flag: '🇫🇷', accent: 'from-blue-600 to-red-500' },
-  { symbol: '^STOXX50E', short: 'SX5E',  name: 'Euro Stoxx 50', region: 'EU',    flag: '🇪🇺', accent: 'from-blue-500 to-yellow-500' },
-  { symbol: '^N225',     short: 'N225',  name: 'Nikkei 225',   region: 'JP',     flag: '🇯🇵', accent: 'from-rose-500 to-red-600' },
-  { symbol: '^HSI',      short: 'HSI',   name: 'Hang Seng',    region: 'HK',     flag: '🇭🇰', accent: 'from-red-500 to-amber-600' },
-  { symbol: '^SSEC',     short: 'SSE',   name: 'Shanghai',     region: 'CN',     flag: '🇨🇳', accent: 'from-red-600 to-yellow-500' },
-];
-
-function fmtPrice(p: number, isVix: boolean) {
+function fmtPrice(p: number) {
   if (!isFinite(p)) return '—';
-  if (isVix) return p.toFixed(2);
-  return p >= 1000 ? p.toLocaleString('en-US', { maximumFractionDigits: 2 }) : p.toFixed(2);
+  if (p >= 1000) return p.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return p.toFixed(2);
 }
 
 function startOfYearTs(): number {
@@ -73,47 +112,61 @@ function pickReferenceClose(bars: Array<{ time: number; close: number }>, tf: TF
   return bars[idx]?.close ?? bars[0].close;
 }
 
-function IndexTile({ meta, quote, perf, tf }: { meta: IndexMeta; quote?: IndexQuote; perf: number | null | undefined; tf: TF }) {
-  const isVix = meta.symbol === '^VIX';
-  const cp = tf === '1D'
-    ? (quote && isFinite(quote.changePercent) ? quote.changePercent : null)
-    : (typeof perf === 'number' && isFinite(perf) ? perf : null);
-  const positive = cp != null && cp >= 0;
-  // VIX inversion: rising VIX = risk-off (red). Keep raw color but flip semantic via subtle hint.
-  const colorClass = cp == null
-    ? 'text-gray-500'
-    : isVix
-      ? (positive ? 'text-red-400' : 'text-emerald-400')
-      : (positive ? 'text-emerald-400' : 'text-red-400');
-
+function RegionCard({ region, quotes, perf, tf }: {
+  region: RegionGroup;
+  quotes: Record<string, IndexQuote>;
+  perf: Record<string, number | null>;
+  tf: TF;
+}) {
   return (
-    <div className="relative bg-white/[0.02] border border-[#1e293b] hover:border-slate-600 rounded-lg p-3 transition-colors overflow-hidden">
-      {/* accent stripe */}
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${meta.accent} opacity-80`} />
-      <div className="flex items-center gap-2 mb-2">
-        {/* Logo badge */}
-        <div className={`w-9 h-9 rounded-md bg-gradient-to-br ${meta.accent} flex items-center justify-center shadow-md shrink-0`}>
-          <span className="text-[10px] font-black text-white tracking-tight">{meta.short}</span>
+    <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-base">{region.icon}</span>
+          <h4 className="text-xs font-bold text-white">{region.label}</h4>
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <span className="text-sm" aria-hidden>{meta.flag}</span>
-            <h4 className="text-[11px] font-bold text-white truncate">{meta.name}</h4>
-          </div>
-          <p className="text-[9px] text-gray-500 uppercase tracking-wider">{meta.region}</p>
-        </div>
+        <span className="text-[9px] text-emerald-400">LIVE</span>
       </div>
-      <div className="flex items-end justify-between">
-        <div className="min-w-0">
-          <p className="text-[8px] text-gray-500 uppercase tracking-wider">Price</p>
-          <p className="text-base font-bold text-gray-100 tabular-nums truncate">{quote ? fmtPrice(quote.price, isVix) : '—'}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[8px] text-gray-500 uppercase tracking-wider">{tf}</p>
-          <p className={`text-sm font-bold tabular-nums ${colorClass}`}>
-            {cp == null ? '—' : `${positive ? '+' : ''}${cp.toFixed(2)}%`}
-          </p>
-        </div>
+      <div className="space-y-1">
+        {region.items.map(meta => {
+          const primary = quotes[meta.symbol.toUpperCase()];
+          const fb = meta.fallback ? quotes[meta.fallback.toUpperCase()] : undefined;
+          const q = primary && isFinite(primary.price) && primary.price > 0 ? primary : fb;
+          const isVix = ['VIX', 'VVIX', 'V2X', 'MOVE'].includes(meta.short);
+
+          let cp: number | null;
+          if (tf === '1D') {
+            cp = q && isFinite(q.changePercent) ? q.changePercent : null;
+          } else {
+            const usedSym = q?.symbol?.toUpperCase() || meta.symbol.toUpperCase();
+            const v = perf[usedSym];
+            cp = typeof v === 'number' && isFinite(v) ? v : null;
+          }
+          const positive = cp != null && cp >= 0;
+          const colorClass = cp == null
+            ? 'text-gray-500'
+            : isVix
+              ? (positive ? 'text-red-400' : 'text-emerald-400')
+              : (positive ? 'text-emerald-400' : 'text-red-400');
+
+          return (
+            <div key={meta.symbol} className="flex items-center justify-between text-[10px] border-b border-slate-800/40 last:border-0 py-0.5">
+              <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                <span className="text-[11px]" aria-hidden>{meta.flag}</span>
+                <div className="min-w-0">
+                  <div className="text-white font-semibold truncate">{meta.short}</div>
+                  <div className="text-[9px] text-gray-500 truncate">{meta.name}</div>
+                </div>
+              </div>
+              <div className="text-right ml-2">
+                <div className="text-gray-200 tabular-nums">{q ? fmtPrice(q.price) : '—'}</div>
+                <div className={`tabular-nums font-semibold ${colorClass}`}>
+                  {cp == null ? '—' : `${positive ? '+' : ''}${cp.toFixed(2)}%`}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -126,7 +179,14 @@ export default function IndicesPanel() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const allSymbols = useMemo(() => [...US_INDICES, ...INTL_INDICES].map(i => i.symbol), []);
+  const allSymbols = useMemo(() => {
+    const s: string[] = [];
+    REGIONS.forEach(r => r.items.forEach(i => {
+      s.push(i.symbol);
+      if (i.fallback) s.push(i.fallback);
+    }));
+    return Array.from(new Set(s));
+  }, []);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -190,7 +250,7 @@ export default function IndicesPanel() {
 
   return (
     <div className="p-3">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="text-[10px] text-gray-400">
           Performance: <span className="text-white font-semibold">{tf}</span>
           {loading && <span className="ml-2 text-gray-600">loading…</span>}
@@ -208,45 +268,10 @@ export default function IndicesPanel() {
           ))}
         </div>
       </div>
-
-      {/* US Indices */}
-      <div className="mb-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-base">🇺🇸</span>
-          <h3 className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">United States</h3>
-          <div className="flex-1 h-px bg-slate-800" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {US_INDICES.map(meta => (
-            <IndexTile
-              key={meta.symbol}
-              meta={meta}
-              quote={quotes[meta.symbol.toUpperCase()]}
-              perf={perf[meta.symbol.toUpperCase()]}
-              tf={tf}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* International Indices */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-base">🌍</span>
-          <h3 className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">International</h3>
-          <div className="flex-1 h-px bg-slate-800" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
-          {INTL_INDICES.map(meta => (
-            <IndexTile
-              key={meta.symbol}
-              meta={meta}
-              quote={quotes[meta.symbol.toUpperCase()]}
-              perf={perf[meta.symbol.toUpperCase()]}
-              tf={tf}
-            />
-          ))}
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {REGIONS.map(region => (
+          <RegionCard key={region.key} region={region} quotes={quotes} perf={perf} tf={tf} />
+        ))}
       </div>
     </div>
   );

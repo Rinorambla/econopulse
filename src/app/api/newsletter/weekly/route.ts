@@ -6,10 +6,17 @@ import { NewsletterDataService } from '@/services/NewsletterDataService';
 
 export async function POST(request: NextRequest) {
   try {
-    // Verifica autorizzazione (in produzione usare un API key o webhook secret)
+    // Require strong cron secret — refuse if not configured (no insecure default).
+    const cronSecret = process.env.NEWSLETTER_CRON_SECRET;
+    if (!cronSecret || cronSecret.length < 16) {
+      return NextResponse.json(
+        { error: 'Server misconfigured: NEWSLETTER_CRON_SECRET not set' },
+        { status: 503 }
+      );
+    }
     const authHeader = request.headers.get('authorization');
-    const expectedAuth = `Bearer ${process.env.NEWSLETTER_CRON_SECRET || 'your-secret-key'}`;
-    
+    const expectedAuth = `Bearer ${cronSecret}`;
+
     if (authHeader !== expectedAuth) {
       return NextResponse.json(
         { error: 'Unauthorized' },

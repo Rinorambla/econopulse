@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Subscriber from '@/models/Subscriber';
 import { EmailService } from '@/services/EmailService';
+import { rateLimit, getClientIp, rateLimitHeaders } from '@/lib/rate-limit';
 
 // Fallback in-memory storage per sviluppo quando MongoDB non è disponibile
 const inMemorySubscribers: Array<{
@@ -17,6 +18,16 @@ const inMemorySubscribers: Array<{
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: prevent spam subscriptions / DoS
+    const ip = getClientIp(request);
+    const rl = rateLimit(`newsletter:subscribe:${ip}`, 5, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
+    }
+
     let useDatabase = true;
     
     // Prova a connettersi al database

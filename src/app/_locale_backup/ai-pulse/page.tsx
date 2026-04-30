@@ -12,6 +12,7 @@ import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from 
 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
+const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -994,6 +995,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <p className="text-sm">Loading market intelligence...</p>
                   </div>
                 )}
+              </Panel>
+            </div>
+
+            {/* ─── ROW 2.5: Global Indices (US + International) with logos ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Global Indices" badge="LIVE" className="lg:col-span-12 min-h-[260px]">
+                <IndicesPanel />
               </Panel>
             </div>
 

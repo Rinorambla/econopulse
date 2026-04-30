@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { newsletterCron } from '@/services/NewsletterCronService';
 
+function requireCronSecret(request: NextRequest): NextResponse | null {
+  const cronSecret = process.env.NEWSLETTER_CRON_SECRET;
+  if (!cronSecret || cronSecret.length < 16) {
+    return NextResponse.json(
+      { error: 'Server misconfigured: NEWSLETTER_CRON_SECRET not set' },
+      { status: 503 }
+    );
+  }
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const authErr = requireCronSecret(request);
+    if (authErr) return authErr;
+
     const { action } = await request.json();
 
     switch (action) {

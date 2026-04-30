@@ -2,63 +2,52 @@
 
 import { useEffect, useRef } from 'react';
 
-// Loads TradingEconomics widget script once per page, then mounts a widget container.
-// Widgets supported: 'cl-pro' (economic calendar), 'ns-pro' (news), etc.
-// Docs: https://tradingeconomics.com/widgets
-
-let scriptPromise: Promise<void> | null = null;
-
-function loadScript(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if (scriptPromise) return scriptPromise;
-  scriptPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-te-widget]');
-    if (existing) {
-      if (existing.dataset.loaded === '1') return resolve();
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('TE script failed')), { once: true });
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://widget.tradingeconomics.com/widget.js';
-    s.async = true;
-    s.dataset.teWidget = '1';
-    s.addEventListener('load', () => { s.dataset.loaded = '1'; resolve(); }, { once: true });
-    s.addEventListener('error', () => reject(new Error('TE script failed')), { once: true });
-    document.head.appendChild(s);
-  });
-  return scriptPromise;
-}
+// TradingEconomics widget loader.
+// The official script auto-scans .te-embed divs on load and replaces them
+// with iframes. In a SPA we re-inject the script after the div is mounted
+// so it picks up our container.
 
 interface Props {
-  widget: 'cl-pro' | 'ns-pro' | string;
+  widget: string; // e.g. 'cl-pro', 'ns-pro'
   height?: number | string;
   className?: string;
+  theme?: 'Dark' | 'Light';
 }
 
-export default function TradingEconomicsWidget({ widget, height = 360, className = '' }: Props) {
-  const ref = useRef<HTMLDivElement | null>(null);
+export default function TradingEconomicsWidget({ widget, height = 360, className = '', theme = 'Dark' }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    loadScript().then(() => {
-      if (cancelled) return;
-      // Re-trigger widget builder if exposed; otherwise the script auto-scans on load.
-      const w = window as any;
-      try {
-        if (w.tradingeconomicsWidgets?.refresh) w.tradingeconomicsWidgets.refresh();
-        else if (w.te_widget?.init) w.te_widget.init();
-      } catch { /* ignore */ }
-    }).catch(() => { /* ignore script failure */ });
-    return () => { cancelled = true; };
-  }, [widget]);
+    const el = containerRef.current;
+    if (!el) return;
+    // Clear any prior render (StrictMode double-invoke / re-render)
+    el.innerHTML = '';
+
+    // Build the widget div per TE spec
+    const div = document.createElement('div');
+    div.className = 'te-embed';
+    div.setAttribute('data-widget', widget);
+    div.setAttribute('data-color-theme', theme);
+    div.style.width = '100%';
+    div.style.height = '100%';
+    el.appendChild(div);
+
+    // Inject a fresh script tag — TE script scans on each load
+    const script = document.createElement('script');
+    script.src = 'https://widget.tradingeconomics.com/widget.js';
+    script.async = true;
+    el.appendChild(script);
+
+    return () => {
+      try { el.innerHTML = ''; } catch { /* noop */ }
+    };
+  }, [widget, theme]);
 
   return (
     <div
-      className={`w-full overflow-auto bg-white/[0.02] rounded-md ${className}`}
+      ref={containerRef}
+      className={`w-full overflow-hidden bg-[#0c1222] rounded-md ${className}`}
       style={{ height }}
-    >
-      <div ref={ref} className="te-embed" data-widget={widget} style={{ width: '100%', height: '100%' }} />
-    </div>
+    />
   );
 }

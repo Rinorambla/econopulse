@@ -1019,14 +1019,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.5: Trading Economics — Calendar + News ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="TE" className="lg:col-span-6 min-h-[400px]">
+              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
                 <div className="p-2">
-                  <TradingEconomicsWidget widget="cl-pro" height={360} />
+                  <TradingEconomicsWidget widget="cl-pro" height={360} theme="Dark" />
                 </div>
               </Panel>
-              <Panel title="Economic News" badge="TE" className="lg:col-span-6 min-h-[400px]">
+              <Panel title="Economic News" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
                 <div className="p-2">
-                  <TradingEconomicsWidget widget="ns-pro" height={360} />
+                  <TradingEconomicsWidget widget="ns-pro" height={360} theme="Dark" />
                 </div>
               </Panel>
             </div>

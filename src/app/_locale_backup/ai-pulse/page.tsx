@@ -13,6 +13,7 @@ import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
+const TradingEconomicsWidget = dynamic(() => import('@/components/TradingEconomicsWidget'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1014,8 +1015,24 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   <CrossAssetTiles />
                 </div>
               </Panel>
+            </div>
 
-              {/* 7. RRG QUADRANT — compact, sized like other panels */}
+            {/* ─── ROW 3.5: Trading Economics — Calendar + News ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Economic Calendar" badge="TE" className="lg:col-span-6 min-h-[400px]">
+                <div className="p-2">
+                  <TradingEconomicsWidget widget="cl-pro" height={360} />
+                </div>
+              </Panel>
+              <Panel title="Economic News" badge="TE" className="lg:col-span-6 min-h-[400px]">
+                <div className="p-2">
+                  <TradingEconomicsWidget widget="ns-pro" height={360} />
+                </div>
+              </Panel>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+
               <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-6 min-h-[360px]">
                 <div className="p-3">
                   <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '320px' }} preserveAspectRatio="xMidYMid meet">

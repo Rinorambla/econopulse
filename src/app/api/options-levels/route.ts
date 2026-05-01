@@ -19,6 +19,15 @@ interface PivotPoint {
   label: 'R3' | 'R2' | 'R1' | 'P' | 'S1' | 'S2' | 'S3';
 }
 
+interface GammaStrike {
+  strike: number;
+  callOi: number;
+  putOi: number;
+  callGex: number;  // call gamma exposure (positive sign)
+  putGex: number;   // put gamma exposure (negative sign)
+  netGex: number;
+}
+
 interface KeyLevels {
   symbol: string;
   asOf: string;
@@ -36,6 +45,9 @@ interface KeyLevels {
   low52w: number | null;
   pivots: PivotPoint[];
   vwap20d: number | null;
+  // Full gamma exposure profile across strikes
+  gammaProfile: GammaStrike[];
+  gammaFlip: number | null; // strike where net GEX crosses zero
   // Signal interpretation
   bias: 'Bullish' | 'Bearish' | 'Neutral';
   notes: string[];
@@ -170,6 +182,52 @@ function computeBias(price: number, maxPain: number | null, callWalls: StrikeLev
   return { bias, notes };
 }
 
+function computeGammaProfile(contracts: any[], spot: number): { profile: GammaStrike[]; flip: number | null } {
+  if (!contracts.length || !spot) return { profile: [], flip: null };
+  // Aggregate per strike across the chain
+  const map = new Map<number, GammaStrike>();
+  for (const c of contracts) {
+    const oi = c.openInterest || 0;
+    if (!oi) continue;
+    const gamma = typeof c.gamma === 'number' && isFinite(c.gamma) ? c.gamma : null;
+    // Notional gamma exposure: gamma * OI * 100 * spot^2 * 0.01 (per 1% move).
+    // If gamma is missing, fall back to OI proxy so the chart still renders.
+    const gex = gamma != null ? gamma * oi * 100 * spot * spot * 0.01 : oi * 100;
+    const cur = map.get(c.strike) || { strike: c.strike, callOi: 0, putOi: 0, callGex: 0, putGex: 0, netGex: 0 };
+    if (c.contractType === 'call') {
+      cur.callOi += oi;
+      cur.callGex += gex;
+    } else if (c.contractType === 'put') {
+      cur.putOi += oi;
+      // Dealer convention: short puts = short gamma below; we render puts as negative
+      cur.putGex += -gex;
+    }
+    cur.netGex = cur.callGex + cur.putGex;
+    map.set(c.strike, cur);
+  }
+  // Restrict to ±25% from spot for readability
+  const lo = spot * 0.75;
+  const hi = spot * 1.25;
+  const profile = Array.from(map.values())
+    .filter(r => r.strike >= lo && r.strike <= hi)
+    .sort((a, b) => a.strike - b.strike);
+  // Find gamma flip: the strike closest to spot where cumulative netGex changes sign
+  let flip: number | null = null;
+  for (let i = 1; i < profile.length; i++) {
+    const prev = profile[i - 1].netGex;
+    const cur = profile[i].netGex;
+    if ((prev <= 0 && cur > 0) || (prev >= 0 && cur < 0)) {
+      // linear interpolation between two strikes
+      const s1 = profile[i - 1].strike;
+      const s2 = profile[i].strike;
+      const t = Math.abs(prev) / (Math.abs(prev) + Math.abs(cur) || 1);
+      const cand = s1 + (s2 - s1) * t;
+      if (flip == null || Math.abs(cand - spot) < Math.abs(flip - spot)) flip = cand;
+    }
+  }
+  return { profile, flip };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -240,7 +298,13 @@ export async function GET(req: NextRequest) {
       if (tv > 0) vwap20d = tpv / tv;
     }
 
+    const { profile: gammaProfile, flip: gammaFlip } = computeGammaProfile(activeContracts, underlyingPrice);
+
     const { bias, notes } = computeBias(underlyingPrice, maxPain, callWalls, putWalls);
+    if (gammaFlip != null) {
+      const above = underlyingPrice >= gammaFlip;
+      notes.push(`Gamma flip ~$${gammaFlip.toFixed(2)} → dealers ${above ? 'long gamma (stabilizing)' : 'short gamma (volatile)'}`);
+    }
     if (vwap20d != null) notes.push(`20d VWAP: $${vwap20d.toFixed(2)} (${underlyingPrice >= vwap20d ? 'above' : 'below'})`);
     if (high52w != null && underlyingPrice >= high52w * 0.98) notes.push(`Near 52-week high ($${high52w.toFixed(2)})`);
     if (low52w != null && underlyingPrice <= low52w * 1.02) notes.push(`Near 52-week low ($${low52w.toFixed(2)})`);
@@ -260,6 +324,8 @@ export async function GET(req: NextRequest) {
       low52w,
       pivots,
       vwap20d,
+      gammaProfile,
+      gammaFlip,
       bias,
       notes,
       source: contracts.length ? 'polygon' : 'technical-only',

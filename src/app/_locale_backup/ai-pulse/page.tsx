@@ -14,7 +14,7 @@ const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 const TradaysCalendarWidget = dynamic(() => import('@/components/TradaysCalendarWidget'), { ssr: false });
-const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m => m.EarningsCalendar), { ssr: false });
+const MarketChameleonWidget = dynamic(() => import('@/components/MarketChameleonWidget'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1027,11 +1027,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3.6: Earnings Calendar (Yahoo Finance) ─── */}
+            {/* ─── ROW 3.6: Earnings Calendar (MarketChameleon) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[360px]">
+              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[640px]">
                 <div className="p-2">
-                  <EarningsCalendar />
+                  <MarketChameleonWidget wtype="ecfull" width={1000} height={600} />
                 </div>
               </Panel>
             </div>

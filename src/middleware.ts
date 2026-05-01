@@ -24,14 +24,14 @@ export default function middleware(req: Request) {
   const csp = [
     "default-src 'self'",
     // Allow TradingView embed script
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://widget.tradingeconomics.com https://www.tradays.com https://*.tradays.com",
-    "style-src 'self' 'unsafe-inline' https://www.tradays.com https://*.tradays.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://widget.tradingeconomics.com https://www.tradays.com https://*.tradays.com https://marketchameleon.com https://*.marketchameleon.com",
+    "style-src 'self' 'unsafe-inline' https://www.tradays.com https://*.tradays.com https://marketchameleon.com https://*.marketchameleon.com",
     "img-src 'self' data: https:",
     "font-src 'self' data: https://www.tradays.com https://*.tradays.com",
     // Allow Supabase + external APIs (explicitly include Supabase domain)
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https: wss:",
-    // Allow embedding TradingView + Tradays frames
-    "frame-src https://s.tradingview.com https://www.tradingview.com https://widget.tradingeconomics.com https://tradingeconomics.com https://www.tradays.com https://*.tradays.com",
+    // Allow embedding TradingView + Tradays + MarketChameleon frames
+    "frame-src https://s.tradingview.com https://www.tradingview.com https://widget.tradingeconomics.com https://tradingeconomics.com https://www.tradays.com https://*.tradays.com https://marketchameleon.com https://*.marketchameleon.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'"

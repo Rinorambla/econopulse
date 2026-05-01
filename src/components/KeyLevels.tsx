@@ -70,6 +70,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
   const [data, setData] = useState<KeyLevels | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'realtime' | 'inventory' | 'levels' | 'tape' | 'ai' | 'technicals'>('realtime');
 
   useEffect(() => {
     let cancel = false;
@@ -173,8 +174,28 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         </div>
       </div>
 
+      {/* Tab navigation (gexstream-style multi-panel) */}
+      <div className="flex flex-wrap gap-1 bg-slate-900/60 rounded-lg p-1 ring-1 ring-white/5">
+        {[
+          { k: 'realtime',   label: 'Real-Time',   icon: '⚡' },
+          { k: 'inventory',  label: 'Inventory',   icon: '📊' },
+          { k: 'levels',     label: 'Walls',       icon: '🧱' },
+          { k: 'tape',       label: 'Tape',        icon: '📜' },
+          { k: 'ai',         label: 'AI Pulse',    icon: '🧠' },
+          { k: 'technicals', label: 'Technicals',  icon: '📏' },
+        ].map(t => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k as any)}
+            className={`flex-1 min-w-[90px] text-[11px] font-medium px-2.5 py-1.5 rounded-md transition-colors ${tab === t.k ? 'bg-blue-600/30 text-blue-200 ring-1 ring-blue-500/40' : 'text-gray-400 hover:text-gray-200 hover:bg-slate-800/60'}`}
+          >
+            <span className="mr-1">{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Options Inventory (gexstream.com-style: BOUGHT vs SOLD per strike, nearest expiry) */}
-      {inventoryZoomed && (() => {
+      {(tab === 'realtime' || tab === 'inventory') && inventoryZoomed && (() => {
         const rows = inventoryZoomed.rows;
         const maxAbs = inventoryZoomed.maxAbs;
         const W = 760;
@@ -308,7 +329,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       })()}
 
       {/* Gamma Exposure profile (vertical histogram, SpotGamma-style) */}
-      {ladder && (() => {
+      {(tab === 'realtime' || tab === 'inventory') && ladder && (() => {
         const rows = ladder.rows;
         const maxAbs = ladder.maxAbs;
         const W = 560;
@@ -408,6 +429,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       })()}
 
       {/* Walls / fresh flow tables */}
+      {tab === 'levels' && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <div className="bg-emerald-950/30 rounded-lg p-3 ring-1 ring-emerald-500/20">
           <div className="text-[11px] font-semibold text-emerald-300 mb-2 flex items-center gap-1">
@@ -452,9 +474,10 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           </table>
         </div>
       </div>
+      )}
 
       {/* Fresh flow today */}
-      {(data.callVolToday.length > 0 || data.putVolToday.length > 0) && (
+      {tab === 'tape' && (data.callVolToday.length > 0 || data.putVolToday.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5">
             <div className="text-[11px] font-semibold text-cyan-300 mb-2">⚡ Fresh Call Flow (today)</div>
@@ -494,7 +517,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       )}
 
       {/* Technical levels */}
-      <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5">
+      {tab === 'technicals' && (      <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5">
         <div className="text-[11px] font-semibold text-gray-300 mb-2">📐 Technical Levels</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
           <div><div className="text-gray-500 text-[10px]">52w High</div><div className="text-emerald-300 font-mono">{fmt$(data.high52w)}</div></div>
@@ -510,22 +533,64 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           )).slice(0, 3)}
         </div>
       </div>
-
-      {/* Notes */}
-      {data.notes.length > 0 && (
-        <div className="bg-slate-800/30 rounded-lg p-3 ring-1 ring-white/5">
-          <div className="text-[11px] font-semibold text-gray-300 mb-2">📝 Interpretation</div>
-          <ul className="text-[11px] text-gray-300 space-y-1 list-disc list-inside">
-            {data.notes.map((n, i) => <li key={i}>{n}</li>)}
-          </ul>
-        </div>
       )}
 
+      {/* AI Pulse: actionable interpretation */}
+      {tab === 'ai' && (() => {
+        const nearestCall = data.callWalls.find(w => w.strike >= price);
+        const nearestPut = [...data.putWalls].reverse().find(w => w.strike <= price);
+        const target = nearestCall?.strike ?? data.high20d ?? null;
+        const stop = nearestPut?.strike ?? data.low20d ?? null;
+        const upPct = target != null ? ((target - price) / price) * 100 : null;
+        const dnPct = stop != null ? ((stop - price) / price) * 100 : null;
+        const rr = upPct != null && dnPct != null && dnPct < 0 ? Math.abs(upPct / dnPct) : null;
+        const biasClass = data.bias === 'Bullish' ? 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30 text-emerald-300'
+          : data.bias === 'Bearish' ? 'from-red-500/20 to-red-500/5 border-red-500/30 text-red-300'
+          : 'from-slate-500/20 to-slate-500/5 border-slate-500/30 text-slate-300';
+        return (
+          <div className="space-y-3">
+            <div className={`bg-gradient-to-br ${biasClass} border rounded-lg p-4`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider opacity-80">AI Market Interpretation</div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/30 ring-1 ring-white/10">Sentiment: {data.bias}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-[12px]">
+                <div>
+                  <div className="text-[10px] text-gray-400">Target (R)</div>
+                  <div className="font-mono font-bold">{fmt$(target)}</div>
+                  {upPct != null && <div className="text-[10px] text-emerald-400">+{upPct.toFixed(2)}%</div>}
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-400">Stop (S)</div>
+                  <div className="font-mono font-bold">{fmt$(stop)}</div>
+                  {dnPct != null && <div className="text-[10px] text-red-400">{dnPct.toFixed(2)}%</div>}
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-400">R/R</div>
+                  <div className="font-mono font-bold">{rr != null ? `${rr.toFixed(2)}×` : '—'}</div>
+                  <div className="text-[10px] text-gray-400">{rr != null && rr >= 1.5 ? 'Favorable' : rr != null ? 'Marginal' : '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            {data.notes.length > 0 && (
+              <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5">
+                <div className="text-[11px] font-semibold text-gray-300 mb-2">📝 Signals</div>
+                <ul className="text-[11px] text-gray-300 space-y-1 list-disc list-inside">
+                  {data.notes.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       <p className="text-[10px] text-gray-500 leading-relaxed">
-        <strong>Call walls</strong> = strikes with high call OI → likely resistance (dealers selling against). <strong>Put walls</strong> = high put OI → likely support.
-        <strong>Max Pain</strong> is the strike where total option holder loss is minimized (price magnet at expiration).
-        <strong>Pivots</strong> are classic floor-trader pivot levels from yesterday's range.
-        Source: Polygon options chain (nearest 3 expirations within 60 days).
+        <strong>Real-Time</strong>: live gamma exposure + options inventory (bought/sold).
+        <strong>Walls</strong>: strikes with concentrated OI acting as support/resistance.
+        <strong>Tape</strong>: today's largest volume strikes by side.
+        <strong>AI Pulse</strong>: actionable target/stop derived from nearest walls, with risk/reward.
+        Source: Polygon options chain (nearest expirations) · Yahoo bars · Lee-Ready trade classification.
       </p>
     </div>
   );

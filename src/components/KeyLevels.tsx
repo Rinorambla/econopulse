@@ -26,6 +26,17 @@ interface GammaStrike {
   netGex: number;
 }
 
+interface InventoryStrike {
+  strike: number;
+  callBought: number;
+  callSold: number;
+  putBought: number;
+  putSold: number;
+  callNet: number;
+  putNet: number;
+  expiration: string;
+}
+
 interface KeyLevels {
   symbol: string;
   asOf: string;
@@ -43,6 +54,8 @@ interface KeyLevels {
   vwap20d: number | null;
   gammaProfile: GammaStrike[];
   gammaFlip: number | null;
+  inventory: InventoryStrike[];
+  inventoryExpiration: string | null;
   bias: 'Bullish' | 'Bearish' | 'Neutral';
   notes: string[];
   source: string;
@@ -53,7 +66,7 @@ const fmt$ = (n: number | null | undefined, dec = 2) =>
 const fmtK = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : String(n);
 
-export default function KeyLevels({ symbol }: { symbol: string }) {
+export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintPrice?: number }) {
   const [data, setData] = useState<KeyLevels | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +76,10 @@ export default function KeyLevels({ symbol }: { symbol: string }) {
     setLoading(true);
     setError(null);
     setData(null);
-    fetch(`/api/options-levels?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+    const url = hintPrice && isFinite(hintPrice) && hintPrice > 0
+      ? `/api/options-levels?symbol=${encodeURIComponent(symbol)}&price=${hintPrice}`
+      : `/api/options-levels?symbol=${encodeURIComponent(symbol)}`;
+    fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then((j) => {
         if (cancel) return;
@@ -73,7 +89,7 @@ export default function KeyLevels({ symbol }: { symbol: string }) {
       .catch((e) => { if (!cancel) setError(e?.message || 'Network error'); })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
-  }, [symbol]);
+  }, [symbol, hintPrice]);
 
   // Build a unified ladder of strikes around current price for visual chart
   const ladder = useMemo(() => {
@@ -81,6 +97,28 @@ export default function KeyLevels({ symbol }: { symbol: string }) {
     if (!data.gammaProfile || !data.gammaProfile.length) return null;
     const maxAbs = Math.max(...data.gammaProfile.map(r => Math.max(Math.abs(r.callGex), Math.abs(r.putGex))), 1);
     return { rows: data.gammaProfile, maxAbs };
+  }, [data]);
+
+  // Filter inventory to ~±3% around spot for the gexstream-style chart (matches their default zoom)
+  const inventoryZoomed = useMemo(() => {
+    if (!data || !data.inventory?.length) return null;
+    const price = data.underlyingPrice;
+    if (!price) return null;
+    const lo = price * 0.97;
+    const hi = price * 1.03;
+    let rows = data.inventory.filter(r => r.strike >= lo && r.strike <= hi);
+    // If too few strikes in tight band, widen to ±8%
+    if (rows.length < 8) {
+      const lo2 = price * 0.92;
+      const hi2 = price * 1.08;
+      rows = data.inventory.filter(r => r.strike >= lo2 && r.strike <= hi2);
+    }
+    if (!rows.length) return null;
+    const maxAbs = Math.max(
+      ...rows.map(r => Math.max(r.callBought, r.callSold, r.putBought, r.putSold)),
+      1
+    );
+    return { rows, maxAbs };
   }, [data]);
 
   if (loading) {
@@ -134,6 +172,140 @@ export default function KeyLevels({ symbol }: { symbol: string }) {
           <div className={`text-lg font-bold ${biasColor}`}>{data.bias}</div>
         </div>
       </div>
+
+      {/* Options Inventory (gexstream.com-style: BOUGHT vs SOLD per strike, nearest expiry) */}
+      {inventoryZoomed && (() => {
+        const rows = inventoryZoomed.rows;
+        const maxAbs = inventoryZoomed.maxAbs;
+        const W = 760;
+        const padTop = 36;
+        const padBottom = 36;
+        const padLeft = 64;
+        const padRight = 16;
+        const barH = 7;
+        const rowH = 22;
+        const H = padTop + padBottom + rows.length * rowH;
+        const chartW = W - padLeft - padRight;
+        const chartH = H - padTop - padBottom;
+        const xZero = padLeft + chartW / 2;
+        const halfW = chartW / 2;
+        // Strikes ordered descending top → ascending bottom (matches gexstream)
+        const ordered = [...rows].sort((a, b) => b.strike - a.strike);
+        const strikes = ordered.map(r => r.strike);
+        const minStrike = Math.min(...strikes);
+        const maxStrike = Math.max(...strikes);
+        const yFor = (s: number) => {
+          if (maxStrike === minStrike) return padTop + chartH / 2;
+          return padTop + ((maxStrike - s) / (maxStrike - minStrike)) * chartH;
+        };
+        const priceY = yFor(price);
+        const xFor = (v: number) => xZero + (v / maxAbs) * halfW;
+        // Tick marks on bottom axis: -max, -max/2, 0, +max/2, +max
+        const ticks = [-maxAbs, -maxAbs / 2, 0, maxAbs / 2, maxAbs];
+        const fmtNum = (v: number) => {
+          const a = Math.abs(v);
+          if (a >= 1000) return `${v >= 0 ? '' : '-'}${(a / 1000).toFixed(1)}K`;
+          if (a >= 100) return `${Math.round(v)}`;
+          return v.toFixed(0);
+        };
+        return (
+          <div className="bg-slate-900 rounded-lg p-3 ring-1 ring-white/5">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[12px] font-semibold text-white">options inventory</div>
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="text-emerald-400 font-semibold">CALLS</span>
+                <span className="text-red-400 font-semibold">PUTS</span>
+              </div>
+            </div>
+            <div className="text-[10px] text-gray-500 mb-2">
+              {data.inventoryExpiration ? `Expiration: ${data.inventoryExpiration}` : '—'}
+              {' · '}strikes {minStrike.toFixed(2)}–{maxStrike.toFixed(2)}
+            </div>
+            <div className="overflow-x-auto">
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxHeight: 600 }} preserveAspectRatio="xMidYMid meet">
+                {/* Background */}
+                <rect x={padLeft} y={padTop} width={chartW} height={chartH} fill="#0b1220" rx={3} />
+                {/* SOLD / BOUGHT headers */}
+                <text x={xZero - chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#94a3b8" fontWeight={600} letterSpacing={1}>SOLD</text>
+                <text x={xZero + chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#cbd5e1" fontWeight={600} letterSpacing={1}>BOUGHT</text>
+                {/* Center axis */}
+                <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={1} />
+                {/* Tick gridlines */}
+                {ticks.map((t, i) => {
+                  if (t === 0) return null;
+                  const x = xFor(t);
+                  return <line key={i} x1={x} y1={padTop} x2={x} y2={padTop + chartH} stroke="#1e293b" strokeWidth={1} strokeDasharray="2 4" />;
+                })}
+                {/* Bars per strike: calls on top half of row (green), puts on bottom (red).
+                    BOUGHT goes right (positive x), SOLD goes left (negative x). */}
+                {ordered.map((r) => {
+                  const yMid = yFor(r.strike);
+                  const yCall = yMid - barH - 1;
+                  const yPut  = yMid + 1;
+                  const callBoughtW = (r.callBought / maxAbs) * halfW;
+                  const callSoldW  = (r.callSold  / maxAbs) * halfW;
+                  const putBoughtW  = (r.putBought  / maxAbs) * halfW;
+                  const putSoldW   = (r.putSold   / maxAbs) * halfW;
+                  const isPriceRow = Math.abs(r.strike - price) / Math.max(price, 1) < 0.0008;
+                  return (
+                    <g key={r.strike}>
+                      {/* CALLS (green) */}
+                      {callBoughtW > 0.5 && (
+                        <rect x={xZero} y={yCall} width={callBoughtW} height={barH} fill="#22c55e" opacity={0.95} rx={1} />
+                      )}
+                      {callSoldW > 0.5 && (
+                        <rect x={xZero - callSoldW} y={yCall} width={callSoldW} height={barH} fill="#22c55e" opacity={0.95} rx={1} />
+                      )}
+                      {/* PUTS (red) */}
+                      {putBoughtW > 0.5 && (
+                        <rect x={xZero} y={yPut} width={putBoughtW} height={barH} fill="#ef4444" opacity={0.95} rx={1} />
+                      )}
+                      {putSoldW > 0.5 && (
+                        <rect x={xZero - putSoldW} y={yPut} width={putSoldW} height={barH} fill="#ef4444" opacity={0.95} rx={1} />
+                      )}
+                      {/* Strike label */}
+                      <text
+                        x={padLeft - 8}
+                        y={yMid + 4}
+                        textAnchor="end"
+                        fontSize={11}
+                        fill={isPriceRow ? '#fbbf24' : '#94a3b8'}
+                        fontFamily="ui-monospace, monospace"
+                        fontWeight={isPriceRow ? 700 : 400}
+                      >
+                        {r.strike.toFixed(2)}
+                      </text>
+                    </g>
+                  );
+                })}
+                {/* Spot price line */}
+                <g>
+                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="6 4" />
+                  <text x={padLeft + chartW - 4} y={priceY - 4} textAnchor="end" fontSize={11} fill="#fbbf24" fontWeight={700} fontFamily="ui-monospace, monospace">
+                    {price.toFixed(2)}
+                  </text>
+                </g>
+                {/* Bottom axis ticks */}
+                {ticks.map((t, i) => {
+                  const x = xFor(t);
+                  const y = padTop + chartH + 4;
+                  return (
+                    <g key={`tk-${i}`}>
+                      <line x1={x} y1={padTop + chartH} x2={x} y2={padTop + chartH + 4} stroke="#475569" strokeWidth={1} />
+                      <text x={x} y={y + 11} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="ui-monospace, monospace">
+                        {fmtNum(t)}
+                      </text>
+                    </g>
+                  );
+                })}
+                <text x={padLeft + 4} y={H - 6} fontSize={10} fill="#64748b" fontStyle="italic">
+                  contract count (nearest expiry)
+                </text>
+              </svg>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Gamma Exposure profile (vertical histogram, SpotGamma-style) */}
       {ladder && (() => {

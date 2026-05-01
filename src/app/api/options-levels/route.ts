@@ -28,6 +28,17 @@ interface GammaStrike {
   netGex: number;
 }
 
+interface InventoryStrike {
+  strike: number;
+  callBought: number;
+  callSold: number;
+  putBought: number;
+  putSold: number;
+  callNet: number;
+  putNet: number;
+  expiration: string;
+}
+
 interface KeyLevels {
   symbol: string;
   asOf: string;
@@ -48,6 +59,9 @@ interface KeyLevels {
   // Full gamma exposure profile across strikes
   gammaProfile: GammaStrike[];
   gammaFlip: number | null; // strike where net GEX crosses zero
+  // Options inventory (gexstream-style): bought vs sold per strike on nearest expiry
+  inventory: InventoryStrike[];
+  inventoryExpiration: string | null;
   // Signal interpretation
   bias: 'Bullish' | 'Bearish' | 'Neutral';
   notes: string[];
@@ -152,6 +166,76 @@ async function fetchPolygonDailyBars(symbol: string, days = 260): Promise<any[]>
   }
 }
 
+// Fetch raw options snapshot with bid/ask/last_trade for bought-vs-sold classification.
+// Returns one object per contract with the fields needed by the inventory builder.
+async function fetchPolygonOptionsSnapshotRaw(symbol: string): Promise<any[]> {
+  const apiKeys = (process.env.POLYGON_API_KEY || '').split(',').filter(Boolean);
+  if (!apiKeys.length) return [];
+  const apiKey = apiKeys[0];
+  const url = `https://api.polygon.io/v3/snapshot/options/${encodeURIComponent(symbol)}?limit=250&apiKey=${apiKey}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return [];
+    const j = await res.json();
+    return Array.isArray(j?.results) ? j.results : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildInventory(rawResults: any[]): { rows: InventoryStrike[]; expiration: string | null } {
+  if (!rawResults.length) return { rows: [], expiration: null };
+  // Group by expiration to find the nearest non-expired one
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const byExp: Record<string, any[]> = {};
+  for (const r of rawResults) {
+    const exp = r?.details?.expiration_date;
+    if (!exp) continue;
+    if (new Date(exp).getTime() < today.getTime()) continue;
+    if (!byExp[exp]) byExp[exp] = [];
+    byExp[exp].push(r);
+  }
+  const expirations = Object.keys(byExp).sort();
+  if (!expirations.length) return { rows: [], expiration: null };
+  const nearest = expirations[0];
+  const list = byExp[nearest];
+
+  // For each contract: classify today's volume into bought vs sold using Lee-Ready
+  const map = new Map<number, InventoryStrike>();
+  for (const r of list) {
+    const strike = r?.details?.strike_price;
+    const type = r?.details?.contract_type as 'call' | 'put' | undefined;
+    if (!strike || !type) continue;
+    const vol = r?.day?.volume || 0;
+    if (!vol) continue;
+    const bid = r?.last_quote?.bid;
+    const ask = r?.last_quote?.ask;
+    const last = r?.last_trade?.price ?? r?.day?.close;
+    let bought = 0, sold = 0;
+    if (bid != null && ask != null && last != null && ask > bid) {
+      const mid = (bid + ask) / 2;
+      if (last >= ask) { bought = vol; }
+      else if (last <= bid) { sold = vol; }
+      else if (last > mid) { bought = vol * 0.7; sold = vol * 0.3; }
+      else if (last < mid) { sold = vol * 0.7; bought = vol * 0.3; }
+      else { bought = vol * 0.5; sold = vol * 0.5; }
+    } else {
+      // No quote data: split 50/50 so the chart still shows activity
+      bought = vol * 0.5;
+      sold = vol * 0.5;
+    }
+    const cur = map.get(strike) || {
+      strike, callBought: 0, callSold: 0, putBought: 0, putSold: 0, callNet: 0, putNet: 0, expiration: nearest,
+    };
+    if (type === 'call') { cur.callBought += bought; cur.callSold += sold; cur.callNet = cur.callBought - cur.callSold; }
+    else { cur.putBought += bought; cur.putSold += sold; cur.putNet = cur.putBought - cur.putSold; }
+    map.set(strike, cur);
+  }
+  const rows = Array.from(map.values()).sort((a, b) => a.strike - b.strike);
+  return { rows, expiration: nearest };
+}
+
 function computeBias(price: number, maxPain: number | null, callWalls: StrikeLevel[], putWalls: StrikeLevel[]): { bias: 'Bullish' | 'Bearish' | 'Neutral'; notes: string[] } {
   const notes: string[] = [];
   let score = 0;
@@ -234,6 +318,7 @@ export async function GET(req: NextRequest) {
     const symbol = (searchParams.get('symbol') || '').toUpperCase().trim();
     if (!symbol) return NextResponse.json({ ok: false, error: 'Missing symbol' }, { status: 400 });
     const force = searchParams.get('force') === '1';
+    const hintPrice = parseFloat(searchParams.get('price') || '');
 
     const k = cacheKey(symbol);
     const hit = CACHE.get(k);
@@ -245,13 +330,42 @@ export async function GET(req: NextRequest) {
     if (!polygon) return NextResponse.json({ ok: false, error: 'Polygon client unavailable' }, { status: 503 });
 
     // Fetch in parallel
-    const [contracts, bars, prev] = await Promise.all([
+    const [contracts, bars, prev, rawSnapshot] = await Promise.all([
       polygon.getOptionsSnapshot(symbol).catch(() => [] as any[]),
       fetchPolygonDailyBars(symbol, 260),
       polygon.getPreviousDay(symbol).catch(() => null),
+      fetchPolygonOptionsSnapshotRaw(symbol),
     ]);
 
-    const underlyingPrice = (prev as any)?.price || (bars.length ? bars[bars.length - 1].c : 0);
+    let underlyingPrice = 0;
+    if (hintPrice && isFinite(hintPrice) && hintPrice > 0) underlyingPrice = hintPrice;
+    else if ((prev as any)?.price) underlyingPrice = (prev as any).price;
+    else if (bars.length) underlyingPrice = bars[bars.length - 1].c;
+
+    // Yahoo fallback for price + bars when Polygon is empty (free tier / illiquid tickers)
+    let workingBars = bars;
+    if (!underlyingPrice || !workingBars.length) {
+      try {
+        const yf = (await import('yahoo-finance2')).default as any;
+        if (!underlyingPrice) {
+          const q = await yf.quote(symbol).catch(() => null);
+          const p = q?.regularMarketPrice ?? q?.postMarketPrice ?? q?.preMarketPrice;
+          if (p && isFinite(p)) underlyingPrice = p;
+        }
+        if (!workingBars.length) {
+          const period2 = new Date();
+          const period1 = new Date(period2.getTime() - 260 * 86400000);
+          const hist = await yf.chart(symbol, { period1, period2, interval: '1d' }).catch(() => null);
+          const quotes = hist?.quotes || [];
+          if (quotes.length) {
+            workingBars = quotes
+              .filter((r: any) => r?.high != null && r?.low != null && r?.close != null)
+              .map((r: any) => ({ h: r.high, l: r.low, c: r.close, o: r.open, v: r.volume || 0, t: new Date(r.date).getTime() }));
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    if (!underlyingPrice && workingBars.length) underlyingPrice = workingBars[workingBars.length - 1].c;
 
     // Filter contracts to nearest 2-3 expirations within 60 days for cleaner walls
     let activeContracts = contracts;
@@ -282,15 +396,15 @@ export async function GET(req: NextRequest) {
     let high52w: number | null = null, low52w: number | null = null;
     let pivots: PivotPoint[] = [];
     let vwap20d: number | null = null;
-    if (bars.length) {
-      const last20 = bars.slice(-20);
+    if (workingBars.length) {
+      const last20 = workingBars.slice(-20);
       high20d = Math.max(...last20.map((b: any) => b.h));
       low20d = Math.min(...last20.map((b: any) => b.l));
-      const last252 = bars.slice(-252);
+      const last252 = workingBars.slice(-252);
       high52w = Math.max(...last252.map((b: any) => b.h));
       low52w = Math.min(...last252.map((b: any) => b.l));
       // Pivots from yesterday's bar
-      const lastBar = bars[bars.length - 1];
+      const lastBar = workingBars[workingBars.length - 1];
       pivots = computePivots(lastBar.h, lastBar.l, lastBar.c);
       // VWAP 20d
       const tpv = last20.reduce((s: number, b: any) => s + ((b.h + b.l + b.c) / 3) * (b.v || 0), 0);
@@ -299,6 +413,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { profile: gammaProfile, flip: gammaFlip } = computeGammaProfile(activeContracts, underlyingPrice);
+    const { rows: inventory, expiration: inventoryExpiration } = buildInventory(rawSnapshot);
 
     const { bias, notes } = computeBias(underlyingPrice, maxPain, callWalls, putWalls);
     if (gammaFlip != null) {
@@ -308,6 +423,7 @@ export async function GET(req: NextRequest) {
     if (vwap20d != null) notes.push(`20d VWAP: $${vwap20d.toFixed(2)} (${underlyingPrice >= vwap20d ? 'above' : 'below'})`);
     if (high52w != null && underlyingPrice >= high52w * 0.98) notes.push(`Near 52-week high ($${high52w.toFixed(2)})`);
     if (low52w != null && underlyingPrice <= low52w * 1.02) notes.push(`Near 52-week low ($${low52w.toFixed(2)})`);
+    if (!contracts.length) notes.unshift('No options chain available for this ticker — showing technical levels only.');
 
     const data: KeyLevels = {
       symbol,
@@ -326,6 +442,8 @@ export async function GET(req: NextRequest) {
       vwap20d,
       gammaProfile,
       gammaFlip,
+      inventory,
+      inventoryExpiration,
       bias,
       notes,
       source: contracts.length ? 'polygon' : 'technical-only',

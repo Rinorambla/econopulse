@@ -778,7 +778,7 @@ export default function DashboardPage() {
 										<span>🎯 Options Key Levels</span>
 										<span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">PRO</span>
 									</div>
-									<KeyLevels symbol={item.ticker} />
+									<KeyLevels symbol={item.ticker} hintPrice={parseFloat(String(item.price || '').replace(/[^0-9.\-]/g, '')) || undefined} />
 								</div>
 
 								<p className="text-[10px] text-gray-500 mt-3 leading-relaxed">

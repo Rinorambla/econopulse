@@ -1027,7 +1027,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
               <Panel title="Earnings Calendar" className="lg:col-span-6 min-h-[440px]">
                 <div className="p-2">
-                  <MarketChameleonWidget wtype="ecfull" width={600} height={400} darkTint />
+                  <MarketChameleonWidget wtype="ecfull" height={400} darkTint />
                 </div>
               </Panel>
             </div>

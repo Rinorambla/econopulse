@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Props {
   /** Widget type, e.g. 'ecfull' = full earnings calendar */
   wtype?: string;
+  /** Optional fixed width override; if omitted, widget auto-sizes to container */
   width?: number;
   height?: number | string;
   className?: string;
@@ -14,28 +15,44 @@ interface Props {
 
 export default function MarketChameleonWidget({
   wtype = 'ecfull',
-  width = 1000,
+  width,
   height = 600,
   className = '',
   darkTint = true,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [boxWidth, setBoxWidth] = useState<number>(width || 0);
+
+  // Measure container width when no fixed width is provided
+  useEffect(() => {
+    if (width) {
+      setBoxWidth(width);
+      return;
+    }
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setBoxWidth(Math.max(320, Math.floor(el.clientWidth)));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width]);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el || !boxWidth) return;
     el.innerHTML = '';
 
     const script = document.createElement('script');
     script.async = true;
     const h = typeof height === 'number' ? height : 600;
-    script.src = `https://marketchameleon.com/Widget?height=${h}&width=${width}&wtype=${encodeURIComponent(wtype)}`;
+    script.src = `https://marketchameleon.com/Widget?height=${h}&width=${boxWidth}&wtype=${encodeURIComponent(wtype)}`;
     el.appendChild(script);
 
     return () => {
       try { el.innerHTML = ''; } catch { /* noop */ }
     };
-  }, [wtype, width, height]);
+  }, [wtype, boxWidth, height]);
 
   return (
     <div
@@ -43,7 +60,6 @@ export default function MarketChameleonWidget({
       className={`w-full overflow-auto bg-[#0c1222] rounded-md ${className}`}
       style={{
         height,
-        // Invert + slight hue rotation so the white widget blends with the dark site theme
         filter: darkTint ? 'invert(0.92) hue-rotate(180deg) saturate(0.85) brightness(0.95)' : undefined,
       }}
     />

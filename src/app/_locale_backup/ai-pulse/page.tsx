@@ -1029,9 +1029,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.6: Earnings Calendar (MarketChameleon) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[640px]">
+              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[440px]">
                 <div className="p-2">
-                  <MarketChameleonWidget wtype="ecfull" width={1000} height={600} />
+                  <MarketChameleonWidget wtype="ecfull" width={900} height={400} darkTint />
                 </div>
               </Panel>
             </div>

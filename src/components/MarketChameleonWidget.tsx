@@ -8,6 +8,8 @@ interface Props {
   width?: number;
   height?: number | string;
   className?: string;
+  /** When true, applies a CSS filter to invert/dark-tint the widget so it blends with dark UI */
+  darkTint?: boolean;
 }
 
 export default function MarketChameleonWidget({
@@ -15,6 +17,7 @@ export default function MarketChameleonWidget({
   width = 1000,
   height = 600,
   className = '',
+  darkTint = true,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -25,7 +28,8 @@ export default function MarketChameleonWidget({
 
     const script = document.createElement('script');
     script.async = true;
-    script.src = `https://marketchameleon.com/Widget?height=${typeof height === 'number' ? height : 800}&width=${width}&wtype=${encodeURIComponent(wtype)}`;
+    const h = typeof height === 'number' ? height : 600;
+    script.src = `https://marketchameleon.com/Widget?height=${h}&width=${width}&wtype=${encodeURIComponent(wtype)}`;
     el.appendChild(script);
 
     return () => {
@@ -37,7 +41,11 @@ export default function MarketChameleonWidget({
     <div
       ref={containerRef}
       className={`w-full overflow-auto bg-[#0c1222] rounded-md ${className}`}
-      style={{ height }}
+      style={{
+        height,
+        // Invert + slight hue rotation so the white widget blends with the dark site theme
+        filter: darkTint ? 'invert(0.92) hue-rotate(180deg) saturate(0.85) brightness(0.95)' : undefined,
+      }}
     />
   );
 }

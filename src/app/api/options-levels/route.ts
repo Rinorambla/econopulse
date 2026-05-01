@@ -39,6 +39,43 @@ interface InventoryStrike {
   expiration: string;
 }
 
+interface MarketRegime {
+  type: 'TREND_BULL' | 'TREND_BEAR' | 'RANGE' | 'VOLATILITY_EXPANSION' | 'CONSOLIDATION';
+  label: string;
+  confidence: number;          // 0..100
+  probabilityBreakout: number; // 0..100
+  probabilityMeanRev: number;  // 0..100
+  rationale: string[];
+}
+
+interface PredictiveGamma {
+  current: number;             // net total GEX in $/1% move
+  projected1d: number;
+  projected3d: number;
+  trend: 'rising' | 'falling' | 'stable';
+  flipDistance: number | null; // % distance of price to gamma flip
+}
+
+interface OptionLeg {
+  side: 'long' | 'short';
+  type: 'call' | 'put';
+  strike: number;
+  expiration: string;
+  qty: number;
+}
+
+interface StrategyIdea {
+  name: string;
+  category: 'directional-bull' | 'directional-bear' | 'neutral-income' | 'volatility-long' | 'volatility-short';
+  legs: OptionLeg[];
+  maxProfit: number | null;     // per spread, undefined = unlimited
+  maxLoss: number | null;
+  breakevens: number[];
+  netDebit: number | null;      // negative = credit
+  rationale: string;
+  score: number;                // 0..100 fit to current regime
+}
+
 interface KeyLevels {
   symbol: string;
   asOf: string;
@@ -62,6 +99,10 @@ interface KeyLevels {
   // Options inventory (gexstream-style): bought vs sold per strike on nearest expiry
   inventory: InventoryStrike[];
   inventoryExpiration: string | null;
+  // Econopulse AI 2.0
+  regime: MarketRegime | null;
+  predictiveGamma: PredictiveGamma | null;
+  strategies: StrategyIdea[];
   // Signal interpretation
   bias: 'Bullish' | 'Bearish' | 'Neutral';
   notes: string[];
@@ -312,6 +353,304 @@ function computeGammaProfile(contracts: any[], spot: number): { profile: GammaSt
   return { profile, flip };
 }
 
+// ============================================================
+// AI 2.0 — Market Regime Classifier
+// ============================================================
+function classifyRegime(args: {
+  price: number;
+  bars: any[];
+  vwap20d: number | null;
+  netGex: number;
+  flipDistPct: number | null;
+  ivAvg: number | null;
+  pcRatio: number | null;
+}): MarketRegime | null {
+  const { price, bars, vwap20d, netGex, flipDistPct, ivAvg, pcRatio } = args;
+  if (!bars.length || !price) return null;
+  const closes = bars.map((b: any) => b.c);
+  const last20 = closes.slice(-20);
+  const last5 = closes.slice(-5);
+  if (last20.length < 10) return null;
+  // 20-day return
+  const ret20 = (last20[last20.length - 1] - last20[0]) / last20[0];
+  // 5-day return
+  const ret5 = last5.length >= 2 ? (last5[last5.length - 1] - last5[0]) / last5[0] : 0;
+  // ATR proxy: avg high-low / close over last 14 bars
+  const last14 = bars.slice(-14);
+  const atr = last14.reduce((s: number, b: any) => s + (b.h - b.l), 0) / last14.length;
+  const atrPct = atr / price;
+  // Direction consistency: how many of last 10 closes above 10-day mean
+  const ma10 = last20.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, last20.length);
+  const aboveMa = last20.slice(-10).filter(c => c > ma10).length / 10;
+  // VWAP alignment
+  const aboveVwap = vwap20d != null && price > vwap20d;
+  const belowVwap = vwap20d != null && price < vwap20d;
+
+  const rationale: string[] = [];
+  let type: MarketRegime['type'] = 'CONSOLIDATION';
+  let confidence = 50;
+  let probBreakout = 50;
+  let probMeanRev = 50;
+
+  // TREND BULL
+  if (ret20 > 0.05 && aboveMa > 0.6 && aboveVwap) {
+    type = 'TREND_BULL';
+    confidence = Math.min(95, 60 + ret20 * 200);
+    probBreakout = 65 + (aboveMa - 0.6) * 100;
+    probMeanRev = 100 - probBreakout;
+    rationale.push(`20d return +${(ret20 * 100).toFixed(1)}%, price above VWAP`);
+    if (netGex > 0) rationale.push('Positive gamma reinforces trend stability');
+  } else if (ret20 < -0.05 && aboveMa < 0.4 && belowVwap) {
+    type = 'TREND_BEAR';
+    confidence = Math.min(95, 60 + Math.abs(ret20) * 200);
+    probBreakout = 65 + (0.4 - aboveMa) * 100;
+    probMeanRev = 100 - probBreakout;
+    rationale.push(`20d return ${(ret20 * 100).toFixed(1)}%, price below VWAP`);
+    if (netGex < 0) rationale.push('Negative gamma amplifies downside moves');
+  } else if (atrPct > 0.025 && (netGex < 0 || (ivAvg != null && ivAvg > 0.4))) {
+    type = 'VOLATILITY_EXPANSION';
+    confidence = Math.min(90, 55 + atrPct * 1000);
+    probBreakout = 75;
+    probMeanRev = 25;
+    rationale.push(`ATR ${(atrPct * 100).toFixed(2)}% — elevated volatility`);
+    if (netGex < 0) rationale.push('Dealers short gamma → large moves likely');
+    if (ivAvg != null && ivAvg > 0.4) rationale.push(`IV elevated (${(ivAvg * 100).toFixed(0)}%)`);
+  } else if (atrPct < 0.015 && Math.abs(ret20) < 0.03 && netGex > 0) {
+    type = 'RANGE';
+    confidence = 70;
+    probBreakout = 25;
+    probMeanRev = 75;
+    rationale.push(`ATR ${(atrPct * 100).toFixed(2)}% — compressed range`);
+    rationale.push('Positive gamma → dealers stabilize price');
+    if (flipDistPct != null && Math.abs(flipDistPct) < 1) rationale.push('Price near gamma flip — pinning likely');
+  } else {
+    type = 'CONSOLIDATION';
+    confidence = 60;
+    probBreakout = 45;
+    probMeanRev = 55;
+    rationale.push('Mixed signals — no dominant regime');
+    rationale.push(`5d return ${(ret5 * 100).toFixed(1)}%, ATR ${(atrPct * 100).toFixed(2)}%`);
+  }
+
+  if (pcRatio != null) {
+    if (pcRatio > 1.3) rationale.push(`P/C ratio ${pcRatio.toFixed(2)} → bearish positioning`);
+    else if (pcRatio < 0.7) rationale.push(`P/C ratio ${pcRatio.toFixed(2)} → bullish positioning`);
+  }
+
+  const labels: Record<MarketRegime['type'], string> = {
+    TREND_BULL: 'Trending Bullish',
+    TREND_BEAR: 'Trending Bearish',
+    RANGE: 'Range-Bound',
+    VOLATILITY_EXPANSION: 'Volatility Expansion',
+    CONSOLIDATION: 'Consolidation',
+  };
+
+  return {
+    type,
+    label: labels[type],
+    confidence: Math.round(confidence),
+    probabilityBreakout: Math.round(Math.max(0, Math.min(100, probBreakout))),
+    probabilityMeanRev: Math.round(Math.max(0, Math.min(100, probMeanRev))),
+    rationale,
+  };
+}
+
+// ============================================================
+// Predictive Gamma — projects GEX 1d / 3d ahead
+// Uses simple time-decay model: closer expiries lose gamma fastest.
+// ============================================================
+function predictGamma(profile: GammaStrike[], price: number, bars: any[], flip: number | null): PredictiveGamma | null {
+  if (!profile.length) return null;
+  const current = profile.reduce((s, r) => s + r.netGex, 0);
+  // Recent net change in price per day
+  const last5 = bars.slice(-5);
+  const dailyMove = last5.length >= 2
+    ? (last5[last5.length - 1].c - last5[0].c) / last5.length
+    : 0;
+  // Project price 1d and 3d ahead, then sum gamma of strikes still relevant.
+  // Strikes within ±2.5% of projected price contribute most.
+  const projectFor = (days: number): number => {
+    const pProj = price + dailyMove * days;
+    const band = pProj * 0.05;
+    let total = 0;
+    for (const r of profile) {
+      const dist = Math.abs(r.strike - pProj);
+      // Weight: gaussian-ish around projected price
+      const w = Math.exp(-Math.pow(dist / band, 2));
+      // Time decay: assume 3d ahead, 80% of gamma remains for monthly expiries
+      const decay = Math.pow(0.93, days);
+      total += r.netGex * w * decay;
+    }
+    return total;
+  };
+  const projected1d = projectFor(1);
+  const projected3d = projectFor(3);
+  const trend: PredictiveGamma['trend'] = projected3d > current * 1.05 ? 'rising'
+    : projected3d < current * 0.95 ? 'falling'
+    : 'stable';
+  const flipDistance = flip != null && price > 0 ? ((flip - price) / price) * 100 : null;
+  return { current, projected1d, projected3d, trend, flipDistance };
+}
+
+// ============================================================
+// Strategy Engine — suggests options strategies fit to regime
+// ============================================================
+function buildStrategies(args: {
+  price: number;
+  contracts: any[];
+  regime: MarketRegime | null;
+  callWalls: StrikeLevel[];
+  putWalls: StrikeLevel[];
+  ivAvg: number | null;
+}): StrategyIdea[] {
+  const { price, contracts, regime, callWalls, putWalls, ivAvg } = args;
+  if (!regime || !contracts.length) return [];
+  // Find nearest expiration with sufficient strikes
+  const expirations = Array.from(new Set(contracts.map(c => c.expiration).filter(Boolean))).sort();
+  const exp = expirations[0];
+  if (!exp) return [];
+  const expContracts = contracts.filter(c => c.expiration === exp);
+  // Helper to pick contract closest to a given strike
+  const pick = (strike: number, type: 'call' | 'put') => {
+    const arr = expContracts.filter(c => c.contractType === type);
+    if (!arr.length) return null;
+    return arr.reduce((best, c) => Math.abs(c.strike - strike) < Math.abs(best.strike - strike) ? c : best);
+  };
+  // Helper for premium estimate
+  const prem = (c: any | null) => c?.lastPrice ?? 0;
+
+  const ideas: StrategyIdea[] = [];
+
+  // 1. Long Call — TREND BULL with low IV
+  if (regime.type === 'TREND_BULL') {
+    const target = callWalls[0]?.strike ?? price * 1.05;
+    const longCall = pick(price, 'call');
+    const shortCall = pick(target, 'call');
+    if (longCall && shortCall && longCall.strike < shortCall.strike) {
+      const debit = prem(longCall) - prem(shortCall);
+      const width = shortCall.strike - longCall.strike;
+      ideas.push({
+        name: 'Bull Call Spread',
+        category: 'directional-bull',
+        legs: [
+          { side: 'long', type: 'call', strike: longCall.strike, expiration: exp, qty: 1 },
+          { side: 'short', type: 'call', strike: shortCall.strike, expiration: exp, qty: 1 },
+        ],
+        maxProfit: width - debit,
+        maxLoss: debit,
+        breakevens: [longCall.strike + debit],
+        netDebit: debit,
+        rationale: `Trending bull regime — capped spread reduces theta vs naked call. Target = call wall at $${shortCall.strike.toFixed(2)}.`,
+        score: regime.confidence,
+      });
+    }
+  }
+
+  // 2. Bear Put Spread — TREND BEAR
+  if (regime.type === 'TREND_BEAR') {
+    const target = putWalls[0]?.strike ?? price * 0.95;
+    const longPut = pick(price, 'put');
+    const shortPut = pick(target, 'put');
+    if (longPut && shortPut && longPut.strike > shortPut.strike) {
+      const debit = prem(longPut) - prem(shortPut);
+      const width = longPut.strike - shortPut.strike;
+      ideas.push({
+        name: 'Bear Put Spread',
+        category: 'directional-bear',
+        legs: [
+          { side: 'long', type: 'put', strike: longPut.strike, expiration: exp, qty: 1 },
+          { side: 'short', type: 'put', strike: shortPut.strike, expiration: exp, qty: 1 },
+        ],
+        maxProfit: width - debit,
+        maxLoss: debit,
+        breakevens: [longPut.strike - debit],
+        netDebit: debit,
+        rationale: `Trending bear regime — capped spread targets put wall at $${shortPut.strike.toFixed(2)}.`,
+        score: regime.confidence,
+      });
+    }
+  }
+
+  // 3. Long Straddle — VOLATILITY EXPANSION (low IV preferred)
+  if (regime.type === 'VOLATILITY_EXPANSION' || regime.probabilityBreakout > 65) {
+    const atmCall = pick(price, 'call');
+    const atmPut = pick(price, 'put');
+    if (atmCall && atmPut) {
+      const debit = prem(atmCall) + prem(atmPut);
+      ideas.push({
+        name: 'Long Straddle',
+        category: 'volatility-long',
+        legs: [
+          { side: 'long', type: 'call', strike: atmCall.strike, expiration: exp, qty: 1 },
+          { side: 'long', type: 'put',  strike: atmPut.strike,  expiration: exp, qty: 1 },
+        ],
+        maxProfit: null,
+        maxLoss: debit,
+        breakevens: [atmCall.strike + debit, atmPut.strike - debit],
+        netDebit: debit,
+        rationale: `Vol expansion expected. Profits on a move >${(debit / price * 100).toFixed(1)}% in either direction.`,
+        score: regime.probabilityBreakout,
+      });
+    }
+  }
+
+  // 4. Iron Condor — RANGE (high IV preferred)
+  if (regime.type === 'RANGE' || regime.probabilityMeanRev > 60) {
+    const callShort = pick(price * 1.03, 'call');
+    const callLong = pick(price * 1.06, 'call');
+    const putShort = pick(price * 0.97, 'put');
+    const putLong = pick(price * 0.94, 'put');
+    if (callShort && callLong && putShort && putLong &&
+        callLong.strike > callShort.strike && putLong.strike < putShort.strike) {
+      const credit = prem(callShort) - prem(callLong) + prem(putShort) - prem(putLong);
+      const callWidth = callLong.strike - callShort.strike;
+      const putWidth = putShort.strike - putLong.strike;
+      const maxLossSpread = Math.max(callWidth, putWidth) - credit;
+      ideas.push({
+        name: 'Iron Condor',
+        category: 'neutral-income',
+        legs: [
+          { side: 'short', type: 'call', strike: callShort.strike, expiration: exp, qty: 1 },
+          { side: 'long',  type: 'call', strike: callLong.strike,  expiration: exp, qty: 1 },
+          { side: 'short', type: 'put',  strike: putShort.strike,  expiration: exp, qty: 1 },
+          { side: 'long',  type: 'put',  strike: putLong.strike,   expiration: exp, qty: 1 },
+        ],
+        maxProfit: credit,
+        maxLoss: maxLossSpread,
+        breakevens: [putShort.strike - credit, callShort.strike + credit],
+        netDebit: -credit,
+        rationale: `Range regime — collect premium between $${putShort.strike.toFixed(2)} and $${callShort.strike.toFixed(2)}.`,
+        score: regime.probabilityMeanRev,
+      });
+    }
+  }
+
+  // 5. Long Strangle — alternative to straddle for cheaper vol play
+  if (regime.type === 'VOLATILITY_EXPANSION' && ivAvg != null && ivAvg < 0.35) {
+    const otmCall = pick(price * 1.03, 'call');
+    const otmPut = pick(price * 0.97, 'put');
+    if (otmCall && otmPut) {
+      const debit = prem(otmCall) + prem(otmPut);
+      ideas.push({
+        name: 'Long Strangle',
+        category: 'volatility-long',
+        legs: [
+          { side: 'long', type: 'call', strike: otmCall.strike, expiration: exp, qty: 1 },
+          { side: 'long', type: 'put',  strike: otmPut.strike,  expiration: exp, qty: 1 },
+        ],
+        maxProfit: null,
+        maxLoss: debit,
+        breakevens: [otmCall.strike + debit, otmPut.strike - debit],
+        netDebit: debit,
+        rationale: `Cheaper vol play vs straddle — wider breakevens but lower cost.`,
+        score: Math.max(50, regime.probabilityBreakout - 5),
+      });
+    }
+  }
+
+  return ideas.sort((a, b) => b.score - a.score).slice(0, 4);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -415,6 +754,25 @@ export async function GET(req: NextRequest) {
     const { profile: gammaProfile, flip: gammaFlip } = computeGammaProfile(activeContracts, underlyingPrice);
     const { rows: inventory, expiration: inventoryExpiration } = buildInventory(rawSnapshot);
 
+    // Aggregate IV and P/C ratio for regime classification
+    let ivSum = 0, ivCnt = 0, totalCallOi = 0, totalPutOi = 0;
+    for (const c of activeContracts) {
+      if (c.impliedVolatility != null && isFinite(c.impliedVolatility)) {
+        ivSum += c.impliedVolatility;
+        ivCnt++;
+      }
+      if (c.contractType === 'call') totalCallOi += c.openInterest || 0;
+      else if (c.contractType === 'put') totalPutOi += c.openInterest || 0;
+    }
+    const ivAvg = ivCnt > 0 ? ivSum / ivCnt : null;
+    const pcRatio = totalCallOi > 0 ? totalPutOi / totalCallOi : null;
+    const netGex = gammaProfile.reduce((s, r) => s + r.netGex, 0);
+    const flipDistPct = gammaFlip != null && underlyingPrice > 0 ? ((gammaFlip - underlyingPrice) / underlyingPrice) * 100 : null;
+
+    const regime = classifyRegime({ price: underlyingPrice, bars: workingBars, vwap20d, netGex, flipDistPct, ivAvg, pcRatio });
+    const predictiveGamma = predictGamma(gammaProfile, underlyingPrice, workingBars, gammaFlip);
+    const strategies = buildStrategies({ price: underlyingPrice, contracts: activeContracts, regime, callWalls, putWalls, ivAvg });
+
     const { bias, notes } = computeBias(underlyingPrice, maxPain, callWalls, putWalls);
     if (gammaFlip != null) {
       const above = underlyingPrice >= gammaFlip;
@@ -444,6 +802,9 @@ export async function GET(req: NextRequest) {
       gammaFlip,
       inventory,
       inventoryExpiration,
+      regime,
+      predictiveGamma,
+      strategies,
       bias,
       notes,
       source: contracts.length ? 'polygon' : 'technical-only',

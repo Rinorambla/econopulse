@@ -37,6 +37,43 @@ interface InventoryStrike {
   expiration: string;
 }
 
+interface MarketRegime {
+  type: 'TREND_BULL' | 'TREND_BEAR' | 'RANGE' | 'VOLATILITY_EXPANSION' | 'CONSOLIDATION';
+  label: string;
+  confidence: number;
+  probabilityBreakout: number;
+  probabilityMeanRev: number;
+  rationale: string[];
+}
+
+interface PredictiveGamma {
+  current: number;
+  projected1d: number;
+  projected3d: number;
+  trend: 'rising' | 'falling' | 'stable';
+  flipDistance: number | null;
+}
+
+interface OptionLeg {
+  side: 'long' | 'short';
+  type: 'call' | 'put';
+  strike: number;
+  expiration: string;
+  qty: number;
+}
+
+interface StrategyIdea {
+  name: string;
+  category: 'directional-bull' | 'directional-bear' | 'neutral-income' | 'volatility-long' | 'volatility-short';
+  legs: OptionLeg[];
+  maxProfit: number | null;
+  maxLoss: number | null;
+  breakevens: number[];
+  netDebit: number | null;
+  rationale: string;
+  score: number;
+}
+
 interface KeyLevels {
   symbol: string;
   asOf: string;
@@ -56,6 +93,9 @@ interface KeyLevels {
   gammaFlip: number | null;
   inventory: InventoryStrike[];
   inventoryExpiration: string | null;
+  regime: MarketRegime | null;
+  predictiveGamma: PredictiveGamma | null;
+  strategies: StrategyIdea[];
   bias: 'Bullish' | 'Bearish' | 'Neutral';
   notes: string[];
   source: string;
@@ -70,7 +110,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
   const [data, setData] = useState<KeyLevels | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'realtime' | 'inventory' | 'levels' | 'tape' | 'ai' | 'technicals'>('realtime');
+  const [tab, setTab] = useState<'realtime' | 'inventory' | 'regime' | 'levels' | 'tape' | 'strategy' | 'ai' | 'technicals'>('realtime');
 
   useEffect(() => {
     let cancel = false;
@@ -178,9 +218,11 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       <div className="flex flex-wrap gap-1 bg-slate-900/60 rounded-lg p-1 ring-1 ring-white/5">
         {[
           { k: 'realtime',   label: 'Real-Time',   icon: '⚡' },
+          { k: 'regime',     label: 'Regime',      icon: '🌡️' },
           { k: 'inventory',  label: 'Inventory',   icon: '📊' },
           { k: 'levels',     label: 'Walls',       icon: '🧱' },
           { k: 'tape',       label: 'Tape',        icon: '📜' },
+          { k: 'strategy',   label: 'Strategies',  icon: '🎯' },
           { k: 'ai',         label: 'AI Pulse',    icon: '🧠' },
           { k: 'technicals', label: 'Technicals',  icon: '📏' },
         ].map(t => (
@@ -193,6 +235,87 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           </button>
         ))}
       </div>
+
+      {/* Market Regime Panel — AI 2.0 classifier */}
+      {(tab === 'realtime' || tab === 'regime') && data.regime && (() => {
+        const r = data.regime!;
+        const colorMap: Record<string, string> = {
+          TREND_BULL: 'from-emerald-500/30 to-emerald-500/5 border-emerald-500/40 text-emerald-300',
+          TREND_BEAR: 'from-red-500/30 to-red-500/5 border-red-500/40 text-red-300',
+          RANGE: 'from-blue-500/30 to-blue-500/5 border-blue-500/40 text-blue-300',
+          VOLATILITY_EXPANSION: 'from-amber-500/30 to-amber-500/5 border-amber-500/40 text-amber-300',
+          CONSOLIDATION: 'from-slate-500/30 to-slate-500/5 border-slate-500/40 text-slate-300',
+        };
+        const pg = data.predictiveGamma;
+        const fmtGex = (v: number) => {
+          const a = Math.abs(v);
+          if (a >= 1e9) return `${v >= 0 ? '+' : '−'}${(a / 1e9).toFixed(2)}B`;
+          if (a >= 1e6) return `${v >= 0 ? '+' : '−'}${(a / 1e6).toFixed(1)}M`;
+          if (a >= 1e3) return `${v >= 0 ? '+' : '−'}${(a / 1e3).toFixed(0)}K`;
+          return `${v.toFixed(0)}`;
+        };
+        return (
+          <div className={`bg-gradient-to-br ${colorMap[r.type]} border rounded-lg p-4`}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider opacity-80">Market Regime</div>
+                <div className="text-xl font-bold">{r.label}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-wider opacity-80">Confidence</div>
+                <div className="text-2xl font-bold tabular-nums">{r.confidence}<span className="text-sm opacity-70">%</span></div>
+              </div>
+            </div>
+            {/* Probability bars */}
+            <div className="space-y-2 mb-3">
+              <div>
+                <div className="flex justify-between text-[10px] mb-0.5">
+                  <span className="opacity-80">Breakout probability</span>
+                  <span className="font-mono">{r.probabilityBreakout}%</span>
+                </div>
+                <div className="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-amber-500 to-red-500" style={{ width: `${r.probabilityBreakout}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[10px] mb-0.5">
+                  <span className="opacity-80">Mean reversion probability</span>
+                  <span className="font-mono">{r.probabilityMeanRev}%</span>
+                </div>
+                <div className="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500" style={{ width: `${r.probabilityMeanRev}%` }} />
+                </div>
+              </div>
+            </div>
+            {/* Predictive gamma row */}
+            {pg && (
+              <div className="grid grid-cols-3 gap-2 mb-3 text-[11px]">
+                <div className="bg-black/25 rounded p-2">
+                  <div className="text-[9px] opacity-70 uppercase">Current GEX</div>
+                  <div className="font-mono font-bold">{fmtGex(pg.current)}</div>
+                </div>
+                <div className="bg-black/25 rounded p-2">
+                  <div className="text-[9px] opacity-70 uppercase">+1 Day</div>
+                  <div className="font-mono font-bold">{fmtGex(pg.projected1d)}</div>
+                </div>
+                <div className="bg-black/25 rounded p-2">
+                  <div className="text-[9px] opacity-70 uppercase">+3 Day</div>
+                  <div className="font-mono font-bold">
+                    {fmtGex(pg.projected3d)}
+                    <span className={`ml-1 text-[9px] ${pg.trend === 'rising' ? 'text-emerald-400' : pg.trend === 'falling' ? 'text-red-400' : 'text-gray-400'}`}>
+                      {pg.trend === 'rising' ? '↑' : pg.trend === 'falling' ? '↓' : '→'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Rationale */}
+            <ul className="text-[11px] space-y-1 list-disc list-inside opacity-90">
+              {r.rationale.map((line, i) => <li key={i}>{line}</li>)}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Options Inventory (gexstream.com-style: BOUGHT vs SOLD per strike, nearest expiry) */}
       {(tab === 'realtime' || tab === 'inventory') && inventoryZoomed && (() => {
@@ -513,6 +636,124 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Strategy Engine — AI 2.0 trade ideas */}
+      {tab === 'strategy' && (
+        <div className="space-y-3">
+          {(!data.strategies || data.strategies.length === 0) && (
+            <div className="bg-slate-800/40 rounded-lg p-4 ring-1 ring-white/5 text-[12px] text-gray-400 text-center">
+              No strategy ideas — options chain unavailable or no clear regime.
+            </div>
+          )}
+          {data.strategies.map((s, idx) => {
+            const catColor: Record<string, string> = {
+              'directional-bull': 'border-emerald-500/40 bg-emerald-500/5',
+              'directional-bear': 'border-red-500/40 bg-red-500/5',
+              'neutral-income': 'border-blue-500/40 bg-blue-500/5',
+              'volatility-long': 'border-amber-500/40 bg-amber-500/5',
+              'volatility-short': 'border-purple-500/40 bg-purple-500/5',
+            };
+            // Build payoff diagram across price range
+            const allStrikes = s.legs.map(l => l.strike);
+            const lo = Math.min(...allStrikes, price) * 0.85;
+            const hi = Math.max(...allStrikes, price) * 1.15;
+            const steps = 80;
+            const points: { x: number; y: number }[] = [];
+            for (let i = 0; i <= steps; i++) {
+              const x = lo + ((hi - lo) * i) / steps;
+              let y = 0;
+              for (const leg of s.legs) {
+                const intrinsic = leg.type === 'call' ? Math.max(0, x - leg.strike) : Math.max(0, leg.strike - x);
+                const sign = leg.side === 'long' ? 1 : -1;
+                y += sign * intrinsic * leg.qty;
+              }
+              if (s.netDebit != null) y -= s.netDebit;
+              points.push({ x, y });
+            }
+            const minY = Math.min(...points.map(p => p.y));
+            const maxY = Math.max(...points.map(p => p.y));
+            const padY = (maxY - minY) * 0.15 || 1;
+            const yMin = minY - padY;
+            const yMax = maxY + padY;
+            const W = 600, H = 140, pad = 30;
+            const xScale = (x: number) => pad + ((x - lo) / (hi - lo)) * (W - 2 * pad);
+            const yScale = (y: number) => H - pad - ((y - yMin) / (yMax - yMin)) * (H - 2 * pad);
+            const zeroY = yScale(0);
+            const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.x).toFixed(1)} ${yScale(p.y).toFixed(1)}`).join(' ');
+            // Profitable area
+            const positivePath: string[] = [];
+            for (const p of points) {
+              if (p.y >= 0) positivePath.push(`${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`);
+            }
+            return (
+              <div key={idx} className={`border rounded-lg p-3 ${catColor[s.category] || 'border-white/10 bg-slate-800/40'}`}>
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-white">{s.name}</div>
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider">{s.category.replace('-', ' / ')}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-gray-400">Fit Score</div>
+                    <div className="text-lg font-bold tabular-nums text-white">{s.score}<span className="text-xs opacity-70">/100</span></div>
+                  </div>
+                </div>
+                {/* Legs */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {s.legs.map((leg, li) => (
+                    <span key={li} className={`text-[10px] px-2 py-0.5 rounded font-mono ${leg.side === 'long' ? 'bg-emerald-600/30 text-emerald-200' : 'bg-red-600/30 text-red-200'}`}>
+                      {leg.side === 'long' ? '+' : '−'}{leg.qty} {leg.type.toUpperCase()} ${leg.strike.toFixed(2)} {leg.expiration}
+                    </span>
+                  ))}
+                </div>
+                {/* Stats */}
+                <div className="grid grid-cols-4 gap-2 text-[11px] mb-2">
+                  <div className="bg-black/25 rounded p-2">
+                    <div className="text-[9px] text-gray-400 uppercase">Max Profit</div>
+                    <div className="text-emerald-300 font-mono font-bold">{s.maxProfit == null ? '∞' : `$${s.maxProfit.toFixed(2)}`}</div>
+                  </div>
+                  <div className="bg-black/25 rounded p-2">
+                    <div className="text-[9px] text-gray-400 uppercase">Max Loss</div>
+                    <div className="text-red-300 font-mono font-bold">{s.maxLoss == null ? '∞' : `$${s.maxLoss.toFixed(2)}`}</div>
+                  </div>
+                  <div className="bg-black/25 rounded p-2">
+                    <div className="text-[9px] text-gray-400 uppercase">{s.netDebit != null && s.netDebit < 0 ? 'Net Credit' : 'Net Debit'}</div>
+                    <div className="text-white font-mono font-bold">{s.netDebit == null ? '—' : `$${Math.abs(s.netDebit).toFixed(2)}`}</div>
+                  </div>
+                  <div className="bg-black/25 rounded p-2">
+                    <div className="text-[9px] text-gray-400 uppercase">Breakeven{s.breakevens.length > 1 ? 's' : ''}</div>
+                    <div className="text-amber-300 font-mono font-bold text-[10px]">{s.breakevens.map(b => `$${b.toFixed(2)}`).join(' / ')}</div>
+                  </div>
+                </div>
+                {/* Payoff diagram */}
+                <div className="bg-black/40 rounded p-1">
+                  <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="xMidYMid meet">
+                    {/* zero line */}
+                    <line x1={pad} y1={zeroY} x2={W - pad} y2={zeroY} stroke="#475569" strokeWidth={1} strokeDasharray="3 3" />
+                    {/* profit shading: payoff line clipped to y>=0 */}
+                    <path d={path + ` L ${W - pad} ${zeroY} L ${pad} ${zeroY} Z`} fill="rgba(34,197,94,0.1)" stroke="none" />
+                    {/* payoff line */}
+                    <path d={path} fill="none" stroke="#fbbf24" strokeWidth={2} />
+                    {/* current price marker */}
+                    <line x1={xScale(price)} y1={pad} x2={xScale(price)} y2={H - pad} stroke="#60a5fa" strokeWidth={1} strokeDasharray="4 3" />
+                    <text x={xScale(price)} y={pad - 4} textAnchor="middle" fontSize={9} fill="#60a5fa" fontFamily="ui-monospace, monospace">${price.toFixed(2)}</text>
+                    {/* breakeven markers */}
+                    {s.breakevens.map((be, bi) => (
+                      <g key={bi}>
+                        <line x1={xScale(be)} y1={pad} x2={xScale(be)} y2={H - pad} stroke="#fbbf24" strokeWidth={0.8} strokeDasharray="2 2" opacity={0.6} />
+                        <text x={xScale(be)} y={H - pad + 11} textAnchor="middle" fontSize={9} fill="#fbbf24" fontFamily="ui-monospace, monospace">${be.toFixed(2)}</text>
+                      </g>
+                    ))}
+                    {/* axes labels */}
+                    <text x={pad} y={H - 4} fontSize={9} fill="#64748b" fontFamily="ui-monospace, monospace">${lo.toFixed(0)}</text>
+                    <text x={W - pad} y={H - 4} textAnchor="end" fontSize={9} fill="#64748b" fontFamily="ui-monospace, monospace">${hi.toFixed(0)}</text>
+                  </svg>
+                </div>
+                <div className="text-[11px] text-gray-300 mt-2">{s.rationale}</div>
+              </div>
+            );
+          })}
         </div>
       )}
 

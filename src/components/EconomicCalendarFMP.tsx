@@ -142,8 +142,7 @@ export default function EconomicCalendarFMP({ days = 7, height = 360 }: { days?:
           ))}
         </div>
         <div className="text-[10px] text-gray-500">
-          {source && <span className="uppercase tracking-wide">{source === 'live' ? 'FMP live' : source}</span>}
-          {lastUpdate && <span className="ml-2">{new Date(lastUpdate).toLocaleTimeString()}</span>}
+          {lastUpdate && <span>{new Date(lastUpdate).toLocaleTimeString()}</span>}
         </div>
       </div>
 

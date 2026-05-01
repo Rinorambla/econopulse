@@ -1019,9 +1019,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.5: Economic Calendar (FMP) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="FMP LIVE" className="lg:col-span-12 min-h-[420px]">
+              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-12 min-h-[360px]">
                 <div className="p-2">
-                  <EconomicCalendarFMP days={14} height={400} />
+                  <EconomicCalendarFMP days={14} height={320} />
                 </div>
               </Panel>
             </div>

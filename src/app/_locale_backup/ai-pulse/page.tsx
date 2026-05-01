@@ -1018,20 +1018,16 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3.5: Economic Calendar (Tradays) ─── */}
+            {/* ─── ROW 3.5: Economic + Earnings Calendars side-by-side ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-12 min-h-[360px]">
+              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-6 min-h-[440px]">
                 <div className="p-2">
-                  <TradaysCalendarWidget height={320} mode="2" theme={1} />
+                  <TradaysCalendarWidget height={400} mode="2" theme={1} />
                 </div>
               </Panel>
-            </div>
-
-            {/* ─── ROW 3.6: Earnings Calendar (MarketChameleon) ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[440px]">
+              <Panel title="Earnings Calendar" className="lg:col-span-6 min-h-[440px]">
                 <div className="p-2">
-                  <MarketChameleonWidget wtype="ecfull" width={900} height={400} darkTint />
+                  <MarketChameleonWidget wtype="ecfull" width={600} height={400} darkTint />
                 </div>
               </Panel>
             </div>

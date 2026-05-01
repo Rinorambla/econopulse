@@ -33,7 +33,6 @@ export const EarningsCalendar: React.FC = () => {
   // source nascosto per privacy
   const [symbolQuery, setSymbolQuery] = useState('')
   const [sectorQuery, setSectorQuery] = useState('')
-  const [live, setLive] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -50,10 +49,8 @@ export const EarningsCalendar: React.FC = () => {
   useEffect(()=>{ 
     fetchData();
     const slow = setInterval(fetchData, 600000); // 10m auto-refresh
-    let fast: any = null
-    if (live) fast = setInterval(fetchData, 60000) // 60s when live
-    return ()=> { clearInterval(slow); if (fast) clearInterval(fast) }
-  }, [fetchData, live])
+    return ()=> { clearInterval(slow) }
+  }, [fetchData])
 
   const filtered = useMemo(()=> {
     let list = significanceFilter==='All' ? events : events.filter(e=> e.significance===significanceFilter)
@@ -76,9 +73,6 @@ export const EarningsCalendar: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-white font-semibold text-lg">Earnings Calendar</h3>
   <div className="flex items-center gap-2">
-          <label className="inline-flex items-center gap-1 text-[11px] text-gray-300 mr-2">
-            <input type="checkbox" className="accent-green-500" checked={live} onChange={e=>setLive(e.target.checked)} /> Live
-          </label>
           <select value={significanceFilter} onChange={e=>setSignificanceFilter(e.target.value as any)} className="bg-gray-700 border border-gray-600 text-gray-200 text-[11px] rounded px-1 py-1">
             {['All','High','Medium','Low'].map(x=> <option key={x}>{x}</option>)}
           </select>
@@ -121,8 +115,8 @@ export const EarningsCalendar: React.FC = () => {
                 <td className="py-1 pr-2 text-gray-400">{ev.time}</td>
                 <td className="py-1 pr-2 text-blue-300 font-medium" title={ev.company}>
                   <div className="flex items-center gap-2">
-                    <a href={`https://finance.yahoo.com/quote/${encodeURIComponent(ev.symbol)}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-200">{ev.symbol}</a>
-                    <a href={`https://www.google.com/search?q=${encodeURIComponent(ev.company || ev.symbol)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-gray-300">Info</a>
+                    <span className="font-semibold">{ev.symbol}</span>
+                    <span className="text-[10px] text-gray-400 truncate max-w-[160px]">{ev.company}</span>
                   </div>
                 </td>
                 <td className="py-1 pr-2 text-gray-200">{ev.epsEstimate || ev.estimate || '-'}</td>

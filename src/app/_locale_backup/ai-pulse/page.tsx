@@ -1029,7 +1029,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.6: Earnings Calendar (Yahoo Finance) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Earnings Calendar" badge="LIVE" className="lg:col-span-12 min-h-[360px]">
+              <Panel title="Earnings Calendar" className="lg:col-span-12 min-h-[360px]">
                 <div className="p-2">
                   <EarningsCalendar />
                 </div>

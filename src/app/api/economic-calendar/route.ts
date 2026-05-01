@@ -72,24 +72,33 @@ export async function GET(req: NextRequest) {
       d2 = end.toISOString().slice(0,10)
     }
 
-    // Try TradingEconomics first (guest works but limited; keys recommended)
+    // Prefer FMP (user-provided key), fallback to TradingEconomics
     let calendar: EconEvent[] = []
     try {
-      calendar = await getTradingEconomicsCalendar({ d1, d2, country, importance: imp })
+      const fmp = await getFmpEconomicCalendar(d1, d2)
+      if (fmp.length) calendar = fmp as any
     } catch (e) {
-      console.warn('TE calendar error, will fallback:', e)
+      console.warn('FMP calendar error, will fallback to TE:', e)
     }
 
-    // Fallback to FMP if TE empty and FMP key exists
     if (!calendar.length) {
       try {
-        const fmp = await getFmpEconomicCalendar(d1, d2)
-        if (fmp.length) {
-          calendar = fmp as any
-        }
+        calendar = await getTradingEconomicsCalendar({ d1, d2, country, importance: imp })
       } catch (e) {
-        console.warn('FMP calendar fallback error:', e)
+        console.warn('TE calendar fallback error:', e)
       }
+    }
+
+    // Optional importance filter when FMP returns all severities
+    if (calendar.length && imp) {
+      const want = imp.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
+      const map: Record<string,'High'|'Medium'|'Low'> = { '3':'High','high':'High','2':'Medium','medium':'Medium','1':'Low','low':'Low' }
+      const wanted = new Set(want.map(w => map[w]).filter(Boolean))
+      if (wanted.size) calendar = calendar.filter(ev => wanted.has(ev.importance))
+    }
+    if (calendar.length && country) {
+      const wantC = country.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
+      calendar = calendar.filter(ev => wantC.some(c => ev.region.toLowerCase().includes(c)))
     }
 
     cache = { ts: Date.now(), data: calendar }

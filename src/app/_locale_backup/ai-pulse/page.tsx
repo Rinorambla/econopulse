@@ -13,7 +13,7 @@ import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
-const TradingEconomicsWidget = dynamic(() => import('@/components/TradingEconomicsWidget'), { ssr: false });
+const EconomicCalendarFMP = dynamic(() => import('@/components/EconomicCalendarFMP'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1017,16 +1017,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3.5: Trading Economics — Calendar + News ─── */}
+            {/* ─── ROW 3.5: Economic Calendar (FMP) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
+              <Panel title="Economic Calendar" badge="FMP LIVE" className="lg:col-span-12 min-h-[420px]">
                 <div className="p-2">
-                  <TradingEconomicsWidget variant="events" height={360} />
-                </div>
-              </Panel>
-              <Panel title="Economic News" badge="LIVE" className="lg:col-span-6 min-h-[400px]">
-                <div className="p-2">
-                  <TradingEconomicsWidget variant="timeline" height={360} />
+                  <EconomicCalendarFMP days={14} height={400} />
                 </div>
               </Panel>
             </div>

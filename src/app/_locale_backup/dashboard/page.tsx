@@ -9,6 +9,8 @@ import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
 
+const KeyLevels = dynamic(() => import('@/components/KeyLevels'), { ssr: false });
+
 interface MarketData {
 	ticker: string;
 	name: string;
@@ -700,7 +702,7 @@ export default function DashboardPage() {
 						: null;
 					return (
 						<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setSelectedRow(null)}>
-							<div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-2xl w-[92%] max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+							<div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-4xl w-[94%] max-h-[88vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
 								<div className="flex items-start justify-between mb-4">
 									<div>
 										<div className="flex items-center gap-2">
@@ -763,12 +765,21 @@ export default function DashboardPage() {
 								</div>
 
 								{opt && (
-									<div className="grid grid-cols-3 gap-2 text-[10px]">
+									<div className="grid grid-cols-3 gap-2 text-[10px] mb-3">
 										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Vol P/C</div><div className="text-white font-semibold">{opt.putCallRatioVol ?? '—'}</div></div>
 										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">OI P/C</div><div className="text-white font-semibold">{opt.putCallRatioOI ?? '—'}</div></div>
 										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Source</div><div className="text-white font-semibold uppercase">{opt.dataSource || '—'}</div></div>
 									</div>
 								)}
+
+								{/* Options Key Levels: max pain, call/put walls, S/R */}
+								<div className="mt-2 pt-3 border-t border-slate-700/60">
+									<div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+										<span>🎯 Options Key Levels</span>
+										<span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">PRO</span>
+									</div>
+									<KeyLevels symbol={item.ticker} />
+								</div>
 
 								<p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
 									DEX combines short-term performance, trend strength, demand/supply pressure, and signed volume into a −100…+100 score of net buying/selling pressure.

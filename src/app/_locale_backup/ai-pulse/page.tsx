@@ -14,6 +14,7 @@ const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 const TradaysCalendarWidget = dynamic(() => import('@/components/TradaysCalendarWidget'), { ssr: false });
+const EarningsCalendar = dynamic(() => import('@/components/analytics/EarningsCalendar').then(m => m.EarningsCalendar), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1022,6 +1023,15 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-12 min-h-[360px]">
                 <div className="p-2">
                   <TradaysCalendarWidget height={320} mode="2" theme={1} />
+                </div>
+              </Panel>
+            </div>
+
+            {/* ─── ROW 3.6: Earnings Calendar (Yahoo Finance) ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Earnings Calendar" badge="LIVE" className="lg:col-span-12 min-h-[360px]">
+                <div className="p-2">
+                  <EarningsCalendar />
                 </div>
               </Panel>
             </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { getYahooEarningsCalendar } from '@/lib/yahoo-earnings';
+import { SP500_ALL_SYMBOLS } from '@/lib/sp500-stocks';
 
 // Cache for earnings data
 let earningsCache: any = null;
@@ -156,7 +158,21 @@ export async function GET(request: NextRequest) {
   const daysParam = url.searchParams.get('days')
   const days = Math.max(1, Math.min(60, Number(daysParam) || 30))
   // Per ora, FMP ritorna prossimi 30 giorni; se days differisce, verrà gestito internamente in FMP o lato UI
-  const earningsEvents: EarningsData[] = await fetchRealEarningsCalendar()
+  let earningsEvents: EarningsData[] = await fetchRealEarningsCalendar()
+
+  // Fallback Yahoo Finance se FMP è vuoto o key mancante
+  if (!earningsEvents.length) {
+    try {
+      console.log('📊 FMP empty, trying Yahoo Finance earnings...')
+      // Curated subset to keep latency reasonable: take first ~80 from SP500
+      const subset = (SP500_ALL_SYMBOLS || []).slice(0, 80)
+      const yh = await getYahooEarningsCalendar(subset, days)
+      earningsEvents = yh as unknown as EarningsData[]
+      console.log(`✅ Yahoo returned ${earningsEvents.length} earnings`)
+    } catch (e) {
+      console.warn('Yahoo earnings fallback error:', e)
+    }
+  }
     
     // Structure the response
     const response = {

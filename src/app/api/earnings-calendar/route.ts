@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getYahooEarningsCalendar } from '@/lib/yahoo-earnings';
-import { SP500_ALL_SYMBOLS } from '@/lib/sp500-stocks';
+
+export const maxDuration = 30;
 
 // Cache for earnings data
 let earningsCache: any = null;
@@ -164,9 +165,15 @@ export async function GET(request: NextRequest) {
   if (!earningsEvents.length) {
     try {
       console.log('📊 FMP empty, trying Yahoo Finance earnings...')
-      // Curated subset to keep latency reasonable: take first ~80 from SP500
-      const subset = (SP500_ALL_SYMBOLS || []).slice(0, 80)
-      const yh = await getYahooEarningsCalendar(subset, days)
+      // Curated mega-cap list to keep latency low on serverless
+      const TOP = [
+        'AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','BRK-B','LLY','AVGO',
+        'JPM','V','UNH','XOM','MA','WMT','PG','JNJ','HD','COST',
+        'ORCL','NFLX','BAC','ABBV','KO','CVX','MRK','PEP','TMO','ADBE',
+        'CRM','AMD','LIN','ACN','MCD','DIS','ABT','CSCO','PFE','WFC',
+        'TMUS','VZ','INTC','IBM','GE','CAT','NKE','BA','GS','MS'
+      ]
+      const yh = await getYahooEarningsCalendar(TOP, days)
       earningsEvents = yh as unknown as EarningsData[]
       console.log(`✅ Yahoo returned ${earningsEvents.length} earnings`)
     } catch (e) {

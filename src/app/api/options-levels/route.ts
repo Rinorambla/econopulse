@@ -278,6 +278,31 @@ async function fetchDailyBarsMulti(symbol: string, days = 260): Promise<any[]> {
   return [polygon, av].sort((a, b) => b.length - a.length)[0] || [];
 }
 
+// ─── Direct Yahoo options fetch (bypasses yahoo-finance2 which fails on Vercel serverless)
+// Yahoo's public options endpoint: query2.finance.yahoo.com/v7/finance/options/{symbol}
+// Returns a single chain per call; pass `?date=<unix>` to fetch a specific expiration.
+async function fetchYahooOptionsDirect(symbol: string, date?: number): Promise<any | null> {
+  const dateParam = date ? `?date=${date}` : '';
+  const hosts = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
+  for (const host of hosts) {
+    const url = `https://${host}/v7/finance/options/${encodeURIComponent(symbol)}${dateParam}`;
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(6000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
+      if (!res.ok) continue;
+      const j = await res.json();
+      const result = j?.optionChain?.result?.[0];
+      if (result) return result;
+    } catch { /* try next host */ }
+  }
+  return null;
+}
+
 // Fetch raw options snapshot with bid/ask/last_trade for bought-vs-sold classification.
 // Returns one object per contract with the fields needed by the inventory builder.
 async function fetchPolygonOptionsSnapshotRaw(symbol: string): Promise<any[]> {
@@ -794,31 +819,31 @@ export async function GET(req: NextRequest) {
     if (!underlyingPrice && workingBars.length) underlyingPrice = workingBars[workingBars.length - 1].c;
 
     // Yahoo Finance options chain fallback when Polygon returns nothing OR contracts without OI
-    // (free tier provides only the reference contract list, no OI/volume/IV).
+    // Uses DIRECT fetch (the yahoo-finance2 lib fails on Vercel serverless due to crumb/cookie auth).
     let workingContracts: any[] = contracts;
     let workingRawSnapshot: any[] = rawSnapshot;
     const hasMeaningfulOI = contracts.some((c: any) => (c.openInterest || 0) > 0 || (c.volume || 0) > 0);
     if (!workingContracts.length || !hasMeaningfulOI) {
       try {
-        const yf = (await import('yahoo-finance2')).default as any;
-        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 8000, null);
-        if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
-          // Yahoo returns ONE expiration per call by default — request the next 3 nearest expirations
-          const nowMs = Date.now();
-          const expDates: number[] = (optAll.expirationDates || [])
-            .map((d: any) => (d instanceof Date ? d.getTime() : new Date(d).getTime()))
-            .filter((t: number) => isFinite(t) && t > nowMs)
+        const firstChain = await fetchYahooOptionsDirect(symbol);
+        if (firstChain) {
+          // Use price from chain quote if we still don't have one
+          if (!underlyingPrice) {
+            const p = firstChain?.quote?.regularMarketPrice ?? firstChain?.quote?.postMarketPrice;
+            if (p && isFinite(p)) underlyingPrice = p;
+          }
+          // Get next 3 expirations
+          const expDates: number[] = (firstChain.expirationDates || [])
+            .map((t: any) => Number(t))
+            .filter((t: number) => isFinite(t) && t > Math.floor(Date.now() / 1000))
             .sort((a: number, b: number) => a - b)
             .slice(0, 3);
           const allChains: any[] = [];
-          // First chain already in optAll.options[0]
-          allChains.push(optAll.options[0]);
-          // Fetch the other 2 in parallel — total Yahoo budget ~18s, well under 30s Vercel limit
+          if (firstChain.options?.[0]) allChains.push(firstChain.options[0]);
+          // Fetch the other 2 expirations in parallel
           const extra = await withTimeout(
             Promise.all(
-              expDates.slice(1).map((t: number) =>
-                yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
-              )
+              expDates.slice(1).map(t => fetchYahooOptionsDirect(symbol, t).then(r => r?.options?.[0]).catch(() => null))
             ),
             10000,
             [] as any[]
@@ -828,14 +853,10 @@ export async function GET(req: NextRequest) {
           const yContracts: any[] = [];
           const yRaw: any[] = [];
           for (const chain of allChains) {
-            const expIso = chain?.expirationDate
-              ? (chain.expirationDate instanceof Date
-                  ? chain.expirationDate.toISOString().slice(0, 10)
-                  : new Date(chain.expirationDate).toISOString().slice(0, 10))
-              : '';
-            // Years to expiration for Black-Scholes
-            const expMs = expIso ? new Date(expIso).getTime() : 0;
-            const T = expMs > 0 ? Math.max((expMs - Date.now()) / (365 * 86400000), 1 / 365) : 0;
+            const expUnix = Number(chain?.expirationDate);
+            if (!isFinite(expUnix) || expUnix <= 0) continue;
+            const expIso = new Date(expUnix * 1000).toISOString().slice(0, 10);
+            const T = Math.max((expUnix * 1000 - Date.now()) / (365 * 86400000), 1 / 365);
             for (const cType of ['calls', 'puts'] as const) {
               const arr = Array.isArray(chain?.[cType]) ? chain[cType] : [];
               for (const o of arr) {
@@ -847,7 +868,6 @@ export async function GET(req: NextRequest) {
                 const last = Number(o?.lastPrice) || 0;
                 const bid = Number(o?.bid) || 0;
                 const ask = Number(o?.ask) || 0;
-                // Compute Black-Scholes gamma locally (Yahoo doesn't provide greeks)
                 const gamma = (underlyingPrice > 0 && iv > 0 && T > 0)
                   ? bsGamma(underlyingPrice, strike, T, iv)
                   : 0;
@@ -859,8 +879,7 @@ export async function GET(req: NextRequest) {
                   volume: vol,
                   impliedVolatility: iv,
                   lastPrice: last,
-                  bid,
-                  ask,
+                  bid, ask,
                   delta: 0,
                   gamma,
                 });
@@ -988,11 +1007,23 @@ export async function GET(req: NextRequest) {
       strategies,
       bias,
       notes,
-      source: workingContracts.length ? (contracts.length ? 'polygon' : 'yahoo') : 'technical-only',
+      source: workingContracts.length ? (contracts.length ? 'polygon' : 'yahoo-direct') : 'technical-only',
     };
 
     CACHE.set(k, { ts: Date.now(), data });
-    return NextResponse.json({ ok: true, data, cached: false });
+    return NextResponse.json({
+      ok: true,
+      data,
+      cached: false,
+      debug: {
+        polygonContracts: contracts.length,
+        polygonRawSnapshot: rawSnapshot.length,
+        polygonBars: bars.length,
+        finalContracts: workingContracts.length,
+        finalBars: workingBars.length,
+        finalPrice: underlyingPrice,
+      },
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Internal error' }, { status: 500 });
   }

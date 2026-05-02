@@ -189,22 +189,75 @@ function computePivots(high: number, low: number, close: number): PivotPoint[] {
 }
 
 async function fetchPolygonDailyBars(symbol: string, days = 260): Promise<any[]> {
-  const apiKeys = (process.env.POLYGON_API_KEY || '').split(',').filter(Boolean);
+  const apiKeys = (process.env.POLYGON_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   if (!apiKeys.length) return [];
-  const apiKey = apiKeys[0];
   const to = new Date();
   const from = new Date(to.getTime() - days * 86400000);
   const f = from.toISOString().slice(0, 10);
   const t = to.toISOString().slice(0, 10);
-  const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${f}/${t}?adjusted=true&sort=asc&limit=400&apiKey=${apiKey}`;
+  // Try each key in order — first successful response wins
+  for (const apiKey of apiKeys) {
+    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${f}/${t}?adjusted=true&sort=asc&limit=400&apiKey=${apiKey}`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } });
+      if (!res.ok) continue;
+      const j = await res.json();
+      const rows = j?.results || [];
+      if (rows.length) return rows;
+    } catch { /* try next key */ }
+  }
+  return [];
+}
+
+// ─── Multi-source fallbacks for daily bars ───────────────────────────────────
+async function fetchAlphaVantageDailyBars(symbol: string, days = 260): Promise<any[]> {
+  const key = (process.env.ALPHAVANTAGE_API_KEY || '').trim();
+  if (!key) return [];
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${key}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { 'Accept': 'application/json' } });
     if (!res.ok) return [];
     const j = await res.json();
-    return j?.results || [];
+    const series = j?.['Time Series (Daily)'];
+    if (!series || typeof series !== 'object') return [];
+    const rows = Object.entries(series).map(([date, v]: [string, any]) => ({
+      t: new Date(date).getTime(),
+      o: parseFloat(v?.['1. open']),
+      h: parseFloat(v?.['2. high']),
+      l: parseFloat(v?.['3. low']),
+      c: parseFloat(v?.['4. close']),
+      v: parseFloat(v?.['5. volume']) || 0,
+    })).filter(r => isFinite(r.c) && isFinite(r.h) && isFinite(r.l));
+    rows.sort((a, b) => a.t - b.t);
+    return rows.slice(-days);
   } catch {
     return [];
   }
+}
+
+async function fetchAlphaVantageQuote(symbol: string): Promise<number | null> {
+  const key = (process.env.ALPHAVANTAGE_API_KEY || '').trim();
+  if (!key) return null;
+  try {
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${key}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const p = parseFloat(j?.['Global Quote']?.['05. price']);
+    return p && isFinite(p) && p > 0 ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+// Unified: try Polygon (with key rotation) → Alpha Vantage. Yahoo is tried later.
+async function fetchDailyBarsMulti(symbol: string, days = 260): Promise<any[]> {
+  const polygon = await fetchPolygonDailyBars(symbol, days);
+  if (polygon.length >= 20) return polygon;
+  const av = await fetchAlphaVantageDailyBars(symbol, days);
+  if (av.length >= 20) return av;
+  // Return whichever has the most data, even if sparse
+  return [polygon, av].sort((a, b) => b.length - a.length)[0] || [];
 }
 
 // Fetch raw options snapshot with bid/ask/last_trade for bought-vs-sold classification.
@@ -671,7 +724,7 @@ export async function GET(req: NextRequest) {
     // Fetch in parallel
     const [contracts, bars, prev, rawSnapshot] = await Promise.all([
       polygon.getOptionsSnapshot(symbol).catch(() => [] as any[]),
-      fetchPolygonDailyBars(symbol, 260),
+      fetchDailyBarsMulti(symbol, 260),
       polygon.getPreviousDay(symbol).catch(() => null),
       fetchPolygonOptionsSnapshotRaw(symbol),
     ]);
@@ -681,8 +734,12 @@ export async function GET(req: NextRequest) {
     else if ((prev as any)?.price) underlyingPrice = (prev as any).price;
     else if (bars.length) underlyingPrice = bars[bars.length - 1].c;
 
-    // Yahoo fallback for price + bars when Polygon is empty (free tier / illiquid tickers)
+    // Multi-source fallback for price + bars when primary sources are empty
     let workingBars = bars;
+    if (!underlyingPrice) {
+      const avPrice = await fetchAlphaVantageQuote(symbol);
+      if (avPrice) underlyingPrice = avPrice;
+    }
     if (!underlyingPrice || !workingBars.length) {
       try {
         const yf = (await import('yahoo-finance2')).default as any;
@@ -706,12 +763,96 @@ export async function GET(req: NextRequest) {
     }
     if (!underlyingPrice && workingBars.length) underlyingPrice = workingBars[workingBars.length - 1].c;
 
+    // Yahoo Finance options chain fallback when Polygon returns nothing OR contracts without OI
+    // (free tier provides only the reference contract list, no OI/volume/IV).
+    let workingContracts: any[] = contracts;
+    let workingRawSnapshot: any[] = rawSnapshot;
+    const hasMeaningfulOI = contracts.some((c: any) => (c.openInterest || 0) > 0 || (c.volume || 0) > 0);
+    if (!workingContracts.length || !hasMeaningfulOI) {
+      try {
+        const yf = (await import('yahoo-finance2')).default as any;
+        const optAll = await yf.options(symbol).catch(() => null);
+        if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
+          // Yahoo returns ONE expiration per call by default — request the next 3 nearest expirations
+          const nowMs = Date.now();
+          const expDates: number[] = (optAll.expirationDates || [])
+            .map((d: any) => (d instanceof Date ? d.getTime() : new Date(d).getTime()))
+            .filter((t: number) => isFinite(t) && t > nowMs)
+            .sort((a: number, b: number) => a - b)
+            .slice(0, 3);
+          const allChains: any[] = [];
+          // First chain already in optAll.options[0]
+          allChains.push(optAll.options[0]);
+          // Fetch the other 2 in parallel
+          const extra = await Promise.all(
+            expDates.slice(1).map((t: number) =>
+              yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
+            )
+          );
+          for (const ch of extra) if (ch) allChains.push(ch);
+
+          const yContracts: any[] = [];
+          const yRaw: any[] = [];
+          for (const chain of allChains) {
+            const expIso = chain?.expirationDate
+              ? (chain.expirationDate instanceof Date
+                  ? chain.expirationDate.toISOString().slice(0, 10)
+                  : new Date(chain.expirationDate).toISOString().slice(0, 10))
+              : '';
+            for (const cType of ['calls', 'puts'] as const) {
+              const arr = Array.isArray(chain?.[cType]) ? chain[cType] : [];
+              for (const o of arr) {
+                const strike = Number(o?.strike);
+                if (!isFinite(strike) || strike <= 0) continue;
+                const oi = Number(o?.openInterest) || 0;
+                const vol = Number(o?.volume) || 0;
+                const iv = Number(o?.impliedVolatility) || 0;
+                const last = Number(o?.lastPrice) || 0;
+                const bid = Number(o?.bid) || 0;
+                const ask = Number(o?.ask) || 0;
+                yContracts.push({
+                  contractType: cType === 'calls' ? 'call' : 'put',
+                  strike,
+                  expiration: expIso,
+                  openInterest: oi,
+                  volume: vol,
+                  impliedVolatility: iv,
+                  lastPrice: last,
+                  bid,
+                  ask,
+                  // crude greek estimates (no analytical data from Yahoo) — leave as 0
+                  delta: 0,
+                  gamma: 0,
+                });
+                yRaw.push({
+                  details: {
+                    contract_type: cType === 'calls' ? 'call' : 'put',
+                    strike_price: strike,
+                    expiration_date: expIso,
+                  },
+                  open_interest: oi,
+                  day: { volume: vol },
+                  last_quote: { bid, ask },
+                  last_trade: { price: last },
+                  implied_volatility: iv,
+                });
+              }
+            }
+          }
+          if (yContracts.length) {
+            workingContracts = yContracts;
+            workingRawSnapshot = yRaw;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     // Filter contracts to nearest 2-3 expirations within 60 days for cleaner walls
-    let activeContracts = contracts;
-    if (contracts.length) {
+    let activeContracts = workingContracts;
+    if (workingContracts.length) {
       const now = Date.now();
       const horizon = now + 60 * 86400000;
-      const validExps = Array.from(new Set(contracts
+      const validExps = Array.from(new Set(workingContracts
         .filter(c => c.expiration)
         .map(c => c.expiration)
       )).filter(e => {
@@ -720,7 +861,7 @@ export async function GET(req: NextRequest) {
       }).sort();
       const nearest = validExps.slice(0, 3);
       if (nearest.length) {
-        activeContracts = contracts.filter(c => nearest.includes(c.expiration));
+        activeContracts = workingContracts.filter(c => nearest.includes(c.expiration));
       }
     }
 
@@ -752,7 +893,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { profile: gammaProfile, flip: gammaFlip } = computeGammaProfile(activeContracts, underlyingPrice);
-    const { rows: inventory, expiration: inventoryExpiration } = buildInventory(rawSnapshot);
+    const { rows: inventory, expiration: inventoryExpiration } = buildInventory(workingRawSnapshot);
 
     // Aggregate IV and P/C ratio for regime classification
     let ivSum = 0, ivCnt = 0, totalCallOi = 0, totalPutOi = 0;
@@ -781,7 +922,7 @@ export async function GET(req: NextRequest) {
     if (vwap20d != null) notes.push(`20d VWAP: $${vwap20d.toFixed(2)} (${underlyingPrice >= vwap20d ? 'above' : 'below'})`);
     if (high52w != null && underlyingPrice >= high52w * 0.98) notes.push(`Near 52-week high ($${high52w.toFixed(2)})`);
     if (low52w != null && underlyingPrice <= low52w * 1.02) notes.push(`Near 52-week low ($${low52w.toFixed(2)})`);
-    if (!contracts.length) notes.unshift('No options chain available for this ticker — showing technical levels only.');
+    if (!workingContracts.length) notes.unshift('No options chain available for this ticker — showing technical levels only.');
 
     const data: KeyLevels = {
       symbol,
@@ -807,7 +948,7 @@ export async function GET(req: NextRequest) {
       strategies,
       bias,
       notes,
-      source: contracts.length ? 'polygon' : 'technical-only',
+      source: workingContracts.length ? (contracts.length ? 'polygon' : 'yahoo') : 'technical-only',
     };
 
     CACHE.set(k, { ts: Date.now(), data });

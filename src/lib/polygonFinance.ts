@@ -112,10 +112,15 @@ class PolygonClient {
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 min cache
 
   constructor() {
+    // Support comma-separated POLYGON_API_KEY plus _2 and _3 for rotation
+    const primary = (process.env.POLYGON_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
     this.apiKeys = [
-      process.env.POLYGON_API_KEY || '',
+      ...primary,
       process.env.POLYGON_API_KEY_2 || '',
-    ].filter(Boolean);
+      process.env.POLYGON_API_KEY_3 || '',
+    ].map(k => k.trim()).filter(Boolean);
+    // Deduplicate
+    this.apiKeys = Array.from(new Set(this.apiKeys));
 
     if (this.apiKeys.length === 0) {
       console.warn('⚠️ No Polygon API keys configured');

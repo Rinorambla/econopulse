@@ -480,6 +480,125 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       }
     }
 
+    // === ATTEMPT 1.5: Yahoo Finance options chain (free, no API key, has OI + IV) ===
+    // Computes real GEX with Black-Scholes from chain data when Polygon/Tradier are unavailable.
+    try {
+      const yf: any = (await import('yahoo-finance2')).default;
+      const optAll: any = await Promise.race([
+        yf.options(upperSymbol).catch(() => null),
+        new Promise(resolve => setTimeout(() => resolve(null), 6000))
+      ]);
+      if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
+        const price = Number(optAll.quote?.regularMarketPrice) || Number(optAll.options[0]?.calls?.[0]?.lastPrice) || 0;
+        if (price > 0) {
+          // Pull next 3 expirations for richer GEX
+          const expDates: number[] = (optAll.expirationDates || [])
+            .map((d: any) => (d instanceof Date ? d.getTime() : new Date(d).getTime()))
+            .filter((t: number) => isFinite(t) && t > Date.now())
+            .sort((a: number, b: number) => a - b)
+            .slice(0, expirationsToUse + 1);
+          const allChains: any[] = [optAll.options[0]];
+          const extra: any[] = await Promise.race([
+            Promise.all(
+              expDates.slice(1).map((t: number) =>
+                yf.options(upperSymbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
+              )
+            ),
+            new Promise(resolve => setTimeout(() => resolve([]), 8000))
+          ]) as any[];
+          for (const ch of extra) if (ch) allChains.push(ch);
+
+          const r = parseFloat(process.env.OPTIONS_RF_RATE || '0.045');
+          const contractMultiplier = 100;
+          let totalCallVolume = 0, totalPutVolume = 0;
+          let totalCallOI = 0, totalPutOI = 0;
+          let gex = 0;
+          let atmVolume = 0, otmVolume = 0, totVolume = 0;
+          let bestCall25: { iv: number; delta: number } | null = null;
+          let bestPut25: { iv: number; delta: number } | null = null;
+
+          for (const chain of allChains) {
+            const expMs = chain?.expirationDate
+              ? (chain.expirationDate instanceof Date ? chain.expirationDate.getTime() : new Date(chain.expirationDate).getTime())
+              : 0;
+            if (!expMs) continue;
+            const T = Math.max((expMs - Date.now()) / (365 * 86400000), 1 / 365);
+            for (const cType of ['calls', 'puts'] as const) {
+              const arr: any[] = Array.isArray(chain?.[cType]) ? chain[cType] : [];
+              for (const o of arr) {
+                const K = Number(o?.strike);
+                if (!isFinite(K) || K <= 0) continue;
+                const vol = Number(o?.volume) || 0;
+                const oi = Number(o?.openInterest) || 0;
+                const iv = safeIV(Number(o?.impliedVolatility));
+                totVolume += vol;
+                const moneyness = K / price;
+                if (Math.abs(moneyness - 1) < 0.02) atmVolume += vol;
+                else if (Math.abs(moneyness - 1) > 0.05) otmVolume += vol;
+                const g = bsGamma(price, K, r, iv, T);
+                if (cType === 'calls') {
+                  totalCallVolume += vol;
+                  totalCallOI += oi;
+                  gex += (oi * contractMultiplier) * (price * price) * g;
+                  const delta = callDelta(price, K, r, iv, T);
+                  if (isFinite(delta)) {
+                    const score = Math.abs(delta - 0.25);
+                    if (!bestCall25 || score < Math.abs(bestCall25.delta - 0.25)) bestCall25 = { iv, delta };
+                  }
+                } else {
+                  totalPutVolume += vol;
+                  totalPutOI += oi;
+                  gex -= (oi * contractMultiplier) * (price * price) * g;
+                  const delta = Math.abs(putDelta(price, K, r, iv, T));
+                  if (isFinite(delta)) {
+                    const score = Math.abs(delta - 0.25);
+                    if (!bestPut25 || score < Math.abs(bestPut25.delta - 0.25)) bestPut25 = { iv, delta };
+                  }
+                }
+              }
+            }
+          }
+
+          // Only commit Yahoo result if we have real OI signal (otherwise fall through to estimates)
+          if ((totalCallOI + totalPutOI) > 0 && isFinite(gex)) {
+            const putCallVolumeRatio = totalCallVolume > 0 ? totalPutVolume / totalCallVolume : null;
+            const putCallOIRatio = totalCallOI > 0 ? totalPutOI / totalCallOI : null;
+            const gexLabel = classifyGEXMagnitude(Math.abs(gex));
+            const ivCall25d = bestCall25?.iv ?? null;
+            const ivPut25d = bestPut25?.iv ?? null;
+            let callSkew: OptionsMetrics['callSkew'] = 'Neutral';
+            if (ivCall25d != null && ivPut25d != null) {
+              const diff = ivCall25d - ivPut25d;
+              callSkew = diff > 0.02 ? 'Call Skew' : diff < -0.02 ? 'Put Skew' : 'Neutral';
+            }
+            const result: OptionsMetrics = {
+              symbol: upperSymbol,
+              asOf: new Date().toISOString(),
+              underlyingPrice: price,
+              totalCallVolume,
+              totalPutVolume,
+              totalCallOI,
+              totalPutOI,
+              putCallVolumeRatio,
+              putCallOIRatio,
+              gex,
+              gexLabel,
+              ivCall25d,
+              ivPut25d,
+              callSkew,
+              atmVolumeShare: totVolume ? atmVolume / totVolume : null,
+              otmVolumeShare: totVolume ? otmVolume / totVolume : null,
+              dataSource: 'tradier' as any, // reuse 'tradier' as the "real chain" label
+            };
+            CACHE.set(cacheKey, { ts: Date.now(), data: result });
+            return result;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Yahoo options provider failed:', upperSymbol, e);
+    }
+
     // === ATTEMPT 2: Get basic price and use market estimates ===
     let currentPrice: number | null = null;
 

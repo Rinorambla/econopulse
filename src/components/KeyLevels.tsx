@@ -121,7 +121,14 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       ? `/api/options-levels?symbol=${encodeURIComponent(symbol)}&price=${hintPrice}`
       : `/api/options-levels?symbol=${encodeURIComponent(symbol)}`;
     fetch(url, { cache: 'no-store' })
-      .then(r => r.json())
+      .then(async r => {
+        // Read as text first so we can handle Vercel timeout/HTML error pages gracefully
+        const txt = await r.text();
+        try { return JSON.parse(txt); }
+        catch {
+          throw new Error(r.ok ? 'Server returned an invalid response. Try again.' : `Server error (${r.status}). Try again in a moment.`);
+        }
+      })
       .then((j) => {
         if (cancel) return;
         if (j?.ok && j.data) setData(j.data);

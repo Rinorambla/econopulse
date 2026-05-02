@@ -188,6 +188,24 @@ function computePivots(high: number, low: number, close: number): PivotPoint[] {
   ];
 }
 
+// ─── Black-Scholes gamma (per share). Used when chain provides IV but no greek.
+// gamma = N'(d1) / (S * sigma * sqrt(T))
+function bsGamma(S: number, K: number, T: number, sigma: number, r = 0.045): number {
+  if (!(S > 0) || !(K > 0) || !(T > 0) || !(sigma > 0)) return 0;
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  const phi = Math.exp(-0.5 * d1 * d1) / Math.sqrt(2 * Math.PI);
+  const g = phi / (S * sigma * Math.sqrt(T));
+  return isFinite(g) ? g : 0;
+}
+
+// Promise with hard timeout — used to cap external calls so Vercel's 30s limit isn't hit.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 async function fetchPolygonDailyBars(symbol: string, days = 260): Promise<any[]> {
   const apiKeys = (process.env.POLYGON_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
   if (!apiKeys.length) return [];
@@ -771,7 +789,7 @@ export async function GET(req: NextRequest) {
     if (!workingContracts.length || !hasMeaningfulOI) {
       try {
         const yf = (await import('yahoo-finance2')).default as any;
-        const optAll = await yf.options(symbol).catch(() => null);
+        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 6000, null);
         if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
           // Yahoo returns ONE expiration per call by default — request the next 3 nearest expirations
           const nowMs = Date.now();
@@ -783,11 +801,15 @@ export async function GET(req: NextRequest) {
           const allChains: any[] = [];
           // First chain already in optAll.options[0]
           allChains.push(optAll.options[0]);
-          // Fetch the other 2 in parallel
-          const extra = await Promise.all(
-            expDates.slice(1).map((t: number) =>
-              yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
-            )
+          // Fetch the other 2 in parallel — bounded by 8s total so Vercel timeout (30s) never hits
+          const extra = await withTimeout(
+            Promise.all(
+              expDates.slice(1).map((t: number) =>
+                yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
+              )
+            ),
+            8000,
+            [] as any[]
           );
           for (const ch of extra) if (ch) allChains.push(ch);
 
@@ -799,6 +821,9 @@ export async function GET(req: NextRequest) {
                   ? chain.expirationDate.toISOString().slice(0, 10)
                   : new Date(chain.expirationDate).toISOString().slice(0, 10))
               : '';
+            // Years to expiration for Black-Scholes
+            const expMs = expIso ? new Date(expIso).getTime() : 0;
+            const T = expMs > 0 ? Math.max((expMs - Date.now()) / (365 * 86400000), 1 / 365) : 0;
             for (const cType of ['calls', 'puts'] as const) {
               const arr = Array.isArray(chain?.[cType]) ? chain[cType] : [];
               for (const o of arr) {
@@ -810,6 +835,10 @@ export async function GET(req: NextRequest) {
                 const last = Number(o?.lastPrice) || 0;
                 const bid = Number(o?.bid) || 0;
                 const ask = Number(o?.ask) || 0;
+                // Compute Black-Scholes gamma locally (Yahoo doesn't provide greeks)
+                const gamma = (underlyingPrice > 0 && iv > 0 && T > 0)
+                  ? bsGamma(underlyingPrice, strike, T, iv)
+                  : 0;
                 yContracts.push({
                   contractType: cType === 'calls' ? 'call' : 'put',
                   strike,
@@ -820,9 +849,8 @@ export async function GET(req: NextRequest) {
                   lastPrice: last,
                   bid,
                   ask,
-                  // crude greek estimates (no analytical data from Yahoo) — leave as 0
                   delta: 0,
-                  gamma: 0,
+                  gamma,
                 });
                 yRaw.push({
                   details: {

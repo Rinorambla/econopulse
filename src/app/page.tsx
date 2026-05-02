@@ -17,6 +17,36 @@ export default function HomePage() {
           <AIBackground intensity="subtle" />
         </SafeBoundary>
 
+        {/* Hero photo backdrop (right side, fades into the dark UI) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage: "url('/hero-bg.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'right center',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.55,
+            maskImage:
+              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.85) 65%, #000 100%)',
+            WebkitMaskImage:
+              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.85) 65%, #000 100%)',
+          }}
+        />
+        {/* Cinematic vignette + brand color wash on top of the photo */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-[#05070d] via-[#05070d]/85 to-transparent"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-[#05070d]/40 via-transparent to-[#05070d]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 mix-blend-overlay opacity-60 bg-gradient-to-tr from-blue-600/20 via-transparent to-emerald-500/20"
+        />
+
         {/* Decorative gradient orbs */}
         <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
         <div className="pointer-events-none absolute -bottom-40 right-0 w-[400px] h-[400px] rounded-full bg-emerald-500/10 blur-[100px]" />

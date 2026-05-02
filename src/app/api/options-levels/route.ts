@@ -278,22 +278,82 @@ async function fetchDailyBarsMulti(symbol: string, days = 260): Promise<any[]> {
   return [polygon, av].sort((a, b) => b.length - a.length)[0] || [];
 }
 
-// ─── Direct Yahoo options fetch (bypasses yahoo-finance2 which fails on Vercel serverless)
-// Yahoo's public options endpoint: query2.finance.yahoo.com/v7/finance/options/{symbol}
-// Returns a single chain per call; pass `?date=<unix>` to fetch a specific expiration.
+// ─── Direct Yahoo options fetch with crumb auth (Yahoo's v7 endpoint requires it now)
+// Flow: GET fc.yahoo.com → grab Set-Cookie → GET /v1/test/getcrumb with cookie → call options with crumb+cookie.
+// Crumb is cached for 30 min to avoid 3 round-trips per request.
+let yahooCrumbCache: { crumb: string; cookie: string; ts: number } | null = null;
+const CRUMB_TTL = 30 * 60 * 1000;
+
+async function getYahooCrumb(): Promise<{ crumb: string; cookie: string } | null> {
+  if (yahooCrumbCache && (Date.now() - yahooCrumbCache.ts) < CRUMB_TTL) {
+    return { crumb: yahooCrumbCache.crumb, cookie: yahooCrumbCache.cookie };
+  }
+  try {
+    // Step 1: get cookies
+    const r1 = await fetch('https://fc.yahoo.com/', {
+      signal: AbortSignal.timeout(4000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    }).catch(() => null);
+    const setCookieRaw = r1?.headers.get('set-cookie') || '';
+    // Extract just name=value pairs (drop attributes like Path/Expires/Domain)
+    const cookieParts = setCookieRaw.split(/,(?=[^ ])/g)
+      .map(c => c.split(';')[0].trim())
+      .filter(Boolean);
+    const cookie = cookieParts.join('; ');
+    if (!cookie) return null;
+    // Step 2: get crumb
+    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+      signal: AbortSignal.timeout(4000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Cookie': cookie,
+      },
+    });
+    if (!r2.ok) return null;
+    const crumb = (await r2.text()).trim();
+    if (!crumb) return null;
+    yahooCrumbCache = { crumb, cookie, ts: Date.now() };
+    return { crumb, cookie };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchYahooOptionsDirect(symbol: string, date?: number): Promise<any | null> {
-  const dateParam = date ? `?date=${date}` : '';
+  const auth = await getYahooCrumb();
+  if (!auth) return null;
+  const dateParam = date ? `&date=${date}` : '';
   const hosts = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
   for (const host of hosts) {
-    const url = `https://${host}/v7/finance/options/${encodeURIComponent(symbol)}${dateParam}`;
+    const url = `https://${host}/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(auth.crumb)}${dateParam}`;
     try {
       const res = await fetch(url, {
         signal: AbortSignal.timeout(6000),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
+          'Cookie': auth.cookie,
         },
       });
+      if (res.status === 401 || res.status === 403) {
+        // Crumb expired — clear cache and retry once
+        yahooCrumbCache = null;
+        const fresh = await getYahooCrumb();
+        if (!fresh) continue;
+        const retry = await fetch(`https://${host}/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(fresh.crumb)}${dateParam}`, {
+          signal: AbortSignal.timeout(6000),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Cookie': fresh.cookie,
+          },
+        });
+        if (!retry.ok) continue;
+        const j = await retry.json();
+        const result = j?.optionChain?.result?.[0];
+        if (result) return result;
+        continue;
+      }
       if (!res.ok) continue;
       const j = await res.json();
       const result = j?.optionChain?.result?.[0];

@@ -109,7 +109,7 @@ export default function HomePage() {
                     </div>
                     <div className="hidden sm:flex flex-col justify-center px-5 py-4 max-w-[220px] border-l border-white/5">
                       <p className="text-[10px] uppercase tracking-[0.2em] text-blue-400 font-semibold mb-1">Live Sentiment</p>
-                      <p className="text-sm text-white/80 leading-snug">Real-time CNN Fear &amp; Greed Index — read crowd psychology before you trade.</p>
+                      <p className="text-sm text-white/80 leading-snug">EconopulseAi Fear &amp; Greed</p>
                     </div>
                   </div>
                 </div>

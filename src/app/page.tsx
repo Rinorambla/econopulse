@@ -98,25 +98,23 @@ export default function HomePage() {
                   <span className="flex items-center gap-1.5"><BoltIcon className="h-4 w-4 text-yellow-400/70" /> &lt;1.2s AI response</span>
                   <span className="flex items-center gap-1.5"><ArrowTrendingUpIcon className="h-4 w-4 text-blue-400/70" /> 600+ live assets</span>
                 </div>
+
+                {/* Fear & Greed Index — inline under hero text (left column) */}
+                <div className="mt-10 ai-fade-up ai-delay-600">
+                  <div className="inline-flex items-stretch gap-0 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/10 shadow-2xl shadow-black/40 backdrop-blur-md overflow-hidden">
+                    <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] shrink-0">
+                      <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
+                        <FearGreedIndex />
+                      </SafeBoundary>
+                    </div>
+                    <div className="hidden sm:flex flex-col justify-center px-5 py-4 max-w-[220px] border-l border-white/5">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-blue-400 font-semibold mb-1">Live Sentiment</p>
+                      <p className="text-sm text-white/80 leading-snug">Real-time CNN Fear &amp; Greed Index — read crowd psychology before you trade.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </main>
-          </div>
-        </div>
-
-        {/* Fear & Greed Index — compact floating card on the right */}
-        <div className="hidden lg:flex lg:absolute lg:top-1/2 lg:-translate-y-1/2 lg:right-8 xl:right-16 z-20">
-          <div className="w-[260px] h-[260px] rounded-2xl bg-gradient-to-br from-[var(--color-panel)] to-[var(--color-backdrop)] border border-[var(--color-border)]/40 shadow-2xl shadow-black/40 overflow-hidden">
-            <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
-              <FearGreedIndex />
-            </SafeBoundary>
-          </div>
-        </div>
-        {/* Mobile: smaller F&G card */}
-        <div className="lg:hidden flex justify-center px-4 pb-6">
-          <div className="w-full max-w-[280px] h-[220px] rounded-2xl bg-gradient-to-br from-[var(--color-panel)] to-[var(--color-backdrop)] border border-[var(--color-border)]/40 shadow-xl overflow-hidden">
-            <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
-              <FearGreedIndex />
-            </SafeBoundary>
           </div>
         </div>
       </div>

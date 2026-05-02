@@ -458,101 +458,118 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         );
       })()}
 
-      {/* Gamma Exposure profile (vertical histogram, SpotGamma-style) */}
-      {(tab === 'realtime' || tab === 'inventory') && ladder && (() => {
-        const rows = ladder.rows;
-        const maxAbs = ladder.maxAbs;
-        const W = 560;
-        const H = Math.max(360, rows.length * 14);
-        const padTop = 18;
-        const padBottom = 30;
+      {/* Gamma Exposure profile — gexstream-style ladder (every strike labeled, dense bars) */}
+      {(tab === 'realtime' || tab === 'inventory' || tab === 'levels') && ladder && (() => {
+        // Zoom around spot: ±5% (gexstream default), fall back to wider if too few strikes
+        const all = ladder.rows;
+        let rows = all.filter(r => r.strike >= price * 0.95 && r.strike <= price * 1.05);
+        if (rows.length < 15) rows = all.filter(r => r.strike >= price * 0.90 && r.strike <= price * 1.10);
+        if (rows.length < 10) rows = all;
+        // Sort descending so highest strike is at top (gexstream layout)
+        rows = [...rows].sort((a, b) => b.strike - a.strike);
+        const maxAbs = Math.max(...rows.map(r => Math.max(Math.abs(r.callGex), Math.abs(r.putGex))), 1);
+        const W = 700;
+        const rowH = 14;
+        const padTop = 30;
+        const padBottom = 36;
         const padLeft = 60;
-        const padRight = 16;
+        const padRight = 70;
+        const chartH = rows.length * rowH;
+        const H = padTop + chartH + padBottom;
         const chartW = W - padLeft - padRight;
-        const chartH = H - padTop - padBottom;
-        const minStrike = rows[0].strike;
-        const maxStrike = rows[rows.length - 1].strike;
-        const strikeRange = maxStrike - minStrike || 1;
-        const yFor = (s: number) => padTop + chartH - ((s - minStrike) / strikeRange) * chartH;
         const xZero = padLeft + chartW / 2;
         const halfW = chartW / 2;
-        const barH = Math.max(3, Math.min(11, chartH / rows.length - 1));
-        const priceY = yFor(price);
-        const flipY = data.gammaFlip != null && data.gammaFlip >= minStrike && data.gammaFlip <= maxStrike ? yFor(data.gammaFlip) : null;
-        // Strike labels: every Nth row to avoid clutter
-        const labelStep = Math.max(1, Math.ceil(rows.length / 22));
+        const barH = rowH - 3;
+        // Find the row closest to spot and the row closest to gamma flip
+        const closestSpotIdx = rows.reduce((best, r, i) => Math.abs(r.strike - price) < Math.abs(rows[best].strike - price) ? i : best, 0);
+        const flipIdx = data.gammaFlip != null
+          ? rows.reduce((best, r, i) => Math.abs(r.strike - data.gammaFlip!) < Math.abs(rows[best].strike - data.gammaFlip!) ? i : best, 0)
+          : -1;
+        const yFor = (i: number) => padTop + i * rowH + rowH / 2;
+        // X-axis ticks: 5 evenly spaced values
+        const tickStep = maxAbs / 2;
+        const ticks = [-maxAbs, -tickStep, 0, tickStep, maxAbs];
+        const fmtAxis = (v: number) => {
+          const a = Math.abs(v);
+          if (a >= 1e6) return `${v < 0 ? '-' : ''}${(a / 1e6).toFixed(1)}M`;
+          if (a >= 1e3) return `${v < 0 ? '-' : ''}${(a / 1e3).toFixed(0)}K`;
+          return v.toFixed(0);
+        };
+        const priceY = yFor(closestSpotIdx);
         return (
-          <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5">
+          <div className="bg-slate-900/70 rounded-lg p-3 ring-1 ring-white/5">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] font-semibold text-gray-300">Gamma Exposure by Strike</div>
+              <div className="text-[11px] font-semibold text-gray-200 uppercase tracking-wider">gamma exposure</div>
               <div className="flex items-center gap-3 text-[10px]">
-                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-emerald-500 rounded-sm" /> Calls (+γ)</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-red-500 rounded-sm" /> Puts (−γ)</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-px bg-amber-300" style={{ borderTop: '1px dashed #fcd34d' }} /> Spot</span>
-                {data.gammaFlip != null && <span className="flex items-center gap-1"><span className="inline-block w-3 h-px bg-fuchsia-400" /> γ Flip</span>}
+                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-emerald-500 rounded-sm" /> Calls</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-red-500 rounded-sm" /> Puts</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-px" style={{ borderTop: '1.5px dashed #fcd34d' }} /> Spot</span>
               </div>
             </div>
             <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxHeight: 480 }} preserveAspectRatio="xMidYMid meet">
-                {/* Background grid */}
-                <rect x={padLeft} y={padTop} width={chartW} height={chartH} fill="#0f172a" rx={4} />
-                {/* Center axis */}
-                <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={1} />
-                {/* Bars */}
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxHeight: 720 }} preserveAspectRatio="xMidYMid meet">
+                {/* Background */}
+                <rect x={padLeft} y={padTop} width={chartW} height={chartH} fill="#0b1220" />
+                {/* Vertical grid for axis ticks */}
+                {ticks.map((t, i) => {
+                  const x = xZero + (t / maxAbs) * halfW;
+                  return (
+                    <line key={`grid-${i}`} x1={x} y1={padTop} x2={x} y2={padTop + chartH} stroke="#1e293b" strokeWidth={1} strokeDasharray={t === 0 ? undefined : '2 3'} />
+                  );
+                })}
+                {/* Bars + strike labels for every row */}
                 {rows.map((r, i) => {
-                  const yBase = yFor(r.strike) - barH / 2;
+                  const y = yFor(i);
+                  const yBar = y - barH / 2;
                   const callW = (Math.abs(r.callGex) / maxAbs) * halfW;
                   const putW = (Math.abs(r.putGex) / maxAbs) * halfW;
+                  const isSpot = i === closestSpotIdx;
+                  const isFlip = i === flipIdx;
+                  const labelColor = isSpot ? '#fcd34d' : isFlip ? '#ef4444' : '#94a3b8';
+                  const labelWeight = (isSpot || isFlip) ? 700 : 400;
                   return (
                     <g key={r.strike}>
-                      {putW > 0 && (
-                        <rect x={xZero - putW} y={yBase} width={putW} height={barH} fill="#ef4444" opacity={0.85} />
+                      <text x={padLeft - 6} y={y + 3} textAnchor="end" fontSize={9.5} fill={labelColor} fontWeight={labelWeight} fontFamily="ui-monospace, monospace">
+                        {r.strike.toFixed(2)}
+                      </text>
+                      {putW > 0.5 && (
+                        <rect x={xZero - putW} y={yBar} width={putW} height={barH} fill="#ef4444" opacity={0.9} />
                       )}
-                      {callW > 0 && (
-                        <rect x={xZero} y={yBase} width={callW} height={barH} fill="#10b981" opacity={0.85} />
-                      )}
-                      {/* Strike labels every Nth */}
-                      {i % labelStep === 0 && (
-                        <text x={padLeft - 6} y={yFor(r.strike) + 3} textAnchor="end" fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">
-                          {r.strike.toFixed(r.strike >= 1000 ? 0 : 2)}
-                        </text>
+                      {callW > 0.5 && (
+                        <rect x={xZero} y={yBar} width={callW} height={barH} fill="#10b981" opacity={0.9} />
                       )}
                     </g>
                   );
                 })}
-                {/* Gamma flip line */}
-                {flipY != null && (
-                  <g>
-                    <line x1={padLeft} y1={flipY} x2={padLeft + chartW} y2={flipY} stroke="#e879f9" strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
-                  </g>
-                )}
-                {/* Spot price line */}
+                {/* Center zero axis */}
+                <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={1} />
+                {/* Spot price line (yellow dashed) with floating label on right */}
                 <g>
-                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke="#fcd34d" strokeWidth={1.4} strokeDasharray="4 3" />
-                  <rect x={padLeft + chartW - 70} y={priceY - 9} width={66} height={16} rx={3} fill="#fcd34d" />
-                  <text x={padLeft + chartW - 4} y={priceY + 3} textAnchor="end" fontSize={10} fontWeight={700} fill="#1f2937" fontFamily="ui-monospace, monospace">
+                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke="#fcd34d" strokeWidth={1.5} strokeDasharray="5 3" />
+                  <text x={padLeft + chartW + 4} y={priceY + 3} fontSize={11} fontWeight={700} fill="#fcd34d" fontFamily="ui-monospace, monospace">
                     {price.toFixed(2)}
                   </text>
                 </g>
-                {/* Max pain marker */}
-                {data.maxPain != null && data.maxPain >= minStrike && data.maxPain <= maxStrike && (
-                  <g>
-                    <line x1={padLeft} y1={yFor(data.maxPain)} x2={padLeft + chartW} y2={yFor(data.maxPain)} stroke="#f59e0b" strokeWidth={1} strokeDasharray="1 4" opacity={0.6} />
-                    <text x={padLeft + 4} y={yFor(data.maxPain) - 3} fontSize={9} fill="#fbbf24" fontFamily="ui-monospace, monospace">
-                      MP {data.maxPain.toFixed(2)}
+                {/* X-axis tick labels */}
+                {ticks.map((t, i) => {
+                  const x = xZero + (t / maxAbs) * halfW;
+                  return (
+                    <text key={`tk-${i}`} x={x} y={padTop + chartH + 14} textAnchor="middle" fontSize={9.5} fill="#94a3b8" fontFamily="ui-monospace, monospace">
+                      {fmtAxis(t)}
                     </text>
-                  </g>
-                )}
-                {/* Axis title */}
-                <text x={padLeft + chartW / 2} y={H - 8} textAnchor="middle" fontSize={9} fill="#64748b" fontFamily="ui-monospace, monospace">
-                  ← Put gamma · 0 · Call gamma →
+                  );
+                })}
+                {/* X-axis title */}
+                <text x={padLeft} y={padTop + chartH + 30} fontSize={9.5} fill="#64748b" fontFamily="ui-monospace, monospace">
+                  shares per $ move
                 </text>
               </svg>
             </div>
             <div className="mt-1 text-[10px] text-gray-500 flex flex-wrap gap-3">
-              <span>Range: ${minStrike.toFixed(2)} – ${maxStrike.toFixed(2)}</span>
               <span>Strikes: {rows.length}</span>
-              {data.gammaFlip != null && <span className="text-fuchsia-300">γ flip: ${data.gammaFlip.toFixed(2)}</span>}
+              <span>Range: ${rows[rows.length - 1].strike.toFixed(2)} – ${rows[0].strike.toFixed(2)}</span>
+              {data.gammaFlip != null && <span className="text-red-400">γ flip: ${data.gammaFlip.toFixed(2)}</span>}
+              {data.maxPain != null && <span className="text-amber-300">Max pain: ${data.maxPain.toFixed(2)}</span>}
             </div>
           </div>
         );

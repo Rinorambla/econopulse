@@ -480,31 +480,32 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
       }
     }
 
-    // === ATTEMPT 1.5: Yahoo Finance options chain (free, no API key, has OI + IV) ===
+    // === ATTEMPT 1.5: Yahoo Finance options chain via direct fetch with crumb auth ===
+    // (yahoo-finance2 lib fails on Vercel serverless because crumb/cookie handshake breaks).
     // Computes real GEX with Black-Scholes from chain data when Polygon/Tradier are unavailable.
     try {
-      const yf: any = (await import('yahoo-finance2')).default;
-      const optAll: any = await Promise.race([
-        yf.options(upperSymbol).catch(() => null),
-        new Promise(resolve => setTimeout(() => resolve(null), 6000))
+      const { fetchYahooOptionsChain } = await import('./yahoo-options-direct');
+      const firstChain: any = await Promise.race([
+        fetchYahooOptionsChain(upperSymbol),
+        new Promise(resolve => setTimeout(() => resolve(null), 7000))
       ]);
-      if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
-        const price = Number(optAll.quote?.regularMarketPrice) || Number(optAll.options[0]?.calls?.[0]?.lastPrice) || 0;
+      if (firstChain) {
+        const price = Number(firstChain.quote?.regularMarketPrice) || Number(firstChain.options?.[0]?.calls?.[0]?.lastPrice) || 0;
         if (price > 0) {
-          // Pull next 3 expirations for richer GEX
-          const expDates: number[] = (optAll.expirationDates || [])
-            .map((d: any) => (d instanceof Date ? d.getTime() : new Date(d).getTime()))
-            .filter((t: number) => isFinite(t) && t > Date.now())
+          const expDates: number[] = (firstChain.expirationDates || [])
+            .map((t: any) => Number(t))
+            .filter((t: number) => isFinite(t) && t > Math.floor(Date.now() / 1000))
             .sort((a: number, b: number) => a - b)
             .slice(0, expirationsToUse + 1);
-          const allChains: any[] = [optAll.options[0]];
+          const allChains: any[] = [];
+          if (firstChain.options?.[0]) allChains.push(firstChain.options[0]);
           const extra: any[] = await Promise.race([
             Promise.all(
               expDates.slice(1).map((t: number) =>
-                yf.options(upperSymbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
+                fetchYahooOptionsChain(upperSymbol, t).then((r: any) => r?.options?.[0]).catch(() => null)
               )
             ),
-            new Promise(resolve => setTimeout(() => resolve([]), 8000))
+            new Promise(resolve => setTimeout(() => resolve([]), 9000))
           ]) as any[];
           for (const ch of extra) if (ch) allChains.push(ch);
 
@@ -518,12 +519,9 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
           let bestPut25: { iv: number; delta: number } | null = null;
 
           for (const chain of allChains) {
-            const expMs = chain?.expirationDate
-              ? (chain.expirationDate instanceof Date ? chain.expirationDate.getTime() : new Date(chain.expirationDate).getTime())
-              : 0;
-            if (!expMs) continue;
-            const T = Math.max((expMs - Date.now()) / (365 * 86400000), 1 / 365);
-            for (const cType of ['calls', 'puts'] as const) {
+            const expUnix = Number(chain?.expirationDate);
+            if (!isFinite(expUnix) || expUnix <= 0) continue;
+            const T = Math.max((expUnix * 1000ls', 'puts'] as const) {
               const arr: any[] = Array.isArray(chain?.[cType]) ? chain[cType] : [];
               for (const o of arr) {
                 const K = Number(o?.strike);

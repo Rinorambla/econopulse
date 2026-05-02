@@ -521,7 +521,8 @@ export async function getOptionsMetrics(symbol: string, expirationsToUse = 2): P
           for (const chain of allChains) {
             const expUnix = Number(chain?.expirationDate);
             if (!isFinite(expUnix) || expUnix <= 0) continue;
-            const T = Math.max((expUnix * 1000ls', 'puts'] as const) {
+            const T = Math.max((expUnix * 1000 - Date.now()) / (365 * 86400000), 1 / 365);
+            for (const cType of ['calls', 'puts'] as const) {
               const arr: any[] = Array.isArray(chain?.[cType]) ? chain[cType] : [];
               for (const o of arr) {
                 const K = Number(o?.strike);

@@ -866,7 +866,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         <strong>Walls</strong>: strikes with concentrated OI acting as support/resistance.
         <strong>Tape</strong>: today's largest volume strikes by side.
         <strong>AI Pulse</strong>: actionable target/stop derived from nearest walls, with risk/reward.
-        Source: Polygon options chain (nearest expirations) · Yahoo bars · Lee-Ready trade classification.
+        Source: EconopulseAI
       </p>
     </div>
   );

@@ -801,7 +801,7 @@ export async function GET(req: NextRequest) {
     if (!workingContracts.length || !hasMeaningfulOI) {
       try {
         const yf = (await import('yahoo-finance2')).default as any;
-        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 4000, null);
+        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 8000, null);
         if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
           // Yahoo returns ONE expiration per call by default — request the next 3 nearest expirations
           const nowMs = Date.now();
@@ -813,14 +813,14 @@ export async function GET(req: NextRequest) {
           const allChains: any[] = [];
           // First chain already in optAll.options[0]
           allChains.push(optAll.options[0]);
-          // Fetch the other 2 in parallel — total Yahoo budget ~9s (4 + 5)
+          // Fetch the other 2 in parallel — total Yahoo budget ~18s, well under 30s Vercel limit
           const extra = await withTimeout(
             Promise.all(
               expDates.slice(1).map((t: number) =>
                 yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
               )
             ),
-            5000,
+            10000,
             [] as any[]
           );
           for (const ch of extra) if (ch) allChains.push(ch);

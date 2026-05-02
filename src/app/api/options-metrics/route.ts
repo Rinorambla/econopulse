@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 25;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOptionsMetrics } from '@/lib/options-provider';
+import { getOptionsMetrics, getFallbackOptionsMetrics } from '@/lib/options-provider';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 type APIMetrics = {
@@ -54,8 +54,14 @@ export async function GET(req: NextRequest) {
     symbols = symbols.slice(0, 20);
 
     const out: Record<string, APIMetrics> = {};
+    // Hard per-symbol budget — if upstream providers hang we still return an estimate
+    // so the dashboard widget never stays stuck on the spinner.
+    const PER_SYMBOL_BUDGET_MS = symbols.length === 1 ? 18_000 : 8_000;
     for (const sym of symbols) {
-      const m = await getOptionsMetrics(sym, 3);
+      const m = await Promise.race([
+        getOptionsMetrics(sym, 3),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), PER_SYMBOL_BUDGET_MS)),
+      ]).catch(() => null) || getFallbackOptionsMetrics(sym);
       if (!m) { out[sym] = { symbol: sym }; continue; }
       const pcVol = m.putCallVolumeRatio;
       const pcOI = m.putCallOIRatio;

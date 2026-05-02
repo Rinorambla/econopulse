@@ -79,13 +79,87 @@ async function fetchSectorPerf(origin: string): Promise<any[]> {
   } catch { return [] }
 }
 
-async function fetchNews(origin: string): Promise<any[]> {
+// Map sector names to bellwether tickers so we can pull sector-relevant headlines from Tiingo.
+const SECTOR_TICKERS: Record<string, string[]> = {
+  Technology: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META'],
+  Communication: ['META', 'GOOGL', 'NFLX', 'DIS'],
+  'Consumer Discretionary': ['AMZN', 'TSLA', 'HD', 'MCD'],
+  'Consumer Staples': ['WMT', 'PG', 'KO', 'PEP'],
+  Financial: ['JPM', 'BAC', 'GS', 'WFC'],
+  Energy: ['XOM', 'CVX', 'COP'],
+  Healthcare: ['UNH', 'JNJ', 'LLY', 'PFE'],
+  Industrials: ['CAT', 'BA', 'GE', 'HON'],
+  Materials: ['LIN', 'FCX', 'NEM'],
+  Utilities: ['NEE', 'DUK', 'SO'],
+  'Real Estate': ['PLD', 'AMT', 'EQIX'],
+}
+
+function truncate(text: string | undefined, max = 150): string {
+  if (!text) return ''
+  if (text.length <= max) return text
+  return text.slice(0, max).replace(/\s+\S*$/, '') + '…'
+}
+
+// Pull news directly from Tiingo, biased toward today's biggest movers and leading/lagging sectors
+// so the AI Daily Brief headlines actually correlate with the market action being summarized.
+async function fetchTiingoCorrelatedNews(
+  movers: { top: any[]; bottom: any[] },
+  sectors: any[]
+): Promise<any[]> {
+  const token = (process.env.TIINGO_API_KEY || '').trim()
+  if (!token) return []
+
+  // Build ticker set: top + bottom movers, plus bellwethers of leading & lagging sectors
+  const focusTickers = new Set<string>()
+  for (const m of [...(movers.top || []), ...(movers.bottom || [])]) {
+    const t = String(m?.symbol || m?.ticker || '').toUpperCase().trim()
+    if (t) focusTickers.add(t)
+  }
+  const sortedSec = [...sectors].filter(s => s?.changePercent != null).sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0))
+  const sectorPicks = [...sortedSec.slice(0, 2), ...sortedSec.slice(-2)]
+  for (const s of sectorPicks) {
+    const key = String(s?.name || s?.sector || '')
+    const tickers = SECTOR_TICKERS[key] || []
+    for (const t of tickers) focusTickers.add(t)
+  }
+  // Always include broad market context
+  for (const t of ['SPY', 'QQQ', 'DIA', 'IWM']) focusTickers.add(t)
+
+  const tickersCsv = Array.from(focusTickers).slice(0, 20).join(',')
+  const url = `https://api.tiingo.com/tiingo/news?token=${encodeURIComponent(token)}&limit=40&tickers=${encodeURIComponent(tickersCsv)}&sortBy=publishedDate`
+
   try {
-    const r = await fetch(`${origin}/api/news`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
-    if (!r.ok) return []
-    const j = await r.json()
-    return (j?.data || []).slice(0, 8)
-  } catch { return [] }
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'EconoPulse/1.0', 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(8000),
+      cache: 'no-store',
+    })
+    if (!res.ok) return []
+    const arr = await res.json()
+    if (!Array.isArray(arr)) return []
+
+    // Score by overlap with focus tickers (more matches = more relevant), then by recency
+    const scored = arr.map((a: any) => {
+      const tks = Array.isArray(a?.tickers) ? a.tickers.map((x: string) => String(x).toUpperCase()) : []
+      const overlap = tks.filter((t: string) => focusTickers.has(t)).length
+      const ts = a?.publishedDate ? Date.parse(a.publishedDate) || 0 : 0
+      return { a, score: overlap * 1000 + ts / 1e10 }
+    }).sort((x, y) => y.score - x.score)
+
+    return scored.slice(0, 8).map(({ a }) => ({
+      id: a.id,
+      title: a.title,
+      description: truncate(a.description),
+      url: a.url,
+      source: a.source || 'Tiingo',
+      publishedDate: a.publishedDate,
+      tickers: a.tickers || [],
+      tags: a.tags || [],
+    }))
+  } catch (e) {
+    console.warn('[updateai] Tiingo news fetch failed:', (e as any)?.message)
+    return []
+  }
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -275,12 +349,14 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const origin = `${url.protocol}//${url.host}`
 
-  const [quotes, movers, sectors, news] = await Promise.all([
+  // First pass: get quotes + movers + sectors (these define the market context)
+  const [quotes, movers, sectors] = await Promise.all([
     fetchQuotes(),
     fetchTopMovers(origin),
     fetchSectorPerf(origin),
-    fetchNews(origin),
   ])
+  // Second pass: pull Tiingo headlines biased toward today's actual movers + leading/lagging sectors
+  const news = await fetchTiingoCorrelatedNews(movers, sectors)
 
   const { brief, provider } = await generateBrief(quotes, movers, sectors, news)
 

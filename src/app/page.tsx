@@ -61,12 +61,6 @@ export default function HomePage() {
           <div className="relative z-10 pb-10 sm:pb-20 md:pb-24 lg:max-w-3xl lg:w-full lg:pb-32 xl:pb-40">
             <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-14 sm:px-6 md:mt-16 lg:mt-24 lg:px-8 xl:mt-28">
               <div className="sm:text-center lg:text-left">
-                {/* Badge */}
-                <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs font-medium tracking-wide ai-fade-up ai-delay-100">
-                  <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>
-                  Live Market Intelligence
-                </div>
-
                 <h1 className="text-4xl tracking-tight font-extrabold sm:text-5xl md:text-6xl lg:text-7xl leading-[1.08]">
                   <span className="block ai-gradient-text ai-float ai-delay-100">Actionable Market</span>
                   <span className="block ai-gradient-text ai-float ai-delay-300">Intelligence Layer</span>

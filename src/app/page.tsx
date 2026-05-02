@@ -26,25 +26,31 @@ export default function HomePage() {
             backgroundSize: 'cover',
             backgroundPosition: 'right center',
             backgroundRepeat: 'no-repeat',
-            opacity: 0.55,
+            opacity: 0.85,
             maskImage:
-              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.85) 65%, #000 100%)',
+              'linear-gradient(to right, transparent 0%, transparent 28%, rgba(0,0,0,0.6) 50%, #000 70%)',
             WebkitMaskImage:
-              'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.85) 65%, #000 100%)',
+              'linear-gradient(to right, transparent 0%, transparent 28%, rgba(0,0,0,0.6) 50%, #000 70%)',
           }}
         />
-        {/* Cinematic vignette + brand color wash on top of the photo */}
+        {/* Left-side darkening for text readability — only covers the text column */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-[#05070d] via-[#05070d]/85 to-transparent"
+          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-[#05070d] via-[#05070d]/70 to-transparent"
+          style={{
+            maskImage: 'linear-gradient(to right, #000 0%, #000 45%, transparent 70%)',
+            WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 45%, transparent 70%)',
+          }}
         />
+        {/* Subtle bottom fade into page */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-[#05070d]/40 via-transparent to-[#05070d]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 z-0 bg-gradient-to-b from-transparent to-[#05070d]"
         />
+        {/* Brand color wash, gentler than before */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 mix-blend-overlay opacity-60 bg-gradient-to-tr from-blue-600/20 via-transparent to-emerald-500/20"
+          className="pointer-events-none absolute inset-0 z-0 mix-blend-overlay opacity-30 bg-gradient-to-tr from-blue-600/30 via-transparent to-emerald-500/20"
         />
 
         {/* Decorative gradient orbs */}

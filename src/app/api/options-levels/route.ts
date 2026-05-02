@@ -233,7 +233,7 @@ async function fetchAlphaVantageDailyBars(symbol: string, days = 260): Promise<a
   if (!key) return [];
   const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${key}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { 'Accept': 'application/json' } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'Accept': 'application/json' } });
     if (!res.ok) return [];
     const j = await res.json();
     const series = j?.['Time Series (Daily)'];
@@ -258,7 +258,7 @@ async function fetchAlphaVantageQuote(symbol: string): Promise<number | null> {
   if (!key) return null;
   try {
     const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${key}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return null;
     const j = await res.json();
     const p = parseFloat(j?.['Global Quote']?.['05. price']);
@@ -286,7 +286,7 @@ async function fetchPolygonOptionsSnapshotRaw(symbol: string): Promise<any[]> {
   const apiKey = apiKeys[0];
   const url = `https://api.polygon.io/v3/snapshot/options/${encodeURIComponent(symbol)}?limit=250&apiKey=${apiKey}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { 'Accept': 'application/json' } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'Accept': 'application/json' } });
     if (!res.ok) return [];
     const j = await res.json();
     return Array.isArray(j?.results) ? j.results : [];
@@ -739,12 +739,12 @@ export async function GET(req: NextRequest) {
     const polygon = getPolygonClient();
     if (!polygon) return NextResponse.json({ ok: false, error: 'Polygon client unavailable' }, { status: 503 });
 
-    // Fetch in parallel
+    // Fetch in parallel — every external call has a hard timeout to stay well below Vercel's 30s limit
     const [contracts, bars, prev, rawSnapshot] = await Promise.all([
-      polygon.getOptionsSnapshot(symbol).catch(() => [] as any[]),
-      fetchDailyBarsMulti(symbol, 260),
-      polygon.getPreviousDay(symbol).catch(() => null),
-      fetchPolygonOptionsSnapshotRaw(symbol),
+      withTimeout(polygon.getOptionsSnapshot(symbol).catch(() => [] as any[]), 6000, [] as any[]),
+      withTimeout(fetchDailyBarsMulti(symbol, 260), 10000, [] as any[]),
+      withTimeout(polygon.getPreviousDay(symbol).catch(() => null), 5000, null),
+      withTimeout(fetchPolygonOptionsSnapshotRaw(symbol), 6000, [] as any[]),
     ]);
 
     let underlyingPrice = 0;
@@ -762,20 +762,32 @@ export async function GET(req: NextRequest) {
       try {
         const yf = (await import('yahoo-finance2')).default as any;
         if (!underlyingPrice) {
-          const q = await yf.quote(symbol).catch(() => null);
+          const q = await withTimeout<any>(yf.quote(symbol).catch(() => null), 4000, null);
           const p = q?.regularMarketPrice ?? q?.postMarketPrice ?? q?.preMarketPrice;
           if (p && isFinite(p)) underlyingPrice = p;
         }
         if (!workingBars.length) {
           const period2 = new Date();
           const period1 = new Date(period2.getTime() - 260 * 86400000);
-          const hist = await yf.chart(symbol, { period1, period2, interval: '1d' }).catch(() => null);
+          const hist = await withTimeout<any>(yf.chart(symbol, { period1, period2, interval: '1d' }).catch(() => null), 6000, null);
           const quotes = hist?.quotes || [];
           if (quotes.length) {
             workingBars = quotes
               .filter((r: any) => r?.high != null && r?.low != null && r?.close != null)
               .map((r: any) => ({ h: r.high, l: r.low, c: r.close, o: r.open, v: r.volume || 0, t: new Date(r.date).getTime() }));
           }
+        }
+      } catch { /* ignore */ }
+    }
+    // Tiingo price fallback (last resort, fast — no options data but useful for price)
+    if (!underlyingPrice && process.env.TIINGO_API_KEY) {
+      try {
+        const tk = process.env.TIINGO_API_KEY.trim();
+        const r = await fetch(`https://api.tiingo.com/iex/?tickers=${encodeURIComponent(symbol)}&token=${tk}`, { signal: AbortSignal.timeout(4000) });
+        if (r.ok) {
+          const j = await r.json();
+          const p = Array.isArray(j) ? Number(j[0]?.last ?? j[0]?.tngoLast ?? j[0]?.prevClose) : 0;
+          if (p && isFinite(p)) underlyingPrice = p;
         }
       } catch { /* ignore */ }
     }
@@ -789,7 +801,7 @@ export async function GET(req: NextRequest) {
     if (!workingContracts.length || !hasMeaningfulOI) {
       try {
         const yf = (await import('yahoo-finance2')).default as any;
-        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 6000, null);
+        const optAll: any = await withTimeout<any>(yf.options(symbol).catch(() => null), 4000, null);
         if (optAll && Array.isArray(optAll.options) && optAll.options.length) {
           // Yahoo returns ONE expiration per call by default — request the next 3 nearest expirations
           const nowMs = Date.now();
@@ -801,14 +813,14 @@ export async function GET(req: NextRequest) {
           const allChains: any[] = [];
           // First chain already in optAll.options[0]
           allChains.push(optAll.options[0]);
-          // Fetch the other 2 in parallel — bounded by 8s total so Vercel timeout (30s) never hits
+          // Fetch the other 2 in parallel — total Yahoo budget ~9s (4 + 5)
           const extra = await withTimeout(
             Promise.all(
               expDates.slice(1).map((t: number) =>
                 yf.options(symbol, { date: new Date(t) }).then((r: any) => r?.options?.[0]).catch(() => null)
               )
             ),
-            8000,
+            5000,
             [] as any[]
           );
           for (const ch of extra) if (ch) allChains.push(ch);

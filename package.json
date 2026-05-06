@@ -11,9 +11,22 @@
     "dev:3011": "cross-env PORT=3011 next dev -p 3011",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android",
+    "cap:open:ios": "cap open ios",
+    "cap:run:android": "cap run android",
+    "cap:run:ios": "cap run ios",
+    "cap:assets": "capacitor-assets generate --iconBackgroundColor #05070d --iconBackgroundColorDark #05070d --splashBackgroundColor #05070d --splashBackgroundColorDark #05070d"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@headlessui/react": "^2.2.6",
     "@heroicons/react": "^2.2.0",
     "@stripe/stripe-js": "^7.7.0",
@@ -38,12 +51,13 @@
     "react-plotly.js": "^2.6.0",
     "recharts": "^3.1.2",
     "resend": "^6.0.1",
-  "web-push": "^3.6.7",
     "stripe": "^18.3.0",
     "tailwind-merge": "^3.3.1",
+    "web-push": "^3.6.7",
     "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

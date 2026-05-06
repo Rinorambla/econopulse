@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EconoPulse</string>
+    <string name="title_activity_main">EconoPulse</string>
+    <string name="package_name">ai.econopulse.app</string>
+    <string name="custom_url_scheme">ai.econopulse.app</string>
+</resources>

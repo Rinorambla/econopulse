@@ -69,23 +69,6 @@ export default function HomePage() {
                   Thousands of raw macro, options, sector and cross‑asset signals compressed into a distilled <span className="text-white font-semibold">risk & opportunity map</span>. Built for speed, clarity and institutional discipline.
                 </p>
 
-                {/* CTA Buttons */}
-                <div className="mt-8 flex flex-col sm:flex-row gap-4 ai-fade-up ai-delay-600">
-                  <NavigationLink
-                    href="/dashboard"
-                    className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-600/25 transition-all duration-200 hover:shadow-blue-500/40 hover:-translate-y-0.5"
-                  >
-                    View Live Dashboard
-                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                  </NavigationLink>
-                  <NavigationLink
-                    href="/pricing"
-                    className="inline-flex items-center justify-center px-8 py-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5"
-                  >
-                    Start Free Trial
-                  </NavigationLink>
-                </div>
-
                 {/* Trust badges row */}
                 <div className="mt-8 flex flex-wrap items-center gap-6 text-xs text-white/40 ai-fade-up ai-delay-600">
                   <span className="flex items-center gap-1.5"><ShieldCheckIcon className="h-4 w-4 text-emerald-400/70" /> Bank‑grade encryption</span>
@@ -128,17 +111,16 @@ export default function HomePage() {
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: '📡', title: 'Macro Risk Radar', desc: 'Real‑time regime detection & recession probability' },
-              { icon: '⚡', title: 'Options Flow Engine', desc: 'Put/Call, Gamma exposure & unusual activity' },
-              { icon: '🗺️', title: 'Sector Momentum Map', desc: 'Multi‑timeframe rotation & relative strength' },
-              { icon: '🧠', title: 'AI Economic Lens', desc: 'Cycle projection, factor analysis & forecasting' },
-              { icon: '📊', title: 'Portfolio Diagnostics', desc: 'Allocation analysis & dynamic risk bands' },
-              { icon: '🌐', title: 'Global Market Matrix', desc: 'Cross‑country inflation, growth & FX' },
-              { icon: '📈', title: 'ETF Spread Analyzer', desc: 'Relative performance & vol comparisons' },
-              { icon: '🎯', title: 'Adaptive Watchlist', desc: 'Live fundamentals, trends & alerts' },
+              { title: 'Macro Risk Radar', desc: 'Real‑time regime detection & recession probability' },
+              { title: 'Options Flow Engine', desc: 'Put/Call, Gamma exposure & unusual activity' },
+              { title: 'Sector Momentum Map', desc: 'Multi‑timeframe rotation & relative strength' },
+              { title: 'AI Economic Lens', desc: 'Cycle projection, factor analysis & forecasting' },
+              { title: 'Portfolio Diagnostics', desc: 'Allocation analysis & dynamic risk bands' },
+              { title: 'Global Market Matrix', desc: 'Cross‑country inflation, growth & FX' },
+              { title: 'ETF Spread Analyzer', desc: 'Relative performance & vol comparisons' },
+              { title: 'Adaptive Watchlist', desc: 'Live fundamentals, trends & alerts' },
             ].map((f) => (
               <div key={f.title} className="group relative p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-blue-500/30 transition-all duration-300">
-                <span className="text-2xl mb-3 block">{f.icon}</span>
                 <h3 className="text-sm font-bold text-white mb-1.5">{f.title}</h3>
                 <p className="text-xs text-white/50 leading-relaxed">{f.desc}</p>
                 {/* Hover glow */}
@@ -182,13 +164,6 @@ export default function HomePage() {
               <p className="text-white/60 text-lg leading-relaxed mb-8 max-w-xl">
                 We compress thousands of raw data points — macro spreads, sector momentum, options positioning, cross‑asset ratios — into a clean decision layer you can act on instantly.
               </p>
-              <NavigationLink
-                href="/pricing"
-                className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:shadow-emerald-500/30 hover:-translate-y-0.5"
-              >
-                Explore Plans
-                <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-              </NavigationLink>
             </div>
             <div className="grid grid-cols-2 gap-5">
               {[
@@ -206,6 +181,29 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ───── FINAL CTA ───── */}
+      <section className="relative py-20 border-t border-[var(--color-border)]/50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-4">Ready to start?</h2>
+          <p className="text-white/60 text-base sm:text-lg mb-8 max-w-2xl mx-auto">Access the live dashboard or begin your free trial in seconds.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <NavigationLink
+              href="/dashboard"
+              className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg shadow-blue-600/25 transition-all duration-200 hover:shadow-blue-500/40 hover:-translate-y-0.5"
+            >
+              View Live Dashboard
+              <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+            </NavigationLink>
+            <NavigationLink
+              href="/pricing"
+              className="inline-flex items-center justify-center px-8 py-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5"
+            >
+              Start Free Trial
+            </NavigationLink>
           </div>
         </div>
       </section>

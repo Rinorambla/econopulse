@@ -16,10 +16,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            storeFile file('econopulse-release.keystore')
+            storePassword System.getenv('ECONOPULSE_KEYSTORE_PASSWORD') ?: 'Codici@1987'
+            keyAlias 'econopulse'
+            keyPassword System.getenv('ECONOPULSE_KEY_PASSWORD') ?: 'Codici@1987'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }

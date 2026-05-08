@@ -3,7 +3,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsIOSApp } from '@/hooks/useIsIOSApp';
-import { CheckIcon, StarIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import {
+  CheckIcon,
+  StarIcon,
+  SparklesIcon,
+  BoltIcon,
+  ChartBarIcon,
+  CpuChipIcon,
+  ShieldCheckIcon,
+  ArrowTrendingUpIcon,
+  BellAlertIcon,
+  GlobeAltIcon,
+  AcademicCapIcon,
+  RocketLaunchIcon,
+} from '@heroicons/react/24/solid';
 import { supabase } from '@/lib/supabase';
 
 export default function PricingPage() {
@@ -13,51 +26,42 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const createCheckoutSession = async () => {
-    // Check authentication first
     if (!user?.id) {
-      console.log('User not authenticated, redirecting to login');
       window.location.href = '/login?redirect=/pricing';
       return;
     }
 
-    console.log('User authenticated:', user.id);
     setLoading('premium');
     try {
-      // Get auth token for API call
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           tier: 'premium',
-          billingCycle: billingCycle,
+          billingCycle,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
           cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
         }),
       });
 
       const data = await response.json();
-      console.log('Checkout response:', data);
-      
+
       if (response.ok && data.url) {
         window.location.href = data.url;
         return;
       }
 
-      // Enhanced error surfacing
       let message = data.error || 'Failed to create checkout session';
       if (data.stripeError?.type === 'StripeAuthenticationError') {
-        message = 'Configurazione Stripe non valida (API key o Price IDs non corrispondono all\'ambiente LIVE).';
+        message = 'Stripe configuration invalid (API key or Price IDs do not match LIVE environment).';
         if (data.hint) message += `\nHint: ${data.hint}`;
       } else if (data.stripeError?.type) {
         message += `\nStripe: ${data.stripeError.type}${data.stripeError.code ? ' (' + data.stripeError.code + ')' : ''}`;
@@ -71,31 +75,28 @@ export default function PricingPage() {
     }
   };
 
-  const currentTier: 'free' | 'premium' = 'free'; // TODO: Get from API
-
-  // App Store guideline 3.1.1: digital subscriptions cannot be sold via
-  // external payment in the iOS app. Show a static info screen instead.
+  // App Store guideline 3.1.1 — no in-app paid checkout on iOS
   if (isIOSApp) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
-        <div className="container mx-auto px-4 max-w-2xl">
-          <div className="bg-white rounded-2xl shadow-lg p-8 text-center space-y-4">
-            <SparklesIcon className="h-12 w-12 text-blue-600 mx-auto" />
-            <h1 className="text-3xl font-bold text-gray-900">EconoPulse Free</h1>
-            <p className="text-gray-700">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 py-16 px-4">
+        <div className="container mx-auto max-w-2xl">
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 text-center space-y-4 shadow-2xl">
+            <SparklesIcon className="h-12 w-12 text-cyan-400 mx-auto" />
+            <h1 className="text-3xl font-bold text-white">EconoPulse Free</h1>
+            <p className="text-gray-300">
               You are using the free version of EconoPulse, which includes
               real-time market quotes, sector heatmaps, and basic AI insights.
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-              <h2 className="text-base font-semibold text-blue-900 mb-2">
+            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4 text-left">
+              <h2 className="text-base font-semibold text-blue-200 mb-2">
                 Want more features?
               </h2>
-              <p className="text-sm text-blue-900">
+              <p className="text-sm text-blue-100">
                 Premium plans (advanced AI, full options analytics, alerts) are
                 available on our website. Once you subscribe there, your account
                 will automatically be upgraded inside the app.
               </p>
-              <p className="text-sm text-blue-900 mt-2">
+              <p className="text-sm text-blue-100 mt-2">
                 Visit <strong>www.econopulse.ai</strong> from any browser to learn more.
               </p>
             </div>
@@ -108,329 +109,349 @@ export default function PricingPage() {
     );
   }
 
+  const premiumFeatures = [
+    {
+      icon: CpuChipIcon,
+      title: 'Unlimited AI Analysis',
+      desc: 'GPT-4 powered insights, daily macro summaries, technical & fundamental analysis on any ticker — no usage caps.',
+    },
+    {
+      icon: ChartBarIcon,
+      title: 'Full Dashboard',
+      desc: 'S&P 500 sector heatmap, top movers, gamma exposure, options flow, FedWatch, VIX, Treasury curve.',
+    },
+    {
+      icon: RocketLaunchIcon,
+      title: 'AI Portfolio Builder',
+      desc: 'Smart portfolio construction (conservative / balanced / aggressive) with risk-adjusted optimization.',
+    },
+    {
+      icon: ArrowTrendingUpIcon,
+      title: 'Advanced Screeners',
+      desc: 'Filter 5,000+ equities, ETFs and crypto by AI score, momentum, valuation and quality factors.',
+    },
+    {
+      icon: BellAlertIcon,
+      title: 'Real-Time Alerts',
+      desc: 'Price triggers, options unusual activity, earnings surprises and macro releases delivered instantly.',
+    },
+    {
+      icon: GlobeAltIcon,
+      title: 'Global Coverage',
+      desc: 'US, EU, Asia equities, FX majors, top 100 crypto, commodities — one unified intelligence layer.',
+    },
+    {
+      icon: BoltIcon,
+      title: 'API Access',
+      desc: 'Programmatic access to AI insights and market data for your own dashboards and bots.',
+    },
+    {
+      icon: ShieldCheckIcon,
+      title: 'Priority Support',
+      desc: 'Direct line to the team. Feature requests prioritized. SLA on critical issues.',
+    },
+  ];
+
+  const monthlyPrice = billingCycle === 'monthly' ? '29.99' : '299.99';
+  const yearlyEquivalent = '25.00';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
-      <div className="container mx-auto px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 relative overflow-hidden">
+      {/* Decorative gradient blobs */}
+      <div className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute top-1/3 -right-32 w-[28rem] h-[28rem] bg-blue-600/20 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/2 w-[32rem] h-[32rem] -translate-x-1/2 bg-indigo-600/10 rounded-full blur-3xl" />
+
+      <div className="relative container mx-auto px-4 py-16">
         {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            AI-Powered Market Intelligence Made Simple
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 text-xs font-semibold tracking-wide uppercase mb-6">
+            <SparklesIcon className="h-4 w-4" />
+            AI-Powered Market Intelligence
+          </div>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6 leading-tight">
+            Trade smarter with
+            <span className="block bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent">
+              institutional-grade AI
+            </span>
           </h1>
-          <p className="text-xl text-gray-600 mb-4">
-            Start free with AI Pulse insights, then unlock the full power of our platform
+          <p className="text-lg sm:text-xl text-gray-300 mb-2">
+            Start free, upgrade when you&apos;re ready. One subscription, every market.
           </p>
-          <p className="text-lg text-gray-500">
-            Professional market analysis accessible to everyone
+          <p className="text-sm text-gray-400">
+            Stocks · ETFs · Crypto · Forex · Commodities · Options · Macro
           </p>
         </div>
 
         {/* Billing Toggle */}
-        <div className="flex justify-center mb-12">
-          <div className="bg-white rounded-lg p-1 shadow-sm border">
-            <div className="flex">
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                  billingCycle === 'monthly'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle('yearly')}
-                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                  billingCycle === 'yearly'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Yearly
-                <span className="ml-1 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-                  Save 17%
-                </span>
-              </button>
-            </div>
+        <div className="flex justify-center mb-14">
+          <div className="inline-flex p-1 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md">
+            <button
+              onClick={() => setBillingCycle('monthly')}
+              className={`px-5 sm:px-7 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                billingCycle === 'monthly'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingCycle('yearly')}
+              className={`px-5 sm:px-7 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                billingCycle === 'yearly'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Yearly
+              <span className="text-[10px] uppercase tracking-wide bg-emerald-400/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                Save 17%
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          
-          {/* FREE Plan */}
-          <div className="relative rounded-2xl p-8 bg-white text-gray-900 ring-1 ring-gray-200">
-            <div className="text-center">
-              <h3 className="text-2xl font-semibold mb-4 text-gray-900">
-                Free Plan
-              </h3>
-              
-              <div className="mb-6">
-                <div className="text-5xl font-bold text-gray-900 mb-2">
-                  €0
-                </div>
-                <div className="text-sm text-gray-500">
-                  Forever free
-                </div>
+        {/* Pricing cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 max-w-5xl mx-auto">
+          {/* FREE */}
+          <div className="relative rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-8 flex flex-col">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-white mb-1">Free</h3>
+              <p className="text-sm text-gray-400">For curious investors getting started</p>
+            </div>
+            <div className="mb-6">
+              <div className="flex items-baseline gap-1">
+                <span className="text-5xl font-extrabold text-white">€0</span>
+                <span className="text-gray-400 text-sm">/forever</span>
               </div>
-
-              <p className="text-sm mb-8 text-gray-600">
-                Perfect for getting started with AI-powered market insights
-              </p>
             </div>
-
-            {/* Features */}
-            <ul className="space-y-4 mb-8">
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-600">
-                  Full access to <strong>AI Pulse</strong> page
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-600">
-                  AI-powered market sentiment analysis
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-600">
-                  Daily market insights and signals
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-600">
-                  Basic portfolio tracking
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-600">
-                  Mobile and desktop access
-                </span>
-              </li>
+            <ul className="space-y-3 mb-8 flex-1">
+              {[
+                'AI Pulse — daily market sentiment & signals',
+                'Real-time quotes (stocks, ETFs, crypto, FX)',
+                'S&P 500 sector heatmap',
+                'Basic portfolio tracking',
+                'Macro & earnings calendar',
+                'Mobile + desktop access',
+              ].map((feat) => (
+                <li key={feat} className="flex items-start gap-3">
+                  <CheckIcon className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-300">{feat}</span>
+                </li>
+              ))}
             </ul>
-
-            {/* CTA Button */}
-            <div>
-              {(currentTier as 'free' | 'premium') === 'free' ? (
-                <button
-                  disabled
-                  className="w-full py-3 px-4 rounded-lg text-sm font-medium bg-green-100 text-green-800 border border-green-200"
-                >
-                  Current Plan
-                </button>
-              ) : (
-                <button
-                  onClick={() => window.location.href = '/ai-pulse'}
-                  className="w-full py-3 px-4 rounded-lg text-sm font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
-                >
-                  Get Started Free
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => (window.location.href = user ? '/dashboard' : '/signup')}
+              className="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/15 border border-white/10 transition-colors"
+            >
+              {user ? 'Go to Dashboard' : 'Get Started Free'}
+            </button>
           </div>
 
-          {/* PREMIUM Plan */}
-          <div className="relative rounded-2xl p-8 bg-gradient-to-b from-blue-600 to-blue-700 text-white ring-4 ring-blue-200">
-            {/* Most Popular Badge */}
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <div className="flex items-center space-x-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-1 rounded-full text-sm font-medium">
-                <StarIcon className="h-4 w-4" />
-                <span>Most Popular</span>
+          {/* PREMIUM */}
+          <div className="relative rounded-2xl p-[2px] bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 shadow-2xl shadow-blue-900/40">
+            {/* Popular badge */}
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+              <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 px-4 py-1 rounded-full text-xs font-bold shadow-lg">
+                <StarIcon className="h-3.5 w-3.5" />
+                MOST POPULAR
               </div>
             </div>
 
-            <div className="text-center">
-              <h3 className="text-2xl font-semibold mb-4 text-white flex items-center justify-center">
-                <SparklesIcon className="h-6 w-6 mr-2" />
-                Premium AI
-              </h3>
-              
+            <div className="rounded-[14px] bg-slate-950/95 backdrop-blur-xl p-8 flex flex-col h-full">
               <div className="mb-6">
-                <div className="text-5xl font-bold text-white mb-2">
-                  €{billingCycle === 'monthly' ? '29.99' : '299.99'}
+                <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                  <SparklesIcon className="h-5 w-5 text-cyan-400" />
+                  Premium AI
+                </h3>
+                <p className="text-sm text-gray-400">
+                  Everything you need to invest like a pro
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-5xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">
+                    €{monthlyPrice}
+                  </span>
+                  <span className="text-gray-400 text-sm">
+                    /{billingCycle === 'monthly' ? 'month' : 'year'}
+                  </span>
                 </div>
-                <div className="text-sm text-blue-100">
-                  per {billingCycle === 'monthly' ? 'month' : 'year'}
-                </div>
-                {billingCycle === 'yearly' && (
-                  <div className="text-xs text-blue-200 mt-1">
-                    €25/month when billed annually
-                  </div>
+                {billingCycle === 'yearly' ? (
+                  <p className="text-xs text-emerald-300 mt-1.5 font-medium">
+                    €{yearlyEquivalent}/month equivalent · 2 months free
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    Or €299.99/year (save 17%)
+                  </p>
                 )}
               </div>
 
-              <p className="text-sm mb-8 text-blue-100">
-                Complete access to all professional features and tools
+              <ul className="space-y-3 mb-8 flex-1">
+                <li className="flex items-start gap-3">
+                  <CheckIcon className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-200">
+                    <strong className="text-white">Everything in Free</strong>, plus full platform unlock
+                  </span>
+                </li>
+                {premiumFeatures.slice(0, 6).map(({ icon: Icon, title }) => (
+                  <li key={title} className="flex items-start gap-3">
+                    <Icon className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-200">{title}</span>
+                  </li>
+                ))}
+                <li className="flex items-start gap-3">
+                  <BoltIcon className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-200">API access for integrations</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <ShieldCheckIcon className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-200">Priority email support</span>
+                </li>
+              </ul>
+
+              <button
+                onClick={createCheckoutSession}
+                disabled={loading === 'premium'}
+                className="group relative w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-900/50 transition-all hover:shadow-cyan-500/40 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {loading === 'premium' ? (
+                    'Loading…'
+                  ) : (
+                    <>
+                      <RocketLaunchIcon className="h-4 w-4" />
+                      Start 14-day free trial
+                    </>
+                  )}
+                </span>
+              </button>
+              <p className="text-xs text-center mt-3 text-gray-500">
+                Cancel anytime · No commitment
               </p>
             </div>
-
-            {/* Features */}
-            <ul className="space-y-4 mb-8">
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  <strong>Everything in Free</strong> +
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  <strong>Full platform access</strong> - All pages and features
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  AI Portfolio Builder & optimization
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  Advanced market analysis & screeners
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  Unlimited AI queries and reports
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  Real-time alerts & notifications
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  API access for integrations
-                </span>
-              </li>
-              <li className="flex items-start">
-                <CheckIcon className="h-5 w-5 text-blue-200 mr-3 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-blue-100">
-                  Priority support
-                </span>
-              </li>
-            </ul>
-
-            {/* CTA Button */}
-            <div>
-              {(currentTier as 'free' | 'premium') === 'premium' ? (
-                <button
-                  disabled
-                  className="w-full py-3 px-4 rounded-lg text-sm font-medium bg-white bg-opacity-20 text-white border border-white border-opacity-30"
-                >
-                  Current Plan
-                </button>
-              ) : (
-                <button
-                  onClick={createCheckoutSession}
-                  disabled={loading === 'premium'}
-                  className="w-full py-3 px-4 rounded-lg text-sm font-medium bg-white text-blue-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  {loading === 'premium' ? 'Loading...' : 'Upgrade to Premium'}
-                </button>
-              )}
-            </div>
-
-            {/* Trial Info */}
-            {(currentTier as 'free' | 'premium') !== 'premium' && (
-              <p className="text-xs text-center mt-3 text-blue-100">
-                14-day free trial included • Cancel anytime
-              </p>
-            )}
           </div>
         </div>
 
-        {/* Value Proposition */}
-        <div className="max-w-4xl mx-auto mt-16 text-center">
-          <div className="bg-white rounded-2xl p-8 shadow-lg">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Why Choose EconoPulse Premium?
+        {/* What you get — detailed grid */}
+        <div className="max-w-6xl mx-auto mt-24">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">
+              What&apos;s inside <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">Premium</span>
             </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="text-center">
-                <div className="text-3xl mb-2">🎯</div>
-                <h3 className="font-semibold text-gray-900 mb-2">AI-Powered</h3>
-                <p className="text-sm text-gray-600">
-                  Advanced artificial intelligence analyzes markets 24/7 for you
-                </p>
+            <p className="text-gray-400 max-w-2xl mx-auto">
+              Eight core capabilities, one subscription — designed to give individual investors the same edge that institutional desks have.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {premiumFeatures.map(({ icon: Icon, title, desc }) => (
+              <div
+                key={title}
+                className="group bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-cyan-400/40 hover:bg-white/[0.07] transition-all"
+              >
+                <div className="inline-flex p-2.5 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/20 mb-3 group-hover:scale-110 transition-transform">
+                  <Icon className="h-5 w-5 text-cyan-300" />
+                </div>
+                <h3 className="text-white font-semibold mb-1.5 text-sm">{title}</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
               </div>
-              
-              <div className="text-center">
-                <div className="text-3xl mb-2">💡</div>
-                <h3 className="font-semibold text-gray-900 mb-2">Professional Tools</h3>
-                <p className="text-sm text-gray-600">
-                  Institutional-grade insights for individual investors
-                </p>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-3xl mb-2">⚡</div>
-                <h3 className="font-semibold text-gray-900 mb-2">Real-Time</h3>
-                <p className="text-sm text-gray-600">
-                  Live market data and instant alerts when it matters
-                </p>
-              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats bar */}
+        <div className="max-w-5xl mx-auto mt-20">
+          <div className="rounded-2xl bg-gradient-to-r from-cyan-500/10 via-blue-600/10 to-indigo-600/10 border border-white/10 backdrop-blur-md p-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div>
+              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">5,000+</div>
+              <div className="text-xs text-gray-400 mt-1">Tickers covered</div>
+            </div>
+            <div>
+              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">24/7</div>
+              <div className="text-xs text-gray-400 mt-1">AI monitoring</div>
+            </div>
+            <div>
+              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">&lt;500ms</div>
+              <div className="text-xs text-gray-400 mt-1">Quote latency</div>
+            </div>
+            <div>
+              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">14 days</div>
+              <div className="text-xs text-gray-400 mt-1">Free trial</div>
             </div>
           </div>
         </div>
 
-        {/* FAQ Section */}
-        <div className="max-w-3xl mx-auto mt-16">
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-8">
-            Frequently Asked Questions
+        {/* FAQ */}
+        <div className="max-w-3xl mx-auto mt-24">
+          <h2 className="text-3xl font-bold text-center text-white mb-10">
+            Frequently asked questions
           </h2>
-          
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-2">
-                What can I access with the Free plan?
-              </h3>
-              <p className="text-gray-600">
-                The Free plan gives you full access to our AI Pulse page with market sentiment analysis, 
-                daily insights, and basic portfolio tracking. Perfect to get started!
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-2">
-                What's included in Premium AI?
-              </h3>
-              <p className="text-gray-600">
-                Premium AI unlocks the entire platform: advanced portfolio builder, market screeners, 
-                unlimited AI queries, real-time alerts, API access, and priority support.
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-2">
-                Can I cancel anytime?
-              </h3>
-              <p className="text-gray-600">
-                Yes! You can cancel your Premium subscription at any time. 
-                You'll continue to have access until the end of your billing period, 
-                then automatically return to the Free plan.
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-2">
-                Do you offer a free trial?
-              </h3>
-              <p className="text-gray-600">
-                Yes! Premium AI comes with a 14-day free trial. 
-                No credit card required to start with the Free plan.
-              </p>
-            </div>
+          <div className="space-y-3">
+            {[
+              {
+                q: 'What does the Free plan include?',
+                a: 'Full access to AI Pulse with daily sentiment, real-time quotes for stocks, ETFs, crypto and FX, the S&P 500 sector heatmap, basic portfolio tracking, and the macro/earnings calendar. No credit card required.',
+              },
+              {
+                q: 'What unlocks with Premium AI?',
+                a: 'Everything: unlimited GPT-4 powered analysis, AI Portfolio Builder, advanced screeners, options gamma exposure, real-time alerts, API access and priority support. The full platform — every page, every feature.',
+              },
+              {
+                q: 'How does the 14-day free trial work?',
+                a: 'You can start the trial right after signup. Full Premium access for 14 days, no charge until the trial ends. Cancel any time inside your account dashboard and you keep Premium until the period ends, then drop back to Free automatically.',
+              },
+              {
+                q: 'Can I switch between monthly and yearly?',
+                a: 'Yes. Upgrade or downgrade your billing cycle from the Stripe billing portal. Yearly saves you 17% — about 2 months free.',
+              },
+              {
+                q: 'Is my data safe?',
+                a: 'Yes. We use Supabase auth, encrypted storage, Stripe-only payment handling and never sell or share personal data. Read our Privacy Policy for the full breakdown of sub-processors.',
+              },
+              {
+                q: 'What payment methods do you accept?',
+                a: 'All major credit/debit cards, Apple Pay and Google Pay via Stripe — secure, PCI-compliant, fraud-protected.',
+              },
+            ].map((item) => (
+              <details
+                key={item.q}
+                className="group bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-cyan-400/30 transition-colors"
+              >
+                <summary className="cursor-pointer list-none flex items-start justify-between gap-4">
+                  <span className="font-semibold text-white text-sm sm:text-base">{item.q}</span>
+                  <span className="text-cyan-400 text-xl leading-none group-open:rotate-45 transition-transform flex-shrink-0">+</span>
+                </summary>
+                <p className="text-sm text-gray-300 mt-3 leading-relaxed">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+
+        {/* Final CTA */}
+        <div className="max-w-3xl mx-auto mt-20 mb-8 text-center">
+          <div className="rounded-2xl bg-gradient-to-r from-cyan-500/15 via-blue-600/15 to-indigo-600/15 border border-cyan-400/20 backdrop-blur-md p-8 sm:p-10">
+            <AcademicCapIcon className="h-10 w-10 text-cyan-400 mx-auto mb-4" />
+            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+              Ready to invest with an edge?
+            </h3>
+            <p className="text-gray-300 mb-6 max-w-xl mx-auto">
+              Join investors using AI to make sense of every market move. 14 days free, full access, cancel anytime.
+            </p>
+            <button
+              onClick={createCheckoutSession}
+              disabled={loading === 'premium'}
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-900/50 hover:shadow-cyan-500/40 hover:scale-105 transition-all disabled:opacity-50"
+            >
+              <RocketLaunchIcon className="h-5 w-5" />
+              {loading === 'premium' ? 'Loading…' : 'Start free trial'}
+            </button>
+            <p className="text-xs text-gray-500 mt-4">
+              No credit card required for Free · Premium trial cancellable anytime
+            </p>
           </div>
         </div>
       </div>

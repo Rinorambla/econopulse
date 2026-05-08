@@ -4,6 +4,7 @@ import Link from 'next/link';
 import React, { startTransition, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import Logo from './Logo';
 import { PowerIcon } from '@heroicons/react/24/outline';
 
@@ -42,6 +43,7 @@ interface NavigationProps {
 export function Navigation({ className }: NavigationProps) {
   const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isIOSApp = useIsIOSApp();
   
   const handleSignOut = async () => {
     await signOut();
@@ -120,10 +122,12 @@ export function Navigation({ className }: NavigationProps) {
           <span className="relative z-10">News</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
+  {!isIOSApp && (
   <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
           <span className="relative z-10">Pricing</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
+  )}
       </nav>
 
       {/* Right: Auth (desktop) */}
@@ -193,9 +197,11 @@ export function Navigation({ className }: NavigationProps) {
               <NavigationLink href="/news" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 News
               </NavigationLink>
+              {!isIOSApp && (
               <NavigationLink href="/pricing" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 Pricing
               </NavigationLink>
+              )}
 
               <div className="pt-2 mt-2 border-t border-slate-800" />
 

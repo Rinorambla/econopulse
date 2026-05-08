@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import Link from 'next/link';
 
 interface PlanGateProps {
@@ -20,6 +21,7 @@ export default function PlanGate({
 }: PlanGateProps) {
   const { user, loading, plan } = useAuth();
   const router = useRouter();
+  const isIOSApp = useIsIOSApp();
 
   // Get user's actual subscription tier from auth hook
   const userTier: 'free' | 'premium' = (plan === 'premium' || plan === 'trial') ? 'premium' : 'free';
@@ -94,12 +96,21 @@ export default function PlanGate({
           </div>
 
           <div className="space-y-3">
-            <Link 
-              href="/pricing"
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-block"
-            >
-              Upgrade to Premium AI
-            </Link>
+            {!isIOSApp && (
+              <Link 
+                href="/pricing"
+                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-block"
+              >
+                Upgrade to Premium AI
+              </Link>
+            )}
+            {isIOSApp && (
+              <p className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                Premium features are available on the website at
+                <strong> www.econopulse.ai</strong>. Once you subscribe there
+                your account is upgraded automatically inside the app.
+              </p>
+            )}
             
             <Link 
               href="/ai-pulse"
@@ -110,7 +121,7 @@ export default function PlanGate({
           </div>
 
           <p className="text-xs text-gray-500 mt-4">
-            14-day free trial included • Cancel anytime
+            {isIOSApp ? 'No purchases are processed inside this app.' : '14-day free trial included • Cancel anytime'}
           </p>
         </div>
       </div>
@@ -129,6 +140,7 @@ export function PremiumFeature({
   fallback?: React.ReactNode;
 }) {
   const { plan } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const userTier: 'free' | 'premium' = (plan === 'premium' || plan === 'trial') ? 'premium' : 'free';
   
   if ((userTier as 'free' | 'premium') === 'premium') {
@@ -145,12 +157,18 @@ export function PremiumFeature({
         {children}
       </div>
       <div className="absolute inset-0 flex items-center justify-center">
-        <Link 
-          href="/pricing"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          Upgrade for Access
-        </Link>
+        {isIOSApp ? (
+          <span className="bg-white/90 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200">
+            Premium feature — upgrade on www.econopulse.ai
+          </span>
+        ) : (
+          <Link 
+            href="/pricing"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            Upgrade for Access
+          </Link>
+        )}
       </div>
     </div>
   );

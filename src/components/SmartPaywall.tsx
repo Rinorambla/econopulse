@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import Link from 'next/link';
 import { XMarkIcon, SparklesIcon, ArrowTrendingUpIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription-system';
@@ -116,6 +117,7 @@ export function SmartPaywall({
   children 
 }: PaywallProps) {
   const { user, plan, isDevUser } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [showPaywall, setShowPaywall] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -145,6 +147,12 @@ export function SmartPaywall({
   };
 
   const handleUpgrade = (planId: string) => {
+    // App Store guideline 3.1.1: do not initiate paid checkout in iOS app
+    if (isIOSApp) {
+      alert('Premium plans are managed on www.econopulse.ai. Once you subscribe there, your account upgrade will be reflected here automatically.');
+      return;
+    }
+
     // Track conversion event
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('event', 'paywall_upgrade_click', {

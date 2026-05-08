@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import { hasAccess, planRank, normalizePlan, PlanTier } from '@/lib/plan-access';
 import Link from 'next/link';
 
@@ -17,6 +18,7 @@ interface RequirePlanProps {
  */
 export function RequirePlan({ min, children, inline }: RequirePlanProps) {
   const { user, loading, plan, refreshingPlan, isAdmin, isDevUser } = useAuth();
+  const isIOSApp = useIsIOSApp();
 
   // Show loading only on initial page load, not on plan refreshes
   // Skip loading screen entirely for admin users
@@ -80,10 +82,16 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
       </p>
       <Link
         href="/pricing"
-        className="inline-block rounded bg-amber-500 px-5 py-2 text-sm font-medium text-black shadow hover:bg-amber-400"
+        className={`inline-block rounded bg-amber-500 px-5 py-2 text-sm font-medium text-black shadow hover:bg-amber-400 ${isIOSApp ? 'hidden' : ''}`}
       >
         Upgrade to {min}
       </Link>
+      {isIOSApp && (
+        <p className="mt-2 text-xs text-gray-300">
+          Premium features are available on <strong>www.econopulse.ai</strong>.
+          Once you subscribe there, your plan will be updated inside the app.
+        </p>
+      )}
     </div>
   );
 }

@@ -8,12 +8,17 @@ import {
   BellIcon, 
   UserCircleIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon 
+  CheckCircleIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 
 export default function UserAccountDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [billingLoading, setBillingLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const openBillingPortal = async () => {
     setBillingLoading(true);
@@ -37,6 +42,28 @@ export default function UserAccountDashboard() {
       alert('Failed to open billing portal. Please try again.');
     } finally {
       setBillingLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') {
+      setDeleteError('Please type DELETE exactly to confirm.');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch('/api/user/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete account');
+      window.location.href = '/?accountDeleted=1';
+    } catch (e: any) {
+      setDeleteError(e?.message || 'Unexpected error. Please contact support@econopulse.ai.');
+      setDeleting(false);
     }
   };
 
@@ -126,6 +153,75 @@ export default function UserAccountDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Danger Zone — Account Deletion (required by Apple App Store guideline 5.1.1(v)) */}
+      <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
+        <div className="flex items-start space-x-3">
+          <ExclamationTriangleIcon className="h-6 w-6 text-red-500 flex-shrink-0 mt-1" />
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-red-700">Delete Account</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Permanently delete your EconoPulse account and all associated data
+              (profile, portfolios, watchlists, preferences). Active subscriptions
+              will be cancelled. <strong>This action cannot be undone.</strong>
+            </p>
+            <button
+              onClick={() => { setShowDeleteModal(true); setDeleteError(null); setDeleteConfirmText(''); }}
+              className="mt-4 inline-flex items-center space-x-2 px-4 py-2 border border-red-600 text-red-600 rounded-md text-sm font-medium hover:bg-red-50"
+            >
+              <TrashIcon className="h-4 w-4" />
+              <span>Delete my account</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center space-x-2">
+              <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-gray-900">Confirm account deletion</h3>
+            </div>
+            <p className="text-sm text-gray-700">
+              You are about to permanently delete the account associated with{' '}
+              <strong>{user?.email}</strong>. All your data will be erased and any active
+              subscription will be cancelled.
+            </p>
+            <p className="text-sm text-gray-700">
+              Type <code className="px-1 py-0.5 bg-gray-100 rounded font-mono">DELETE</code> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              disabled={deleting}
+            />
+            {deleteError && (
+              <p className="text-sm text-red-600">{deleteError}</p>
+            )}
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting || deleteConfirmText !== 'DELETE'}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Deleting…' : 'Delete account permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

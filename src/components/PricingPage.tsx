@@ -2,11 +2,13 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import { CheckIcon, StarIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import { supabase } from '@/lib/supabase';
 
 export default function PricingPage() {
   const { user } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
@@ -70,6 +72,41 @@ export default function PricingPage() {
   };
 
   const currentTier: 'free' | 'premium' = 'free'; // TODO: Get from API
+
+  // App Store guideline 3.1.1: digital subscriptions cannot be sold via
+  // external payment in the iOS app. Show a static info screen instead.
+  if (isIOSApp) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
+        <div className="container mx-auto px-4 max-w-2xl">
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center space-y-4">
+            <SparklesIcon className="h-12 w-12 text-blue-600 mx-auto" />
+            <h1 className="text-3xl font-bold text-gray-900">EconoPulse Free</h1>
+            <p className="text-gray-700">
+              You are using the free version of EconoPulse, which includes
+              real-time market quotes, sector heatmaps, and basic AI insights.
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+              <h2 className="text-base font-semibold text-blue-900 mb-2">
+                Want more features?
+              </h2>
+              <p className="text-sm text-blue-900">
+                Premium plans (advanced AI, full options analytics, alerts) are
+                available on our website. Once you subscribe there, your account
+                will automatically be upgraded inside the app.
+              </p>
+              <p className="text-sm text-blue-900 mt-2">
+                Visit <strong>www.econopulse.ai</strong> from any browser to learn more.
+              </p>
+            </div>
+            <p className="text-xs text-gray-500">
+              No purchases are processed inside this app.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">

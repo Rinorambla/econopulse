@@ -20,11 +20,18 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
   const { user, loading, plan, refreshingPlan, isAdmin, isDevUser } = useAuth();
   const isIOSApp = useIsIOSApp();
 
-  // Show loading only on initial page load, not on plan refreshes
-  // Skip loading screen entirely for admin users
-  if (loading && !user) {
+  // Show loading on initial page load (auth still resolving)
+  if (loading) {
     return (
       <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>
+    );
+  }
+
+  // User is authenticated but plan hasn't been fetched yet — avoid flashing
+  // "Upgrade Required" while /api/me is in flight.
+  if (user && plan === null) {
+    return (
+      <div className="py-8 text-center text-sm text-gray-400">Loading your plan...</div>
     );
   }
 

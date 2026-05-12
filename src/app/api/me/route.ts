@@ -55,6 +55,7 @@ export async function GET(req: Request) {
     if (isAdmin) {
       return NextResponse.json({
         authenticated: true,
+        id: userId,
         email: userEmail,
         plan: 'premium',
         subscription_status: 'premium',
@@ -116,6 +117,7 @@ export async function GET(req: Request) {
     
     return NextResponse.json({
       authenticated: true,
+      id: userId,
       email: data?.email || userEmail,
       plan: finalPlan,
       subscription_status: currentSubscriptionStatus,

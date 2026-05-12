@@ -43,9 +43,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<string | null>(null);
+  // Hydrate plan synchronously from non-HttpOnly cookie set by /api/me to
+  // avoid the "Upgrade Required" flash while the next /api/me call resolves.
+  const readPlanCookie = (): { plan: string | null; isAdmin: boolean } => {
+    if (typeof document === 'undefined') return { plan: null, isAdmin: false };
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    const pc = cookies.find(c => c.startsWith('ep_plan='));
+    const ac = cookies.find(c => c.startsWith('ep_admin='));
+    return {
+      plan: pc ? decodeURIComponent(pc.split('=')[1]) : null,
+      isAdmin: ac ? decodeURIComponent(ac.split('=')[1]) === '1' : false,
+    };
+  };
+  const initialCookie = typeof window !== 'undefined' ? readPlanCookie() : { plan: null, isAdmin: false };
+  const [plan, setPlan] = useState<string | null>(initialCookie.plan);
   const [refreshingPlan, setRefreshingPlan] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(initialCookie.isAdmin);
 
   // Fetch plan details for the current authenticated user
   const fetchPlan = useCallback(async () => {
@@ -266,6 +279,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!SUPABASE_ENABLED) return;
       await supabase.auth.signOut();
+      // Clear plan hydration cookies
+      if (typeof document !== 'undefined') {
+        document.cookie = 'ep_plan=; Path=/; Max-Age=0; SameSite=Lax';
+        document.cookie = 'ep_admin=; Path=/; Max-Age=0; SameSite=Lax';
+      }
       // The auth state change listener will handle updating the state
     } catch (error) {
       console.error('Error signing out:', error);

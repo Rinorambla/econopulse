@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     const isAdmin = isAdminEmail(userEmail);
     
     if (isAdmin) {
-      return NextResponse.json({
+      const res = NextResponse.json({
         authenticated: true,
         id: userId,
         email: userEmail,
@@ -69,6 +69,11 @@ export async function GET(req: Request) {
           'Cache-Control': 'private, max-age=300', // 5 min cache
         }
       });
+      // Non-HttpOnly cookie so client can hydrate plan synchronously and avoid
+      // the "Upgrade Required" flash while /api/me is in flight.
+      res.cookies.set('ep_plan', 'premium', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+      res.cookies.set('ep_admin', '1', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+      return res;
     }
     
     // Fetch extended user data for regular users
@@ -115,7 +120,7 @@ export async function GET(req: Request) {
     const finalPlan = currentSubscriptionStatus === 'trial' ? 'premium' : plan;
     const finalRequiresSubscription = currentSubscriptionStatus === 'trial' ? false : requiresSubscription;
     
-    return NextResponse.json({
+    const res = NextResponse.json({
       authenticated: true,
       id: userId,
       email: data?.email || userEmail,
@@ -131,6 +136,11 @@ export async function GET(req: Request) {
         'Cache-Control': 'private, max-age=300', // 5 min cache
       }
     });
+    // Non-HttpOnly cookie so client can hydrate plan synchronously and avoid
+    // the "Upgrade Required" flash while /api/me is in flight.
+    res.cookies.set('ep_plan', finalPlan, { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+    res.cookies.set('ep_admin', '0', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+    return res;
   } catch (e) {
     console.error('GET /api/me error', e);
     return NextResponse.json({ authenticated: false, plan: 'free' }, { status: 500 });

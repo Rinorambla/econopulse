@@ -23,21 +23,25 @@ Apple reviewers will use this to test Premium features. Create this user in your
 **Option 1 — Via your signup flow (easiest):**
 1. Go to https://www.econopulse.ai/en/signup
 2. Sign up with email `apple.review@econopulse.ai` and password `AppleReview2026!`
-3. Verify email if required (use a mailbox you control or skip verification in Supabase)
-4. Open Supabase Studio → Authentication → Users → find this user → copy user UUID
-5. Open Supabase Studio → Table Editor → `profiles` (or your subscriptions table) → find row with that UUID → set:
-   - `plan` = `premium`
-   - `subscription_status` = `active`
-   - `subscription_period_end` = `2027-12-31T23:59:59Z`
+3. Verify email if required (use a mailbox you control or temporarily disable email confirmation in Supabase Auth settings)
+4. Run the SQL below in Supabase to upgrade the account to Premium
 
 **Option 2 — SQL one-liner** (run in Supabase SQL editor after signup):
 ```sql
-UPDATE profiles
-SET plan = 'premium',
-    subscription_status = 'active',
-    subscription_period_end = '2027-12-31T23:59:59Z'
+-- Upgrade Apple reviewer account to Premium (no expiry concern, trial_end_date far future)
+UPDATE public.users
+SET subscription_status = 'premium',
+    trial_end_date = '2027-12-31T23:59:59Z',
+    updated_at = now()
+WHERE email = 'apple.review@econopulse.ai';
+
+-- Verify
+SELECT id, email, subscription_status, trial_end_date
+FROM public.users
 WHERE email = 'apple.review@econopulse.ai';
 ```
+
+The expected result: one row with `subscription_status = 'premium'`.
 
 **⚠️ IMPORTANT**: Test the login yourself from a fresh browser BEFORE submitting. If reviewers can't log in, app gets rejected (guideline 2.1).
 

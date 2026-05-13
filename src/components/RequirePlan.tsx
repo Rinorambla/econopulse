@@ -27,14 +27,6 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
     );
   }
 
-  // User is authenticated but plan hasn't been fetched yet — avoid flashing
-  // "Upgrade Required" while /api/me is in flight.
-  if (user && plan === null) {
-    return (
-      <div className="py-8 text-center text-sm text-gray-400">Loading your plan...</div>
-    );
-  }
-
   if (!user) {
     return (
       <div className="rounded border border-gray-700 bg-gray-900/40 p-6 text-center">
@@ -48,6 +40,14 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
 
   // Admin and Developer users have unrestricted access
   if (isAdmin || isDevUser) {
+    return <>{children}</>;
+  }
+
+  // Optimistic render: while the plan is still being fetched for an authenticated
+  // user, render the protected content. If /api/me later resolves to a lower plan,
+  // the upgrade panel will appear. This eliminates the "Upgrade Required" flash for
+  // legitimate premium users (including the Apple review account).
+  if (plan === null) {
     return <>{children}</>;
   }
 

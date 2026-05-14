@@ -298,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/ai-pulse`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/ai-pulse`,
         },
       });
 
@@ -318,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
-          redirectTo: `${window.location.origin}/ai-pulse`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/ai-pulse`,
         },
       });
       if (error) {

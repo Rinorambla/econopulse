@@ -6,11 +6,12 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -43,6 +44,21 @@ export default function LoginPage() {
       setError('Network error. Please try again.');
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleApple = async () => {
+    setError(null);
+    setAppleLoading(true);
+    try {
+      const res = await signInWithApple();
+      if (!res.success) {
+        setError(res.error || 'Apple sign-in failed');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -101,6 +117,18 @@ export default function LoginPage() {
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
           </svg>
           {googleLoading ? 'Connecting…' : 'Sign in with Google'}
+        </button>
+
+        {/* Apple Sign In */}
+        <button
+          onClick={handleApple}
+          disabled={appleLoading}
+          className="mt-3 w-full flex items-center justify-center gap-3 bg-black hover:bg-gray-900 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M16.365 1.43c0 1.14-.49 2.27-1.29 3.07-.84.83-2.2 1.46-3.31 1.37-.15-1.13.41-2.31 1.18-3.09.86-.87 2.34-1.52 3.42-1.35zM20.5 17.21c-.6 1.38-.88 2-1.65 3.21-1.07 1.69-2.58 3.79-4.45 3.81-1.66.02-2.09-1.08-4.35-1.07-2.27.01-2.74 1.09-4.4 1.07-1.87-.02-3.3-1.91-4.37-3.6-3-4.75-3.31-10.32-1.46-13.28 1.31-2.1 3.39-3.33 5.34-3.33 1.99 0 3.24 1.09 4.88 1.09 1.59 0 2.56-1.09 4.86-1.09 1.74 0 3.58.95 4.89 2.59-4.3 2.36-3.6 8.5.71 10.6z"/>
+          </svg>
+          {appleLoading ? 'Connecting…' : 'Sign in with Apple'}
         </button>
 
         <div className="mt-4 flex items-center justify-between text-sm">

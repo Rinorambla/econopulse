@@ -16,6 +16,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string; needsConfirmation?: boolean }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signInWithApple: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   requestReauth: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -35,6 +36,7 @@ const defaultAuthContext: AuthContextType = {
   signIn: async () => ({ success: false, error: 'Auth unavailable' }),
   signUp: async () => ({ success: false, error: 'Auth unavailable' }),
   signInWithGoogle: async () => ({ success: false, error: 'Auth unavailable' }),
+  signInWithApple: async () => ({ success: false, error: 'Auth unavailable' }),
   signOut: async () => {},
   requestReauth: async () => ({ success: false, error: 'Auth unavailable' })
 };
@@ -310,6 +312,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithApple = async () => {
+    try {
+      if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' };
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: `${window.location.origin}/ai-pulse`,
+        },
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to sign in with Apple' };
+    }
+  };
+
   const requestReauth = async (email: string) => {
     try {
       const response = await fetch('/api/auth/reauth', {
@@ -353,6 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signInWithGoogle,
+    signInWithApple,
     signOut,
     requestReauth,
   };

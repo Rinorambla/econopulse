@@ -15,7 +15,7 @@ const PAGES = [
   { slug: '01-dashboard',     path: '/dashboard',    waitMs: 12000 },
   { slug: '02-ai-portfolio',  path: '/ai-portfolio', waitMs: 12000 },
   { slug: '03-visual-ai',     path: '/visual-ai',    waitMs: 12000 },
-  { slug: '04-market-dna',    path: '/market-dna',   waitMs: 12000 },
+  { slug: '04-market-dna',    path: '/market-dna',   waitMs: 30000 },
   { slug: '05-ai-pulse',      path: '/ai-pulse',     waitMs: 12000 },
   { slug: '06-home',          path: '/',             waitMs: 6000 },
 ];
@@ -47,6 +47,28 @@ async function dismissCookieBanner(page) {
     } catch {}
   }
   return false;
+}
+
+async function dismissModals(page) {
+  // Close any "Important News" / generic modals that may overlay screenshots
+  const tries = [
+    'button:has-text("Close")',
+    'button:has-text("Chiudi")',
+    'button[aria-label="Close"]',
+    'button[aria-label="close"]',
+    '[role="dialog"] button:has-text("Close")',
+  ];
+  for (const sel of tries) {
+    try {
+      const btns = await page.locator(sel).all();
+      for (const b of btns) {
+        if (await b.isVisible({ timeout: 500 }).catch(() => false)) {
+          await b.click({ timeout: 1500 }).catch(() => {});
+          await page.waitForTimeout(300);
+        }
+      }
+    } catch {}
+  }
 }
 
 async function doLoginAndSaveState(browser) {
@@ -97,6 +119,16 @@ async function captureForDevice(browser, device) {
     colorScheme: 'dark',
     storageState: STATE_FILE,
   });
+  // Pre-accept cookie consent before any page script runs, so banner never shows.
+  await context.addInitScript(() => {
+    try {
+      const consent = JSON.stringify({
+        necessary: true, analytics: true, marketing: true, preferences: true,
+        timestamp: new Date().toISOString(),
+      });
+      localStorage.setItem('cookie-consent', consent);
+    } catch {}
+  });
   const page = await context.newPage();
 
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -130,6 +162,8 @@ async function captureForDevice(browser, device) {
     } catch {}
     await dismissCookieBanner(page);
     await page.waitForTimeout(p.waitMs);
+    await dismissModals(page);
+    await page.waitForTimeout(500);
     await page.screenshot({ path: file, fullPage: false });
     console.log(`    saved ${path.relative(process.cwd(), file)}`);
   }

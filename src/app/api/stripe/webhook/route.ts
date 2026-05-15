@@ -107,13 +107,16 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       }
 
       // Update user subscription status
+      const mappedStatus = subscription.status === 'trialing' ? 'trial' : (subscription.status === 'active' ? 'premium' : subscription.status);
       const { error: updateError } = await supabase
         .from('users')
         .update({
           subscription_tier: tier,
           billing_cycle: billingCycle,
-          subscription_status: 'active',
+          subscription_status: mappedStatus,
           stripe_subscription_id: subscription.id,
+          subscription_id: subscription.id,
+          cancel_at_period_end: !!subscription.cancel_at_period_end,
           last_billing_date: new Date().toISOString(),
           next_billing_date: new Date((subscription as any).current_period_end * 1000).toISOString(),
           trial_end_date: (subscription as any).trial_end ? new Date((subscription as any).trial_end * 1000).toISOString() : null,
@@ -155,13 +158,16 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     }
 
     // Update user subscription
+    const mappedStatus = subscription.status === 'trialing' ? 'trial' : (subscription.status === 'active' ? 'premium' : subscription.status);
     const { error: updateError } = await supabase
       .from('users')
       .update({
         subscription_tier: tier,
         billing_cycle: billingCycle,
-        subscription_status: subscription.status,
+        subscription_status: mappedStatus,
         stripe_subscription_id: subscription.id,
+        subscription_id: subscription.id,
+        cancel_at_period_end: !!subscription.cancel_at_period_end,
         trial_end_date: (subscription as any).trial_end ? new Date((subscription as any).trial_end * 1000).toISOString() : null,
         next_billing_date: new Date((subscription as any).current_period_end * 1000).toISOString(),
         updated_at: new Date().toISOString(),
@@ -201,12 +207,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     }
 
     // Update user subscription status
+    const mappedStatus = subscription.status === 'trialing' ? 'trial' : (subscription.status === 'active' ? 'premium' : (['canceled','cancelled','incomplete_expired','unpaid'].includes(subscription.status) ? 'free' : subscription.status));
     const { error: updateError } = await supabase
       .from('users')
       .update({
         subscription_tier: tier,
         billing_cycle: billingCycle,
-        subscription_status: subscription.status,
+        subscription_status: mappedStatus,
+        stripe_subscription_id: subscription.id,
+        subscription_id: subscription.id,
+        cancel_at_period_end: !!subscription.cancel_at_period_end,
         trial_end_date: (subscription as any).trial_end ? new Date((subscription as any).trial_end * 1000).toISOString() : null,
         next_billing_date: new Date((subscription as any).current_period_end * 1000).toISOString(),
         updated_at: new Date().toISOString(),
@@ -244,8 +254,10 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       .from('users')
       .update({
         subscription_tier: 'free',
-        subscription_status: 'cancelled',
+        subscription_status: 'free',
         stripe_subscription_id: null,
+        subscription_id: null,
+        cancel_at_period_end: false,
         trial_end_date: null,
         next_billing_date: null,
         updated_at: new Date().toISOString(),
@@ -292,7 +304,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
         .update({
           last_billing_date: new Date().toISOString(),
           next_billing_date: new Date((subscription as any).current_period_end * 1000).toISOString(),
-          subscription_status: 'active',
+          subscription_status: 'premium',
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);

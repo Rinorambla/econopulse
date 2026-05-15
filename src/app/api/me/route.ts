@@ -77,16 +77,25 @@ export async function GET(req: Request) {
     }
     
     // Fetch extended user data for regular users
+    // We select both legacy + new column names to support either schema variant.
     const { data, error } = await supabase
       .from('users')
-      .select('email, subscription_status, stripe_customer_id, subscription_id, trial_end_date')
+      .select('email, subscription_status, subscription_tier, stripe_customer_id, subscription_id, stripe_subscription_id, trial_end_date, next_billing_date, cancel_at_period_end')
       .eq('id', userId)
       .single();
     if (error) {
       return NextResponse.json({ authenticated: true, email: userEmail, plan: 'free', warning: 'profile_missing', requiresSubscription: true });
     }
 
-    let currentSubscriptionStatus = data?.subscription_status || 'free';
+    // Resolve effective status: prefer subscription_status (mapped value),
+    // but if it's a raw Stripe status, derive a normalized value.
+    const rawStatus: string = (data?.subscription_status || data?.subscription_tier || 'free').toString().toLowerCase();
+    let currentSubscriptionStatus = rawStatus;
+    if (['active', 'trialing', 'past_due'].includes(rawStatus)) {
+      currentSubscriptionStatus = rawStatus === 'trialing' ? 'trial' : 'premium';
+    } else if (['canceled', 'cancelled', 'incomplete_expired', 'unpaid'].includes(rawStatus)) {
+      currentSubscriptionStatus = 'free';
+    }
     
     // Check if trial has expired
     if (currentSubscriptionStatus === 'trial' && data?.trial_end_date) {
@@ -129,7 +138,11 @@ export async function GET(req: Request) {
       trial_end_date: data?.trial_end_date || null,
       requiresSubscription: finalRequiresSubscription,
       stripe_customer_id: data?.stripe_customer_id || null,
-      subscription_id: data?.subscription_id || null,
+      subscription_id: data?.subscription_id || data?.stripe_subscription_id || null,
+      cancel_at_period_end: !!data?.cancel_at_period_end,
+      current_period_end: data?.next_billing_date
+        ? Math.floor(new Date(data.next_billing_date).getTime() / 1000)
+        : null,
       isAdmin: false
     }, {
       headers: {

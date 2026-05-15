@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeftIcon, ClockIcon, TagIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import RequirePlan from '@/components/RequirePlan';
 
 interface NewsArticle {
   id: string;
@@ -76,7 +76,7 @@ export default function NewsPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <RequirePlan min="premium">
       <div className="min-h-screen bg-[var(--background)] text-white">
         {/* Header */}
         <div className="border-b border-white/10 bg-gradient-to-r from-slate-900/70 via-slate-800/60 to-slate-900/70 backdrop-blur-md">
@@ -179,6 +179,6 @@ export default function NewsPage() {
         </div>
         <Footer />
       </div>
-    </ProtectedRoute>
+    </RequirePlan>
   );
 }

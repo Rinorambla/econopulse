@@ -170,10 +170,18 @@ export async function getOrCreateCustomer(params: {
     customerId = created.id;
   }
 
+  // Upsert so missing rows (no profile trigger) get created.
   await db
     .from('users')
-    .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
-    .eq('id', userId);
+    .upsert(
+      {
+        id: userId,
+        email,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    );
 
   return customerId;
 }

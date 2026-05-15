@@ -58,13 +58,24 @@ export async function POST(req: NextRequest) {
       const list = await stripe().customers.list({ email, limit: 1 });
       if (list.data.length > 0) {
         customerId = list.data[0].id;
-        await db.from('users').update({ stripe_customer_id: customerId }).eq('id', userId);
       }
     }
 
     if (!customerId) {
       return NextResponse.json({ ok: false, plan: 'free', reason: 'no_customer' });
     }
+
+    // Ensure public.users row exists for this auth user and is linked to the customer.
+    // (Trigger may not have run for older accounts.)
+    await db.from('users').upsert(
+      {
+        id: userId,
+        email: email || null,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    );
 
     const snapshot = await syncStripeData(customerId);
     return NextResponse.json({

@@ -13,12 +13,75 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function UserAccountDashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, session } = useAuth();
   const [billingLoading, setBillingLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Stato abbonamento
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'free'|'premium'|'canceled'|'canceling'|'trial'|null>(null);
+  const [subscriptionEnd, setSubscriptionEnd] = useState<string|null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string|null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+
+  // Recupera stato abbonamento dal profilo utente
+  useEffect(() => {
+    async function fetchSub() {
+      if (!session) return;
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        setSubscriptionStatus(data.plan || 'free');
+        if (data.subscription_status === 'canceled' || data.subscription_status === 'canceling') {
+          setSubscriptionStatus('canceling');
+        }
+        if (data.current_period_end) {
+          setSubscriptionEnd(new Date(data.current_period_end * 1000).toLocaleDateString());
+        } else {
+          setSubscriptionEnd(null);
+        }
+      } catch (e) {
+        setSubscriptionStatus(null);
+      }
+    }
+    fetchSub();
+  }, [session]);
+
+  // Annulla abbonamento
+  const handleCancelSubscription = async () => {
+    setCancelLoading(true);
+    setCancelError(null);
+    setCancelSuccess(false);
+    try {
+      // Recupera subscriptionId dal profilo
+      const resMe = await fetch('/api/me');
+      const dataMe = await resMe.json();
+      if (!dataMe.subscription_id) throw new Error('Subscription ID not found');
+      const token = session?.access_token;
+      const res = await fetch('/api/stripe/cancel-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ subscriptionId: dataMe.subscription_id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel');
+      setCancelSuccess(true);
+      setSubscriptionStatus('canceling');
+      if (data.subscription?.current_period_end) {
+        setSubscriptionEnd(new Date(data.subscription.current_period_end * 1000).toLocaleDateString());
+      }
+    } catch (e: any) {
+      setCancelError(e.message || 'Errore annullamento');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const openBillingPortal = async () => {
     setBillingLoading(true);
@@ -93,21 +156,40 @@ export default function UserAccountDashboard() {
               </h2>
               <p className="text-gray-600">{user?.email}</p>
               <div className="flex items-center space-x-2 mt-2">
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  Starter Plan
-                </span>
+                {subscriptionStatus === 'premium' && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Premium</span>
+                )}
+                {subscriptionStatus === 'canceling' && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Annullato (attivo fino al {subscriptionEnd || '-'})</span>
+                )}
+                {subscriptionStatus === 'free' && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Free</span>
+                )}
               </div>
             </div>
           </div>
           
-          <button
-            onClick={openBillingPortal}
-            disabled={billingLoading}
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            <CreditCardIcon className="h-4 w-4" />
-            <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
-          </button>
+          <div className="flex flex-col gap-2 items-end">
+            <button
+              onClick={openBillingPortal}
+              disabled={billingLoading}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              <CreditCardIcon className="h-4 w-4" />
+              <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
+            </button>
+            {subscriptionStatus === 'premium' && (
+              <button
+                onClick={handleCancelSubscription}
+                disabled={cancelLoading || cancelSuccess || subscriptionStatus === 'canceling'}
+                className="flex items-center space-x-2 px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
+              >
+                {cancelLoading ? 'Annullamento...' : cancelSuccess ? 'Annullato' : 'Annulla abbonamento'}
+              </button>
+            )}
+            {cancelError && <div className="text-xs text-red-600 mt-1">{cancelError}</div>}
+            {cancelSuccess && <div className="text-xs text-green-600 mt-1">Abbonamento annullato. Resterà attivo fino al termine del periodo.</div>}
+          </div>
         </div>
       </div>
 

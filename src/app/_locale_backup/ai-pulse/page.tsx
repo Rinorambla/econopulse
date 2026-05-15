@@ -450,7 +450,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   // ─── RENDER ────────────────────────────────────────────────────
   return (
     <LocalErrorBoundary fallbackTitle="AI Pulse section error">
-      <RequirePlan min="free">
+      <RequirePlan min="free">  {/* Solo AI Pulse resta free, tutto il resto premium */}
         <div className="min-h-screen bg-[#060a13] text-white font-sans">
 
           {/* ═══ HEADER ═══ */}

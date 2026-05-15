@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Ensure public.users row exists for this auth user and is linked to the customer.
     // (Trigger may not have run for older accounts.)
-    await db.from('users').upsert(
+    const linkUpsert = await db.from('users').upsert(
       {
         id: userId,
         email: email || null,
@@ -76,8 +76,35 @@ export async function POST(req: NextRequest) {
       },
       { onConflict: 'id' },
     );
+    if (linkUpsert.error) {
+      console.error('[sync] link upsert failed:', linkUpsert.error.message);
+    }
 
     const snapshot = await syncStripeData(customerId);
+
+    // Also persist the full snapshot keyed by user id, so even if syncStripeData
+    // couldn't find a row by stripe_customer_id (e.g. race/missing row), we have
+    // the authoritative state stored.
+    const snapshotUpsert = await db.from('users').upsert(
+      {
+        id: userId,
+        email: email || null,
+        stripe_customer_id: snapshot.customerId,
+        stripe_subscription_id: snapshot.subscriptionId,
+        subscription_id: snapshot.subscriptionId,
+        subscription_status: snapshot.status,
+        subscription_tier: snapshot.plan,
+        cancel_at_period_end: snapshot.cancelAtPeriodEnd,
+        next_billing_date: snapshot.currentPeriodEnd?.toISOString() || null,
+        trial_end_date: snapshot.trialEnd?.toISOString() || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    );
+    if (snapshotUpsert.error) {
+      console.error('[sync] snapshot upsert failed:', snapshotUpsert.error.message);
+    }
+
     return NextResponse.json({
       ok: true,
       plan: snapshot.plan,
@@ -85,6 +112,10 @@ export async function POST(req: NextRequest) {
       cancel_at_period_end: snapshot.cancelAtPeriodEnd,
       current_period_end: snapshot.currentPeriodEnd?.getTime() ? Math.floor(snapshot.currentPeriodEnd.getTime() / 1000) : null,
       subscription_id: snapshot.subscriptionId,
+      _debug: {
+        link_error: linkUpsert.error?.message || null,
+        snapshot_error: snapshotUpsert.error?.message || null,
+      },
     });
   } catch (e: any) {
     console.error('[sync] error:', e?.message);

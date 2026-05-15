@@ -47,7 +47,7 @@ export default function PricingPage() {
         body: JSON.stringify({
           tier: 'premium',
           billingCycle,
-          successUrl: `${window.location.origin}/dashboard?checkout=success`,
+          successUrl: `${window.location.origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
         }),
       });

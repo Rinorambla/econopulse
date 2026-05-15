@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Navigation } from '@/components/Navigation';
 import { AuthProvider } from '@/hooks/useAuth';
 import CookieConsent from '@/components/CookieConsent';
+import CheckoutSuccessHandler from '@/components/CheckoutSuccessHandler';
 import SafeBoundary from '@/components/SafeBoundary';
 
 export const metadata: Metadata = {
@@ -115,6 +116,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </header>
           <main>{children}</main>
+          {/* Auto-sync subscription after Stripe Checkout redirect */}
+          <CheckoutSuccessHandler />
           {/* Site-wide cookie consent banner */}
           <SafeBoundary>
             <CookieConsent />

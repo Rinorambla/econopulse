@@ -178,6 +178,30 @@ export default function UserAccountDashboard() {
               <CreditCardIcon className="h-4 w-4" />
               <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
             </button>
+            <button
+              onClick={async () => {
+                try {
+                  const token = session?.access_token;
+                  const r = await fetch('/api/stripe/sync-mine', {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                  });
+                  const j = await r.json();
+                  if (j.ok) {
+                    alert(`Sincronizzato: ${j.subscription_status}`);
+                    window.location.reload();
+                  } else {
+                    alert(`Errore: ${j.error || 'sync fallito'}`);
+                  }
+                } catch (e: any) {
+                  alert(`Errore: ${e?.message || 'sync fallito'}`);
+                }
+              }}
+              className="flex items-center space-x-2 px-4 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-white hover:bg-blue-50"
+              title="Forza il ricaricamento dello stato abbonamento da Stripe"
+            >
+              <span>Sincronizza abbonamento</span>
+            </button>
             {subscriptionStatus === 'premium' && (
               <button
                 onClick={handleCancelSubscription}

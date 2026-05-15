@@ -145,11 +145,12 @@ export async function POST(request: NextRequest) {
       customerId: customer.id,
       tier: tier as SubscriptionTier,
       billingCycle: billingCycle as BillingCycle,
-      successUrl: successUrl || `${request.nextUrl.origin}/dashboard?checkout=success`,
+      successUrl: successUrl || `${request.nextUrl.origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: cancelUrl || `${request.nextUrl.origin}/pricing?checkout=cancelled`,
       trialDays,
       metadata: {
         userId: userId,
+        supabase_user_id: userId,
         isUpgrade: subscriptionTier !== 'free' ? 'true' : 'false',
       },
     });

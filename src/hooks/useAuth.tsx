@@ -63,22 +63,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(initialCookie.isAdmin);
 
   // Fetch plan details for the current authenticated user
-  const fetchPlan = useCallback(async () => {
+  const fetchPlan = useCallback(async (force = false) => {
     // Skip if already fetching or no session
     if (!session) return;
     
-    // Check sessionStorage cache first (5 min TTL)
+    // Check sessionStorage cache first (5 min TTL) — unless caller asked to bypass
     const cacheKey = `plan_cache_${session.user.id}`;
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      try {
-        const { plan: cachedPlan, isAdmin: cachedAdmin, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 300000) { // 5 min cache
-          setPlan(cachedPlan);
-          setIsAdmin(cachedAdmin);
-          return;
-        }
-      } catch {}
+    if (!force) {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const { plan: cachedPlan, isAdmin: cachedAdmin, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 300000) { // 5 min cache
+            setPlan(cachedPlan);
+            setIsAdmin(cachedAdmin);
+            return;
+          }
+        } catch {}
+      }
+    } else {
+      sessionStorage.removeItem(cacheKey);
     }
     
     try {
@@ -148,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshPlan = useCallback(async () => {
     if (!user) return;
-    await fetchPlan();
+    await fetchPlan(true); // force bypass cache
   }, [user, fetchPlan]);
 
   useEffect(() => {

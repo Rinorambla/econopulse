@@ -20,6 +20,15 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
   const { user, loading, plan, refreshingPlan, isAdmin, isDevUser } = useAuth();
   const isIOSApp = useIsIOSApp();
 
+  // Safety fallback: if plan stays null too long (e.g. /api/me failing),
+  // treat the user as free so we still gate the page instead of looping.
+  const [timedOut, setTimedOut] = React.useState(false);
+  React.useEffect(() => {
+    if (plan !== null || !user) { setTimedOut(false); return; }
+    const t = setTimeout(() => setTimedOut(true), 6000);
+    return () => clearTimeout(t);
+  }, [plan, user]);
+
   // Show loading on initial page load (auth still resolving)
   if (loading) {
     return (
@@ -43,10 +52,9 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
     return <>{children}</>;
   }
 
-  // While the plan is still being fetched (plan === null) show a loader.
-  // Do NOT optimistically render premium content — that would expose paid
-  // pages to non-subscribers until /api/me resolves.
-  if (plan === null) {
+  // While the plan is still being fetched (plan === null) show a loader,
+  // unless we've waited too long — then assume free and apply gating below.
+  if (plan === null && !timedOut) {
     return (
       <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>
     );

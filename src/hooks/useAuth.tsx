@@ -209,6 +209,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
   }, [fetchPlan]);
 
+  // Ensure plan is fetched whenever we have a user but no plan yet.
+  // Covers the case where getInitialSession() resolves a session but
+  // onAuthStateChange doesn't re-emit (no INITIAL_SESSION event).
+  useEffect(() => {
+    if (user && plan === null && session) {
+      fetchPlan();
+    }
+  }, [user, plan, session, fetchPlan]);
+
   const signIn = async (email: string, password: string) => {
     try {
       if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' }

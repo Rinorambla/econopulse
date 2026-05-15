@@ -4,13 +4,26 @@
 import Stripe from 'stripe';
 import { env } from './env';
 
-if (!env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is required');
+// Lazy proxy: avoid throwing at module load (which would crash the whole API
+// route bundle at startup and produce opaque "Failed to fetch" errors on the
+// client). We create the real Stripe instance on first property access.
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (_stripe) return _stripe;
+  const key = env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error('STRIPE_SECRET_KEY is required (set it in Vercel environment variables)');
+  }
+  _stripe = new Stripe(key, { apiVersion: '2025-06-30.basil', typescript: true });
+  return _stripe;
 }
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-06-30.basil',
-  typescript: true,
+const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    const real = getStripe() as any;
+    const value = real[prop];
+    return typeof value === 'function' ? value.bind(real) : value;
+  },
 });
 
 // Product IDs in Stripe - Set these up in your Stripe Dashboard

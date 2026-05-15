@@ -43,12 +43,13 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
     return <>{children}</>;
   }
 
-  // Optimistic render: while the plan is still being fetched for an authenticated
-  // user, render the protected content. If /api/me later resolves to a lower plan,
-  // the upgrade panel will appear. This eliminates the "Upgrade Required" flash for
-  // legitimate premium users (including the Apple review account).
+  // While the plan is still being fetched (plan === null) show a loader.
+  // Do NOT optimistically render premium content — that would expose paid
+  // pages to non-subscribers until /api/me resolves.
   if (plan === null) {
-    return <>{children}</>;
+    return (
+      <div className="py-8 text-center text-sm text-gray-400">Checking access...</div>
+    );
   }
 
   // Treat null plan as free (still loading or no subscription) - plan-access util handles unknown gracefully

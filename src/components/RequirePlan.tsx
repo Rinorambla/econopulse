@@ -98,6 +98,14 @@ export function RequirePlan({ min, children, inline }: RequirePlanProps) {
       </p>
       <Link
         href="/pricing"
+        prefetch={false}
+        onClick={(e) => {
+          // Hard navigation: bypass any client-side interception/error boundaries
+          e.preventDefault();
+          if (typeof window !== 'undefined') {
+            window.location.assign('/pricing');
+          }
+        }}
         className={`inline-block rounded bg-amber-500 px-5 py-2 text-sm font-medium text-black shadow hover:bg-amber-400 ${isIOSApp ? 'hidden' : ''}`}
       >
         Upgrade to {min}

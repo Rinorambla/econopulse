@@ -7,10 +7,10 @@ import { supabase } from '@/lib/supabase';
 /**
  * Mounted globally. When the user lands on any page with
  * ?checkout=success&session_id=cs_..., this component:
- *  1. Calls /api/stripe/sync-session to immediately write the subscription
- *     to the DB (covers the case where the Stripe webhook is slow or not
- *     configured).
- *  2. Forces a plan refresh in the auth context (bypassing cache).
+ *  1. Calls /api/stripe/sync to immediately pull subscription state from
+ *     Stripe and write it to the DB (covers cases where the webhook is slow
+ *     or not yet configured).
+ *  2. Forces a plan refresh in the auth context.
  *  3. Strips the query params so a manual reload doesn't re-trigger.
  */
 export default function CheckoutSuccessHandler() {
@@ -35,16 +35,15 @@ export default function CheckoutSuccessHandler() {
         const token = session?.access_token;
         if (!token) return;
 
-        await fetch('/api/stripe/sync-session', {
+        await fetch('/api/stripe/sync', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ sessionId }),
         });
       } catch (e) {
-        console.warn('sync-session failed', e);
+        console.warn('subscription sync failed', e);
       } finally {
         try { await refreshPlan(); } catch {}
         // Strip the query params (keep path + hash)

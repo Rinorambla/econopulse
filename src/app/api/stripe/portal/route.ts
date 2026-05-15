@@ -1,90 +1,70 @@
-// API Route: /api/stripe/portal
-// Creates Stripe Customer Portal session for subscription management
-
+/**
+ * POST /api/stripe/portal
+ * Opens the Stripe Customer Portal for the authenticated user, where they can:
+ *   - Update payment method
+ *   - Cancel subscription
+ *   - View invoices
+ *   - Change plan (if portal is configured to allow it)
+ *
+ * This is the SaaS-standard way to handle subscription management. We do NOT
+ * build custom cancel/update endpoints — Stripe Portal is more secure, more
+ * complete, and updates flow back via webhook.
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import StripeSubscriptionManager from '@/lib/stripe-enhanced';
+import { supabase as supabaseAnon } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase-server';
+import { stripe } from '@/lib/stripe-server';
+import { getOrCreateCustomer } from '@/lib/subscription';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
-  const clientIp = getClientIp(request);
-  const rateLimitResult = rateLimit(`stripe-portal:${clientIp}`, 10, 600000); // 10 requests per 10 minutes
-  
-  if (!rateLimitResult.ok) {
-    return NextResponse.json(
-      { error: 'Too many portal requests. Please try again later.' },
-      { 
-        status: 429,
-        headers: rateLimitHeaders(rateLimitResult)
-      }
-    );
+  const ip = getClientIp(request);
+  const rl = rateLimit(`stripe-portal:${ip}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(rl) });
   }
 
   try {
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401, headers: rateLimitHeaders(rateLimitResult) }
-      );
+    let userId: string | undefined;
+    let userEmail: string | undefined;
+    const auth = request.headers.get('authorization');
+    if (auth?.startsWith('Bearer ')) {
+      const { data, error } = await supabaseAnon.auth.getUser(auth.slice(7));
+      if (!error && data.user) {
+        userId = data.user.id;
+        userEmail = data.user.email || undefined;
+      }
+    }
+    if (!userId) {
+      const supa = await createClient();
+      const { data } = await supa.auth.getUser();
+      if (data.user) {
+        userId = data.user.id;
+        userEmail = data.user.email || undefined;
+      }
+    }
+    if (!userId || !userEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401, headers: rateLimitHeaders(rl) });
     }
 
-    const body = await request.json();
-    const { returnUrl } = body;
+    const body = await request.json().catch(() => ({}));
+    const returnUrl: string = typeof body.returnUrl === 'string'
+      ? body.returnUrl
+      : `${request.nextUrl.origin}/dashboard/account`;
 
-    // Get user profile with Stripe customer ID
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('stripe_customer_id, subscription_tier')
-      .eq('id', user.id)
-      .single();
+    const customerId = await getOrCreateCustomer({ userId, email: userEmail });
 
-    if (profileError) {
-      console.error('Error fetching user profile:', profileError);
-      return NextResponse.json(
-        { error: 'Failed to fetch user profile' },
-        { status: 500, headers: rateLimitHeaders(rateLimitResult) }
-      );
-    }
-
-    // Check if user has a Stripe customer ID
-    if (!profile.stripe_customer_id) {
-      return NextResponse.json(
-        { error: 'No billing account found. Please subscribe first.' },
-        { status: 400, headers: rateLimitHeaders(rateLimitResult) }
-      );
-    }
-
-    // Check if user has an active subscription
-    if (!profile.subscription_tier || profile.subscription_tier === 'free') {
-      return NextResponse.json(
-        { error: 'No active subscription found. Please subscribe first.' },
-        { status: 400, headers: rateLimitHeaders(rateLimitResult) }
-      );
-    }
-
-    // Create portal session
-    const portalSession = await StripeSubscriptionManager.createPortalSession({
-      customerId: profile.stripe_customer_id,
-      returnUrl: returnUrl || `${request.nextUrl.origin}/dashboard/billing`,
+    const session = await stripe().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
     });
 
-    return NextResponse.json(
-      { 
-        url: portalSession.url 
-      },
-      { headers: rateLimitHeaders(rateLimitResult) }
-    );
-
-  } catch (error: any) {
-    console.error('Stripe portal error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create portal session' },
-      { 
-        status: 500,
-        headers: rateLimitHeaders(rateLimitResult)
-      }
-    );
+    return NextResponse.json({ url: session.url }, { headers: rateLimitHeaders(rl) });
+  } catch (e: any) {
+    console.error('[portal] error:', e?.message);
+    return NextResponse.json({ error: e?.message || 'Failed to open portal' }, { status: 500, headers: rateLimitHeaders(rl) });
   }
 }

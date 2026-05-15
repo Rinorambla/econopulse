@@ -62,34 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [refreshingPlan, setRefreshingPlan] = useState(false);
   const [isAdmin, setIsAdmin] = useState(initialCookie.isAdmin);
 
-  // Fetch plan details for the current authenticated user
-  const fetchPlan = useCallback(async (force = false) => {
-    // Skip if already fetching or no session
+  // Fetch plan details for the current authenticated user.
+  // No sessionStorage cache — /api/me is no-store and fast. The ep_plan cookie
+  // (set by /api/me) provides synchronous hydration on first render.
+  const fetchPlan = useCallback(async (_force = false) => {
     if (!session) return;
-    
-    // Check sessionStorage cache first (5 min TTL) — unless caller asked to bypass
-    const cacheKey = `plan_cache_${session.user.id}`;
-    if (!force) {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          const { plan: cachedPlan, isAdmin: cachedAdmin, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < 300000) { // 5 min cache
-            setPlan(cachedPlan);
-            setIsAdmin(cachedAdmin);
-            return;
-          }
-        } catch {}
-      }
-    } else {
-      sessionStorage.removeItem(cacheKey);
-    }
-    
+
     try {
       setRefreshingPlan(true);
-
       const accessToken = session.access_token as any;
-      // Helper: fetch with timeout
       const fetchWithTimeout = (ms = 7000) => {
         const ctrl = new AbortController();
         const id = setTimeout(() => ctrl.abort(), ms);
@@ -134,7 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newAdmin = json.isAdmin || false;
         setPlan(newPlan);
         setIsAdmin(newAdmin);
-        sessionStorage.setItem(cacheKey, JSON.stringify({ plan: newPlan, isAdmin: newAdmin, timestamp: Date.now() }));
       } else {
         setPlan('free');
         setIsAdmin(false);
@@ -190,7 +170,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fetchTimer = setTimeout(() => fetchPlan(), 200);
         } else {
           setPlan(null);
-          sessionStorage.clear(); // Clear cache on logout
         }
       }
     );

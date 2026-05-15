@@ -50,35 +50,25 @@ export default function UserAccountDashboard() {
     fetchSub();
   }, [session]);
 
-  // Annulla abbonamento
+  // Annulla abbonamento: redirect to Stripe Customer Portal (industry standard)
   const handleCancelSubscription = async () => {
     setCancelLoading(true);
     setCancelError(null);
-    setCancelSuccess(false);
     try {
-      // Recupera subscriptionId dal profilo
-      const resMe = await fetch('/api/me');
-      const dataMe = await resMe.json();
-      if (!dataMe.subscription_id) throw new Error('Subscription ID not found');
       const token = session?.access_token;
-      const res = await fetch('/api/stripe/cancel-subscription', {
+      const res = await fetch('/api/stripe/portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ subscriptionId: dataMe.subscription_id })
+        body: JSON.stringify({ returnUrl: window.location.origin + '/dashboard/account' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to cancel');
-      setCancelSuccess(true);
-      setSubscriptionStatus('canceling');
-      if (data.subscription?.current_period_end) {
-        setSubscriptionEnd(new Date(data.subscription.current_period_end * 1000).toLocaleDateString());
-      }
+      if (!res.ok || !data.url) throw new Error(data.error || 'Failed to open portal');
+      window.location.href = data.url;
     } catch (e: any) {
-      setCancelError(e.message || 'Errore annullamento');
-    } finally {
+      setCancelError(e.message || 'Errore');
       setCancelLoading(false);
     }
   };
@@ -86,9 +76,13 @@ export default function UserAccountDashboard() {
   const openBillingPortal = async () => {
     setBillingLoading(true);
     try {
+      const token = session?.access_token;
       const response = await fetch('/api/stripe/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ 
           returnUrl: window.location.origin + '/dashboard/account' 
         }),
@@ -182,13 +176,13 @@ export default function UserAccountDashboard() {
               onClick={async () => {
                 try {
                   const token = session?.access_token;
-                  const r = await fetch('/api/stripe/sync-mine', {
+                  const r = await fetch('/api/stripe/sync', {
                     method: 'POST',
                     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
                   });
                   const j = await r.json();
                   if (j.ok) {
-                    alert(`Sincronizzato: ${j.subscription_status}`);
+                    alert(`Sincronizzato: ${j.plan} (${j.status})`);
                     window.location.reload();
                   } else {
                     alert(`Errore: ${j.error || 'sync fallito'}`);

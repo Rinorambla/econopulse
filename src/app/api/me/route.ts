@@ -1,161 +1,109 @@
+/**
+ * GET /api/me
+ * Returns the authenticated user's profile + subscription plan.
+ *
+ * Strategy:
+ *  - Always no-store (no HTTP cache). Auth state must be fresh.
+ *  - Reads cached subscription state from public.users (written by webhook + sync).
+ *  - Admin email = unconditional premium.
+ *  - Returns: { authenticated, id, email, plan: 'free'|'premium', subscription_status, current_period_end, cancel_at_period_end, subscription_id, isAdmin }
+ */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
-import { normalizePlan } from '@/lib/plan-access';
+import { supabase as supabaseAnon } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { statusToPlan } from '@/lib/subscription';
 
-// Admin email configuration - hardcoded for server-side check
 const ADMIN_EMAIL = 'info@econopulse.ai';
 
-function isAdminEmail(email: string | undefined): boolean {
-  if (!email) return false;
-  return email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
+function isAdmin(email?: string | null): boolean {
+  return !!email && email.toLowerCase().trim() === ADMIN_EMAIL;
 }
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   try {
-    // Try to extract bearer token (client will send if available)
-    const authHeader = req.headers.get('authorization');
-    let bearerToken: string | undefined;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      bearerToken = authHeader.slice(7);
-    }
+    // Resolve user (Bearer or cookie)
+    let userId: string | undefined;
+    let userEmail: string | undefined;
 
-    // Create Supabase client with proper cookie handling for API routes
-    const supabase = await createClient();
-    let { data: { user }, error: userErr } = await supabase.auth.getUser();
-
-    // If no user via cookie, attempt manual fetch via token
-    if ((!user || userErr) && bearerToken) {
-      try {
-        const profileRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`, {
-          headers: {
-            Authorization: `Bearer ${bearerToken}`,
-            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-          },
-          cache: 'no-store'
-        });
-        if (profileRes.ok) {
-          const json = await profileRes.json();
-          user = json as any;
-          userErr = undefined as any;
-        }
-      } catch (e) {
-        console.warn('Manual token user fetch failed');
+    const auth = req.headers.get('authorization');
+    if (auth?.startsWith('Bearer ')) {
+      const { data, error } = await supabaseAnon.auth.getUser(auth.slice(7));
+      if (!error && data.user) {
+        userId = data.user.id;
+        userEmail = data.user.email || undefined;
       }
     }
-    
-    if (userErr || !user) {
-      return NextResponse.json({ authenticated: false, plan: 'free', requiresSubscription: true });
+    if (!userId) {
+      const supa = await createClient();
+      const { data } = await supa.auth.getUser();
+      if (data.user) {
+        userId = data.user.id;
+        userEmail = data.user.email || undefined;
+      }
     }
-    
-    const userEmail = user.email;
-    const userId = user.id;
-    // Check if user is admin - grant premium immediately
-    const isAdmin = isAdminEmail(userEmail);
-    
-    if (isAdmin) {
+
+    if (!userId) {
+      const res = NextResponse.json({ authenticated: false, plan: 'free' });
+      res.headers.set('Cache-Control', 'no-store');
+      res.cookies.set('ep_plan', 'free', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
+      return res;
+    }
+
+    if (isAdmin(userEmail)) {
       const res = NextResponse.json({
         authenticated: true,
         id: userId,
         email: userEmail,
         plan: 'premium',
-        subscription_status: 'premium',
-        trial_end_date: null,
-        requiresSubscription: false,
-        stripe_customer_id: null,
+        subscription_status: 'active',
+        cancel_at_period_end: false,
+        current_period_end: null,
         subscription_id: null,
-        isAdmin: true
-      }, {
-        headers: {
-          'Cache-Control': 'private, max-age=300', // 5 min cache
-        }
+        isAdmin: true,
       });
-      // Non-HttpOnly cookie so client can hydrate plan synchronously and avoid
-      // the "Upgrade Required" flash while /api/me is in flight.
-      res.cookies.set('ep_plan', 'premium', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
-      res.cookies.set('ep_admin', '1', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+      res.headers.set('Cache-Control', 'no-store');
+      res.cookies.set('ep_plan', 'premium', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
+      res.cookies.set('ep_admin', '1', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
       return res;
     }
-    
-    // Fetch extended user data for regular users
-    // We select both legacy + new column names to support either schema variant.
-    const { data, error } = await supabase
-      .from('users')
-      .select('email, subscription_status, subscription_tier, stripe_customer_id, subscription_id, stripe_subscription_id, trial_end_date, next_billing_date, cancel_at_period_end')
-      .eq('id', userId)
-      .single();
-    if (error) {
-      return NextResponse.json({ authenticated: true, email: userEmail, plan: 'free', warning: 'profile_missing', requiresSubscription: true });
-    }
 
-    // Resolve effective status: prefer subscription_status (mapped value),
-    // but if it's a raw Stripe status, derive a normalized value.
-    const rawStatus: string = (data?.subscription_status || data?.subscription_tier || 'free').toString().toLowerCase();
-    let currentSubscriptionStatus = rawStatus;
-    if (['active', 'trialing', 'past_due'].includes(rawStatus)) {
-      currentSubscriptionStatus = rawStatus === 'trialing' ? 'trial' : 'premium';
-    } else if (['canceled', 'cancelled', 'incomplete_expired', 'unpaid'].includes(rawStatus)) {
-      currentSubscriptionStatus = 'free';
-    }
-    
-    // Check if trial has expired
-    if (currentSubscriptionStatus === 'trial' && data?.trial_end_date) {
-      const trialEndDate = new Date(data.trial_end_date);
-      const now = new Date();
-      
-      if (now > trialEndDate) {
-        // Trial expired, update to free
-        currentSubscriptionStatus = 'free';
-        
-        // Update in database ONLY if not already marked as expired
-        // This prevents unnecessary DB writes on every request
-        if (data.subscription_status === 'trial') {
-          // Fire and forget - don't await to avoid blocking response
-          supabase
-            .from('users')
-            .update({ 
-              subscription_status: 'free',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', userId)
-            .then(() => console.log('Trial expired updated for', userId));
-        }
-      }
-    }
-    
-    const plan = normalizePlan(currentSubscriptionStatus);
-    const requiresSubscription = currentSubscriptionStatus === 'free';
-    
-    // FORCE premium access for trial users
-    const finalPlan = currentSubscriptionStatus === 'trial' ? 'premium' : plan;
-    const finalRequiresSubscription = currentSubscriptionStatus === 'trial' ? false : requiresSubscription;
-    
+    // Fetch DB cache
+    const db = supabaseAdmin();
+    const { data } = await db
+      .from('users')
+      .select('email, subscription_status, stripe_customer_id, stripe_subscription_id, cancel_at_period_end, next_billing_date, trial_end_date')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const status = (data?.subscription_status as string | null) || 'free';
+    const plan = statusToPlan(status);
+    const periodEnd = data?.next_billing_date ? Math.floor(new Date(data.next_billing_date).getTime() / 1000) : null;
+
     const res = NextResponse.json({
       authenticated: true,
       id: userId,
       email: data?.email || userEmail,
-      plan: finalPlan,
-      subscription_status: currentSubscriptionStatus,
-      trial_end_date: data?.trial_end_date || null,
-      requiresSubscription: finalRequiresSubscription,
-      stripe_customer_id: data?.stripe_customer_id || null,
-      subscription_id: data?.subscription_id || data?.stripe_subscription_id || null,
+      plan,
+      subscription_status: status,
       cancel_at_period_end: !!data?.cancel_at_period_end,
-      current_period_end: data?.next_billing_date
-        ? Math.floor(new Date(data.next_billing_date).getTime() / 1000)
-        : null,
-      isAdmin: false
-    }, {
-      headers: {
-        'Cache-Control': 'private, max-age=300', // 5 min cache
-      }
+      current_period_end: periodEnd,
+      trial_end_date: data?.trial_end_date || null,
+      stripe_customer_id: data?.stripe_customer_id || null,
+      subscription_id: data?.stripe_subscription_id || null,
+      isAdmin: false,
     });
-    // Non-HttpOnly cookie so client can hydrate plan synchronously and avoid
-    // the "Upgrade Required" flash while /api/me is in flight.
-    res.cookies.set('ep_plan', finalPlan, { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
-    res.cookies.set('ep_admin', '0', { path: '/', maxAge: 300, sameSite: 'lax', secure: true });
+    res.headers.set('Cache-Control', 'no-store');
+    res.cookies.set('ep_plan', plan, { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
+    res.cookies.set('ep_admin', '0', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
     return res;
-  } catch (e) {
-    console.error('GET /api/me error', e);
-    return NextResponse.json({ authenticated: false, plan: 'free' }, { status: 500 });
+  } catch (e: any) {
+    console.error('[/api/me] error:', e?.message);
+    const res = NextResponse.json({ authenticated: false, plan: 'free', error: 'internal' }, { status: 500 });
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   }
 }

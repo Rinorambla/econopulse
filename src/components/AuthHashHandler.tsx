@@ -39,7 +39,7 @@ export default function AuthHashHandler() {
             window.history.replaceState(null, '', window.location.pathname);
             router.replace('/ai-pulse');
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             console.error('[AuthHashHandler] setSession failed:', err);
           });
         return;
@@ -60,7 +60,7 @@ export default function AuthHashHandler() {
             window.history.replaceState(null, '', window.location.pathname);
             router.replace('/ai-pulse');
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             console.error('[AuthHashHandler] exchangeCodeForSession failed:', err);
           });
       }

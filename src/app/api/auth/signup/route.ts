@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,37 +9,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID and email are required' }, { status: 400 });
     }
 
-    // Create user record in our users table with 14-day free trial
-    const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 14); // 14 giorni da ora
-
-    const { error: dbError } = await supabase
+    // Upsert profile row. We set status='free'; an actual subscription/trial
+    // starts only when the user goes through Stripe Checkout, after which
+    // syncStripeData() writes the correct status ('trialing' or 'active').
+    const db = supabaseAdmin();
+    const { error: dbError } = await db
       .from('users')
-      .insert({
-        id: userId,
-        email: email,
-        full_name: fullName,
-        subscription_status: 'trial',
-        trial_end_date: trialEndDate.toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      .upsert(
+        {
+          id: userId,
+          email,
+          full_name: fullName || null,
+          subscription_status: 'free',
+          subscription_tier: 'free',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' },
+      );
 
     if (dbError) {
-      console.error('Database error:', dbError);
-      return NextResponse.json({ error: 'Failed to create user record' }, { status: 500 });
+      console.error('[signup] DB error:', dbError);
+      return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      message: 'User record created successfully with 14-day free trial',
-      trial_end_date: trialEndDate.toISOString(),
-    });
-
-  } catch (error) {
-    console.error('Signup error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'User profile created' });
+  } catch (error: any) {
+    console.error('[signup] error:', error?.message || error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

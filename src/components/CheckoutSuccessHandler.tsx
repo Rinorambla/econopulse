@@ -38,35 +38,43 @@ export default function CheckoutSuccessHandler() {
         const token = session?.access_token;
         if (!token) return;
 
-        // 1) Force sync from Stripe
+        // 1) Force sync from Stripe (authoritative state, no need to wait for webhook)
         setStatusMsg('Verifying payment with Stripe…');
-        await fetch('/api/stripe/sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        let syncedPlan: string | null = null;
+        try {
+          const syncRes = await fetch('/api/stripe/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (syncRes.ok) {
+            const j = await syncRes.json().catch(() => ({}));
+            syncedPlan = j?.plan || null;
+          }
+        } catch {
+          /* fall through to polling */
+        }
 
-        // 2) Poll plan until premium (max ~12s)
+        // 2) Refresh /api/me once to persist the ep_plan cookie
         setStatusMsg('Activating your premium access…');
-        for (let i = 0; i < 8; i++) {
-          await refreshPlan();
-          // refreshPlan updates context async; small wait
-          await new Promise((r) => setTimeout(r, 800));
-          // Re-read current value via cookie shortcut (set by /api/me)
+        await refreshPlan();
+
+        // 3) If Stripe sync already told us we're premium, exit overlay now
+        if (syncedPlan === 'premium') {
+          return;
+        }
+
+        // 4) Fallback: short poll in case the DB write is still propagating
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 500));
           const cookiePlan = document.cookie
             .split('; ')
             .find((c) => c.startsWith('ep_plan='))
             ?.split('=')[1];
           if (cookiePlan === 'premium') break;
-          // also call sync again after a couple of failed attempts
-          if (i === 3) {
-            await fetch('/api/stripe/sync', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
+          await refreshPlan();
         }
       } catch (e) {
         console.warn('subscription sync failed', e);

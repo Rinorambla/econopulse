@@ -60,7 +60,7 @@ export default function UserAccountDashboard() {
     fetchSub();
   }, [session]);
 
-  // Annulla abbonamento: redirect to Stripe Customer Portal (industry standard)
+  // Cancel subscription: redirect to Stripe Customer Portal (industry standard)
   const handleCancelSubscription = async () => {
     setCancelLoading(true);
     setCancelError(null);
@@ -78,7 +78,7 @@ export default function UserAccountDashboard() {
       if (!res.ok || !data.url) throw new Error(data.error || 'Failed to open portal');
       window.location.href = data.url;
     } catch (e: any) {
-      setCancelError(e.message || 'Errore');
+      setCancelError(e.message || 'Error');
       setCancelLoading(false);
     }
   };

@@ -21,7 +21,9 @@ export default function LoginPage() {
     try {
       const res = await signIn(email, password);
       if (res.success) {
-        router.push('/dashboard');
+        // Send everyone to /ai-pulse (free landing). Premium pages will
+        // be reachable from there once their plan is fetched.
+        router.push('/ai-pulse');
       } else {
         setError(res.error || 'Login failed');
       }

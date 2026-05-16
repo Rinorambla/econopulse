@@ -14,6 +14,27 @@ export default function SignupPage() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const handleResend = async () => {
+    setError(null);
+    setResending(true);
+    try {
+      const res = await fetch('/api/auth/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to resend');
+      setInfo('Confirmation email re-sent. Check your inbox (and spam folder).');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to resend confirmation email');
+    } finally {
+      setResending(false);
+    }
+  };
   const handleApple = async () => {
     if (!agreedTerms) {
       setError('You must agree to the Terms of Service and Privacy Policy');
@@ -47,6 +68,7 @@ export default function SignupPage() {
       if (res.success) {
         if (res.needsConfirmation) {
           setInfo('Check your email to confirm your account.');
+          setNeedsConfirm(true);
         } else {
           router.push('/ai-pulse');
         }
@@ -147,6 +169,16 @@ export default function SignupPage() {
 
           {error && <div className="text-red-400 text-sm">{error}</div>}
           {info && <div className="text-emerald-400 text-sm">{info}</div>}
+          {needsConfirm && (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="w-full text-sm text-blue-400 hover:text-blue-300 underline disabled:opacity-50"
+            >
+              {resending ? 'Sending…' : "Didn't get the email? Resend confirmation"}
+            </button>
+          )}
           <button
             type="submit"
             disabled={loading || !agreedTerms}

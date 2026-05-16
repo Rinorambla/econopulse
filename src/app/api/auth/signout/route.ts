@@ -10,8 +10,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ message: 'Signed out successfully' });
-
+    const res = NextResponse.json({ message: 'Signed out successfully' });
+    // Wipe plan-hydration cookies so the next page render starts clean
+    res.cookies.set('ep_plan', '', { path: '/', maxAge: 0, sameSite: 'lax' });
+    res.cookies.set('ep_admin', '', { path: '/', maxAge: 0, sameSite: 'lax' });
+    return res;
   } catch (error: any) {
     console.error('Signout API error:', error);
     return NextResponse.json(

@@ -31,13 +31,15 @@ export default function AuthHashHandler() {
       const params = new URLSearchParams(hash.slice(1));
       const access_token = params.get('access_token');
       const refresh_token = params.get('refresh_token');
+      // Some flows include the intended landing page as `next` in the search part
+      const nextParam = new URLSearchParams(search).get('next');
+      const dest = nextParam && nextParam.startsWith('/') ? nextParam : '/ai-pulse';
       if (access_token && refresh_token) {
         supabase.auth
           .setSession({ access_token, refresh_token })
           .then(() => {
-            // Clean URL and route to free landing page
             window.history.replaceState(null, '', window.location.pathname);
-            router.replace('/ai-pulse');
+            router.replace(dest);
           })
           .catch((err: unknown) => {
             console.error('[AuthHashHandler] setSession failed:', err);
@@ -53,12 +55,14 @@ export default function AuthHashHandler() {
     ) {
       const params = new URLSearchParams(search);
       const code = params.get('code');
+      const nextParam = params.get('next');
+      const dest = nextParam && nextParam.startsWith('/') ? nextParam : '/ai-pulse';
       if (code) {
         supabase.auth
           .exchangeCodeForSession(code)
           .then(() => {
             window.history.replaceState(null, '', window.location.pathname);
-            router.replace('/ai-pulse');
+            router.replace(dest);
           })
           .catch((err: unknown) => {
             console.error('[AuthHashHandler] exchangeCodeForSession failed:', err);

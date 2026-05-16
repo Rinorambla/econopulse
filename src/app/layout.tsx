@@ -5,6 +5,7 @@ import { Navigation } from '@/components/Navigation';
 import { AuthProvider } from '@/hooks/useAuth';
 import CookieConsent from '@/components/CookieConsent';
 import CheckoutSuccessHandler from '@/components/CheckoutSuccessHandler';
+import AuthHashHandler from '@/components/AuthHashHandler';
 import SafeBoundary from '@/components/SafeBoundary';
 
 export const metadata: Metadata = {
@@ -116,6 +117,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </header>
           <main>{children}</main>
+          {/* Catches Supabase email-confirmation / OAuth callbacks that land anywhere */}
+          <AuthHashHandler />
           {/* Auto-sync subscription after Stripe Checkout redirect */}
           <CheckoutSuccessHandler />
           {/* Site-wide cookie consent banner */}

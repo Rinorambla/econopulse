@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     const session = await stripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
+      locale: 'en',
     });
 
     return NextResponse.json({ url: session.url }, { headers: rateLimitHeaders(rl) });

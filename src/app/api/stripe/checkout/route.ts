@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
       cancel_url: cancelUrl,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
+      locale: 'en',
       subscription_data: {
         trial_period_days: 14,
         metadata: { supabaseUserId: userId },

@@ -49,7 +49,9 @@ export async function GET(req: Request) {
     if (!userId) {
       const res = NextResponse.json({ authenticated: false, plan: 'free' });
       res.headers.set('Cache-Control', 'no-store');
-      res.cookies.set('ep_plan', 'free', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
+      // Do NOT overwrite ep_plan cookie when unauthenticated. A transient
+      // missing-token call (during hydration / navigation) would otherwise
+      // stomp a valid 'premium' cookie to 'free' and cause UI flicker.
       return res;
     }
 

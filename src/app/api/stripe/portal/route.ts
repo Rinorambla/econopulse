@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase as supabaseAnon } from '@/lib/supabase';
 import { createClient } from '@/lib/supabase-server';
 import { stripe } from '@/lib/stripe-server';
-import { getOrCreateCustomer } from '@/lib/subscription';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -46,16 +46,41 @@ export async function POST(request: NextRequest) {
         userEmail = data.user.email || undefined;
       }
     }
-    if (!userId || !userEmail) {
+    if (!userId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401, headers: rateLimitHeaders(rl) });
+    }
+
+    // The Customer Portal only makes sense when the user already has a Stripe
+    // customer record (created during checkout). If they don't, send them to
+    // /pricing instead of silently creating an empty customer.
+    const db = supabaseAdmin();
+    const { data: row } = await db
+      .from('users')
+      .select('stripe_customer_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    let customerId = row?.stripe_customer_id as string | undefined | null;
+
+    // Last-chance lookup by email (covers cases where DB link is missing)
+    if (!customerId && userEmail) {
+      try {
+        const list = await stripe().customers.list({ email: userEmail, limit: 1 });
+        if (list.data.length > 0) customerId = list.data[0].id;
+      } catch { /* ignore */ }
+    }
+
+    if (!customerId) {
+      return NextResponse.json(
+        { error: 'You do not have an active subscription yet.', redirect: '/pricing' },
+        { status: 400, headers: rateLimitHeaders(rl) },
+      );
     }
 
     const body = await request.json().catch(() => ({}));
     const returnUrl: string = typeof body.returnUrl === 'string'
       ? body.returnUrl
       : `${request.nextUrl.origin}/dashboard/account`;
-
-    const customerId = await getOrCreateCustomer({ userId, email: userEmail });
 
     const session = await stripe().billingPortal.sessions.create({
       customer: customerId,
@@ -66,6 +91,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url }, { headers: rateLimitHeaders(rl) });
   } catch (e: any) {
     console.error('[portal] error:', e?.message);
-    return NextResponse.json({ error: e?.message || 'Failed to open portal' }, { status: 500, headers: rateLimitHeaders(rl) });
+    const msg = e?.message || 'Failed to open portal';
+    const hint = /No configuration provided/i.test(msg)
+      ? 'Stripe Customer Portal is not configured. Go to Stripe Dashboard → Settings → Billing → Customer Portal and click Save.'
+      : undefined;
+    return NextResponse.json(
+      { error: msg, hint },
+      { status: 500, headers: rateLimitHeaders(rl) },
+    );
   }
 }

@@ -101,12 +101,14 @@ export default function UserAccountDashboard() {
       const data = await response.json();
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.redirect) {
+        window.location.href = data.redirect;
       } else {
-        throw new Error(data.error || 'Failed to open billing portal');
+        throw new Error(data.error || data.hint || 'Failed to open billing portal');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Billing portal error:', error);
-      alert('Failed to open billing portal. Please try again.');
+      alert(`Failed to open billing portal: ${error?.message || 'Network error. Please retry.'}`);
     } finally {
       setBillingLoading(false);
     }
@@ -192,14 +194,24 @@ export default function UserAccountDashboard() {
           </div>
           
           <div className="flex flex-col gap-2 items-end">
-            <button
-              onClick={openBillingPortal}
-              disabled={billingLoading}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-            >
-              <CreditCardIcon className="h-4 w-4" />
-              <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
-            </button>
+            {hasStripeCustomer ? (
+              <button
+                onClick={openBillingPortal}
+                disabled={billingLoading}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <CreditCardIcon className="h-4 w-4" />
+                <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
+              </button>
+            ) : (
+              <a
+                href="/pricing"
+                className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700"
+              >
+                <CreditCardIcon className="h-4 w-4" />
+                <span>Upgrade to Premium</span>
+              </a>
+            )}
             <button
               onClick={async () => {
                 try {

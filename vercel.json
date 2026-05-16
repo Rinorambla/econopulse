@@ -22,14 +22,6 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Permissions-Policy", "value": "geolocation=()" }
       ]
-    },
-    {
-      "source": "/api/stripe/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "https://js.stripe.com" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, stripe-signature" }
-      ]
     }
   ],
   "redirects": [

@@ -43,22 +43,38 @@ interface NavigationProps {
 export function Navigation({ className }: NavigationProps) {
   const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const isIOSApp = useIsIOSApp();
   
   const handleSignOut = async () => {
     await signOut();
     setMobileOpen(false);
+    setUserMenuOpen(false);
   };
   
   // Close on ESC
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!mobileOpen && !userMenuOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+        setUserMenuOpen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mobileOpen]);
+  }, [mobileOpen, userMenuOpen]);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-user-menu]')) setUserMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [userMenuOpen]);
   
   return (
   <div className={`relative flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full overflow-hidden`}> 
@@ -132,19 +148,26 @@ export function Navigation({ className }: NavigationProps) {
 
       {/* Right: Auth (desktop) */}
     {user ? (
-      <div className="hidden md:flex items-center gap-2 ml-auto shrink-0 pl-2">
+      <div className="hidden md:flex items-center gap-2 ml-auto shrink-0 pl-2 relative" data-user-menu>
         {(() => {
           const fullName = (user.user_metadata?.full_name as string) || '';
           const email = (user.email as string) || '';
           const shortName = fullName ? fullName.split(' ')[0] : (email.split('@')[0] || 'User');
           const initial = (shortName[0] || 'U').toUpperCase();
           return (
-            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen(v => !v)}
+              className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+            >
               <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold">
                 {initial}
               </div>
               <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[10ch]" title={fullName || email}>{shortName}</span>
-            </div>
+              <svg className={`h-3 w-3 text-white/70 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            </button>
           );
         })()}
         <button
@@ -155,6 +178,46 @@ export function Navigation({ className }: NavigationProps) {
         >
           <PowerIcon className="h-5 w-5" />
         </button>
+
+        {userMenuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden z-50"
+          >
+            <div className="px-4 py-3 border-b border-white/10">
+              <p className="text-xs text-white/60">Signed in as</p>
+              <p className="text-sm text-white font-medium truncate">{user.email}</p>
+            </div>
+            <NavigationLink
+              href="/dashboard/account"
+              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              onClick={() => setUserMenuOpen(false)}
+            >
+              Account &amp; Billing
+            </NavigationLink>
+            <NavigationLink
+              href="/dashboard"
+              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              onClick={() => setUserMenuOpen(false)}
+            >
+              Dashboard
+            </NavigationLink>
+            <NavigationLink
+              href="/pricing"
+              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              onClick={() => setUserMenuOpen(false)}
+            >
+              Manage Plan
+            </NavigationLink>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full text-left px-4 py-2.5 text-sm text-rose-300 hover:bg-rose-500/10 hover:text-rose-200 border-t border-white/10"
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
       </div>
       ) : (
         <div className="ml-auto hidden md:flex items-center gap-2 shrink-0">
@@ -206,13 +269,16 @@ export function Navigation({ className }: NavigationProps) {
               <div className="pt-2 mt-2 border-t border-slate-800" />
 
               {user ? (
-                <div className="flex items-center justify-between gap-3 px-1">
-                  <span className="text-sm text-white/80 truncate" title={user.user_metadata?.full_name || user.email}>
+                <div className="space-y-1">
+                  <div className="px-3 py-2 text-xs text-white/60 truncate" title={user.user_metadata?.full_name || user.email}>
                     {user.user_metadata?.full_name || user.email}
-                  </span>
+                  </div>
+                  <NavigationLink href="/dashboard/account" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
+                    Account &amp; Billing
+                  </NavigationLink>
                   <button
                     onClick={handleSignOut}
-                    className="bg-gradient-to-r from-rose-500 to-orange-600 text-white px-3 py-2 rounded-lg text-sm font-semibold active:scale-95"
+                    className="w-full text-left bg-gradient-to-r from-rose-500 to-orange-600 text-white px-3 py-2 rounded-lg text-sm font-semibold active:scale-95"
                   >
                     Sign Out
                   </button>

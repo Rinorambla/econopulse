@@ -24,6 +24,8 @@ export default function UserAccountDashboard() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<'free'|'premium'|'canceled'|'canceling'|'trial'|null>(null);
   const [hasStripeCustomer, setHasStripeCustomer] = useState(false);
   const [subscriptionEnd, setSubscriptionEnd] = useState<string|null>(null);
+  const [trialEndDate, setTrialEndDate] = useState<string|null>(null);
+  const [rawStatus, setRawStatus] = useState<string|null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string|null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
@@ -37,6 +39,12 @@ export default function UserAccountDashboard() {
         const data = await res.json();
         setSubscriptionStatus(data.plan || 'free');
         setHasStripeCustomer(!!data.stripe_customer_id);
+        setRawStatus(data.subscription_status || null);
+        if (data.trial_end_date) {
+          setTrialEndDate(new Date(data.trial_end_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }));
+        } else {
+          setTrialEndDate(null);
+        }
         if (data.subscription_status === 'canceled' || data.subscription_status === 'canceling') {
           setSubscriptionStatus('canceling');
         }
@@ -141,6 +149,21 @@ export default function UserAccountDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Trial banner */}
+      {rawStatus === 'trialing' && trialEndDate && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+          <BellIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-900">
+            <p className="font-semibold">Prova gratuita in corso</p>
+            <p>
+              La tua prova di 14 giorni termina il <strong>{trialEndDate}</strong>.
+              Dopo questa data l’abbonamento si rinnoverà automaticamente e verrà addebitato sul tuo metodo di pagamento.
+              Puoi annullare in qualsiasi momento prima di quella data per evitare l’addebito.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Account Overview */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-start justify-between">
@@ -152,13 +175,16 @@ export default function UserAccountDashboard() {
               </h2>
               <p className="text-gray-600">{user?.email}</p>
               <div className="flex items-center space-x-2 mt-2">
-                {subscriptionStatus === 'premium' && (
+                {rawStatus === 'trialing' && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Trial – termina il {trialEndDate || '-'}</span>
+                )}
+                {rawStatus !== 'trialing' && subscriptionStatus === 'premium' && (
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Premium</span>
                 )}
                 {subscriptionStatus === 'canceling' && (
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Annullato (attivo fino al {subscriptionEnd || '-'})</span>
                 )}
-                {subscriptionStatus === 'free' && (
+                {subscriptionStatus === 'free' && !rawStatus && (
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Free</span>
                 )}
               </div>

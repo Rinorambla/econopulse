@@ -38,7 +38,8 @@ export default function CheckoutSuccessHandler() {
         const token = session?.access_token;
         if (!token) return;
 
-        // 1) Force sync from Stripe (authoritative state, no need to wait for webhook)
+        // 1) Force sync from Stripe (authoritative state, no need to wait for webhook).
+        //    Pass the sessionId so the server can resolve the customer directly.
         setStatusMsg('Verifying payment with Stripe…');
         let syncedPlan: string | null = null;
         try {
@@ -48,6 +49,7 @@ export default function CheckoutSuccessHandler() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
+            body: JSON.stringify({ sessionId }),
           });
           if (syncRes.ok) {
             const j = await syncRes.json().catch(() => ({}));

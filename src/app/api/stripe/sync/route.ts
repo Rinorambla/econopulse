@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    // Optional checkout session id from body (passed by post-checkout handler).
+    // When present, we resolve the customer DIRECTLY from Stripe (most reliable).
+    let sessionId: string | undefined;
+    try {
+      const body = await req.json().catch(() => ({}));
+      if (typeof body?.sessionId === 'string' && body.sessionId.startsWith('cs_')) {
+        sessionId = body.sessionId;
+      }
+    } catch { /* no body, that's fine */ }
+
     // Find customer ID
     const db = supabaseAdmin();
     const { data: row } = await db
@@ -54,10 +64,36 @@ export async function POST(req: NextRequest) {
     let customerId = row?.stripe_customer_id as string | undefined | null;
     const email = row?.email || userEmail;
 
+    // 1) Preferred: resolve from the just-completed Checkout Session
+    if (!customerId && sessionId) {
+      try {
+        const cs = await stripe().checkout.sessions.retrieve(sessionId);
+        const cust = cs.customer;
+        if (typeof cust === 'string') customerId = cust;
+        else if (cust && typeof cust === 'object' && 'id' in cust) customerId = (cust as any).id;
+      } catch (e: any) {
+        console.warn('[sync] could not retrieve checkout session:', e?.message);
+      }
+    }
+
+    // 2) Fallback: lookup by email
     if (!customerId && email) {
       const list = await stripe().customers.list({ email, limit: 1 });
       if (list.data.length > 0) {
         customerId = list.data[0].id;
+      }
+    }
+
+    // 3) Last resort: search Stripe customers by metadata.supabaseUserId
+    if (!customerId) {
+      try {
+        const search = await stripe().customers.search({
+          query: `metadata['supabaseUserId']:'${userId}'`,
+          limit: 1,
+        });
+        if (search.data.length > 0) customerId = search.data[0].id;
+      } catch (e: any) {
+        console.warn('[sync] customers.search failed:', e?.message);
       }
     }
 

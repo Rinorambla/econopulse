@@ -64,9 +64,26 @@ export async function GET(request: Request) {
         applyRateLimitHeaders(res, rl);
         return res;
       }
+      // Last resort: serve stale cache if we have one (rather than failing the UI)
+      if (CACHE.data) {
+        console.warn('⚠️ Serving stale sector cache after upstream failure');
+        const res = NextResponse.json({ ...CACHE.data, stale: true }, { status: 200 });
+        applyRateLimitHeaders(res, rl);
+        return res;
+      }
+      // Truly nothing available — return 200 with empty sectors so UI shows a soft message
       return NextResponse.json(
-        { error: 'No sector data available' },
-        { status: 503 }
+        {
+          success: false,
+          sectors: [],
+          lastUpdated: new Date().toISOString(),
+          summary: { averagePerformance: 0, positiveSectors: 0, totalSectors: 0, marketSentiment: 'Neutral' },
+          timestamp: new Date().toISOString(),
+          source: 'unavailable',
+          dataType: 'EMPTY',
+          message: 'Market data is temporarily unavailable. Please retry in a moment.',
+        },
+        { status: 200 }
       );
     }
 

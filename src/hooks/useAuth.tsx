@@ -159,17 +159,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
   let fetchTimer: NodeJS.Timeout;
+  let lastUserId: string | null = null;
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: string, session: Session | null) => {
+        const newUserId = session?.user?.id ?? null;
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         if (session?.user) {
+          // If a different user just signed in (or first sign-in this tab),
+          // wipe any stale ep_plan cookie + local plan so we don't show
+          // a previous user's premium access while /api/me is still loading.
+          if (event === 'SIGNED_IN' || (lastUserId && lastUserId !== newUserId)) {
+            if (typeof document !== 'undefined') {
+              document.cookie = 'ep_plan=; Path=/; Max-Age=0; SameSite=Lax';
+              document.cookie = 'ep_admin=; Path=/; Max-Age=0; SameSite=Lax';
+            }
+            setPlan(null);
+            setIsAdmin(false);
+          }
+          lastUserId = newUserId;
           // Debounce fetchPlan to avoid rapid successive calls
           clearTimeout(fetchTimer);
           fetchTimer = setTimeout(() => fetchPlan(), 200);
         } else {
+          lastUserId = null;
           setPlan(null);
+          setIsAdmin(false);
         }
       }
     );

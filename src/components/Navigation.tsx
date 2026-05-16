@@ -77,7 +77,7 @@ export function Navigation({ className }: NavigationProps) {
   }, [userMenuOpen]);
   
   return (
-  <div className={`relative flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full overflow-hidden`}> 
+  <div className={`relative flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full min-w-0`}> 
       {/* Left: Logo */}
       <div className="shrink-0">
         <NavigationLink href="/" className="flex items-center">
@@ -182,29 +182,29 @@ export function Navigation({ className }: NavigationProps) {
         {userMenuOpen && (
           <div
             role="menu"
-            className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden z-50"
+            className="fixed sm:absolute right-2 sm:right-0 top-14 sm:top-full sm:mt-2 w-72 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100] text-white"
           >
-            <div className="px-4 py-3 border-b border-white/10">
+            <div className="px-4 py-3 border-b border-white/10 bg-slate-800/60">
               <p className="text-xs text-white/60">Signed in as</p>
-              <p className="text-sm text-white font-medium truncate">{user.email}</p>
+              <p className="text-sm text-white font-semibold truncate">{user.email}</p>
             </div>
             <NavigationLink
               href="/dashboard/account"
-              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              className="block px-4 py-3 text-sm text-white hover:bg-blue-600/30"
               onClick={() => setUserMenuOpen(false)}
             >
               Account &amp; Billing
             </NavigationLink>
             <NavigationLink
               href="/dashboard"
-              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              className="block px-4 py-3 text-sm text-white hover:bg-blue-600/30"
               onClick={() => setUserMenuOpen(false)}
             >
               Dashboard
             </NavigationLink>
             <NavigationLink
               href="/pricing"
-              className="block px-4 py-2.5 text-sm text-white/90 hover:bg-white/10 hover:text-white"
+              className="block px-4 py-3 text-sm text-white hover:bg-blue-600/30"
               onClick={() => setUserMenuOpen(false)}
             >
               Manage Plan
@@ -212,7 +212,7 @@ export function Navigation({ className }: NavigationProps) {
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-full text-left px-4 py-2.5 text-sm text-rose-300 hover:bg-rose-500/10 hover:text-rose-200 border-t border-white/10"
+              className="w-full text-left px-4 py-3 text-sm font-semibold text-rose-300 hover:bg-rose-500/20 border-t border-white/10"
             >
               Sign Out
             </button>

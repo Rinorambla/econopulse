@@ -224,6 +224,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
       if (!SUPABASE_ENABLED) return { success: false, error: 'Auth unavailable' }
+      // Build the redirect URL used in the confirmation email link
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
       // Use Supabase client directly for immediate auth state update
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -232,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             full_name: fullName,
           },
-          emailRedirectTo: undefined // Disable email confirmation temporarily
+          emailRedirectTo: redirectTo,
         }
       });
 

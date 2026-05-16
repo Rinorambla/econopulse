@@ -112,10 +112,6 @@ export async function POST(req: NextRequest) {
       cancel_at_period_end: snapshot.cancelAtPeriodEnd,
       current_period_end: snapshot.currentPeriodEnd?.getTime() ? Math.floor(snapshot.currentPeriodEnd.getTime() / 1000) : null,
       subscription_id: snapshot.subscriptionId,
-      _debug: {
-        link_error: linkUpsert.error?.message || null,
-        snapshot_error: snapshotUpsert.error?.message || null,
-      },
     });
   } catch (e: any) {
     console.error('[sync] error:', e?.message);

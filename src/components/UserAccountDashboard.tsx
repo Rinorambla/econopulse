@@ -154,11 +154,11 @@ export default function UserAccountDashboard() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
           <BellIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-900">
-            <p className="font-semibold">Prova gratuita in corso</p>
+            <p className="font-semibold">Free trial active</p>
             <p>
-              La tua prova di 14 giorni termina il <strong>{trialEndDate}</strong>.
-              Dopo questa data l’abbonamento si rinnoverà automaticamente e verrà addebitato sul tuo metodo di pagamento.
-              Puoi annullare in qualsiasi momento prima di quella data per evitare l’addebito.
+              Your 14-day trial ends on <strong>{trialEndDate}</strong>.
+              After this date your subscription will automatically renew and your payment method will be charged.
+              You can cancel anytime before that date to avoid being charged.
             </p>
           </div>
         </div>
@@ -176,13 +176,13 @@ export default function UserAccountDashboard() {
               <p className="text-gray-600">{user?.email}</p>
               <div className="flex items-center space-x-2 mt-2">
                 {rawStatus === 'trialing' && (
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Trial – termina il {trialEndDate || '-'}</span>
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Trial – ends on {trialEndDate || '-'}</span>
                 )}
                 {rawStatus !== 'trialing' && subscriptionStatus === 'premium' && (
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Premium</span>
                 )}
                 {subscriptionStatus === 'canceling' && (
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Annullato (attivo fino al {subscriptionEnd || '-'})</span>
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Canceled (active until {subscriptionEnd || '-'})</span>
                 )}
                 {subscriptionStatus === 'free' && !rawStatus && (
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Free</span>
@@ -210,19 +210,19 @@ export default function UserAccountDashboard() {
                   });
                   const j = await r.json();
                   if (j.ok) {
-                    alert(`Sincronizzato: ${j.plan} (${j.status})`);
+                    alert(`Synced: ${j.plan} (${j.status})`);
                     window.location.reload();
                   } else {
-                    alert(`Errore: ${j.error || 'sync fallito'}`);
+                    alert(`Error: ${j.error || 'sync failed'}`);
                   }
                 } catch (e: any) {
-                  alert(`Errore: ${e?.message || 'sync fallito'}`);
+                  alert(`Error: ${e?.message || 'sync failed'}`);
                 }
               }}
               className="flex items-center space-x-2 px-4 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-white hover:bg-blue-50"
-              title="Forza il ricaricamento dello stato abbonamento da Stripe"
+              title="Force refresh subscription status from Stripe"
             >
-              <span>Sincronizza abbonamento</span>
+              <span>Sync subscription</span>
             </button>
             {(subscriptionStatus === 'premium' || subscriptionStatus === 'trial' || hasStripeCustomer) && (
               <button
@@ -230,11 +230,11 @@ export default function UserAccountDashboard() {
                 disabled={cancelLoading || cancelSuccess}
                 className="flex items-center space-x-2 px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
               >
-                {cancelLoading ? 'Annullamento...' : cancelSuccess ? 'Annullato' : 'Annulla abbonamento'}
+                {cancelLoading ? 'Cancelling...' : cancelSuccess ? 'Cancelled' : 'Cancel subscription'}
               </button>
             )}
             {cancelError && <div className="text-xs text-red-600 mt-1">{cancelError}</div>}
-            {cancelSuccess && <div className="text-xs text-green-600 mt-1">Abbonamento annullato. Resterà attivo fino al termine del periodo.</div>}
+            {cancelSuccess && <div className="text-xs text-green-600 mt-1">Subscription cancelled. It will remain active until the end of the current period.</div>}
           </div>
         </div>
       </div>

@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setRefreshingPlan(true);
       const accessToken = session.access_token as any;
-      const fetchWithTimeout = (ms = 7000) => {
+      const fetchWithTimeout = (ms = 15000) => {
         const ctrl = new AbortController();
         const id = setTimeout(() => ctrl.abort(), ms);
         const p = fetch('/api/me', {
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let lastErr: any = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          res = await fetchWithTimeout(7000 + attempt * 1000);
+          res = await fetchWithTimeout(15000 + attempt * 2000);
           if (res.ok) break;
           lastErr = new Error(`HTTP ${res.status}`);
         } catch (e) {
@@ -99,7 +99,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!res || !res.ok) {
-        console.warn('Plan fetch failed after retries:', lastErr);
+        // AbortError on page navigation is expected, don't spam console
+        if (lastErr?.name !== 'AbortError') {
+          console.warn('Plan fetch failed after retries:', lastErr);
+        }
         // Do NOT downgrade immediately on transient failures; keep previous state if any
         // Only set to free if we truly have no cached info
         if (plan == null) {

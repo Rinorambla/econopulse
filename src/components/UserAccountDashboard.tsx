@@ -22,6 +22,7 @@ export default function UserAccountDashboard() {
 
   // Stato abbonamento
   const [subscriptionStatus, setSubscriptionStatus] = useState<'free'|'premium'|'canceled'|'canceling'|'trial'|null>(null);
+  const [hasStripeCustomer, setHasStripeCustomer] = useState(false);
   const [subscriptionEnd, setSubscriptionEnd] = useState<string|null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string|null>(null);
@@ -35,6 +36,7 @@ export default function UserAccountDashboard() {
         const res = await fetch('/api/me');
         const data = await res.json();
         setSubscriptionStatus(data.plan || 'free');
+        setHasStripeCustomer(!!data.stripe_customer_id);
         if (data.subscription_status === 'canceled' || data.subscription_status === 'canceling') {
           setSubscriptionStatus('canceling');
         }
@@ -196,7 +198,7 @@ export default function UserAccountDashboard() {
             >
               <span>Sincronizza abbonamento</span>
             </button>
-            {subscriptionStatus === 'premium' && (
+            {(subscriptionStatus === 'premium' || subscriptionStatus === 'trial' || hasStripeCustomer) && (
               <button
                 onClick={handleCancelSubscription}
                 disabled={cancelLoading || cancelSuccess}

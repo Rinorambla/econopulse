@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase-server';
 import { stripe } from '@/lib/stripe-server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { syncStripeData, statusToPlan } from '@/lib/subscription';
+import type Stripe from 'stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,13 +65,30 @@ export async function POST(req: NextRequest) {
     let customerId = row?.stripe_customer_id as string | undefined | null;
     const email = row?.email || userEmail;
 
-    // 1) Preferred: resolve from the just-completed Checkout Session
-    if (!customerId && sessionId) {
+    // 1) Preferred: resolve from the just-completed Checkout Session.
+    // We also pull the subscription FROM THE SESSION directly — this avoids
+    // the Stripe eventual-consistency race where subscriptions.list() may not
+    // yet return the subscription created milliseconds ago.
+    let sessionSub: Stripe.Subscription | null = null;
+    if (sessionId) {
       try {
-        const cs = await stripe().checkout.sessions.retrieve(sessionId);
+        const cs = await stripe().checkout.sessions.retrieve(sessionId, {
+          expand: ['subscription', 'customer'],
+        });
         const cust = cs.customer;
-        if (typeof cust === 'string') customerId = cust;
-        else if (cust && typeof cust === 'object' && 'id' in cust) customerId = (cust as any).id;
+        if (typeof cust === 'string') customerId = customerId || cust;
+        else if (cust && typeof cust === 'object' && 'id' in cust) customerId = customerId || (cust as any).id;
+        const sub = cs.subscription;
+        if (sub && typeof sub === 'object' && 'id' in sub) {
+          sessionSub = sub as Stripe.Subscription;
+        } else if (typeof sub === 'string') {
+          // sub is just an id; retrieve it
+          try {
+            sessionSub = await stripe().subscriptions.retrieve(sub);
+          } catch (e: any) {
+            console.warn('[sync] subscriptions.retrieve failed:', e?.message);
+          }
+        }
       } catch (e: any) {
         console.warn('[sync] could not retrieve checkout session:', e?.message);
       }
@@ -116,7 +134,33 @@ export async function POST(req: NextRequest) {
       console.error('[sync] link upsert failed:', linkUpsert.error.message);
     }
 
-    const snapshot = await syncStripeData(customerId);
+    // Build snapshot. If we have the subscription directly from the just-completed
+    // Checkout Session, USE IT — this bypasses Stripe's list() eventual-consistency
+    // window that otherwise causes the user to be persisted as 'free' right after
+    // a successful payment.
+    let snapshot = await syncStripeData(customerId);
+    if (sessionSub) {
+      const status = sessionSub.status;
+      const plan = statusToPlan(status);
+      // If list() returned nothing or an older sub, prefer the session sub if it
+      // is active / trialing / past_due (i.e. the just-paid one).
+      if (snapshot.plan === 'free' || snapshot.subscriptionId !== sessionSub.id) {
+        if (['active', 'trialing', 'past_due'].includes(status)) {
+          const periodEnd = (sessionSub as any).current_period_end as number | undefined;
+          const trialEnd = (sessionSub as any).trial_end as number | null | undefined;
+          snapshot = {
+            customerId: customerId!,
+            subscriptionId: sessionSub.id,
+            status,
+            priceId: sessionSub.items.data[0]?.price?.id || null,
+            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+            cancelAtPeriodEnd: !!sessionSub.cancel_at_period_end,
+            trialEnd: trialEnd ? new Date(trialEnd * 1000) : null,
+            plan,
+          };
+        }
+      }
+    }
 
     // Also persist the full snapshot keyed by user id, so even if syncStripeData
     // couldn't find a row by stripe_customer_id (e.g. race/missing row), we have

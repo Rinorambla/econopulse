@@ -7,6 +7,7 @@ import CookieConsent from '@/components/CookieConsent';
 import CheckoutSuccessHandler from '@/components/CheckoutSuccessHandler';
 import AuthHashHandler from '@/components/AuthHashHandler';
 import SafeBoundary from '@/components/SafeBoundary';
+import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -109,6 +110,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <AuthProvider>
+          {/* Auto-recover when an old cached HTML references chunks no longer on CDN */}
+          <ChunkErrorRecovery />
           <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
             <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
               <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>

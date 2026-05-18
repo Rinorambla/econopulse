@@ -17,7 +17,7 @@ export default function ChunkErrorRecovery() {
   useEffect(() => {
     const RELOAD_FLAG = '__chunk_reload_attempted__';
     const isChunkError = (msg: string) =>
-      /Loading chunk \d+ failed|ChunkLoadError|Loading CSS chunk/i.test(msg);
+      /Loading chunk \d+ failed|ChunkLoadError|Loading CSS chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg);
 
     const attemptReload = (reason: string) => {
       // Prevent loops: only reload once per session
@@ -33,7 +33,19 @@ export default function ChunkErrorRecovery() {
 
     const onError = (e: ErrorEvent) => {
       const msg = e?.message || String(e?.error || '');
-      if (isChunkError(msg)) attemptReload(msg);
+      if (isChunkError(msg)) {
+        attemptReload(msg);
+        return;
+      }
+      // Also catch resource load errors on Next.js static assets
+      // (these fire on the window with target = the <script>/<link> element).
+      const target = e?.target as any;
+      if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+        const url = (target.src || target.href || '') as string;
+        if (url.includes('/_next/static/')) {
+          attemptReload('static asset failed: ' + url);
+        }
+      }
     };
     const onRejection = (e: PromiseRejectionEvent) => {
       const reason = e?.reason;
@@ -49,11 +61,11 @@ export default function ChunkErrorRecovery() {
       setTimeout(() => sessionStorage.removeItem(RELOAD_FLAG), 5000);
     };
 
-    window.addEventListener('error', onError);
+    window.addEventListener('error', onError, true); // capture for resource load errors
     window.addEventListener('unhandledrejection', onRejection);
     window.addEventListener('load', onLoad);
     return () => {
-      window.removeEventListener('error', onError);
+      window.removeEventListener('error', onError, true);
       window.removeEventListener('unhandledrejection', onRejection);
       window.removeEventListener('load', onLoad);
     };

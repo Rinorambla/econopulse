@@ -18,10 +18,24 @@ export default class LocalErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: any, info: any) {
     try {
-      // Minimal client log; no network calls
       // eslint-disable-next-line no-console
       console.error('[LocalErrorBoundary]', { message: error?.message || String(error), info });
     } catch {}
+
+    // Auto-recover from stale-deploy chunk errors: a single hard reload usually
+    // fixes it. Guard with sessionStorage so we don't loop.
+    const msg = error?.message || String(error || '');
+    const isChunkError = /Loading chunk \d+ failed|ChunkLoadError|Loading CSS chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg);
+    if (isChunkError && typeof window !== 'undefined') {
+      try {
+        const FLAG = '__chunk_reload_attempted__';
+        if (!sessionStorage.getItem(FLAG)) {
+          sessionStorage.setItem(FLAG, '1');
+          // small delay so the fallback UI doesn't flash
+          setTimeout(() => window.location.reload(), 150);
+        }
+      } catch {}
+    }
   }
 
   private reset = () => this.setState({ hasError: false, lastError: undefined });

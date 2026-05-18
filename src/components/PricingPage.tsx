@@ -41,25 +41,51 @@ export default function PricingPage() {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          tier: 'premium',
-          billingCycle,
-          successUrl: `${window.location.origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
-        }),
-      });
+      // 30s safety timeout — Vercel cold starts + 3 Stripe calls can take up to ~10s
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const data = await response.json();
+      let response: Response;
+      try {
+        response = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers,
+          credentials: 'same-origin',
+          signal: controller.signal,
+          body: JSON.stringify({
+            tier: 'premium',
+            billingCycle,
+            successUrl: `${window.location.origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
+          }),
+        });
+      } catch (networkErr: any) {
+        clearTimeout(timeoutId);
+        if (networkErr?.name === 'AbortError') {
+          throw new Error('The request took too long. Please refresh the page and try again.');
+        }
+        // TypeError: Failed to fetch — covers DNS/TLS/CORS/extension blocks
+        throw new Error(
+          'Network error: could not reach the checkout service. ' +
+          'Try disabling browser extensions / ad-blockers, or open in a private window.'
+        );
+      }
+      clearTimeout(timeoutId);
+
+      let data: any = {};
+      try {
+        data = await response.json();
+      } catch {
+        // Non-JSON response (e.g. HTML error page from edge) — surface raw status
+        throw new Error(`Server returned ${response.status} ${response.statusText}. Please retry in a moment.`);
+      }
 
       if (response.ok && data.url) {
         window.location.href = data.url;
         return;
       }
 
-      let message = data.error || 'Failed to create checkout session';
+      let message = data.error || `Failed to create checkout session (HTTP ${response.status})`;
       if (data.stripeError?.type === 'StripeAuthenticationError') {
         message = 'Stripe configuration invalid (API key or Price IDs do not match LIVE environment).';
         if (data.hint) message += `\nHint: ${data.hint}`;

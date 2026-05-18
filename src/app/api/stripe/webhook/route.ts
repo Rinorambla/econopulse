@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe, STRIPE_WEBHOOK_SECRET } from '@/lib/stripe-server';
 import { syncStripeData } from '@/lib/subscription';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +69,31 @@ export async function POST(request: NextRequest) {
   if (!customerId) {
     console.warn('[webhook] no customer on event', event.type, event.id);
     return NextResponse.json({ received: true, no_customer: true });
+  }
+
+  // Explicit downgrade path: if Stripe tells us a subscription was deleted or
+  // is in a non-paying terminal state, write that directly. We don't rely on
+  // syncStripeData here because list() may not include the deleted sub.
+  if (event.type === 'customer.subscription.deleted') {
+    const sub = event.data.object as Stripe.Subscription;
+    try {
+      const db = supabaseAdmin();
+      await db
+        .from('users')
+        .update({
+          subscription_status: sub.status || 'canceled',
+          subscription_tier: 'free',
+          stripe_subscription_id: null,
+          subscription_id: null,
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_customer_id', customerId);
+      console.log('[webhook] subscription.deleted -> downgraded', customerId);
+    } catch (e: any) {
+      console.error('[webhook] downgrade write failed:', e?.message);
+    }
+    return NextResponse.json({ received: true, downgraded: true });
   }
 
   try {

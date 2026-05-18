@@ -73,7 +73,16 @@ export async function syncStripeData(customerId: string): Promise<SubscriptionSn
 
   let snapshot: SubscriptionSnapshot;
   if (!sub) {
-    snapshot = {
+    // CRITICAL: Stripe.subscriptions.list() can transiently return empty due to
+    // eventual consistency, rate limits, or replication lag — especially right
+    // after a checkout when several webhooks fire in parallel. NEVER downgrade
+    // a paying user to 'free' on an empty list. Real cancellations come in via
+    // `customer.subscription.deleted` and are handled explicitly by the caller.
+    // We do NOT touch the DB here; we just report 'free' to the caller so it
+    // can decide what to do (e.g. /api/stripe/sync will fall back to the
+    // subscription pulled directly from the Checkout Session).
+    console.warn('[syncStripeData] empty subscription list for', customerId, '— NOT downgrading');
+    return {
       customerId,
       subscriptionId: null,
       status: 'free',

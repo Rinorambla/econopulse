@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, SUPABASE_ENABLED } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -65,13 +65,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch plan details for the current authenticated user.
   // No sessionStorage cache — /api/me is no-store and fast. The ep_plan cookie
   // (set by /api/me) provides synchronous hydration on first render.
-  const fetchPlan = useCallback(async (_force = false) => {
+  const lastFetchAtRef = useRef<number>(0);
+  const fetchPlan = useCallback(async (force = false) => {
     if (!session) return;
+    // Throttle: avoid refetching more than once every 60s unless forced.
+    // This prevents the plan/subscription UI from flickering each time the
+    // user refocuses the tab.
+    const now = Date.now();
+    if (!force && now - lastFetchAtRef.current < 60_000) return;
+    lastFetchAtRef.current = now;
 
     try {
       setRefreshingPlan(true);
       const accessToken = session.access_token as any;
-      const fetchWithTimeout = (ms = 15000) => {
+      const fetchWithTimeout = (ms = 6000) => {
         const ctrl = new AbortController();
         const id = setTimeout(() => ctrl.abort(), ms);
         const p = fetch('/api/me', {
@@ -83,19 +90,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return p;
       };
 
-      // Retry up to 2 times on network errors/timeouts
+      // Retry up to 1 time on network errors/timeouts (faster UX)
       let res: Response | null = null;
       let lastErr: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          res = await fetchWithTimeout(15000 + attempt * 2000);
+          res = await fetchWithTimeout(6000 + attempt * 2000);
           if (res.ok) break;
           lastErr = new Error(`HTTP ${res.status}`);
         } catch (e) {
           lastErr = e;
         }
-        // Small backoff before next attempt
-        await new Promise(r => setTimeout(r, 200 + attempt * 200));
+        await new Promise(r => setTimeout(r, 200));
       }
 
       if (!res || !res.ok) {
@@ -193,9 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-  // Refresh plan on visibility regain or when back online
-  const onVis = () => { if (document.visibilityState === 'visible') fetchPlan(); };
-  const onOnline = () => { fetchPlan(); };
+  // Refresh plan on visibility regain or when back online (throttled in fetchPlan)
+  const onVis = () => { if (document.visibilityState === 'visible') fetchPlan(false); };
+  const onOnline = () => { fetchPlan(false); };
   if (typeof window !== 'undefined') {
     window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVis);
@@ -294,16 +300,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async (): Promise<void> => {
     try {
-      if (!SUPABASE_ENABLED) return;
-      await supabase.auth.signOut();
+      if (SUPABASE_ENABLED) {
+        await supabase.auth.signOut();
+      }
       // Clear plan hydration cookies
       if (typeof document !== 'undefined') {
         document.cookie = 'ep_plan=; Path=/; Max-Age=0; SameSite=Lax';
         document.cookie = 'ep_admin=; Path=/; Max-Age=0; SameSite=Lax';
       }
-      // The auth state change listener will handle updating the state
+      setUser(null);
+      setSession(null);
+      setPlan(null);
+      setIsAdmin(false);
     } catch (error) {
       console.error('Error signing out:', error);
+    } finally {
+      // Hard-navigate home so any protected page unmounts and stops
+      // re-rendering against stale auth state.
+      if (typeof window !== 'undefined') {
+        window.location.assign('/');
+      }
     }
   };
 

@@ -27,8 +27,15 @@ export default function ChunkErrorRecovery() {
       }
       sessionStorage.setItem(RELOAD_FLAG, '1');
       console.warn('[ChunkErrorRecovery] Reloading to recover from chunk error:', reason);
-      // Use replace to avoid back-button replay
-      window.location.reload();
+      // Bust HTTP cache by appending a cache-buster query param so we get
+      // fresh HTML referencing the current chunk hashes.
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('_cb', Date.now().toString(36));
+        window.location.replace(u.toString());
+      } catch {
+        window.location.reload();
+      }
     };
 
     const onError = (e: ErrorEvent) => {

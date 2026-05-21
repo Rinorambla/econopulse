@@ -31,7 +31,7 @@
       "permanent": false
     },
     {
-      "source": "/:lang(en|it)/:path*",
+      "source": "/:lang(en|it)/:path((?!api/).*)",
       "destination": "/:path",
       "permanent": false
     },
@@ -49,6 +49,10 @@
     {
       "source": "/stripe/webhook",
       "destination": "/api/stripe/webhook"
+    },
+    {
+      "source": "/:lang(en|it)/api/:path*",
+      "destination": "/api/:path*"
     }
   ]
 }

@@ -42,7 +42,12 @@ export default function middleware(req: Request) {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
-  
+  // Prevent the browser from caching stale HTML that references deleted JS
+  // chunks after a redeploy (root cause of "Loading chunk N failed").
+  // Static assets under /_next/static are immutable-hashed and excluded
+  // from this middleware by the matcher, so they remain long-cached.
+  res.headers.set('Cache-Control', 'no-store, must-revalidate')
+
   return res
 }
 

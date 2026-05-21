@@ -31,8 +31,17 @@ export default class LocalErrorBoundary extends React.Component<Props, State> {
         const FLAG = '__chunk_reload_attempted__';
         if (!sessionStorage.getItem(FLAG)) {
           sessionStorage.setItem(FLAG, '1');
-          // small delay so the fallback UI doesn't flash
-          setTimeout(() => window.location.reload(), 150);
+          // small delay so the fallback UI doesn't flash; cache-bust to be
+          // sure we fetch fresh HTML with current chunk hashes.
+          setTimeout(() => {
+            try {
+              const u = new URL(window.location.href);
+              u.searchParams.set('_cb', Date.now().toString(36));
+              window.location.replace(u.toString());
+            } catch {
+              window.location.reload();
+            }
+          }, 150);
         }
       } catch {}
     }

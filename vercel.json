@@ -2,10 +2,6 @@
   "version": 2,
   "framework": "nextjs",
   "regions": ["fra1"],
-  "env": {},
-  "build": {
-    "env": {}
-  },
   "crons": [
     {
       "path": "/api/newsletter/cron",

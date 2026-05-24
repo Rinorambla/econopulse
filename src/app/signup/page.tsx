@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 
 export default function SignupPage() {
   const router = useRouter();
   const { signUp, signInWithGoogle, signInWithApple } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [form, setForm] = useState({ fullName: '', email: '', password: '', confirm: '' });
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -188,15 +190,19 @@ export default function SignupPage() {
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="my-5 flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-xs text-white/40 uppercase">or</span>
-          <div className="flex-1 h-px bg-white/10" />
-        </div>
+        {/* Divider — only when OAuth buttons available */}
+        {!isIOSApp && (
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-white/40 uppercase">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+        )}
 
 
-        {/* Google & Apple Sign Up */}
+        {/* Google & Apple Sign Up — hidden on iOS native to avoid external
+            browser opening (Apple guideline 4). */}
+        {!isIOSApp && (
         <div className="flex flex-col gap-3">
           <button
             onClick={handleGoogle}
@@ -222,6 +228,7 @@ export default function SignupPage() {
             {appleLoading ? 'Connecting…' : 'Sign up with Apple'}
           </button>
         </div>
+        )}
 
         <div className="mt-4 text-sm text-white/70">
           Already have an account? <a className="text-blue-400 hover:text-blue-300" href="/login">Log in</a>

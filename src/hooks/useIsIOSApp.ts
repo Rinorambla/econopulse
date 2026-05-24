@@ -31,8 +31,10 @@ export function isIOSApp(): boolean {
   try {
     const platform = window.Capacitor?.getPlatform?.();
     if (platform === 'ios') return true;
-    // Fallback heuristic for cases where the bridge isn't injected yet
     const ua = window.navigator?.userAgent || '';
+    // Reliable signal: our Capacitor config appends "EconoPulseiOSApp" to UA.
+    if (/EconoPulseiOSApp/i.test(ua)) return true;
+    // Fallback heuristic for legacy installs without the UA suffix
     const isIOSDevice = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
     const isStandalone = (window.navigator as any)?.standalone === true;
     return isIOSDevice && isStandalone;

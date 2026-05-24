@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import Link from 'next/link';
 import { ClockIcon, StarIcon } from '@heroicons/react/24/outline';
 
@@ -11,6 +12,7 @@ interface TrialBannerProps {
 
 export function TrialBanner({ className = '' }: TrialBannerProps) {
   const { user, loading, refreshPlan } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -84,7 +86,7 @@ export function TrialBanner({ className = '' }: TrialBannerProps) {
             </div>
             <Link
               href="/en/pricing"
-              className="bg-white/20 hover:bg-white/30 px-4 py-1 rounded-md text-sm font-medium transition-colors"
+              className={`bg-white/20 hover:bg-white/30 px-4 py-1 rounded-md text-sm font-medium transition-colors ${isIOSApp ? 'hidden' : ''}`}
             >
               Upgrade Now
             </Link>
@@ -110,7 +112,7 @@ export function TrialBanner({ className = '' }: TrialBannerProps) {
           </div>
           <Link
             href="/en/pricing"
-            className="bg-white/20 hover:bg-white/30 px-4 py-1 rounded-md text-sm font-medium transition-colors"
+            className={`bg-white/20 hover:bg-white/30 px-4 py-1 rounded-md text-sm font-medium transition-colors ${isIOSApp ? 'hidden' : ''}`}
           >
             Subscribe Now
           </Link>

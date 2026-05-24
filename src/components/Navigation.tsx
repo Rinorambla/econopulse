@@ -202,6 +202,7 @@ export function Navigation({ className }: NavigationProps) {
             >
               Dashboard
             </NavigationLink>
+            {!isIOSApp && (
             <NavigationLink
               href="/pricing"
               className="block px-4 py-3 text-sm text-white hover:bg-blue-600/30"
@@ -209,6 +210,7 @@ export function Navigation({ className }: NavigationProps) {
             >
               Manage Plan
             </NavigationLink>
+            )}
             <button
               type="button"
               onClick={handleSignOut}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Cookie, Settings, CheckCircle, AlertCircle } from 'lucide-react';
+import { isIOSApp } from '@/hooks/useIsIOSApp';
 
 // Declare gtag for TypeScript
 declare global {
@@ -42,6 +43,14 @@ const CookieConsent: React.FC<CookieConsentProps> = ({
   }, []);
 
   useEffect(() => {
+    // iOS native app: we don't set analytics/tracking cookies, so no consent
+    // banner is needed. Apple flagged this under App Tracking Transparency
+    // (guideline 5.1.2): we suppress the banner entirely on iOS.
+    if (isIOSApp()) {
+      console.log('🍪 iOS native app detected — suppressing cookie banner');
+      return;
+    }
+
     // Check if user has already made a choice
     const consent = localStorage.getItem('cookie-consent');
     console.log('🍪 Cookie consent check:', consent);

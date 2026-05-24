@@ -4,12 +4,14 @@ import React from 'react';
 // Removed next-intl usage (temporary de-i18n)
 // Removed unused NavigationLink and NewsWidget
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import { useRouter } from 'next/navigation';
 import Logo from './Logo';
 
 const Footer = () => {
   const router = useRouter();
   const { user, isDevUser } = useAuth();
+  const isIOSApp = useIsIOSApp();
 
   const currentYear = new Date().getFullYear();
 
@@ -63,13 +65,14 @@ const Footer = () => {
     },
     {
       title: 'Company',
-      links: [
+      links: ([
         { key: 'about', href: '/about' },
         { key: 'news', href: '/news' },
-        { key: 'pricing', href: '/pricing' },
+        // Pricing link is hidden on iOS native (Apple guideline 3.1.1).
+        ...(!isIOSApp ? [{ key: 'pricing', href: '/pricing' }] : []),
         { key: 'help', href: '/help' },
         { key: 'work_with_us', href: '/work-with-us' }
-      ] as FooterLink[]
+      ]) as FooterLink[]
     },
     {
       title: 'Legal',

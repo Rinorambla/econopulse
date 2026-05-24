@@ -8,6 +8,7 @@ import CheckoutSuccessHandler from '@/components/CheckoutSuccessHandler';
 import AuthHashHandler from '@/components/AuthHashHandler';
 import SafeBoundary from '@/components/SafeBoundary';
 import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
+import NativeFeaturesInit from '@/components/NativeFeaturesInit';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -110,6 +111,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <AuthProvider>
+          {/* Bootstraps native iOS/Android features (haptics, in-app browser,
+              push notifications, share sheet, native storage) when the app is
+              running inside the Capacitor shell. No-op on the web. */}
+          <NativeFeaturesInit />
           {/* Auto-recover when an old cached HTML references chunks no longer on CDN */}
           <ChunkErrorRecovery />
           <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import { 
   CreditCardIcon, 
   ChartBarIcon, 
@@ -14,6 +15,7 @@ import {
 
 export default function UserAccountDashboard() {
   const { user, loading: authLoading, session } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [billingLoading, setBillingLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -194,7 +196,9 @@ export default function UserAccountDashboard() {
           </div>
           
           <div className="flex flex-col gap-2 items-end">
-            {hasStripeCustomer ? (
+            {/* iOS native app: no in-app billing controls (App Store guideline 3.1.1).
+                Premium upgrade and billing management are exclusively on the website. */}
+            {!isIOSApp && hasStripeCustomer && (
               <button
                 onClick={openBillingPortal}
                 disabled={billingLoading}
@@ -203,7 +207,8 @@ export default function UserAccountDashboard() {
                 <CreditCardIcon className="h-4 w-4" />
                 <span>{billingLoading ? 'Loading...' : 'Manage Billing'}</span>
               </button>
-            ) : (
+            )}
+            {!isIOSApp && !hasStripeCustomer && (
               <a
                 href="/pricing"
                 className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700"
@@ -212,8 +217,15 @@ export default function UserAccountDashboard() {
                 <span>Upgrade to Premium</span>
               </a>
             )}
-            <button
-              onClick={async () => {
+            {isIOSApp && (
+              <div className="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-3 max-w-xs">
+                Subscriptions and billing are managed on <strong>www.econopulse.ai</strong>.
+                Your account upgrade is automatically reflected here once you subscribe on the web.
+              </div>
+            )}
+            {!isIOSApp && (
+              <button
+                onClick={async () => {
                 try {
                   const token = session?.access_token;
                   const r = await fetch('/api/stripe/sync', {
@@ -236,7 +248,8 @@ export default function UserAccountDashboard() {
             >
               <span>Sync subscription</span>
             </button>
-            {(subscriptionStatus === 'premium' || subscriptionStatus === 'trial' || hasStripeCustomer) && (
+            )}
+            {!isIOSApp && (subscriptionStatus === 'premium' || subscriptionStatus === 'trial' || hasStripeCustomer) && (
               <button
                 onClick={handleCancelSubscription}
                 disabled={cancelLoading || cancelSuccess}

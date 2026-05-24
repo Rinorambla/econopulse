@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 
 export default function LoginPage() {
   const router = useRouter();
   const { signIn, signInWithGoogle, signInWithApple } = useAuth();
+  const isIOSApp = useIsIOSApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -99,14 +101,19 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="my-5 flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-xs text-white/40 uppercase">or</span>
-          <div className="flex-1 h-px bg-white/10" />
-        </div>
+        {/* Divider — only shown when OAuth buttons are available */}
+        {!isIOSApp && (
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-white/40 uppercase">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+        )}
 
-        {/* Google Sign In */}
+        {/* Google Sign In — hidden on iOS native app: OAuth would open the system
+            browser, which violates Apple guideline 4. Email + password works
+            entirely inside the WebView. */}
+        {!isIOSApp && (
         <button
           onClick={handleGoogle}
           disabled={googleLoading}
@@ -120,8 +127,10 @@ export default function LoginPage() {
           </svg>
           {googleLoading ? 'Connecting…' : 'Sign in with Google'}
         </button>
+        )}
 
-        {/* Apple Sign In */}
+        {/* Apple Sign In — same constraint as Google on iOS native. */}
+        {!isIOSApp && (
         <button
           onClick={handleApple}
           disabled={appleLoading}
@@ -132,6 +141,7 @@ export default function LoginPage() {
           </svg>
           {appleLoading ? 'Connecting…' : 'Sign in with Apple'}
         </button>
+        )}
 
         <div className="mt-4 flex items-center justify-between text-sm">
           <a href="/forgot-password" className="text-blue-400 hover:text-blue-300">Forgot password?</a>

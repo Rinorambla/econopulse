@@ -17,10 +17,15 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     backgroundColor: '#05070d',
+    appendUserAgent: 'EconoPulseAndroidApp/1.0',
   },
   ios: {
     contentInset: 'always',
     backgroundColor: '#05070d',
+    // Custom UA suffix lets the server (and our client JS fallback) recognise
+    // the iOS native shell so we can hide paywalls / OAuth buttons / cookie
+    // banner that Apple flags under guidelines 3.1.1, 4, and 5.1.2.
+    appendUserAgent: 'EconoPulseiOSApp/1.0',
   },
   plugins: {
     SplashScreen: {

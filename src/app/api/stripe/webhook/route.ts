@@ -13,6 +13,7 @@ import Stripe from 'stripe';
 import { stripe, STRIPE_WEBHOOK_SECRET } from '@/lib/stripe-server';
 import { syncStripeData } from '@/lib/subscription';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { EmailService } from '@/services/EmailService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -94,6 +95,48 @@ export async function POST(request: NextRequest) {
       console.error('[webhook] downgrade write failed:', e?.message);
     }
     return NextResponse.json({ received: true, downgraded: true });
+  }
+
+  // Send a reminder email 3 days before the trial ends. Stripe fires this
+  // event once per subscription, so it cannot cause duplicate sends.
+  if (event.type === 'customer.subscription.trial_will_end') {
+    try {
+      const sub = event.data.object as Stripe.Subscription;
+      // Look up the user's email — prefer Supabase, fall back to Stripe customer
+      let email: string | null = null;
+      try {
+        const db = supabaseAdmin();
+        const { data } = await db
+          .from('users')
+          .select('email')
+          .eq('stripe_customer_id', customerId)
+          .maybeSingle();
+        email = (data?.email as string | undefined) || null;
+      } catch {}
+      if (!email) {
+        try {
+          const cust = await stripe().customers.retrieve(customerId);
+          if (!('deleted' in cust) || !cust.deleted) {
+            email = (cust as Stripe.Customer).email || null;
+          }
+        } catch {}
+      }
+
+      if (email && sub.trial_end) {
+        const item = sub.items?.data?.[0];
+        const amount = item?.price?.unit_amount;
+        await EmailService.sendTrialEndingSoon(email, {
+          trialEndDate: new Date(sub.trial_end * 1000),
+          planName: 'Premium',
+          amountEur: typeof amount === 'number' ? amount / 100 : undefined,
+        });
+      } else {
+        console.warn('[webhook] trial_will_end: no email for customer', customerId);
+      }
+    } catch (e: any) {
+      console.error('[webhook] trial_will_end email failed:', e?.message);
+      // Don't fail the webhook — still continue to syncStripeData below
+    }
   }
 
   try {

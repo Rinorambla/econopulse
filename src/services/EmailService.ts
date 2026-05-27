@@ -131,6 +131,38 @@ export class EmailService {
     }
   }
 
+  /**
+   * Trial-ending reminder: sent from the Stripe webhook on
+   * `customer.subscription.trial_will_end` (3 days before trial expires).
+   */
+  static async sendTrialEndingSoon(
+    email: string,
+    opts: { trialEndDate: Date; planName?: string; amountEur?: number }
+  ): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (trial-end) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
+    try {
+      const { data, error } = await client.emails.send({
+        from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
+        to: [email],
+        subject: '⏰ Your EconoPulse trial ends in 3 days',
+        html: this.getTrialEndingTemplate(email, opts),
+      });
+      if (error) {
+        console.error('❌ Trial-ending email error:', error);
+        return false;
+      }
+      console.log('✅ Trial-ending email sent:', data);
+      return true;
+    } catch (error) {
+      console.error('❌ Trial-ending email failed:', error);
+      return false;
+    }
+  }
+
   static async sendBulkNewsletter(
     emails: string[],
     data: WeeklyNewsletterData
@@ -404,6 +436,90 @@ export class EmailService {
                 </p>
             </div>
         </div>
+    </body>
+    </html>
+    `;
+  }
+
+  private static getTrialEndingTemplate(
+    email: string,
+    opts: { trialEndDate: Date; planName?: string; amountEur?: number }
+  ): string {
+    const dateStr = opts.trialEndDate.toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+    const plan = opts.planName || 'Premium';
+    const price = typeof opts.amountEur === 'number'
+      ? `€${opts.amountEur.toFixed(2)}/month`
+      : '';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.econopulse.ai';
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Your EconoPulse trial ends soon</title>
+    </head>
+    <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f6fb;margin:0;padding:24px;color:#1f2937;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+              <tr>
+                <td style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%);color:#ffffff;padding:32px 28px;text-align:center;">
+                  <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;">EconoPulse</div>
+                  <div style="margin-top:8px;font-size:14px;opacity:0.85;">Your trial is ending soon</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 28px;">
+                  <h1 style="font-size:22px;margin:0 0 16px;color:#0f172a;">⏰ 3 days left on your free trial</h1>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    Hi <strong>${email}</strong>,
+                  </p>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    Your <strong>EconoPulse ${plan}</strong> free trial will end on
+                    <strong>${dateStr}</strong>. After that, your subscription will renew automatically
+                    ${price ? `at <strong>${price}</strong>` : ''} so you can keep using every premium feature without interruption.
+                  </p>
+                  <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin:24px 0;">
+                    <div style="font-size:14px;font-weight:600;color:#1e3a8a;margin-bottom:6px;">What you keep with Premium</div>
+                    <ul style="margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.7;color:#334155;">
+                      <li>Unlimited market analysis &amp; portfolio insights</li>
+                      <li>Real-time options flow and gamma exposure</li>
+                      <li>Smart portfolio builder with risk-adjusted optimization</li>
+                      <li>Real-time alerts on price, earnings, macro events</li>
+                      <li>Priority support</li>
+                    </ul>
+                  </div>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 24px;">
+                    Need to make changes? You can review your plan or cancel anytime from your account.
+                  </p>
+                  <div style="text-align:center;margin:24px 0;">
+                    <a href="${siteUrl}/dashboard/account"
+                      style="display:inline-block;background:#1e40af;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+                      Manage subscription
+                    </a>
+                  </div>
+                  <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0;">
+                    If you do nothing, your subscription will renew automatically on ${dateStr}.
+                    You can cancel anytime before that date and you will not be charged.
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#f8fafc;padding:18px 28px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;">
+                  <div style="margin-bottom:6px;">EconoPulse — global market intelligence</div>
+                  <a href="${siteUrl}" style="color:#1e40af;text-decoration:none;">${siteUrl}</a>
+                  &nbsp;·&nbsp;
+                  <a href="mailto:support@econopulse.ai" style="color:#64748b;text-decoration:none;">support@econopulse.ai</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     `;

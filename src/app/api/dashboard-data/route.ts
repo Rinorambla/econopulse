@@ -4,8 +4,9 @@ export const maxDuration = 60;
 
 import { NextResponse, NextRequest } from 'next/server';
 import { getTiingoMarketData } from '@/lib/tiingo';
-import { getYahooQuotes, convertYahooToMarketData } from '@/lib/yahooFinance';
+import { getYahooQuotes } from '@/lib/yahooFinance';
 import { marketCache, portfolioCache, getCacheKey, formatCacheStatus } from '@/lib/cache';
+import { SP500_ALL_SYMBOLS } from '@/lib/sp500-stocks';
 
 interface MarketDataItem {
   ticker: string;
@@ -104,18 +105,47 @@ const CORE_SYMBOLS = [
 
 // EXTENDED SYMBOLS (added when scope=full) – curated large caps, additional themes, commodities, volatility
 const EXTENDED_SYMBOLS = [
-  // Additional Large Caps / S&P style breadth
-  'ABT','ACN','ADP','AIG','ALGN','AMAT','AMGN','ANET','BKNG','BMY','C','CMCSA','COP','CSX','DE','DUK','EL','ETN','EXC','F','FDX','GD','GM','HON','IBM','LMT','LOW','MAR','MMM','MO','MRK','NEE','NOW','PANW','PYPL','QCOM','SBUX','SO','SPGI','TGT','TXN','UPS','WFC','ZTS','ABNB','PLTR','SNOW','SHOP','UBER','LYFT','TSM','BABA','JD','NIO','TCEHY',
-  // Additional Thematic / Factor / Niche ETFs
+  // ── Full S&P 500 breadth (all 503 constituents) ──
+  ...SP500_ALL_SYMBOLS,
+  // ── Nasdaq-100 extras not already covered ──
+  'ADSK','ASML','AZN','BIIB','CDNS','CHTR','CPRT','CRWD','CTAS','CTSH','DDOG','DXCM','EA','EXC','FANG','FAST',
+  'FTNT','GFS','GILD','HON','IDXX','ILMN','INTU','ISRG','KDP','KLAC','LCID','LRCX','LULU','MDLZ','MELI','MNST',
+  'MRVL','MU','NXPI','ODFL','ON','PANW','PCAR','PDD','PEP','PYPL','REGN','ROST','SIRI','SNPS','TEAM','TMUS',
+  'TTD','TTWO','VRSK','VRTX','WBA','WBD','WDAY','XEL','ZM','ZS',
+  // ── Russell 1000 / Mid-large cap extras ──
+  'AAP','ACAD','ACGL','ACI','ACM','ADM','AFG','AFRM','AGCO','AGNC','AKAM','ALK','ALSN','APLS','ARMK','ASH',
+  'AVTR','AXTA','AYI','BALL','BCO','BERY','BFAM','BG','BIO','BJ','BLDR','BLD','BMRN','BOX','BPMC','BRBR',
+  'BURL','CACI','CAH','CCL','CDW','CFR','CHE','CHRW','CIEN','CLF','CNH','CNM','COHR','COKE','COTY','CRBG',
+  'CROX','CRUS','CW','CZR','DBX','DDS','DECK','DG','DKS','DLB','DNB','DOCU','DPZ','DT','DXC','EHC','ELS',
+  'ENTG','ENV','EPAM','EQH','ERIE','ESI','EVR','EXEL','EXP','FAF','FCN','FHB','FIVE','FIX','FLR','FN','FNF',
+  'FOUR','FRPT','FTI','FYBR','GAP','GGG','GH','GME','GMED','GNRC','GNTX','GPK','GTLB','GTLS','GXO','HALO',
+  'HBI','HEI','HIMS','HLI','HOOD','HQY','HRB','HUBB','HUN','IAC','IBKR','ICUI','IGT','INFA','INSP','IOT',
+  'IPGP','ITRI','JAZZ','JEF','JLL','KBR','KMPR','KNSL','LAMR','LECO','LEG','LEN','LFUS','LITE','LNTH','LPLA',
+  'LSCC','M','MASI','MAT','MDB','MEDP','MIDD','MKL','MMS','MORN','MRO','MTCH','MTH','MTSI','MUSA','NCLH',
+  'NDSN','NET','NFE','NLY','NOG','NOVT','NTLA','NTRA','NTNX','NVAX','NVT','OC','OGS','OKTA','OLLI','OMC',
+  'OWL','PAYC','PCG','PCTY','PCVX','PEN','PFGC','PINS','PLNT','PNR','POOL','PPC','PRGS','PSTG','PVH','QGEN',
+  'QRVO','R','RBA','RBC','RCL','RGA','RHI','RIVN','RKLB','RMBS','RNG','RPRX','RRX','RTO','S','SAIA','SAIC',
+  'SBAC','SCI','SCSS','SEIC','SF','SFM','SHC','SHOO','SITE','SJM','SKX','SMG','SNAP','SNDR','SOFI','SQ',
+  'SRPT','SSD','SSNC','STAA','STAG','STE','STLD','STN','STT','SUM','SWK','SWN','TAP','TDC','TECH','TER',
+  'TFII','TFX','TGNA','THC','THG','THO','TKR','TKO','TNL','TOL','TPL','TPR','TPX','TREX','TRGP','TRH','TRMB',
+  'TROW','TRU','TTEK','TWLO','TWO','TXG','U','UAA','UFPI','UHS','UI','ULTA','UNM','UPST','URI','VC','VEEV',
+  'VFC','VICI','VIR','VKTX','VMI','VNT','VOYA','VST','VVV','W','WAL','WBS','WCC','WEX','WH','WMS','WOLF',
+  'WSO','WTRG','WWD','XPO','XRAY','YETI','YUMC','ZBRA','ZG','ZI','ZWS',
+  // ── Mega-cap individual stocks not in SP500 (ADRs / foreign) ──
+  'TSM','BABA','JD','PDD','NIO','TCEHY','ASML','SAP','BHP','RIO','SHEL','TM','SONY','NVO','AZN','BP','UL','HSBC',
+  'TD','RY','BNS','BMO','CM','CP','CNQ','SU','MFG','MUFG','SMFG','HMC','NTES','BIDU','LI','XPEV','TME',
+  // ── Crypto-adjacent equities ──
+  'COIN','MSTR','MARA','RIOT','HUT','CIFR','CLSK','BITF','HOOD','SOFI',
+  // ── Additional Thematic / Factor / Niche ETFs ──
   'VIXY','UVXY','SVXY','BUG','CIBR','FIVG','CLOU','CLEAN','PHO','GRID','IDRV','PAVE','DRIV','FINX','XT','XTL',
-  // Additional Commodities / Agri
-  'JO','SGG','NIB','CANE','GLDM','KRBN',
-  // Additional International single-country ETFs
-  'EPU','EIRL','EIS','ENZL','EPOL','ECH','EPI','SCHE','SCHF','SCHC',
-  // REIT / Real Estate breadth
-  'SCHH','IYR','REET','XLRE',
-  // Additional Bonds / Yield curve
-  'BIL','SHV','IEF','ZROZ','EDV','HYG','JNK','BKLN','SRLN'
+  // ── Additional Commodities / Agri ──
+  'JO','SGG','NIB','CANE','GLDM','KRBN','PALL','PPLT','SIVR',
+  // ── Additional International single-country / regional ETFs ──
+  'EPU','EIRL','EIS','ENZL','EPOL','ECH','EPI','SCHE','SCHF','SCHC','ASEA','VPL','GXC','ASHR','MCHI','INDA','EWZ','RSX','TUR',
+  // ── REIT / Real Estate breadth ──
+  'SCHH','IYR','REET','XLRE','PSR','RWO','RWX',
+  // ── Additional Bonds / Yield curve ──
+  'BIL','SHV','IEF','ZROZ','EDV','HYG','JNK','BKLN','SRLN','PFF','PGX','CWB','MBB','SCHZ','GOVT','MUB','BAB'
 ];
 
 // Remove duplicates and ensure unique symbols
@@ -124,7 +154,7 @@ function buildUniverse(scope: string, limit?: number) {
   if (scope === 'full') base.push(...EXTENDED_SYMBOLS);
   const uniq = [...new Set(base)];
   const maxEnv = parseInt(process.env.MAX_SYMBOL_UNIVERSE || '',10);
-  const hardCap = !isNaN(maxEnv) ? maxEnv : 600; // raised to maximize ticker breadth on dashboard
+  const hardCap = !isNaN(maxEnv) ? maxEnv : 1500; // expanded universe: S&P500 + Nasdaq100 + Russell1000 extras + ETFs
   const appliedLimit = Math.min(limit || hardCap, hardCap);
   return uniq.slice(0, appliedLimit);
 }
@@ -238,15 +268,49 @@ async function handleDashboardRequest(params: DashboardParams) {
   }
 
   console.log('🔄 Fetching fresh data from Tiingo (equities/etfs)... universe size', REQUESTED_UNIVERSE.length);
-  if (REQUESTED_UNIVERSE.length > 400) {
+  if (REQUESTED_UNIVERSE.length > 1500) {
     console.warn('⚠️ Requested universe too large, trimming for safety');
-    REQUESTED_UNIVERSE = REQUESTED_UNIVERSE.slice(0, 400);
+    REQUESTED_UNIVERSE = REQUESTED_UNIVERSE.slice(0, 1500);
   }
   const tiingoData = await withTimeout(
     getTiingoMarketData(REQUESTED_UNIVERSE),
     50000,
     'Tiingo market data fetch'
   );
+
+  // Yahoo fallback: fill in any tickers Tiingo couldn't return (smaller-caps, ADRs, ETFs)
+  const tiingoGot = new Set((tiingoData || []).map((q: any) => String(q.symbol || '').toUpperCase()));
+  const missing = REQUESTED_UNIVERSE.filter(s => !tiingoGot.has(s.toUpperCase()));
+  if (missing.length > 0) {
+    try {
+      console.log(`🔁 Yahoo fallback for ${missing.length} missing tickers...`);
+      const yahooFill = await withTimeout(
+        getYahooQuotes(missing),
+        30000,
+        'Yahoo fallback'
+      );
+      if (Array.isArray(yahooFill) && yahooFill.length) {
+        let added = 0;
+        for (const yq of yahooFill) {
+          if (!yq || !yq.ticker) continue;
+          const sym = yq.ticker.toUpperCase();
+          if (tiingoGot.has(sym)) continue;
+          tiingoData.push({
+            symbol: sym,
+            price: yq.price ?? 0,
+            change: yq.change ?? 0,
+            changePercent: yq.changePercent ?? 0,
+            volume: yq.volume ?? 0,
+          });
+          tiingoGot.add(sym);
+          added++;
+        }
+        console.log(`✅ Yahoo fallback filled ${added} tickers (total: ${tiingoData.length})`);
+      }
+    } catch (e) {
+      console.warn('⚠️ Yahoo fallback failed (non-blocking):', (e as any)?.message);
+    }
+  }
 
   // Optionally extend with crypto & forex (best-effort; failures are ignored to keep core fast)
   let cryptoData: any[] = [];

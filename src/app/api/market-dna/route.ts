@@ -770,7 +770,12 @@ export async function GET(request: NextRequest) {
   riskSummary
     };
     
-  return NextResponse.json(response, { headers: rateLimitHeaders(rl) });
+  return NextResponse.json(response, {
+    headers: {
+      ...rateLimitHeaders(rl),
+      'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+    },
+  });
     
   } catch (error) {
     console.error('Market DNA API Error:', error);

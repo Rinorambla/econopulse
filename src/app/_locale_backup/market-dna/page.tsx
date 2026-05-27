@@ -211,8 +211,8 @@ export default function MarketDNAPage() {
       setIsFetching(true);
       setRefreshing(true);
       
-        // Add cache busting to force fresh data
-        const response = await fetchT(`/api/market-dna?t=${Date.now()}`, 25000);
+        // Allow CDN/browser caching for faster page load; user can refresh manually if needed
+        const response = await fetchT(`/api/market-dna`, 25000);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

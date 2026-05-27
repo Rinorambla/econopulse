@@ -93,17 +93,29 @@ export async function GET(req: NextRequest) {
   try {
     const force = req.nextUrl.searchParams.get('refresh') === '1';
     if (!force && _cache && Date.now() - _cache.ts < CACHE_TTL_MS) {
-      return NextResponse.json(_cache.data, { status:200, headers:{'x-cache':'HIT'} });
+      return NextResponse.json(_cache.data, {
+        status: 200,
+        headers: {
+          'x-cache': 'HIT',
+          'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
+        },
+      });
     }
     // Fetch required series in parallel
-    const [umcSent, dgs10, dgs2, cpi, sp500, hySpread, sloos] = await Promise.all([
+    const [umcSent, dgs10, dgs2, cpi, sp500, hySpread, sloos, vix, nfci, icsa, unrate, real10y, sahm] = await Promise.all([
       fetchFREDSeries('UMCSENT','1990-01-01'), // consumer sentiment proxy
       fetchFREDSeries('DGS10','1990-01-01'),
       fetchFREDSeries('DGS2','1990-01-01'),
       fetchFREDSeries('CPIAUCSL','1990-01-01'),
       fetchFREDSeries('SP500','1990-01-01'),
       fetchFREDSeries('BAMLH0A0HYM2','1990-01-01'), // HY OAS
-      fetchFREDSeries('DRTSCILM','1990-01-01') // SLOOS tightening (% net)
+      fetchFREDSeries('DRTSCILM','1990-01-01'), // SLOOS tightening (% net)
+      fetchFREDSeries('VIXCLS','1990-01-01'),    // CBOE VIX (daily close)
+      fetchFREDSeries('NFCI','1990-01-01'),       // Chicago Fed National Financial Conditions Index
+      fetchFREDSeries('ICSA','1990-01-01'),       // Initial jobless claims (weekly)
+      fetchFREDSeries('UNRATE','1990-01-01'),     // Unemployment rate (monthly)
+      fetchFREDSeries('DFII10','2003-01-01'),     // 10y TIPS real yield (starts 2003)
+      fetchFREDSeries('SAHMREALTIME','1959-01-01')// Sahm rule real-time indicator
     ]);
 
     // Prepare derived metrics
@@ -158,6 +170,49 @@ export async function GET(req: NextRequest) {
     // Consumer sentiment proxy > 100 (scale differs from Conference Board; treat >100 as elevated)
     const sentimentConfidenceTriggered = latestSent != null ? latestSent > 100 : false;
 
+    // ───────── New real FRED-based signals ─────────
+
+    // VIX > 25 (elevated fear)
+    const latestVIX = latestNumeric(vix);
+    const vixTriggered = latestVIX != null ? latestVIX > 25 : false;
+
+    // NFCI loose (negative = excess credit / euphoric financial conditions) → < -0.4
+    const latestNFCI = latestNumeric(nfci);
+    const nfciLooseTriggered = latestNFCI != null ? latestNFCI < -0.4 : false;
+
+    // Initial jobless claims spike: latest 4-week MA vs 12-month low, > +25%
+    let claimsSpikeTriggered = false; let claimsRatio: number | null = null;
+    if (icsa && icsa.length >= 60) {
+      const vals = icsa.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+      if (vals.length >= 60) {
+        const last4 = vals.slice(-4); const last4MA = last4.reduce((a,b)=>a+b,0)/last4.length;
+        const last52 = vals.slice(-52);
+        const min52 = Math.min(...last52);
+        claimsRatio = min52 > 0 ? (last4MA / min52 - 1) * 100 : null;
+        claimsSpikeTriggered = claimsRatio != null && claimsRatio > 25;
+      }
+    }
+
+    // Unemployment at cycle low: current within +0.3 of trailing 36-month min (late-cycle peak signal)
+    let unrateCycleLowTriggered = false; let unrateDelta: number | null = null;
+    if (unrate && unrate.length >= 36) {
+      const vals = unrate.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+      if (vals.length >= 36) {
+        const latest = vals[vals.length - 1];
+        const min36 = Math.min(...vals.slice(-36));
+        unrateDelta = +(latest - min36).toFixed(2);
+        unrateCycleLowTriggered = unrateDelta != null && unrateDelta <= 0.3;
+      }
+    }
+
+    // 10y Real Yield > 2% (restrictive territory)
+    const latestReal10y = latestNumeric(real10y);
+    const real10yTriggered = latestReal10y != null ? latestReal10y > 2 : false;
+
+    // Sahm Rule recession trigger: SAHMREALTIME > 0.5
+    const latestSahm = latestNumeric(sahm);
+    const sahmTriggered = latestSahm != null ? latestSahm > 0.5 : false;
+
     // Compose signals
   const signals: RawSignalResult[] = [
       {
@@ -180,6 +235,30 @@ export async function GET(req: NextRequest) {
         triggered: valTriggered, value: valZ!=null? +valZ.toFixed(2): null, threshold:'Z > 1', source:'FRED: SP500, CPIAUCSL'
       }
       ,{
+        key:'vix_elevated', label:'VIX Above 25 (Elevated Fear)', category:'Sentiment', status:'real',
+        triggered: vixTriggered, value: latestVIX!=null? +latestVIX.toFixed(2): null, threshold:'> 25', source:'FRED: VIXCLS'
+      }
+      ,{
+        key:'nfci_loose', label:'Financial Conditions Very Loose (NFCI)', category:'Macro', status:'real',
+        triggered: nfciLooseTriggered, value: latestNFCI!=null? +latestNFCI.toFixed(2): null, threshold:'< -0.4 (loose)', source:'FRED: NFCI', notes:'Chicago Fed Financial Conditions Index'
+      }
+      ,{
+        key:'claims_spike', label:'Initial Jobless Claims Spike (>25% above 12m low)', category:'Macro', status:'real',
+        triggered: claimsSpikeTriggered, value: claimsRatio!=null? +claimsRatio.toFixed(1): null, threshold:'4w MA vs 52w min > +25%', source:'FRED: ICSA'
+      }
+      ,{
+        key:'unrate_cycle_low', label:'Unemployment at 36m Cycle Low (late-cycle)', category:'Macro', status:'real',
+        triggered: unrateCycleLowTriggered, value: unrateDelta, threshold:'within +0.3 of 36m min', source:'FRED: UNRATE'
+      }
+      ,{
+        key:'real_yield_restrictive', label:'10y Real Yield Above 2% (Restrictive)', category:'Macro', status:'real',
+        triggered: real10yTriggered, value: latestReal10y!=null? +latestReal10y.toFixed(2): null, threshold:'> 2.0%', source:'FRED: DFII10'
+      }
+      ,{
+        key:'sahm_rule', label:'Sahm Rule Recession Indicator', category:'Macro', status:'real',
+        triggered: sahmTriggered, value: latestSahm!=null? +latestSahm.toFixed(2): null, threshold:'> 0.5', source:'FRED: SAHMREALTIME'
+      }
+      ,{
         key:'sell_side_indicator', label:'Sell-Side Composite Signal', category:'Sentiment', status:'unavailable',
         triggered: false, value: null, threshold:'Proprietary', source:'Unavailable', notes:'Proprietary index – excluded'
       }
@@ -199,6 +278,38 @@ export async function GET(req: NextRequest) {
   const pct = (triggerCount:number, denom:number)=> denom? Math.round(triggerCount/denom*100):0;
   const currentPercent = pct(realKeysTriggered.length, eligibleKeys.length);
   const current: Snapshot = { date: new Date().toISOString().split('T')[0], triggeredKeys: realKeysTriggered, percent: currentPercent };
+
+  // Point-in-time reconstruction helper for the new FRED signals
+  function pitNewSignals(dateStr: string): string[] {
+    const out: string[] = [];
+    // VIX
+    const v = valueOnOrBefore(vix, dateStr); if (v != null && v > 25) out.push('vix_elevated');
+    // NFCI
+    const n = valueOnOrBefore(nfci, dateStr); if (n != null && n < -0.4) out.push('nfci_loose');
+    // Claims spike (need 52w window up to date)
+    if (icsa) {
+      const upto = icsa.filter(o => o.date <= dateStr).map(o => parseFloat(o.value)).filter(x => !isNaN(x));
+      if (upto.length >= 52) {
+        const last4MA = upto.slice(-4).reduce((a,b)=>a+b,0)/4;
+        const min52 = Math.min(...upto.slice(-52));
+        if (min52 > 0 && (last4MA/min52 - 1) * 100 > 25) out.push('claims_spike');
+      }
+    }
+    // Unemployment cycle low (36m)
+    if (unrate) {
+      const upto = unrate.filter(o => o.date <= dateStr).map(o => parseFloat(o.value)).filter(x => !isNaN(x));
+      if (upto.length >= 36) {
+        const latest = upto[upto.length - 1];
+        const min36 = Math.min(...upto.slice(-36));
+        if (latest - min36 <= 0.3) out.push('unrate_cycle_low');
+      }
+    }
+    // Real yield (DFII10 starts 2003)
+    const ry = valueOnOrBefore(real10y, dateStr); if (ry != null && ry > 2) out.push('real_yield_restrictive');
+    // Sahm rule
+    const sh = valueOnOrBefore(sahm, dateStr); if (sh != null && sh > 0.5) out.push('sahm_rule');
+    return out;
+  }
 
     // Build historical snapshots for provided PEAK_DATES (real + proxy only)
   const historical: Snapshot[] = PEAK_DATES.map(date => {
@@ -234,6 +345,8 @@ export async function GET(req: NextRequest) {
           if (z > 1) triggeredKeys.push('valuation_cpi_z');
         }
       }
+      // New FRED-based signals
+      triggeredKeys.push(...pitNewSignals(date));
       const percent = pct(triggeredKeys.length, eligibleKeys.length);
       return { date, triggeredKeys, percent };
     });
@@ -288,6 +401,8 @@ export async function GET(req: NextRequest) {
           if (z > 1) triggeredKeys.push('valuation_cpi_z');
         }
       }
+      // New FRED-based signals
+      triggeredKeys.push(...pitNewSignals(dateStr));
       recent.push({ date: monthLabel, triggeredKeys, percent: pct(triggeredKeys.length, eligibleKeys.length) });
     }
 
@@ -300,7 +415,13 @@ export async function GET(req: NextRequest) {
       disclaimer: 'Signals classified as real/proxy/unavailable. Proxy signals use open substitutes; unavailable require proprietary data. Informational only.'
     };
   _cache = { ts: Date.now(), data: response };
-  return NextResponse.json(response, { status: 200, headers:{'x-cache':'MISS'} });
+  return NextResponse.json(response, {
+    status: 200,
+    headers: {
+      'x-cache': 'MISS',
+      'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
+    },
+  });
   } catch (e) {
     console.error('Peak signals error', e);
     return NextResponse.json({ error: 'Failed to compute peak signals' }, { status: 500 });

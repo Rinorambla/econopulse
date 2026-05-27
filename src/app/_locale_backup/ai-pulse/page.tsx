@@ -310,7 +310,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const fetchHeatmapQuotes = useCallback(async (period = 'daily') => {
     try {
       setHeatmapLoading(true);
-      const r = await fetchT(`/api/heatmap-quotes?period=${period}`, 55000, { cache: 'no-store' });
+      // Allow browser/CDN to short-circuit repeated period switches; server has its own 3-60min cache
+      const r = await fetchT(`/api/heatmap-quotes?period=${period}`, 55000);
       if (!r.ok) return;
       const j = await r.json();
       if (j.ok && j.data) {
@@ -322,9 +323,12 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [fetchT]);
 
   // ─── Effects ───────────────────────────────────────────────────
-  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes('daily'); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchHeatmapQuotes]);
+  // Initial mount: kick off non-heatmap fetches. The heatmap fetch is handled by the
+  // period-change effect below (which runs on mount with the initial 'daily' value),
+  // avoiding a duplicate /api/heatmap-quotes call on first render.
+  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis]);
 
-  // Re-fetch heatmap when period changes
+  // Re-fetch heatmap when period changes (also runs once on mount)
   useEffect(() => { fetchHeatmapQuotes(heatmapPeriod); }, [heatmapPeriod, fetchHeatmapQuotes]);
 
   useEffect(() => {
@@ -494,18 +498,31 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
           <main className="p-2 space-y-2">
 
             {/* ─── ROW 0: Full-width Treemap Heatmap ─── */}
-            <Panel title="S&P 500 Heatmap" className="min-h-[480px]"
+            <Panel title="S&P 500 Heatmap" className="min-h-[480px] relative"
               actions={
                 <div className="flex items-center gap-1">
                   {heatmapLoading && <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin mr-1" />}
                   {(['daily','weekly','monthly','3month','6month','ytd','yearly'] as const).map(p => (
-                    <button key={p} onClick={() => setHeatmapPeriod(p)}
-                      className={`px-1.5 py-0.5 text-[9px] font-semibold rounded transition-colors ${heatmapPeriod === p ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}`}>
+                    <button key={p}
+                      onClick={() => setHeatmapPeriod(p)}
+                      disabled={heatmapLoading && heatmapPeriod === p}
+                      className={`px-1.5 py-0.5 text-[9px] font-semibold rounded transition-colors disabled:opacity-60 ${heatmapPeriod === p ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}`}>
                       {{ daily:'1D', weekly:'1W', monthly:'1M', '3month':'3M', '6month':'6M', ytd:'YTD', yearly:'1Y' }[p]}
                     </button>
                   ))}
                 </div>
               }>
+              {/* Loading overlay so users see immediate feedback when switching period */}
+              {heatmapLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[2px] pointer-events-none rounded-md">
+                  <div className="flex flex-col items-center gap-2 px-4 py-3 rounded-lg bg-slate-900/80 border border-blue-500/30">
+                    <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="text-[10px] text-blue-300 font-semibold uppercase tracking-wider">
+                      Updating {{ daily:'1 Day', weekly:'1 Week', monthly:'1 Month', '3month':'3 Months', '6month':'6 Months', ytd:'YTD', yearly:'1 Year' }[heatmapPeriod]}…
+                    </div>
+                  </div>
+                </div>
+              )}
               {(() => {
                 const W = 1200, H = 600;
                 const SECTOR_HEADER = 20; // px height for sector label bar

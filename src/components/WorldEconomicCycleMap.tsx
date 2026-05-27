@@ -20,6 +20,7 @@ interface CountryCycle {
   inflationDelta: number | null;
   cycle: Cycle;
   asOf: string | null;
+  source?: 'IMF' | 'WorldBank' | 'Mixed' | null;
 }
 
 interface ApiResponse {
@@ -98,7 +99,8 @@ export default function WorldEconomicCycleMap() {
       const cpi = c.cpiLatest != null ? `${c.cpiLatest.toFixed(1)}%` : 'n/a';
       const gd = c.growthDelta != null ? `${c.growthDelta > 0 ? '+' : ''}${c.growthDelta.toFixed(1)}` : 'n/a';
       const id = c.inflationDelta != null ? `${c.inflationDelta > 0 ? '+' : ''}${c.inflationDelta.toFixed(1)}` : 'n/a';
-      return `<b>${c.name}</b><br>Cycle: <b>${c.cycle}</b><br>GDP: ${gdp} (Δ ${gd})<br>CPI: ${cpi} (Δ ${id})<br>As of: ${c.asOf || 'n/a'}<extra></extra>`;
+      const src = c.source ? ` • ${c.source}` : '';
+      return `<b>${c.name}</b><br>Cycle: <b>${c.cycle}</b><br>GDP: ${gdp} (Δ ${gd})<br>CPI: ${cpi} (Δ ${id})<br>As of: ${c.asOf || 'n/a'}${src}<extra></extra>`;
     });
     // Discrete colorscale: 5 bands
     const colorscale: any = [
@@ -214,7 +216,8 @@ export default function WorldEconomicCycleMap() {
         ))}
       </div>
       <div className="mt-2 text-[10px] text-gray-500">
-        Source: World Bank (GDP growth annual %, CPI inflation annual %). Cycle = direction of growth × direction of inflation YoY.
+        Source: <span className="text-gray-300">IMF WEO DataMapper</span> (primary, includes current-year nowcast) +
+        <span className="text-gray-300"> World Bank WDI</span> (fallback). Cycle classified by weighted score combining GDP growth level &amp; YoY direction with CPI inflation level &amp; YoY direction.
         {data?.generatedAt && <> Updated {new Date(data.generatedAt).toLocaleString()}.</>}
       </div>
     </div>

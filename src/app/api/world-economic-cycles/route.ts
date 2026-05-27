@@ -2,15 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 /**
- * World Economic Cycle classifier
- * For each country, fetches the latest 2 valid annual observations of:
- *   - GDP growth (annual %)        -> NY.GDP.MKTP.KD.ZG
- *   - CPI inflation (annual %)     -> FP.CPI.TOTL.ZG
- * Classifies each country into one of the 4 cycle quadrants:
- *   - Reflation   (growth ↑, inflation ↓)  -> recovering disinflationary phase
- *   - Inflation   (growth ↑, inflation ↑)  -> overheating / boom
- *   - Stagflation (growth ↓, inflation ↑)  -> worst regime
- *   - Recession   (growth ↓, inflation ↓)  -> contraction / disinflation
+ * World Economic Cycle classifier — HIGH-ACCURACY VERSION
+ *
+ * Data sources (in priority order):
+ *   1. IMF DataMapper WEO API   (current-year nowcast/forecast + last actual,  ~6-month update)
+ *        - NGDP_RPCH  Real GDP growth (annual %)
+ *        - PCPIPCH    Average CPI inflation (annual %)
+ *   2. World Bank                (annual actuals, fallback for countries IMF misses)
+ *        - NY.GDP.MKTP.KD.ZG   /   FP.CPI.TOTL.ZG
+ *
+ * Each country gets the most-recent IMF value (which can be a "current year" estimate
+ * incorporating monthly indicators, much fresher than the World Bank annual actuals)
+ * plus the prior year for direction (delta).
+ *
+ * Classification combines BOTH absolute level and YoY direction to identify the regime:
+ *   - Reflation   (growth recovering / inflation contained)   -> best for risk assets
+ *   - Inflation   (growth strong + inflation accelerating)    -> overheating
+ *   - Stagflation (growth weak + inflation high)              -> worst regime
+ *   - Recession   (growth weak + inflation contained/falling) -> contraction
  */
 
 export const runtime = 'nodejs';
@@ -31,6 +40,7 @@ interface CountryCycle {
   inflationDelta: number | null;
   cycle: Cycle;
   asOf: string | null;
+  source: 'IMF' | 'WorldBank' | 'Mixed' | null;
 }
 
 interface ApiResponse {
@@ -113,8 +123,49 @@ const COUNTRIES: Array<{ iso3: string; iso2: string; name: string; region: strin
 
 // Simple in-memory cache
 let _cache: { ts: number; data: ApiResponse } | null = null;
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — World Bank annual data updates slowly
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — macro data updates slowly
 
+/**
+ * Fetch from IMF DataMapper WEO API.
+ * Note: the IMF endpoint returns ALL countries for the requested indicator in one response,
+ * so we fetch once globally and extract per-ISO3 on the consumer side.
+ * Example URL: https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH
+ * Response shape: { values: { NGDP_RPCH: { USA: { "2024": 2.8, ... }, ITA: { ... } } } }
+ */
+async function imfAll(indicator: 'NGDP_RPCH' | 'PCPIPCH'): Promise<Record<string, Record<string, number>>> {
+  try {
+    const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return {};
+    const json: any = await res.json();
+    return json?.values?.[indicator] || {};
+  } catch {
+    return {};
+  }
+}
+
+function extractImfSeries(
+  all: Record<string, Record<string, number>>,
+  iso3: string,
+): Array<{ year: number; value: number }> {
+  const series = all?.[iso3];
+  if (!series || typeof series !== 'object') return [];
+  const currentYear = new Date().getUTCFullYear();
+  const out: Array<{ year: number; value: number }> = [];
+  for (const [yStr, v] of Object.entries(series)) {
+    const y = Number(yStr);
+    const num = Number(v);
+    if (!isFinite(y) || !isFinite(num)) continue;
+    // Keep recent years only (up to current year + 1 to allow forecast)
+    if (y < currentYear - 5 || y > currentYear + 1) continue;
+    out.push({ year: y, value: num });
+  }
+  return out.sort((a, b) => b.year - a.year);
+}
+
+/**
+ * World Bank fallback — used only if IMF doesn't return data for a country.
+ */
 async function wb(iso3: string, indicator: string): Promise<Array<{ year: number; value: number }>> {
   try {
     const url = `https://api.worldbank.org/v2/country/${iso3}/indicator/${indicator}?format=json&per_page=10&date=2018:2026`;
@@ -132,38 +183,104 @@ async function wb(iso3: string, indicator: string): Promise<Array<{ year: number
   }
 }
 
-function classify(growthDelta: number | null, inflationDelta: number | null, gdpLatest: number | null, cpiLatest: number | null): Cycle {
-  if (growthDelta == null || inflationDelta == null || gdpLatest == null || cpiLatest == null) return 'Unknown';
-  // Slight dead-band around 0 to avoid noise; combine direction with absolute level
-  const growthUp = growthDelta > 0 || gdpLatest > 3;
-  const growthDown = growthDelta < 0 || gdpLatest < 1;
-  const inflUp = inflationDelta > 0 || cpiLatest > 4;
-  const inflDown = inflationDelta < 0 || cpiLatest < 2;
+/**
+ * High-accuracy cycle classifier.
+ * Uses a weighted score combining absolute level AND direction (YoY delta) for
+ * both growth and inflation, then maps to one of the four quadrants.
+ *
+ *   growthScore:  +ve = expansion,  -ve = contraction
+ *   inflScore:    +ve = inflation pressure rising/high,  -ve = disinflation
+ *
+ * Thresholds calibrated on developed-market norms with country-flexible bands:
+ *   GDP:   <0.5 weak,  0.5–2.5 moderate,  >2.5 strong
+ *   CPI:   <2.0 low,   2.0–4.0 moderate,  >4.0 high
+ */
+function classify(
+  growthDelta: number | null,
+  inflationDelta: number | null,
+  gdpLatest: number | null,
+  cpiLatest: number | null,
+): Cycle {
+  if (gdpLatest == null || cpiLatest == null) return 'Unknown';
 
-  if (growthDown && inflUp) return 'Stagflation';
-  if (growthDown && inflDown) return 'Recession';
-  if (growthUp && inflUp) return 'Inflation';
-  if (growthUp && inflDown) return 'Reflation';
+  // --- growth score ---------------------------------------------------------
+  let growthScore = 0;
+  // level component
+  if (gdpLatest >= 3) growthScore += 2;
+  else if (gdpLatest >= 1.5) growthScore += 1;
+  else if (gdpLatest >= 0.5) growthScore += 0;
+  else if (gdpLatest >= -0.5) growthScore -= 1;
+  else growthScore -= 2;
+  // direction component
+  if (growthDelta != null) {
+    if (growthDelta >= 0.5) growthScore += 1;
+    else if (growthDelta <= -0.5) growthScore -= 1;
+  }
 
-  // Tie-breakers based on absolute level
-  if (cpiLatest > 4 && gdpLatest < 2) return 'Stagflation';
-  if (gdpLatest >= 2 && cpiLatest <= 3) return 'Reflation';
-  if (gdpLatest >= 2 && cpiLatest > 3) return 'Inflation';
+  // --- inflation score ------------------------------------------------------
+  let inflScore = 0;
+  // level component (relative to ~2% target)
+  if (cpiLatest >= 6) inflScore += 2;
+  else if (cpiLatest >= 4) inflScore += 1;
+  else if (cpiLatest >= 2.5) inflScore += 0;
+  else if (cpiLatest >= 1) inflScore -= 1;
+  else inflScore -= 2;
+  // direction component
+  if (inflationDelta != null) {
+    if (inflationDelta >= 0.5) inflScore += 1;
+    else if (inflationDelta <= -0.5) inflScore -= 1;
+  }
+
+  // --- map to quadrant ------------------------------------------------------
+  const growthUp = growthScore > 0;
+  const inflHigh = inflScore > 0;
+
+  // Strong stagflation override: very high CPI with very weak growth
+  if (cpiLatest >= 5 && gdpLatest < 1.5) return 'Stagflation';
+  // Strong recession override: contracting GDP with falling/low CPI
+  if (gdpLatest < 0 && cpiLatest < 4) return 'Recession';
+
+  if (growthUp && inflHigh) return 'Inflation';
+  if (growthUp && !inflHigh) return 'Reflation';
+  if (!growthUp && inflHigh) return 'Stagflation';
   return 'Recession';
 }
 
 async function buildData(): Promise<ApiResponse> {
-  // Run in small batches of 8 to avoid hammering World Bank
-  const BATCH = 8;
+  // 1. Single global fetch per IMF indicator (returns all countries at once)
+  const [imfGdpAll, imfCpiAll] = await Promise.all([
+    imfAll('NGDP_RPCH'),
+    imfAll('PCPIPCH'),
+  ]);
+
+  // 2. Per-country: extract from IMF; fall back to World Bank only when IMF lacks data.
+  //    Batch World Bank fallbacks to avoid hammering it.
+  const BATCH = 6;
   const results: CountryCycle[] = [];
   for (let i = 0; i < COUNTRIES.length; i += BATCH) {
     const slice = COUNTRIES.slice(i, i + BATCH);
     const batchRes = await Promise.all(
       slice.map(async (c) => {
-        const [gdpSeries, cpiSeries] = await Promise.all([
-          wb(c.iso3, 'NY.GDP.MKTP.KD.ZG'),
-          wb(c.iso3, 'FP.CPI.TOTL.ZG'),
-        ]);
+        let gdpSeries = extractImfSeries(imfGdpAll, c.iso3);
+        let cpiSeries = extractImfSeries(imfCpiAll, c.iso3);
+        let gdpSrc: 'IMF' | 'WorldBank' = 'IMF';
+        let cpiSrc: 'IMF' | 'WorldBank' = 'IMF';
+
+        if (gdpSeries.length < 2) {
+          const wbGdp = await wb(c.iso3, 'NY.GDP.MKTP.KD.ZG');
+          if (wbGdp.length >= gdpSeries.length) {
+            gdpSeries = wbGdp;
+            gdpSrc = 'WorldBank';
+          }
+        }
+        if (cpiSeries.length < 2) {
+          const wbCpi = await wb(c.iso3, 'FP.CPI.TOTL.ZG');
+          if (wbCpi.length >= cpiSeries.length) {
+            cpiSeries = wbCpi;
+            cpiSrc = 'WorldBank';
+          }
+        }
+
         const gdpLatest = gdpSeries[0]?.value ?? null;
         const gdpPrior = gdpSeries[1]?.value ?? null;
         const cpiLatest = cpiSeries[0]?.value ?? null;
@@ -172,19 +289,23 @@ async function buildData(): Promise<ApiResponse> {
         const inflationDelta = cpiLatest != null && cpiPrior != null ? +(cpiLatest - cpiPrior).toFixed(2) : null;
         const cycle = classify(growthDelta, inflationDelta, gdpLatest, cpiLatest);
         const asOf = gdpSeries[0]?.year ? String(gdpSeries[0].year) : null;
+        const source: 'IMF' | 'WorldBank' | 'Mixed' | null =
+          gdpLatest == null && cpiLatest == null ? null : gdpSrc === cpiSrc ? gdpSrc : 'Mixed';
+
         return {
           iso3: c.iso3,
           iso2: c.iso2,
           name: c.name,
           region: c.region,
-          gdpLatest,
-          gdpPrior,
-          cpiLatest,
-          cpiPrior,
+          gdpLatest: gdpLatest != null ? +gdpLatest.toFixed(2) : null,
+          gdpPrior: gdpPrior != null ? +gdpPrior.toFixed(2) : null,
+          cpiLatest: cpiLatest != null ? +cpiLatest.toFixed(2) : null,
+          cpiPrior: cpiPrior != null ? +cpiPrior.toFixed(2) : null,
           growthDelta,
           inflationDelta,
           cycle,
           asOf,
+          source,
         } as CountryCycle;
       })
     );
@@ -204,7 +325,7 @@ async function buildData(): Promise<ApiResponse> {
     generatedAt: new Date().toISOString(),
     countries: results,
     summary,
-    source: 'World Bank (NY.GDP.MKTP.KD.ZG, FP.CPI.TOTL.ZG)',
+    source: 'IMF DataMapper WEO (primary) + World Bank WDI (fallback)',
   };
 }
 

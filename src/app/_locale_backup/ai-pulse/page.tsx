@@ -14,6 +14,7 @@ const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 const TradaysCalendarWidget = dynamic(() => import('@/components/TradaysCalendarWidget'), { ssr: false });
+const WorldEconomicCycleMap = dynamic(() => import('@/components/WorldEconomicCycleMap'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -637,6 +638,16 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   </svg>
                 );
               })()}
+            </Panel>
+
+            {/* ─── WORLD ECONOMIC CYCLE MAP ─── */}
+            <Panel
+              title="World Economic Cycles"
+              badge="Macro"
+              className="min-h-[640px]"
+              actions={<span className="text-[9px] text-gray-500">Reflation • Inflation • Stagflation • Recession</span>}
+            >
+              <WorldEconomicCycleMap />
             </Panel>
 
             {/* ─── ROW 1: Screener | Company + Industry ─── */}

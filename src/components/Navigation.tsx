@@ -130,6 +130,10 @@ export function Navigation({ className }: NavigationProps) {
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market DNA</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
+  <NavigationLink href="/market-data" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-fuchsia-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-fuchsia-500/25 hover:scale-105">
+          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market Data</span><span className="text-[8px] px-1 py-px rounded bg-emerald-500/30 text-emerald-200 border border-emerald-500/40">FREE</span></span>
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-fuchsia-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+        </NavigationLink>
   <NavigationLink href="/econoai" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-sky-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-sky-500/25 hover:scale-105">
           <span className="relative z-10">UpdateAI</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
@@ -255,6 +259,9 @@ export function Navigation({ className }: NavigationProps) {
               </NavigationLink>
               <NavigationLink href="/market-dna" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 Market DNA
+              </NavigationLink>
+              <NavigationLink href="/market-data" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
+                Market Data <span className="ml-2 text-[9px] px-1 py-px rounded bg-emerald-500/30 text-emerald-200 border border-emerald-500/40">FREE</span>
               </NavigationLink>
               <NavigationLink href="/econoai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 UpdateAI

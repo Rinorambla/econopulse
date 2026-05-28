@@ -280,7 +280,7 @@ export default function MarketDataPage() {
             <div className="w-8 h-8 rounded-md bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-black">M</div>
             <div>
               <h1 className="text-lg font-bold leading-none">Market Data</h1>
-              <p className="text-[10px] text-gray-400 mt-0.5">Pro Technical Analysis Terminal · Free</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Pro Technical Analysis Terminal</p>
             </div>
           </div>
 

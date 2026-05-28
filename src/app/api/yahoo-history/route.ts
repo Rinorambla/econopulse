@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server'
 import { fetchYahooHistory, fetchMultipleHistory } from '@/lib/yahoo-history'
+import { fetchTiingoHistory } from '@/lib/tiingo-history'
 
 export const revalidate = 0
+
+async function fetchOne(symbol: string, range: string, interval: string) {
+  const y = await fetchYahooHistory(symbol, range, interval)
+  if (y && y.bars && y.bars.length >= 2) return y
+  const t = await fetchTiingoHistory(symbol, range, interval)
+  if (t && t.bars && t.bars.length >= 2) return t
+  return y || t || null
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -13,13 +22,20 @@ export async function GET(request: Request) {
     if (symbolsParam) {
       const symbols = symbolsParam.split(',').map(s=>s.trim()).filter(Boolean).slice(0,15)
       const data = await fetchMultipleHistory(symbols, range, interval)
+      const have = new Set(data.map(d => d.symbol.toUpperCase()))
+      const missing = symbols.filter(s => !have.has(s.toUpperCase()))
+      for (const s of missing) {
+        const t = await fetchTiingoHistory(s, range, interval)
+        if (t) data.push(t)
+      }
       return NextResponse.json({ ok:true, mode:'multi', count:data.length, range, interval, data })
     }
     if (!symbolParam) return NextResponse.json({ ok:false, error:'symbol or symbols param required'}, { status:400 })
-    const data = await fetchYahooHistory(symbolParam, range, interval)
+    const data = await fetchOne(symbolParam, range, interval)
     if (!data) return NextResponse.json({ ok:false, error:'not found'}, { status:404 })
     return NextResponse.json({ ok:true, range, interval, data })
   } catch (e:any) {
     return NextResponse.json({ ok:false, error:e?.message||'error'}, { status:500 })
   }
 }
+

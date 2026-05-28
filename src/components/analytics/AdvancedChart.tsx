@@ -1213,8 +1213,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
       {/* ===== BOTTOM STATUS BAR ===== */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/30 border-t border-white/10 text-[10px] text-gray-500">
-        <span>EconoPulse Charts • {symbol} • {currentRange.interval} interval</span>
-        <span>{bars.length} bars{lastPrice ? ` • Last: $${lastPrice.price.toFixed(2)}` : ''}</span>
+        <span>{symbol} · {currentRange.interval}</span>
+        <span>{bars.length} bars{lastPrice ? ` · Last: $${lastPrice.price.toFixed(2)}` : ''}</span>
       </div>
     </div>
   )

@@ -1182,16 +1182,21 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         )}
       </div>
 
-      {/* ===== CROSSHAIR TOOLTIP ===== */}
-      {crosshairData && (
-        <div className="flex items-center gap-4 px-3 py-1 text-[10px] bg-slate-800/20 border-b border-white/5">
-          <span className="text-gray-500">{crosshairData.time}</span>
-          <span className="text-gray-400">O <span className="text-white">{crosshairData.o.toFixed(2)}</span></span>
-          <span className="text-gray-400">H <span className="text-emerald-400">{crosshairData.h.toFixed(2)}</span></span>
-          <span className="text-gray-400">L <span className="text-red-400">{crosshairData.l.toFixed(2)}</span></span>
-          <span className="text-gray-400">C <span className={crosshairData.c >= crosshairData.o ? 'text-emerald-400' : 'text-red-400'}>{crosshairData.c.toFixed(2)}</span></span>
-        </div>
-      )}
+      {/* ===== CROSSHAIR TOOLTIP (always rendered, fixed height to prevent layout shift) ===== */}
+      <div
+        className="flex items-center gap-4 px-3 text-[10px] bg-slate-800/20 border-b border-white/5 tabular-nums"
+        style={{ height: 22, visibility: crosshairData ? 'visible' : 'hidden' }}
+      >
+        {crosshairData && (
+          <>
+            <span className="text-gray-500">{crosshairData.time}</span>
+            <span className="text-gray-400">O <span className="text-white">{crosshairData.o.toFixed(2)}</span></span>
+            <span className="text-gray-400">H <span className="text-emerald-400">{crosshairData.h.toFixed(2)}</span></span>
+            <span className="text-gray-400">L <span className="text-red-400">{crosshairData.l.toFixed(2)}</span></span>
+            <span className="text-gray-400">C <span className={crosshairData.c >= crosshairData.o ? 'text-emerald-400' : 'text-red-400'}>{crosshairData.c.toFixed(2)}</span></span>
+          </>
+        )}
+      </div>
 
       {/* ===== CHART AREA ===== */}
       <div style={{ height, position: 'relative' }} className="[&_a[href*='tradingview']]:!hidden">

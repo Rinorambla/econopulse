@@ -493,12 +493,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   useEffect(() => { fetchData() }, [fetchData])
 
   // ========== Chart Creation / Update ==========
+  // Tick used to safely re-trigger the effect once when the container width is 0
+  // on first paint (flex layouts). Bumped at most once per mount cycle.
+  const [layoutTick, setLayoutTick] = useState(0)
   useEffect(() => {
     if (!chartContainerRef.current || bars.length < 2) return
-    // Defer until container has actual width (initial render may be 0 in flex layouts)
     if (chartContainerRef.current.clientWidth === 0) {
-      const raf = requestAnimationFrame(() => setBars(b => b.slice()))
-      return () => cancelAnimationFrame(raf)
+      const id = window.setTimeout(() => setLayoutTick(t => t + 1), 50)
+      return () => window.clearTimeout(id)
     }
     let didCreate = false
     try {
@@ -863,12 +865,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const redrawOnRange = () => requestAnimationFrame(redrawOverlay)
     chart.timeScale().subscribeVisibleLogicalRangeChange(redrawOnRange)
 
-    // Resize observer
+    // Resize observer (debounced via RAF to avoid layout-thrash flicker)
+    let roRaf = 0
     const ro = new ResizeObserver(() => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
-        requestAnimationFrame(redrawOverlay)
-      }
+      if (roRaf) return
+      roRaf = requestAnimationFrame(() => {
+        roRaf = 0
+        if (chartContainerRef.current && chartRef.current) {
+          const w = chartContainerRef.current.clientWidth
+          if (w > 0) {
+            chartRef.current.applyOptions({ width: w })
+            redrawOverlay()
+          }
+        }
+      })
     })
     ro.observe(container)
 
@@ -877,6 +887,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     didCreate = true
 
     return () => {
+      if (roRaf) cancelAnimationFrame(roRaf)
       ro.disconnect()
       chart.remove()
       chartRef.current = null
@@ -889,7 +900,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {

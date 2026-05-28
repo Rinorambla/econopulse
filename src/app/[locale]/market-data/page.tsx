@@ -45,12 +45,26 @@ const WATCHLIST_DEFAULT = [
 ]
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
-  { label: 'Indices', symbols: ['SPY', 'QQQ', 'DIA', 'IWM', '^GSPC', '^IXIC', '^DJI', '^VIX'] },
-  { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO'] },
-  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD'] },
-  { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X'] },
-  { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'NG=F', 'HG=F', 'ZC=F'] },
-  { label: 'Bonds & ETF', symbols: ['TLT', 'IEF', 'HYG', 'LQD', 'GLD', 'SLV', 'USO', 'UNG'] },
+  { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX'] },
+  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', '^FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE'] },
+  { label: 'Index ETFs', symbols: ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'IVV', 'EFA', 'EEM', 'VEA', 'VWO', 'ACWI'] },
+  { label: 'Sector ETFs', symbols: ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'SMH', 'SOXX', 'KRE', 'XBI', 'ITA'] },
+  { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK-B', 'LLY', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'COST'] },
+  { label: 'Tech', symbols: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'META', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'AVGO', 'CSCO', 'QCOM', 'TXN', 'NOW', 'IBM', 'PLTR', 'SHOP', 'UBER'] },
+  { label: 'Finance', symbols: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'SQ'] },
+  { label: 'Energy', symbols: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'MPC', 'OXY', 'HES', 'PSX'] },
+  { label: 'Healthcare', symbols: ['UNH', 'LLY', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD'] },
+  { label: 'Consumer', symbols: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TGT', 'DIS', 'KO', 'PEP', 'PG', 'WMT', 'COST'] },
+  { label: 'EU Stocks', symbols: ['ASML', 'SAP', 'NVO', 'MC.PA', 'OR.PA', 'AIR.PA', 'SAN.PA', 'NESN.SW', 'NOVN.SW', 'ROG.SW', 'SHEL.L', 'ULVR.L', 'AZN.L', 'HSBA.L', 'BP.L', 'RIO.L', 'ISP.MI', 'UCG.MI', 'ENI.MI', 'STLAM.MI'] },
+  { label: 'Asia Stocks', symbols: ['7203.T', '6758.T', '9984.T', '6861.T', '0700.HK', '9988.HK', '3690.HK', 'TSM', 'BABA', 'BIDU', 'JD', 'PDD', 'NIO'] },
+  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'MATIC-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD'] },
+  { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
+  { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
+  { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
+  { label: 'Metal ETFs', symbols: ['GLD', 'IAU', 'SLV', 'PPLT', 'PALL', 'GDX', 'GDXJ', 'SIL', 'COPX'] },
+  { label: 'Energy ETFs', symbols: ['USO', 'UNG', 'BNO', 'UCO', 'XOP', 'OIH', 'AMLP', 'ICLN', 'TAN', 'URA'] },
+  { label: 'Thematic', symbols: ['ARKK', 'ARKG', 'ARKW', 'ARKF', 'ARKQ', 'BOTZ', 'ROBO', 'AIQ', 'WCLD', 'BLOK', 'HACK', 'JETS', 'KWEB', 'INDA', 'EWJ', 'EWZ', 'EWY', 'EWG', 'EWU', 'EWQ'] },
+  { label: 'Leveraged', symbols: ['TQQQ', 'SQQQ', 'UPRO', 'SPXL', 'SPXS', 'SOXL', 'SOXS', 'TNA', 'TZA', 'FAS', 'FAZ', 'TMF', 'TMV'] },
 ]
 
 import { Minus, MoveHorizontal, MoveVertical } from 'lucide-react'

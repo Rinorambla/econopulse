@@ -685,30 +685,30 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     }
 
-    // ── Sub-panel indicators (rendered as overlays into a secondary price-scale) ──
-    // Due to lightweight-charts limitations, we render sub-panel indicators in a separate scale area
-    const subPanelScaleBase = 0.62 // leave room for sub-panels at the bottom
-    if (activeSubPanels.length > 0) {
-      chart.priceScale('right').applyOptions({
-        scaleMargins: { top: 0.05, bottom: 1 - subPanelScaleBase + (hasVolume ? 0.04 : 0) },
-      })
+    // ── Sub-panel indicators (each rendered in its OWN pane below the price chart) ──
+    // lightweight-charts v5 supports real panes via the third arg of addSeries.
+    // Pane 0 = main price + volume overlay. Pane 1, 2, … = sub-indicators.
+    let nextPaneIdx = 1
+    const paneMap = new Map<string, number>()
+    const getPane = (key: string) => {
+      if (!paneMap.has(key)) paneMap.set(key, nextPaneIdx++)
+      return paneMap.get(key)!
     }
 
-    let panelIdx = 0
-    const panelHeight = activeSubPanels.length > 0 ? (1 - subPanelScaleBase) / Math.min(activeSubPanels.length, 3) : 0
-
-    const addSubLine = (vals: (number | null)[], scaleId: string, color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
+    const addSubLine = (vals: (number | null)[], key: string, color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
+      const pane = getPane(key)
       const ls = chart.addSeries(LineSeries, {
         color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style, crosshairMarkerVisible: false,
-        priceScaleId: scaleId, lastValueVisible: true,
-      })
+        lastValueVisible: true,
+      }, pane)
       ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
       overlaySeriesRef.current.push(ls)
       return ls
     }
 
-    const addSubHistogram = (vals: (number | null)[], scaleId: string) => {
-      const hs = chart.addSeries(HistogramSeries, { priceScaleId: scaleId })
+    const addSubHistogram = (vals: (number | null)[], key: string) => {
+      const pane = getPane(key)
+      const hs = chart.addSeries(HistogramSeries, {}, pane)
       hs.setData(vals.map((v, i) => v !== null ? ({
         time: timeLabels[i], value: v,
         color: v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)',
@@ -716,26 +716,21 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       overlaySeriesRef.current.push(hs)
     }
 
-    const setupSubScale = (scaleId: string) => {
-      const top = subPanelScaleBase + panelIdx * panelHeight
-      chart.priceScale(scaleId).applyOptions({
-        scaleMargins: { top, bottom: Math.max(0, 1 - top - panelHeight) },
-      })
-      panelIdx++
-    }
+    // No-op kept for backwards compatibility with the previous signature; panes handle layout now.
+    const setupSubScale = (_key: string) => { /* handled by pane assignment */ }
 
     // RSI
     if (indicators.has('rsi')) {
       const rsiVals = computeRSI(closes)
       const sid = 'rsi-panel'
-      setupSubScale(sid)
       addSubLine(rsiVals, sid, '#8b5cf6')
-      // 30/70 reference lines
+      // 30/70 reference lines (same pane as RSI line)
+      const rsiPane = getPane(sid)
       const line30 = timeLabels.map(t => ({ time: t, value: 30 } as LineData))
       const line70 = timeLabels.map(t => ({ time: t, value: 70 } as LineData))
-      const ls30 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, priceScaleId: sid, lastValueVisible: false })
+      const ls30 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, rsiPane)
       ls30.setData(line30); overlaySeriesRef.current.push(ls30)
-      const ls70 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, priceScaleId: sid, lastValueVisible: false })
+      const ls70 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, rsiPane)
       ls70.setData(line70); overlaySeriesRef.current.push(ls70)
     }
 

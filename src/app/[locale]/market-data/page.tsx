@@ -166,6 +166,8 @@ export default function MarketDataPage() {
   const [loadingQuotes, setLoadingQuotes] = useState(false)
   const [popularOpen, setPopularOpen] = useState<string>('Indices')
   const [notificationTab, setNotificationTab] = useState<'all' | 'system' | 'results' | 'scans' | 'alerts'>('all')
+  const [readSet, setReadSet] = useState<Set<number>>(new Set())
+  const [dismissedSet, setDismissedSet] = useState<Set<number>>(new Set())
 
   // ===== Fetch live quotes for watchlist =====
   const fetchQuotes = useCallback(async () => {
@@ -229,52 +231,110 @@ export default function MarketDataPage() {
     return DRAWING_TOOLS
   }, [toolTab, starred])
 
-  // ===== Mock notifications driven by current symbol =====
-  const notifications = useMemo(() => {
-    const sym = symbol.toUpperCase()
+  // ===== Notifications driven by live quotes =====
+  type Notif = { id: number; type: 'system' | 'results' | 'scans' | 'alerts'; icon: React.ComponentType<{ className?: string }>; color: string; title: string; desc: string; date: Date }
+
+  const notifications = useMemo<Notif[]>(() => {
     const now = Date.now()
-    return [
-      {
-        id: 1, type: 'system', icon: Sparkles, color: 'text-amber-400',
-        title: 'New tools released', desc: 'Fibonacci Extension & Pitchfork now available',
-        date: new Date(now - 6 * 60 * 1000),
-      },
-      {
-        id: 2, type: 'scans', icon: Activity, color: 'text-blue-400',
-        title: `${sym} bullish crossover`, desc: 'EMA 9 crossed above EMA 21 (1H)',
-        date: new Date(now - 22 * 60 * 1000),
-      },
-      {
-        id: 3, type: 'alerts', icon: Bell, color: 'text-rose-400',
-        title: `${sym} price alert`, desc: `${sym} crossed above target level`,
-        date: new Date(now - 60 * 60 * 1000),
-      },
-      {
-        id: 4, type: 'results', icon: TrendingUp, color: 'text-emerald-400',
-        title: 'Scan completed', desc: '17 results matched "Breakout > 50d high"',
-        date: new Date(now - 2 * 3600 * 1000),
-      },
-      {
-        id: 5, type: 'alerts', icon: Bell, color: 'text-yellow-400',
-        title: 'SPY change > $5', desc: 'SPY moved +1.42% in the last session',
-        date: new Date(now - 5 * 3600 * 1000),
-      },
-      {
-        id: 6, type: 'scans', icon: Zap, color: 'text-purple-400',
-        title: 'DeMARK Sequential 9s and 31s', desc: 'Completed: 22 results',
-        date: new Date(now - 9 * 3600 * 1000),
-      },
-      {
-        id: 7, type: 'system', icon: Sparkles, color: 'text-cyan-400',
-        title: 'System update', desc: 'New customization options for charts',
-        date: new Date(now - 23 * 3600 * 1000),
-      },
-    ]
-  }, [symbol])
+    const sym = symbol.toUpperCase()
+    const q = quotes[sym]
+    const list: Notif[] = []
+
+    // Active symbol live snapshot
+    if (q && Number.isFinite(q.price)) {
+      const up = q.changePercent >= 0
+      list.push({
+        id: 1001, type: 'alerts', icon: up ? TrendingUp : TrendingDown,
+        color: up ? 'text-emerald-400' : 'text-rose-400',
+        title: `${sym} ${up ? '+' : ''}${q.changePercent.toFixed(2)}%`,
+        desc: `Last: $${fmtPrice(q.price)} • Vol ${fmtVol(q.volume)}`,
+        date: new Date(now - 2 * 60 * 1000),
+      })
+      if (Math.abs(q.changePercent) >= 2) {
+        list.push({
+          id: 1002, type: 'alerts', icon: Bell, color: 'text-amber-400',
+          title: `${sym} large move`,
+          desc: `Move ≥ 2% triggered (${up ? '+' : ''}${q.changePercent.toFixed(2)}%)`,
+          date: new Date(now - 60 * 1000),
+        })
+      }
+    }
+
+    // Top 3 movers across watchlist
+    Object.values(quotes)
+      .filter((x) => Number.isFinite(x.changePercent))
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+      .slice(0, 3)
+      .forEach((x, i) => {
+        list.push({
+          id: 2000 + i, type: 'scans', icon: Activity,
+          color: x.changePercent >= 0 ? 'text-blue-400' : 'text-purple-400',
+          title: `Top mover: ${x.ticker}`,
+          desc: `${x.changePercent >= 0 ? '+' : ''}${x.changePercent.toFixed(2)}% • $${fmtPrice(x.price)}`,
+          date: new Date(now - (10 + i * 5) * 60 * 1000),
+        })
+      })
+
+    list.push({
+      id: 3001, type: 'results', icon: TrendingUp, color: 'text-emerald-400',
+      title: 'Watchlist scan complete',
+      desc: `${Object.keys(quotes).length} symbols evaluated`,
+      date: new Date(now - 30 * 60 * 1000),
+    })
+    list.push({
+      id: 4001, type: 'system', icon: Sparkles, color: 'text-cyan-400',
+      title: 'Pro tip',
+      desc: 'Use the Fib Retracement tool on the latest swing high/low',
+      date: new Date(now - 60 * 60 * 1000),
+    })
+    list.push({
+      id: 4002, type: 'system', icon: Sparkles, color: 'text-amber-400',
+      title: 'New: World indices & EU/Asia stocks added',
+      desc: 'Open the Search dropdown to browse all categories',
+      date: new Date(now - 3 * 60 * 60 * 1000),
+    })
+
+    return list.filter((n) => !dismissedSet.has(n.id))
+  }, [symbol, quotes, dismissedSet])
+
+  const tabCounts = useMemo(() => {
+    const c: Record<string, number> = { all: notifications.length, system: 0, results: 0, scans: 0, alerts: 0 }
+    for (const n of notifications) c[n.type] = (c[n.type] || 0) + 1
+    return c
+  }, [notifications])
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !readSet.has(n.id)).length,
+    [notifications, readSet]
+  )
 
   const filteredNotifs = notifications.filter((n) =>
     notificationTab === 'all' ? true : n.type === notificationTab
   )
+
+  const markAllRead = useCallback(() => {
+    setReadSet(new Set(notifications.map((n) => n.id)))
+  }, [notifications])
+
+  const clearAll = useCallback(() => {
+    setDismissedSet(new Set(notifications.map((n) => n.id)))
+  }, [notifications])
+
+  const toggleRead = useCallback((id: number) => {
+    setReadSet((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
+
+  const dismissOne = useCallback((id: number) => {
+    setDismissedSet((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#05070d] text-white">
@@ -553,21 +613,62 @@ export default function MarketDataPage() {
         <aside className="lg:w-72 shrink-0 bg-slate-900/60 border border-white/10 rounded-lg flex flex-col">
           <div className="p-3 border-b border-white/5">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold">Notifications</h3>
-              <Bell className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="flex items-center gap-1 mt-2 text-[11px]">
-              {(['all', 'system', 'results', 'scans', 'alerts'] as const).map((t) => (
+              <h3 className="text-base font-bold flex items-center gap-2">
+                Notifications
+                {unreadCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 text-[10px] font-semibold">
+                    {unreadCount}
+                  </span>
+                )}
+              </h3>
+              <div className="flex items-center gap-1">
                 <button
-                  key={t}
-                  onClick={() => setNotificationTab(t)}
-                  className={`px-2 py-0.5 rounded capitalize ${
-                    notificationTab === t ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'
-                  }`}
+                  onClick={markAllRead}
+                  disabled={unreadCount === 0}
+                  className="text-[10px] text-gray-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Mark all as read"
                 >
-                  {t}
+                  Mark read
                 </button>
-              ))}
+                <span className="text-gray-600">·</span>
+                <button
+                  onClick={clearAll}
+                  disabled={notifications.length === 0}
+                  className="text-[10px] text-gray-400 hover:text-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Dismiss all"
+                >
+                  Clear
+                </button>
+                <Bell className="w-4 h-4 text-gray-400 ml-1" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1 mt-2 text-[11px] overflow-x-auto">
+              {(['all', 'system', 'results', 'scans', 'alerts'] as const).map((t) => {
+                const active = notificationTab === t
+                const count = tabCounts[t] || 0
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setNotificationTab(t)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded capitalize whitespace-nowrap transition-colors ${
+                      active
+                        ? 'bg-blue-600/30 text-white border border-blue-500/40'
+                        : 'text-gray-400 hover:text-white border border-transparent hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{t}</span>
+                    {count > 0 && (
+                      <span
+                        className={`px-1 rounded text-[9px] ${
+                          active ? 'bg-blue-500/40 text-blue-100' : 'bg-white/10 text-gray-300'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -575,16 +676,37 @@ export default function MarketDataPage() {
             <div className="px-3 py-1.5 text-[9px] text-gray-500 uppercase tracking-wider bg-slate-900/40">Today</div>
             {filteredNotifs.map((n) => {
               const Icon = n.icon
+              const isRead = readSet.has(n.id)
               return (
-                <div key={n.id} className="px-3 py-2.5 border-b border-white/5 hover:bg-white/5 cursor-pointer flex items-start gap-2">
-                  <div className={`w-7 h-7 rounded-md bg-white/5 flex items-center justify-center ${n.color}`}>
+                <div
+                  key={n.id}
+                  onClick={() => toggleRead(n.id)}
+                  className={`group px-3 py-2.5 border-b border-white/5 hover:bg-white/5 cursor-pointer flex items-start gap-2 ${
+                    isRead ? 'opacity-60' : ''
+                  }`}
+                >
+                  <div className={`relative w-7 h-7 rounded-md bg-white/5 flex items-center justify-center ${n.color}`}>
                     <Icon className="w-3.5 h-3.5" />
+                    {!isRead && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-slate-900" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-white font-medium truncate">{n.title}</div>
+                    <div className={`text-xs truncate ${isRead ? 'text-gray-300 font-normal' : 'text-white font-medium'}`}>
+                      {n.title}
+                    </div>
                     <div className="text-[10px] text-gray-400 truncate">{n.desc}</div>
                   </div>
-                  <div className="text-[10px] text-gray-500 whitespace-nowrap">{timeAgo(n.date)}</div>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="text-[10px] text-gray-500 whitespace-nowrap">{timeAgo(n.date)}</div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismissOne(n.id) }}
+                      className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
+                      title="Dismiss"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               )
             })}

@@ -50,7 +50,35 @@ interface Props {
   onSymbolChange?: (sym: string) => void
   height?: number
   className?: string
+  activeTool?: DrawingTool
+  onToolChange?: (t: DrawingTool) => void
 }
+
+export type DrawingTool =
+  | 'cursor' | 'crosshair'
+  | 'trendline' | 'horizontal' | 'vertical'
+  | 'rect' | 'ellipse' | 'triangle'
+  | 'fib-retr' | 'fib-ext'
+  | 'text'
+
+interface DrawPoint { logical: number; price: number }
+interface Drawing {
+  id: number
+  tool: DrawingTool
+  pts: DrawPoint[]
+  color: string
+  text?: string
+}
+
+const TOOL_STEPS: Record<DrawingTool, number> = {
+  cursor: 0, crosshair: 0,
+  trendline: 2, horizontal: 1, vertical: 1,
+  rect: 2, ellipse: 2, triangle: 3,
+  'fib-retr': 2, 'fib-ext': 2,
+  text: 1,
+}
+const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
   { key: '1D', label: '1D', range: '1d', interval: '5m' },
@@ -371,24 +399,44 @@ function computePivots(bars: Bar[]): { pp: number; s1: number; s2: number; s3: n
 }
 
 // ========== Component ==========
-export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '' }: Props) {
+export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '', activeTool: activeToolProp, onToolChange }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
   const overlaySeriesRef = useRef<ISeriesApi<SeriesType>[]>([])
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const [symbol, setSymbol] = useState(propSymbol)
   const [inputVal, setInputVal] = useState(propSymbol)
   const [rangeKey, setRangeKey] = useState<RangeKey>('1Y')
   const [chartStyle, setChartStyle] = useState<ChartStyle>('candle')
   const [indicators, setIndicators] = useState<Set<IndicatorKey>>(new Set(['volume']))
+  const [openCategory, setOpenCategory] = useState<string | null>(null)
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastPrice, setLastPrice] = useState<{ price: number; change: number; changePct: number } | null>(null)
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null)
+
+  // Drawing state
+  const [activeToolLocal, setActiveToolLocal] = useState<DrawingTool>('cursor')
+  const activeTool = activeToolProp ?? activeToolLocal
+  const setActiveTool = (t: DrawingTool) => {
+    setActiveToolLocal(t)
+    onToolChange?.(t)
+    setPendingPts([])
+  }
+  const [drawings, setDrawings] = useState<Drawing[]>([])
+  const [pendingPts, setPendingPts] = useState<DrawPoint[]>([])
+  const [hoverPt, setHoverPt] = useState<DrawPoint | null>(null)
+
+  // Refs for handlers (avoid stale closures)
+  const activeToolRef = useRef(activeTool); useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
+  const drawingsRef = useRef(drawings); useEffect(() => { drawingsRef.current = drawings }, [drawings])
+  const pendingPtsRef = useRef(pendingPts); useEffect(() => { pendingPtsRef.current = pendingPts }, [pendingPts])
+  const hoverPtRef = useRef(hoverPt); useEffect(() => { hoverPtRef.current = hoverPt }, [hoverPt])
 
   // Sync prop → state
   useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol); setInputVal(propSymbol) } }, [propSymbol])
@@ -487,16 +535,15 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     })
     chartRef.current = chart
 
-    // Format time for chart
-    const formatTime = (t: number): string => {
+    // Format time for chart.
+    // lightweight-charts v5 accepts either UTCTimestamp (seconds, number) OR 'YYYY-MM-DD' string.
+    // Intraday intervals MUST use a numeric timestamp, otherwise multiple bars per day
+    // collapse to the same key and setData() throws "data must be asc ordered by time".
+    const isIntraday = /m$|h$/.test(currentRange.interval)
+    const formatTime = (t: number): Time => {
+      if (isIntraday) return t as Time // t is already in seconds
       const d = new Date(t * 1000)
-      if (currentRange.interval.includes('m')) {
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-      }
-      if (currentRange.interval === '1wk' || currentRange.interval === '1mo') {
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-      }
-      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` as Time
     }
 
     const candleData: CandlestickData[] = bars.map(b => ({
@@ -745,17 +792,30 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Fit content
     chart.timeScale().fitContent()
 
-    // Crosshair move → tooltip
+    // Crosshair move → tooltip + drawing preview
     chart.subscribeCrosshairMove((param) => {
+      // Drawing preview point
+      const main = mainSeriesRef.current
+      if (param.point && main && activeToolRef.current !== 'cursor' && activeToolRef.current !== 'crosshair') {
+        const logical = chart.timeScale().coordinateToLogical(param.point.x)
+        const price = main.coordinateToPrice(param.point.y)
+        if (logical != null && price != null) setHoverPt({ logical, price })
+      } else {
+        setHoverPt(null)
+      }
       if (!param.time || !param.seriesData) {
         setCrosshairData(null)
         return
       }
-      const main = mainSeriesRef.current
       if (!main) return
       const data = param.seriesData.get(main) as any
       if (!data) { setCrosshairData(null); return }
-      const timeStr = typeof param.time === 'string' ? param.time : ''
+      let timeStr = ''
+      if (typeof param.time === 'string') timeStr = param.time
+      else if (typeof param.time === 'number') {
+        const d = new Date(param.time * 1000)
+        timeStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+      }
       if ('open' in data) {
         setCrosshairData({ time: timeStr, o: data.open, h: data.high, l: data.low, c: data.close, v: 0 })
       } else if ('value' in data) {
@@ -763,13 +823,49 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     })
 
+    // ===== Drawing: click handler =====
+    chart.subscribeClick((param) => {
+      const tool = activeToolRef.current
+      if (tool === 'cursor' || tool === 'crosshair') return
+      if (!param.point || !mainSeriesRef.current) return
+      const logical = chart.timeScale().coordinateToLogical(param.point.x)
+      const price = mainSeriesRef.current.coordinateToPrice(param.point.y)
+      if (logical == null || price == null) return
+      const pt: DrawPoint = { logical, price }
+
+      if (tool === 'text') {
+        const txt = window.prompt('Note text:')
+        if (txt && txt.trim()) {
+          setDrawings(d => [...d, { id: Date.now(), tool, pts: [pt], color: '#fbbf24', text: txt.trim() }])
+        }
+        return
+      }
+
+      const need = TOOL_STEPS[tool] || 2
+      const next = [...pendingPtsRef.current, pt]
+      if (next.length >= need) {
+        setDrawings(d => [...d, { id: Date.now(), tool, pts: next, color: '#3b82f6' }])
+        setPendingPts([])
+      } else {
+        setPendingPts(next)
+      }
+    })
+
+    // Redraw overlay on visible range changes
+    const redrawOnRange = () => requestAnimationFrame(redrawOverlay)
+    chart.timeScale().subscribeVisibleLogicalRangeChange(redrawOnRange)
+
     // Resize observer
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
+        requestAnimationFrame(redrawOverlay)
       }
     })
     ro.observe(container)
+
+    // Initial overlay redraw
+    requestAnimationFrame(redrawOverlay)
 
     return () => {
       ro.disconnect()
@@ -794,6 +890,126 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       onSymbolChange?.(v)
     }
   }, [inputVal, symbol, onSymbolChange])
+
+  // ========== Drawing overlay renderer ==========
+  const redrawOverlay = useCallback(() => {
+    const canvas = overlayCanvasRef.current
+    const chart = chartRef.current
+    const main = mainSeriesRef.current
+    const container = chartContainerRef.current
+    if (!canvas || !chart || !main || !container) return
+    const W = container.clientWidth
+    const H = container.clientHeight
+    const dpr = window.devicePixelRatio || 1
+    if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+      canvas.width = W * dpr; canvas.height = H * dpr
+      canvas.style.width = `${W}px`; canvas.style.height = `${H}px`
+    }
+    const ctx = canvas.getContext('2d')!
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, W, H)
+
+    const toXY = (p: DrawPoint): { x: number; y: number } | null => {
+      const x = chart.timeScale().logicalToCoordinate(p.logical as any)
+      const y = main.priceToCoordinate(p.price)
+      if (x == null || y == null) return null
+      return { x, y }
+    }
+
+    const drawShape = (d: Drawing | { tool: DrawingTool; pts: DrawPoint[]; color: string; text?: string }, isPreview = false) => {
+      const pts = d.pts.map(toXY).filter(Boolean) as { x: number; y: number }[]
+      if (pts.length === 0) return
+      ctx.save()
+      ctx.strokeStyle = d.color
+      ctx.fillStyle = d.color
+      ctx.lineWidth = isPreview ? 1 : 1.5
+      if (isPreview) ctx.setLineDash([5, 4])
+      const [a, b, c] = pts
+
+      switch (d.tool) {
+        case 'trendline':
+          if (a && b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke() }
+          break
+        case 'horizontal':
+          if (a) { ctx.beginPath(); ctx.moveTo(0, a.y); ctx.lineTo(W, a.y); ctx.stroke() }
+          break
+        case 'vertical':
+          if (a) { ctx.beginPath(); ctx.moveTo(a.x, 0); ctx.lineTo(a.x, H); ctx.stroke() }
+          break
+        case 'rect':
+          if (a && b) {
+            const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y)
+            const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y)
+            ctx.globalAlpha = 0.15; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1
+            ctx.strokeRect(x, y, w, h)
+          }
+          break
+        case 'ellipse':
+          if (a && b) {
+            const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2
+            const rx = Math.abs(b.x - a.x) / 2, ry = Math.abs(b.y - a.y) / 2
+            ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
+            ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke()
+          }
+          break
+        case 'triangle':
+          if (a && b && c) {
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.closePath()
+            ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke()
+          }
+          break
+        case 'fib-retr':
+        case 'fib-ext': {
+          if (!(a && b)) break
+          const levels = d.tool === 'fib-retr' ? FIB_LEVELS : FIB_EXT_LEVELS
+          const colors = ['#94a3b8', '#22c55e', '#10b981', '#eab308', '#f97316', '#ef4444', '#a855f7', '#ec4899']
+          const y0 = a.y, y1 = b.y
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+          ctx.setLineDash([])
+          levels.forEach((lv, i) => {
+            const y = y0 + (y1 - y0) * lv
+            ctx.strokeStyle = colors[i % colors.length]
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+            ctx.fillStyle = colors[i % colors.length]
+            ctx.font = '10px ui-sans-serif, system-ui'
+            ctx.fillText(`${(lv * 100).toFixed(1)}%`, 4, y - 2)
+          })
+          break
+        }
+        case 'text':
+          if (a && d.text) {
+            ctx.font = '12px ui-sans-serif, system-ui'
+            const w = ctx.measureText(d.text).width + 8
+            ctx.globalAlpha = 0.85; ctx.fillStyle = '#1e293b'; ctx.fillRect(a.x, a.y - 14, w, 18); ctx.globalAlpha = 1
+            ctx.fillStyle = d.color; ctx.fillText(d.text, a.x + 4, a.y)
+            ctx.beginPath(); ctx.arc(a.x, a.y, 3, 0, Math.PI * 2); ctx.fill()
+          }
+          break
+      }
+      ctx.restore()
+    }
+
+    drawingsRef.current.forEach(d => drawShape(d))
+
+    // Preview pending drawing with current hover
+    const tool = activeToolRef.current
+    const pend = pendingPtsRef.current
+    if (tool && tool !== 'cursor' && tool !== 'crosshair' && pend.length > 0 && hoverPtRef.current) {
+      drawShape({ tool, pts: [...pend, hoverPtRef.current], color: '#60a5fa' }, true)
+      // Mark placed points
+      pend.forEach(p => {
+        const xy = toXY(p); if (!xy) return
+        ctx.save(); ctx.fillStyle = '#60a5fa'
+        ctx.beginPath(); ctx.arc(xy.x, xy.y, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+      })
+    }
+  }, [])
+
+  // Trigger redraw on drawings/pending/hover/tool changes
+  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, redrawOverlay, bars])
+
+  const clearDrawings = useCallback(() => { setDrawings([]); setPendingPts([]) }, [])
+  const undoDrawing = useCallback(() => { setDrawings(d => d.slice(0, -1)) }, [])
 
   const pctColor = lastPrice ? (lastPrice.changePct >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'
 
@@ -857,28 +1073,62 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         </div>
       </div>
 
-      {/* ===== INDICATOR BAR (categorized) ===== */}
+      {/* ===== INDICATOR BAR (grouped dropdowns) ===== */}
       <div className="px-3 py-1.5 bg-slate-800/30 border-b border-white/5 space-y-1">
-        <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
-          {IND_CATEGORIES.map(cat => (
-            <div key={cat.category} className="flex items-center gap-1 flex-wrap">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mr-0.5">{cat.category}</span>
-              {cat.items.map(ind => (
+        <div className="flex flex-wrap items-center gap-2">
+          {IND_CATEGORIES.map(cat => {
+            const activeCount = cat.items.filter(i => indicators.has(i.key)).length
+            const open = openCategory === cat.category
+            return (
+              <div key={cat.category} className="relative">
                 <button
-                  key={ind.key}
-                  onClick={() => toggleIndicator(ind.key)}
-                  className={`px-1.5 py-0.5 text-[10px] rounded-full transition-colors border ${
-                    indicators.has(ind.key)
-                      ? 'bg-blue-600/30 border-blue-500/40 text-blue-300'
-                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  onClick={() => setOpenCategory(open ? null : cat.category)}
+                  className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                    activeCount > 0
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-200'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
                   }`}
                 >
-                  {ind.label}
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">{cat.category}</span>
+                  {activeCount > 0 && (
+                    <span className="px-1 rounded bg-blue-500/30 text-blue-100 text-[9px]">{activeCount}</span>
+                  )}
+                  <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
                 </button>
-              ))}
-              <div className="w-px h-3 bg-white/10 mx-0.5 hidden lg:block" />
-            </div>
-          ))}
+                {open && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setOpenCategory(null)} />
+                    <div className="absolute left-0 top-full mt-1 z-30 min-w-[160px] p-1.5 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+                      <div className="flex flex-col gap-0.5">
+                        {cat.items.map(ind => (
+                          <button
+                            key={ind.key}
+                            onClick={() => toggleIndicator(ind.key)}
+                            className={`flex items-center justify-between px-2 py-1 text-[11px] rounded transition-colors ${
+                              indicators.has(ind.key)
+                                ? 'bg-blue-600/30 text-blue-200'
+                                : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            <span>{ind.label}</span>
+                            {indicators.has(ind.key) && <span className="text-blue-400">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+          {indicators.size > 0 && (
+            <button
+              onClick={() => setIndicators(new Set())}
+              className="ml-auto px-2 py-1 text-[10px] rounded border border-white/10 text-gray-400 hover:text-red-300 hover:border-red-400/40"
+            >
+              Clear indicators
+            </button>
+          )}
         </div>
         {/* Active indicator legend */}
         {indicators.size > 0 && (
@@ -938,8 +1188,27 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </div>
           </div>
         )}
-        <div ref={chartContainerRef} className="[&>a]:!hidden [&>table]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
+        <div ref={chartContainerRef} className="[&>a]:!hidden [&>table]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <canvas
+            ref={overlayCanvasRef}
+            className="absolute inset-0"
+            style={{ pointerEvents: 'none', zIndex: 5 }}
+          />
+        </div>
         <div ref={tooltipRef} />
+        {activeTool !== 'cursor' && activeTool !== 'crosshair' && (
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-blue-500/40 text-[10px] text-blue-200">
+            <span className="font-semibold uppercase tracking-wider">{activeTool}</span>
+            <span className="text-gray-400">click {TOOL_STEPS[activeTool] - pendingPts.length} more</span>
+            <button onClick={() => { setPendingPts([]); setActiveTool('cursor') }} className="text-gray-400 hover:text-white">✕</button>
+          </div>
+        )}
+        {drawings.length > 0 && (
+          <div className="absolute top-2 right-2 z-10 flex gap-1">
+            <button onClick={undoDrawing} className="px-2 py-1 text-[10px] rounded bg-slate-900/90 border border-white/15 text-gray-300 hover:text-white" title="Undo last drawing">↶ Undo</button>
+            <button onClick={clearDrawings} className="px-2 py-1 text-[10px] rounded bg-slate-900/90 border border-red-400/40 text-red-300 hover:text-red-200" title="Clear all drawings">Clear</button>
+          </div>
+        )}
       </div>
 
       {/* ===== BOTTOM STATUS BAR ===== */}

@@ -53,30 +53,23 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Bonds & ETF', symbols: ['TLT', 'IEF', 'HYG', 'LQD', 'GLD', 'SLV', 'USO', 'UNG'] },
 ]
 
+import { Minus, MoveHorizontal, MoveVertical } from 'lucide-react'
+
 const DRAWING_TOOLS = [
   { id: 'cursor', label: 'Arrow', icon: MousePointer2 },
   { id: 'crosshair', label: 'Crosshairs', icon: Crosshair },
-  { id: 'target', label: 'Target', icon: Target },
-  { id: 'ellipse', label: 'Ellipse', icon: Circle },
-  { id: 'rect', label: 'Rectangle', icon: Square },
-  { id: 'text', label: 'Text', icon: TypeIcon },
-  { id: 'triangle', label: 'Triangle', icon: Triangle },
-  { id: 'curve', label: 'Curve', icon: Spline },
-  { id: 'cycle-finder', label: 'Cycle Finder', icon: Activity },
-  { id: 'cycle-lines', label: 'Cycle Lines', icon: Layers },
-  { id: 'date-range', label: 'Date Range', icon: CalendarRange },
-  { id: 'elliott-corr', label: 'Elliott Wave Correction', icon: PenLine },
-  { id: 'elliott-imp', label: 'Elliott Wave Impulse', icon: PenLine },
-  { id: 'fib-retr', label: 'Fibonacci Retracement', icon: FunctionSquare },
-  { id: 'fib-ext', label: 'Fibonacci Extension', icon: FunctionSquare },
-  { id: 'fib-fan', label: 'Fibonacci Fan', icon: FunctionSquare },
   { id: 'trendline', label: 'Trend Line', icon: TrendingUp },
-  { id: 'channel', label: 'Channel', icon: Layers },
-  { id: 'pitchfork', label: 'Pitchfork', icon: Spline },
-  { id: 'gann-fan', label: 'Gann Fan', icon: Spline },
-  { id: 'gann-box', label: 'Gann Box', icon: Square },
-  { id: 'note', label: 'Note', icon: BookOpen },
-]
+  { id: 'horizontal', label: 'Horizontal Line', icon: MoveHorizontal },
+  { id: 'vertical', label: 'Vertical Line', icon: MoveVertical },
+  { id: 'rect', label: 'Rectangle', icon: Square },
+  { id: 'ellipse', label: 'Ellipse', icon: Circle },
+  { id: 'triangle', label: 'Triangle', icon: Triangle },
+  { id: 'fib-retr', label: 'Fib Retracement', icon: FunctionSquare },
+  { id: 'fib-ext', label: 'Fib Extension', icon: FunctionSquare },
+  { id: 'text', label: 'Text / Note', icon: TypeIcon },
+] as const
+
+type DrawingToolId = typeof DRAWING_TOOLS[number]['id']
 
 const TOOL_TABS = [
   { id: 'tools', label: 'Tools', icon: PenLine },
@@ -451,6 +444,8 @@ export default function MarketDataPage() {
             onSymbolChange={(s) => setSymbol(s)}
             height={580}
             className="shadow-xl shadow-black/40"
+            activeTool={activeTool as DrawingToolId}
+            onToolChange={(t) => setActiveTool(t)}
           />
 
           {/* Watchlist strip */}

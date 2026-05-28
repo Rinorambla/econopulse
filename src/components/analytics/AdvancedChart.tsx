@@ -495,6 +495,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   // ========== Chart Creation / Update ==========
   useEffect(() => {
     if (!chartContainerRef.current || bars.length < 2) return
+    // Defer until container has actual width (initial render may be 0 in flex layouts)
+    if (chartContainerRef.current.clientWidth === 0) {
+      const raf = requestAnimationFrame(() => setBars(b => b.slice()))
+      return () => cancelAnimationFrame(raf)
+    }
+    let didCreate = false
+    try {
 
     // Clean up previous chart
     if (chartRef.current) {
@@ -794,13 +801,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // Crosshair move → tooltip + drawing preview
     chart.subscribeCrosshairMove((param) => {
-      // Drawing preview point
+      // Drawing preview point (only when a drawing tool is active)
+      const tool = activeToolRef.current
       const main = mainSeriesRef.current
-      if (param.point && main && activeToolRef.current !== 'cursor' && activeToolRef.current !== 'crosshair') {
+      if (tool !== 'cursor' && tool !== 'crosshair' && param.point && main) {
         const logical = chart.timeScale().coordinateToLogical(param.point.x)
         const price = main.coordinateToPrice(param.point.y)
         if (logical != null && price != null) setHoverPt({ logical, price })
-      } else {
+      } else if (hoverPtRef.current) {
         setHoverPt(null)
       }
       if (!param.time || !param.seriesData) {
@@ -866,11 +874,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // Initial overlay redraw
     requestAnimationFrame(redrawOverlay)
+    didCreate = true
 
     return () => {
       ro.disconnect()
       chart.remove()
       chartRef.current = null
+    }
+    } catch (err: any) {
+      console.error('[AdvancedChart] creation failed:', err)
+      setError(`Chart render error: ${err?.message || 'unknown'}`)
+      if (!didCreate && chartRef.current) {
+        try { chartRef.current.remove() } catch {}
+        chartRef.current = null
+      }
     }
   }, [bars, chartStyle, indicators, height, currentRange.interval])
 

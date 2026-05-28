@@ -1188,13 +1188,12 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </div>
           </div>
         )}
-        <div ref={chartContainerRef} className="[&>a]:!hidden [&>table]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%', position: 'relative' }}>
-          <canvas
-            ref={overlayCanvasRef}
-            className="absolute inset-0"
-            style={{ pointerEvents: 'none', zIndex: 5 }}
-          />
-        </div>
+        <div ref={chartContainerRef} className="[&>a]:!hidden [&>table]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
+        <canvas
+          ref={overlayCanvasRef}
+          className="absolute inset-0"
+          style={{ pointerEvents: 'none', zIndex: 5 }}
+        />
         <div ref={tooltipRef} />
         {activeTool !== 'cursor' && activeTool !== 'crosshair' && (
           <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-blue-500/40 text-[10px] text-blue-200">

@@ -170,12 +170,13 @@ export default function MarketDataPage() {
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
   const mainRef = useRef<HTMLDivElement | null>(null)
+  const headerRef = useRef<HTMLDivElement | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   useEffect(() => {
     const compute = () => {
       const top = mainRef.current?.getBoundingClientRect().top ?? 110
-      const pad = 20 // bottom padding
+      const pad = 16 // bottom padding
       // AdvancedChart renders a toolbar + status bar around the chart canvas;
       // subtract that chrome so the whole terminal fits the viewport without scroll.
       const chartChrome = 96
@@ -185,7 +186,14 @@ export default function MarketDataPage() {
     // run after layout is ready
     const raf = requestAnimationFrame(compute)
     window.addEventListener('resize', compute)
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute) }
+    // Recompute whenever the header height changes (price badge appearing,
+    // toolbar buttons wrapping to a new line, etc.) so we never need to scroll.
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined' && headerRef.current) {
+      ro = new ResizeObserver(() => requestAnimationFrame(compute))
+      ro.observe(headerRef.current)
+    }
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute); ro?.disconnect() }
   }, [panelOpen])
 
   const showToast = useCallback((msg: string) => {
@@ -470,11 +478,11 @@ export default function MarketDataPage() {
   return (
     <div className="bg-[#05070d] text-white lg:overflow-hidden lg:h-[calc(100dvh-3rem)]">
       {/* HEADER */}
-      <div className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
-        <div className="px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 flex-wrap">
+      <div ref={headerRef} className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
+        <div className="px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 shrink-0">
-            <Logo size={30} showText={false} layout="inline" />
-            <p className="hidden lg:block text-[10px] text-gray-400">Pro Technical Analysis Terminal</p>
+            <Logo size={26} showText={false} layout="inline" />
+            <p className="hidden xl:block text-[10px] text-gray-400 leading-tight">Pro Technical<br />Analysis Terminal</p>
           </div>
 
           {/* Single search bar */}

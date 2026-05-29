@@ -167,6 +167,8 @@ export default function MarketDataPage() {
   const [newListName, setNewListName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [chartHeight, setChartHeight] = useState(620)
+  const [panelOpen, setPanelOpen] = useState(true)
+  const [panelInput, setPanelInput] = useState('')
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   useEffect(() => {
@@ -262,6 +264,19 @@ export default function MarketDataPage() {
       return { ...wls, [activeListName]: cur.filter((s) => s.toUpperCase() !== sym.toUpperCase()) }
     })
   }, [activeListName, setWatchlists])
+
+  // Add a symbol directly into the active watchlist (from the side panel input).
+  const addToWatchlist = useCallback((raw?: string) => {
+    const v = (raw ?? panelInput).trim().toUpperCase()
+    if (!v) return
+    setWatchlists((wls) => {
+      const cur = wls[activeListName] || []
+      if (cur.some((s) => s.toUpperCase() === v)) return wls
+      return { ...wls, [activeListName]: [...cur, v] }
+    })
+    setPanelInput('')
+    showToast(`Added ${v} → ${activeListName}`)
+  }, [panelInput, activeListName, setWatchlists, showToast])
 
   // Smart save files the current symbol into its sector watchlist (creating it if needed).
   const saveToSector = useCallback(() => {
@@ -820,6 +835,7 @@ export default function MarketDataPage() {
         </div>
 
         {/* Watchlist side panel (TradingView-style) */}
+        {panelOpen ? (
         <aside className="lg:w-80 xl:w-96 shrink-0 rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -827,12 +843,42 @@ export default function MarketDataPage() {
               <span className="text-sm font-bold truncate">{activeListName}</span>
               <span className="text-[10px] text-gray-500">({watchlist.length})</span>
             </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { setWatchlistMenuOpen((o) => !o); setNotifMenuOpen(false) }}
+                className="p-1 rounded hover:bg-white/10 text-gray-300"
+                title="Manage watchlists"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPanelOpen(false)}
+                className="p-1 rounded hover:bg-white/10 text-gray-300"
+                title="Hide watchlist"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Add-symbol input */}
+          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+            <div className="flex items-center flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 focus-within:border-blue-500">
+              <Plus className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <input
+                value={panelInput}
+                onChange={(e) => setPanelInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') addToWatchlist() }}
+                placeholder="Add symbol (AAPL, BTC-USD)…"
+                className="bg-transparent text-xs font-semibold flex-1 ml-1.5 outline-none placeholder-gray-500 min-w-0"
+              />
+            </div>
             <button
-              onClick={() => { setWatchlistMenuOpen((o) => !o); setNotifMenuOpen(false) }}
-              className="p-1 rounded hover:bg-white/10 text-gray-300"
-              title="Manage watchlists"
+              onClick={() => addToWatchlist()}
+              disabled={!panelInput.trim()}
+              className="px-2.5 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <List className="w-4 h-4" />
+              Add
             </button>
           </div>
 
@@ -843,10 +889,10 @@ export default function MarketDataPage() {
             <span className="text-right w-16">Chg%</span>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 80 }}>
+          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 120 }}>
             {watchlist.length === 0 && (
               <div className="p-6 text-center text-[11px] text-gray-500">
-                Empty list — search a symbol to add it.
+                Empty list — type a symbol above and press Add.
               </div>
             )}
             {watchlist.map((sym) => {
@@ -889,6 +935,16 @@ export default function MarketDataPage() {
             })}
           </div>
         </aside>
+        ) : (
+          <button
+            onClick={() => setPanelOpen(true)}
+            className="lg:self-start flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-white/10 text-xs font-semibold text-gray-200"
+            title="Show watchlist"
+          >
+            <List className="w-4 h-4 text-blue-300" />
+            <span>Watchlist ({watchlist.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Toast */}

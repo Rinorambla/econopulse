@@ -122,58 +122,52 @@ export function Navigation({ className }: NavigationProps) {
 
       {/* Center: Links (desktop) */}
   <nav className="hidden md:flex flex-1 min-w-0 items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* Always show feature links; if user not logged in add a subtle lock indicator */}
-  <NavigationLink href="/dashboard" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">Dashboard</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  <NavigationLink href="/ai-portfolio" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">AI Portfolio</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
+        {/* Always show feature links; grouped into a single dropdown menu */}
   <div className="relative shrink-0" data-tools-menu>
           <button
             type="button"
             onClick={() => setToolsMenuOpen(v => !v)}
             aria-haspopup="menu"
             aria-expanded={toolsMenuOpen}
-            className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-violet-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105 flex items-center gap-1"
+            className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105 flex items-center gap-1.5"
           >
-            <span className="relative z-10">AI Tools</span>
-            <svg className={`relative z-10 h-3 w-3 text-white/70 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            <span className="relative z-10">Menu</span>
+            <svg className={`relative z-10 h-3.5 w-3.5 text-white/70 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </button>
           {toolsMenuOpen && (
-            <div role="menu" className="absolute left-0 top-full mt-2 w-48 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100]">
-              <NavigationLink href="/ai-pulse" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-pink-600/30" onClick={() => setToolsMenuOpen(false)}>
+            <div role="menu" className="absolute left-0 top-full mt-2 w-52 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100] py-1">
+              <NavigationLink href="/dashboard" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-blue-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Dashboard
+              </NavigationLink>
+              <NavigationLink href="/ai-portfolio" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-emerald-600/30" onClick={() => setToolsMenuOpen(false)}>
+                AI Portfolio
+              </NavigationLink>
+              <NavigationLink href="/ai-pulse" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-pink-600/30" onClick={() => setToolsMenuOpen(false)}>
                 AI Pulse
               </NavigationLink>
-              <NavigationLink href="/visual-ai" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-violet-600/30" onClick={() => setToolsMenuOpen(false)}>
+              <NavigationLink href="/visual-ai" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-violet-600/30" onClick={() => setToolsMenuOpen(false)}>
                 Visual AI
               </NavigationLink>
-              <NavigationLink href="/market-dna" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
+              <NavigationLink href="/market-dna" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
                 Market DNA
               </NavigationLink>
+              <NavigationLink href="/market-data" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-fuchsia-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Market Data
+              </NavigationLink>
+              <NavigationLink href="/econoai" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-sky-600/30" onClick={() => setToolsMenuOpen(false)}>
+                UpdateAI
+              </NavigationLink>
+              <NavigationLink href="/news" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-cyan-600/30" onClick={() => setToolsMenuOpen(false)}>
+                News
+              </NavigationLink>
+              {!isIOSApp && (
+              <NavigationLink href="/pricing" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-cyan-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Pricing
+              </NavigationLink>
+              )}
             </div>
           )}
         </div>
-  <NavigationLink href="/market-data" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-fuchsia-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-fuchsia-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market Data</span></span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-fuchsia-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  <NavigationLink href="/econoai" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-sky-500/20 hover:to-teal-500/20 hover:shadow-lg hover:shadow-sky-500/25 hover:scale-105">
-          <span className="relative z-10">UpdateAI</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  <NavigationLink href="/news" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
-          <span className="relative z-10">News</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  {!isIOSApp && (
-  <NavigationLink href="/pricing" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
-          <span className="relative z-10">Pricing</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  )}
       </nav>
 
       {/* Right: Auth (desktop) */}

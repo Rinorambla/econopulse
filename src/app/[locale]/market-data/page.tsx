@@ -205,11 +205,7 @@ export default function MarketDataPage() {
     })
   }, [searchVal, activeListName, setSymbol, setWatchlists])
 
-  const removeFromWatchlist = useCallback((sym: string) => {
-    setWatchlists((wls) => ({ ...wls, [activeListName]: (wls[activeListName] || []).filter((s) => s !== sym) }))
-  }, [activeListName, setWatchlists])
-
-  // Smart save — files the current symbol into its sector watchlist (creating it if needed).
+  // Smart save files the current symbol into its sector watchlist (creating it if needed).
   const saveToSector = useCallback(() => {
     const v = symbol.trim().toUpperCase()
     if (!v) return
@@ -728,66 +724,6 @@ export default function MarketDataPage() {
           height={620}
           className="shadow-xl shadow-black/40"
         />
-
-        {/* Watchlist strip */}
-        <div className="bg-slate-900/60 border border-white/10 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-              <List className="w-3 h-3" /> {activeListName}
-            </h3>
-            <span className="text-[10px] text-gray-500">{watchlist.length} symbols · auto-refresh</span>
-          </div>
-          <div className="overflow-x-auto">
-            <div className="flex gap-2 min-w-min">
-              {watchlist.map((s) => {
-                const q = quotes[s.toUpperCase()]
-                const pos = q ? q.changePercent >= 0 : true
-                const active = s.toUpperCase() === symbol.toUpperCase()
-                return (
-                  <div
-                    key={s}
-                    onClick={() => setSymbol(s)}
-                    className={`group relative min-w-[120px] cursor-pointer rounded-lg border px-3 py-2 ${
-                      active ? 'border-blue-500/60 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeFromWatchlist(s) }}
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-400"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <div className="text-xs font-bold">{s}</div>
-                    <div className="text-sm font-semibold mt-0.5">{q ? fmtPrice(q.price) : '—'}</div>
-                    <div className={`text-[10px] flex items-center gap-1 ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {pos ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-                      {q ? fmtPct(q.changePercent) : '—'}
-                    </div>
-                  </div>
-                )
-              })}
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="min-w-[60px] rounded-lg border border-dashed border-white/15 text-gray-400 hover:text-white hover:border-white/30 flex items-center justify-center"
-                title="Add a symbol via search"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Symbol" value={symbol.toUpperCase()} hint={currentQuote?.name?.slice(0, 30) || 'Loading…'} />
-          <StatCard
-            label="Last"
-            value={currentQuote ? `$${fmtPrice(currentQuote.price)}` : '—'}
-            hint={currentQuote ? fmtPct(currentQuote.changePercent) : ''}
-            tone={currentQuote ? (currentQuote.changePercent >= 0 ? 'up' : 'down') : 'neutral'}
-          />
-          <StatCard label="Volume" value={fmtVol(currentQuote?.volume)} hint="last session" />
-          <StatCard label="Watchlist" value={activeListName} hint={`${watchlist.length} symbols`} />
-        </div>
       </div>
 
       {/* Toast */}
@@ -797,17 +733,6 @@ export default function MarketDataPage() {
           {toast}
         </div>
       )}
-    </div>
-  )
-}
-
-function StatCard({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: 'up' | 'down' | 'neutral' }) {
-  const toneClass = tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : 'text-gray-300'
-  return (
-    <div className="bg-slate-900/60 border border-white/10 rounded-lg p-3">
-      <div className="text-[10px] uppercase tracking-wider text-gray-400">{label}</div>
-      <div className="text-lg font-bold mt-0.5">{value}</div>
-      {hint && <div className={`text-[10px] mt-0.5 ${toneClass}`}>{hint}</div>}
     </div>
   )
 }

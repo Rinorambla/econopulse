@@ -31,7 +31,7 @@ type IndicatorKey =
   // Volatility
   | 'bb' | 'keltner' | 'atr' | 'donchian'
   // Volume
-  | 'volume' | 'vwap' | 'obv'
+  | 'volume' | 'vwap' | 'obv' | 'volprofile'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
   // Support/Resistance
@@ -138,6 +138,7 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'volume', label: 'Volume' },
       { key: 'vwap', label: 'VWAP' },
       { key: 'obv', label: 'OBV' },
+      { key: 'volprofile', label: 'Volume Profile' },
     ],
   },
   {
@@ -411,6 +412,47 @@ function computePivots(bars: Bar[]): { pp: number; s1: number; s2: number; s3: n
     pp,
     s1: 2 * pp - prev.high, s2: pp - (prev.high - prev.low), s3: prev.low - 2 * (prev.high - pp),
     r1: 2 * pp - prev.low, r2: pp + (prev.high - prev.low), r3: prev.high + 2 * (pp - prev.low),
+  }
+}
+
+// Volume Profile: bin volume by price level, return POC (point of control) and the
+// value area (price band containing ~70% of traded volume).
+function computeVolumeProfile(bars: Bar[], bins = 24): {
+  poc: number; vah: number; val: number;
+  levels: { price: number; volume: number }[]; maxVolume: number;
+} | null {
+  if (bars.length < 5) return null
+  let lo = Infinity, hi = -Infinity
+  for (const b of bars) { if (b.low < lo) lo = b.low; if (b.high > hi) hi = b.high }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null
+  const step = (hi - lo) / bins
+  const vol = new Array(bins).fill(0)
+  for (const b of bars) {
+    const tp = (b.high + b.low + b.close) / 3
+    let idx = Math.floor((tp - lo) / step)
+    if (idx < 0) idx = 0
+    if (idx >= bins) idx = bins - 1
+    vol[idx] += b.volume
+  }
+  const levels = vol.map((v, i) => ({ price: lo + (i + 0.5) * step, volume: v }))
+  let pocIdx = 0
+  for (let i = 1; i < bins; i++) if (vol[i] > vol[pocIdx]) pocIdx = i
+  const totalVol = vol.reduce((s, v) => s + v, 0)
+  // Expand from POC until 70% of volume is captured → value area.
+  let lower = pocIdx, upper = pocIdx, acc = vol[pocIdx]
+  const target = totalVol * 0.7
+  while (acc < target && (lower > 0 || upper < bins - 1)) {
+    const below = lower > 0 ? vol[lower - 1] : -1
+    const above = upper < bins - 1 ? vol[upper + 1] : -1
+    if (above >= below) { upper++; acc += vol[upper] }
+    else { lower--; acc += vol[lower] }
+  }
+  return {
+    poc: lo + (pocIdx + 0.5) * step,
+    vah: lo + (upper + 1) * step,
+    val: lo + lower * step,
+    levels,
+    maxVolume: vol[pocIdx] || 1,
   }
 }
 
@@ -721,6 +763,25 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // ── Volume Overlays ──
     if (indicators.has('vwap')) addOverlay(computeVWAP(bars), '#ec4899', LineStyle.Dotted)
+
+    // ── Volume Profile (POC + Value Area as horizontal bands) ──
+    if (indicators.has('volprofile')) {
+      const vp = computeVolumeProfile(bars)
+      if (vp) {
+        const drawVPLine = (val: number, color: string, style: LineStyle, width = 1, title?: string) => {
+          const ls = chart.addSeries(LineSeries, {
+            color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style,
+            crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+            ...(title ? { title } : {}),
+          })
+          ls.setData(timeLabels.map(t => ({ time: t, value: val } as LineData)))
+          overlaySeriesRef.current.push(ls)
+        }
+        drawVPLine(vp.poc, '#facc15', LineStyle.Solid, 2, 'POC')
+        drawVPLine(vp.vah, 'rgba(250,204,21,0.5)', LineStyle.Dashed, 1, 'VAH')
+        drawVPLine(vp.val, 'rgba(250,204,21,0.5)', LineStyle.Dashed, 1, 'VAL')
+      }
+    }
 
     // ── Pivot Points (horizontal lines) ──
     if (indicators.has('pivots') && bars.length >= 2) {
@@ -1354,6 +1415,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
         <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
+        {/* Brand watermark (bottom-left) */}
+        <div className="absolute bottom-2 left-2 z-[6] flex items-center gap-1.5 pointer-events-none select-none opacity-80">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[11px] font-black text-white shadow">E</div>
+          <span className="text-xs font-bold bg-gradient-to-r from-blue-300 to-purple-300 bg-clip-text text-transparent tracking-tight">Econopulse.ai</span>
+        </div>
         <canvas
           ref={overlayCanvasRef}
           className="absolute inset-0"

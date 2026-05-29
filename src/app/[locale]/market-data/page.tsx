@@ -18,6 +18,8 @@ import {
   Pencil,
   Trash2,
   Check,
+  Save,
+  Share2,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 
@@ -30,6 +32,34 @@ const DEFAULT_WATCHLISTS: Record<string, string[]> = {
   Main: ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'JPM', 'XOM', 'GLD', 'BTC-USD', 'ETH-USD'],
   Tech: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AVGO', 'CRM', 'ORCL', 'ADBE'],
   Crypto: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD'],
+}
+
+// Smart sector mapping — used to auto-file a saved symbol into the right watchlist.
+const SECTOR_SYMBOLS: Record<string, string[]> = {
+  Technology: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'GOOG', 'META', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'AVGO', 'CSCO', 'QCOM', 'TXN', 'NOW', 'IBM', 'PLTR', 'SHOP', 'UBER', 'ASML', 'SAP', 'TSM', 'MU', 'AMAT', 'LRCX', 'SNOW', 'DELL', 'HPQ'],
+  Financials: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'SQ', 'BRK-B', 'BRK-A', 'USB', 'PNC', 'TFC', 'COF'],
+  Energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'MPC', 'OXY', 'HES', 'PSX', 'VLO', 'WMB', 'KMI', 'DVN'],
+  Healthcare: ['UNH', 'LLY', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'NVO', 'CVS', 'MDT'],
+  Consumer: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TGT', 'DIS', 'KO', 'PEP', 'PG', 'WMT', 'COST', 'BKNG', 'CMG'],
+  Industrials: ['CAT', 'BA', 'HON', 'GE', 'UPS', 'RTX', 'LMT', 'DE', 'MMM', 'UNP', 'FDX', 'EMR', 'ETN'],
+}
+
+const SYMBOL_TO_SECTOR: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  for (const [sector, syms] of Object.entries(SECTOR_SYMBOLS)) {
+    for (const s of syms) m[s] = sector
+  }
+  return m
+})()
+
+function detectSector(sym: string): string {
+  const s = sym.toUpperCase().trim()
+  if (s.endsWith('-USD') || s.endsWith('-USDT')) return 'Crypto'
+  if (s.endsWith('=X')) return 'Forex'
+  if (s.endsWith('=F')) return 'Commodities'
+  if (s.startsWith('^')) return 'Indices'
+  if (['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'IVV', 'EFA', 'EEM', 'VEA', 'VWO', 'ACWI', 'XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'SMH', 'SOXX', 'GLD', 'SLV', 'TLT', 'HYG', 'GDX'].includes(s)) return 'ETFs'
+  return SYMBOL_TO_SECTOR[s] || 'Other'
 }
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
@@ -118,6 +148,12 @@ export default function MarketDataPage() {
   const [renamingList, setRenamingList] = useState<string | null>(null)
   const [renameVal, setRenameVal] = useState('')
   const [newListName, setNewListName] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 2600)
+  }, [])
 
   const watchlist = useMemo(() => watchlists[activeListName] || [], [watchlists, activeListName])
 
@@ -172,6 +208,38 @@ export default function MarketDataPage() {
   const removeFromWatchlist = useCallback((sym: string) => {
     setWatchlists((wls) => ({ ...wls, [activeListName]: (wls[activeListName] || []).filter((s) => s !== sym) }))
   }, [activeListName, setWatchlists])
+
+  // Smart save — files the current symbol into its sector watchlist (creating it if needed).
+  const saveToSector = useCallback(() => {
+    const v = symbol.trim().toUpperCase()
+    if (!v) return
+    const sector = detectSector(v)
+    setWatchlists((wls) => {
+      const cur = wls[sector] || []
+      if (cur.includes(v)) return wls
+      return { ...wls, [sector]: [v, ...cur].slice(0, 100) }
+    })
+    setActiveListName(sector)
+    showToast(`Saved ${v} → ${sector}`)
+  }, [symbol, setWatchlists, setActiveListName, showToast])
+
+  // Share — copies a deep link to the current symbol to the clipboard.
+  const shareCurrent = useCallback(async () => {
+    const v = symbol.trim().toUpperCase()
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('symbol', v)
+      const link = url.toString()
+      if (navigator.share) {
+        await navigator.share({ title: `${v} • Econopulse.ai`, text: `Check ${v} on Econopulse.ai`, url: link })
+        return
+      }
+      await navigator.clipboard.writeText(link)
+      showToast('Link copied to clipboard')
+    } catch {
+      showToast('Unable to share')
+    }
+  }, [symbol, showToast])
 
   const addNewList = useCallback(() => {
     const name = newListName.trim()
@@ -312,6 +380,14 @@ export default function MarketDataPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Deep-link: ?symbol=XYZ overrides the persisted symbol on first load.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const s = sp.get('symbol')
+    if (s) setSymbol(s.toUpperCase())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const currentQuote = quotes[symbol.toUpperCase()]
@@ -616,6 +692,23 @@ export default function MarketDataPage() {
             </div>
 
             <button
+              onClick={saveToSector}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-emerald-500/15 hover:border-emerald-500/40 text-xs text-emerald-200"
+              title="Smart save: file this symbol into its sector watchlist"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline font-semibold">Save</span>
+            </button>
+            <button
+              onClick={shareCurrent}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-blue-500/15 hover:border-blue-500/40 text-xs text-blue-200"
+              title="Share a link to this symbol"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline font-semibold">Share</span>
+            </button>
+
+            <button
               onClick={fetchQuotes}
               disabled={loadingQuotes}
               className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-50"
@@ -695,24 +788,15 @@ export default function MarketDataPage() {
           <StatCard label="Volume" value={fmtVol(currentQuote?.volume)} hint="last session" />
           <StatCard label="Watchlist" value={activeListName} hint={`${watchlist.length} symbols`} />
         </div>
-
-        <div className="bg-slate-900/40 border border-white/10 rounded-lg p-4 text-xs text-gray-400">
-          <div className="flex items-start gap-3">
-            <Sparkles className="w-4 h-4 text-amber-400 mt-0.5" />
-            <div>
-              <div className="text-gray-200 font-semibold mb-1">Pro tips</div>
-              <ul className="space-y-0.5 list-disc list-inside">
-                <li>Single search bar: type any ticker (AAPL, BTC-USD, EURUSD=X, ^GSPC, CL=F).</li>
-                <li>Open the <b>Indicators</b> dropdown in the chart toolbar to enable Trend / Volatility / Volume / Momentum / S-R indicators.</li>
-                <li>Use <b>Tools</b> for drawing (trend lines, Fib, rectangles, notes). Drawings persist across reloads.</li>
-                <li>Compare two symbols with the <b>vs</b> input in the chart toolbar (e.g. QQQ vs SPY).</li>
-                <li>Create multiple watchlists from the <b>Watchlist</b> menu — they’re saved to your browser.</li>
-                <li>Range <b>MAX</b> loads the longest history available from Yahoo (decades for indices).</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-slate-800 border border-white/15 text-sm text-white shadow-xl flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-400" />
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

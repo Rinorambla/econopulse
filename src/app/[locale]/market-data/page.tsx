@@ -468,7 +468,7 @@ export default function MarketDataPage() {
   const currentQuote = quotes[symbol.toUpperCase()]
 
   return (
-    <div className="min-h-screen bg-[#05070d] text-white">
+    <div className="bg-[#05070d] text-white lg:overflow-hidden lg:h-[calc(100dvh-3rem)]">
       {/* HEADER */}
       <div className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
         <div className="px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 flex-wrap">

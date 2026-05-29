@@ -215,7 +215,8 @@ export default function MarketDataPage() {
     return () => clearInterval(id)
   }, [fetchQuotes])
 
-  // Live Yahoo symbol search — finds ANY instrument across all global exchanges.  useEffect(() => {
+  // Live Yahoo symbol search — finds ANY instrument across all global exchanges.
+  useEffect(() => {
     const q = searchVal.trim()
     if (!searchOpen || q.length < 1) { setSearchResults([]); setSearchLoading(false); return }
     let aborted = false

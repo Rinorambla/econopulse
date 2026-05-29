@@ -176,7 +176,7 @@ export default function MarketDNAPage() {
   // Enhanced color palette for better contrast
   const CHART_COLORS = {
     primary: '#3b82f6',
-    secondary: '#8b5cf6',
+    secondary: '#0ea5e9',
     success: '#10b981',
     warning: '#f59e0b',
     danger: '#ef4444',
@@ -321,7 +321,7 @@ export default function MarketDNAPage() {
       }
     } finally { setLoadingPeak(false);} }
   useEffect(()=>{ fetchPeakSignals(); }, []);
-  const categoryColor = (cat:string) => cat==='Sentiment'?'text-cyan-300 border-cyan-500/30': cat==='Valuation'?'text-amber-300 border-amber-500/30':'text-purple-300 border-purple-500/30';
+  const categoryColor = (cat:string) => cat==='Sentiment'?'text-cyan-300 border-cyan-500/30': cat==='Valuation'?'text-amber-300 border-amber-500/30':'text-sky-300 border-sky-500/30';
   const checkMark = (active:boolean, status?:string) => active ? <span className="text-emerald-300">✓</span> : <span className={` ${status==='unavailable'?'text-slate-500':'text-slate-600'}`}>•</span>;
 
   const getSimilarityColor = (similarity: number) => {
@@ -358,9 +358,9 @@ export default function MarketDNAPage() {
             <svg viewBox="0 0 200 200" className="w-64 h-64 mx-auto animate-spin" style={{ animationDuration: '8s' }}>
               <defs>
                 <linearGradient id="dnaGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" />
-                  <stop offset="50%" stopColor="#8b5cf6" />
-                  <stop offset="100%" stopColor="#ec4899" />
+                  <stop offset="0%" stopColor="#22d3ee" />
+                  <stop offset="50%" stopColor="#0ea5e9" />
+                  <stop offset="100%" stopColor="#2563eb" />
                 </linearGradient>
               </defs>
               <circle cx="100" cy="100" r="80" fill="none" stroke="url(#dnaGrad)" strokeWidth="0.5" strokeDasharray="4 6" />
@@ -369,9 +369,9 @@ export default function MarketDNAPage() {
             </svg>
           </div>
           <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse" />
-            <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-blue-400 border-r-purple-400 animate-spin" />
-            <span className="absolute inset-0 flex items-center justify-center text-2xl">🧬</span>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 animate-pulse" />
+            <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-cyan-400 border-r-blue-400 animate-spin" />
+            <ChartBarIcon className="absolute inset-0 m-auto h-7 w-7 text-cyan-300" />
           </div>
           <p className="text-white/90 text-xl font-semibold tracking-tight">Decoding Market DNA</p>
           <p className="text-gray-500 text-sm mt-2">Analyzing patterns, correlations & regime signals...</p>
@@ -406,8 +406,8 @@ export default function MarketDNAPage() {
                 <ArrowLeftIcon className="h-4 w-4" />
               </NavigationLink>
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                  <span className="text-lg">🧬</span>
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <ChartBarIcon className="h-5 w-5 text-white" />
                 </div>
                 <div>
                   <h1 className="text-base font-bold tracking-tight">Market DNA</h1>
@@ -445,8 +445,8 @@ export default function MarketDNAPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* DNA Score Card */}
             <div className="lg:col-span-2 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.08] via-purple-500/[0.05] to-pink-500/[0.08] rounded-2xl" />
-              <div className="relative bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] p-6 shadow-[0_0_60px_-15px_rgba(139,92,246,0.15)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.07] via-sky-500/[0.04] to-blue-600/[0.07] rounded-2xl" />
+              <div className="relative bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] p-6 shadow-[0_0_60px_-15px_rgba(56,189,248,0.13)]">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center">
@@ -775,7 +775,7 @@ export default function MarketDNAPage() {
             <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
               <div className="px-6 py-5 border-b border-white/[0.06]">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-500/20 flex items-center justify-center">
                     <span className="text-lg">🎯</span>
                   </div>
                   <div>
@@ -971,7 +971,7 @@ export default function MarketDNAPage() {
           <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="px-6 py-5 border-b border-white/[0.06]">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/10 border border-purple-500/20 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500/20 to-blue-500/10 border border-sky-500/20 flex items-center justify-center">
                   <span className="text-lg">🌊</span>
                 </div>
                 <div>
@@ -1073,8 +1073,8 @@ export default function MarketDNAPage() {
 
               {/* Correlation Heatmap */}
               <div className="mt-6 pt-6 border-t border-white/[0.04]">
-                <h3 className="text-sm font-semibold mb-4 text-purple-400 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                <h3 className="text-sm font-semibold mb-4 text-sky-400 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-400"></div>
                   Asset Correlation Matrix
                 </h3>
                 <div className="bg-white/[0.02] rounded-xl p-4 border border-white/[0.06]">
@@ -1107,10 +1107,10 @@ export default function MarketDNAPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* AI Market DNA Insight */}
             <div className="lg:col-span-2 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.03] via-transparent to-purple-500/[0.03] pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-blue-500/[0.03] pointer-events-none"></div>
               <div className="relative px-6 py-5 border-b border-white/[0.06]">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-500/20 flex items-center justify-center">
                     <span className="text-lg">🤖</span>
                   </div>
                   <div>

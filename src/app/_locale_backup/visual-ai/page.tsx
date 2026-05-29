@@ -1543,7 +1543,7 @@ function VisualAIPageLegacy() {
               labelStyle={{ color: '#f9fafb' }}
             />
             <Line type="monotone" dataKey="us" stroke="#22d3ee" strokeWidth={3} name="US" />
-            <Line type="monotone" dataKey="eu" stroke="#a855f7" strokeWidth={3} name="EU" />
+            <Line type="monotone" dataKey="eu" stroke="#38bdf8" strokeWidth={3} name="EU" />
             <Line type="monotone" dataKey="em" stroke="#f59e0b" strokeWidth={3} name="EM" />
           </LineChart>
         );
@@ -1557,140 +1557,35 @@ function VisualAIPageLegacy() {
             <YAxis dataKey={countryAxisMetric === 'pe' ? 'dividendYield' : 'pe'} stroke="#9ca3af" name={countryAxisMetric === 'pe' ? 'Dividend Yield %' : 'P/E Ratio'} />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#000000', 
-                border: '3px solid #3b82f6', 
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
                 borderRadius: '12px',
-                boxShadow: '0 8px 32px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-                padding: '24px',
-                minWidth: '380px',
-                backdropFilter: 'none',
-                WebkitBackdropFilter: 'none'
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
+                minWidth: '220px'
               }}
-              labelStyle={{ 
-                color: '#ffffff', 
-                fontSize: '18px', 
-                fontWeight: '700',
-                textShadow: 'none',
-                WebkitFontSmoothing: 'antialiased'
-              }}
-              cursor={{ stroke: '#3b82f6', strokeWidth: 3, strokeOpacity: 0.8 }}
+              labelStyle={{ color: '#e5e7eb', fontSize: '13px', fontWeight: 700 }}
+              cursor={{ stroke: '#38bdf8', strokeWidth: 1, strokeOpacity: 0.5 }}
               formatter={(value, name, props) => {
                 const data = props.payload;
+                const valColor = data?.valuation === 'undervalued' ? '#34d399' : data?.valuation === 'overvalued' ? '#f87171' : '#fbbf24';
+                const row = (label: string, val: React.ReactNode) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', padding: '5px 0', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
+                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}</span>
+                    <span style={{ color: '#f8fafc', fontWeight: 600, fontSize: '13px' }}>{val}</span>
+                  </div>
+                );
                 return [
-                  <div key="detailed-country-tooltip" style={{ 
-                    color: '#ffffff',
-                    WebkitFontSmoothing: 'antialiased',
-                    textRendering: 'optimizeLegibility'
-                  }}>
-                    <div style={{ 
-                      color: '#ffffff', 
-                      fontSize: '20px', 
-                      fontWeight: '800', 
-                      marginBottom: '20px', 
-                      textAlign: 'center',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      backgroundColor: '#1e40af',
-                      border: '2px solid #3b82f6'
-                    }}>
-                      🏛️ {data?.country}
+                  <div key="detailed-country-tooltip" style={{ color: '#f8fafc' }}>
+                    <div style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>
+                      {data?.country}
                     </div>
-                    
-                    <div style={{ 
-                      color: '#ffffff', 
-                      marginBottom: '14px', 
-                      fontSize: '16px', 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '10px 0',
-                      borderBottom: '2px solid #374151'
-                    }}>
-                      <span style={{ color: '#a855f7', fontWeight: '600' }}>📊 P/E Ratio:</span>
-                      <span style={{ 
-                        color: '#ffffff', 
-                        fontWeight: '700', 
-                        fontSize: '18px',
-                        backgroundColor: '#374151',
-                        padding: '6px 16px',
-                        borderRadius: '8px',
-                        border: '2px solid #6b7280'
-                      }}>
-                        {data?.pe}
-                      </span>
-                    </div>
-                    
-                    <div style={{ 
-                      color: '#ffffff', 
-                      marginBottom: '14px', 
-                      fontSize: '16px', 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '10px 0',
-                      borderBottom: '2px solid #374151'
-                    }}>
-                      <span style={{ color: '#f59e0b', fontWeight: '600' }}>💰 Dividend Yield:</span>
-                      <span style={{ 
-                        color: '#ffffff', 
-                        fontWeight: '700', 
-                        fontSize: '18px',
-                        backgroundColor: '#374151',
-                        padding: '6px 16px',
-                        borderRadius: '8px',
-                        border: '2px solid #6b7280'
-                      }}>
-                        {data?.dividendYield}%
-                      </span>
-                    </div>
-                    
-                    <div style={{ 
-                      color: '#ffffff', 
-                      marginBottom: '20px', 
-                      fontSize: '16px', 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '10px 0',
-                      borderBottom: '2px solid #374151'
-                    }}>
-                      <span style={{ color: '#10b981', fontWeight: '600' }}>🌍 Market Cap:</span>
-                      <span style={{ 
-                        color: '#ffffff', 
-                        fontWeight: '700', 
-                        fontSize: '18px',
-                        backgroundColor: '#374151',
-                        padding: '6px 16px',
-                        borderRadius: '8px',
-                        border: '2px solid #6b7280'
-                      }}>
-                        ${data?.marketCap}T
-                      </span>
-                    </div>
-                    
-                    <div style={{ 
-                      color: '#ffffff',
-                      fontSize: '17px',
-                      textAlign: 'center',
-                      marginTop: '16px',
-                      padding: '16px',
-                      borderRadius: '10px',
-                      backgroundColor: data?.valuation === 'undervalued' ? '#059669' : 
-                                      data?.valuation === 'overvalued' ? '#dc2626' : '#d97706',
-                      border: `3px solid ${data?.valuation === 'undervalued' ? '#10b981' : 
-                                          data?.valuation === 'overvalued' ? '#ef4444' : '#f59e0b'}`,
-                      fontWeight: '700'
-                    }}>
-                      📈 {data?.valuation?.toUpperCase()}
-                      <div style={{ 
-                        fontSize: '13px', 
-                        marginTop: '8px', 
-                        opacity: 0.95,
-                        fontWeight: '500'
-                      }}>
-                        {data?.valuation === 'undervalued' ? 'Excellent Investment Opportunity' : 
-                         data?.valuation === 'overvalued' ? 'Consider Waiting for Better Entry' : 'Fair Market Value'}
-                      </div>
+                    {row('P/E Ratio', data?.pe)}
+                    {row('Dividend Yield', `${data?.dividendYield}%`)}
+                    {row('Market Cap', `$${data?.marketCap}T`)}
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '9999px', backgroundColor: valColor }} />
+                      <span style={{ color: valColor, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{data?.valuation}</span>
                     </div>
                   </div>
                 ];
@@ -1719,50 +1614,37 @@ function VisualAIPageLegacy() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#1e293b', 
-                border: '3px solid #059669', 
-                borderRadius: '16px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                padding: '24px',
-                minWidth: '380px'
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
+                borderRadius: '12px',
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
+                minWidth: '220px'
               }}
-              labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
-              cursor={{ fill: 'rgba(34, 197, 94, 0.15)' }}
+              labelStyle={{ color: '#e5e7eb', fontSize: '13px', fontWeight: 700 }}
+              cursor={{ fill: 'rgba(56, 189, 248, 0.08)' }}
               formatter={(value, name, props) => {
                 const data = props.payload;
+                const typeColor = data?.type === 'growth' ? '#22d3ee' : data?.type === 'defensive' ? '#34d399' : '#fbbf24';
+                const row = (label: string, val: React.ReactNode) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', padding: '5px 0', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
+                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}</span>
+                    <span style={{ color: '#f8fafc', fontWeight: 600, fontSize: '13px' }}>{val}</span>
+                  </div>
+                );
                 return [
-                  <div key="detailed-sector-tooltip" style={{ color: '#ffffff' }}>
-                    <div style={{ color: '#22d3ee', fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
-                      🏢 {data?.sector}
+                  <div key="detailed-sector-tooltip" style={{ color: '#f8fafc' }}>
+                    <div style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>
+                      {data?.sector}
                     </div>
-                    <div style={{ color: '#10b981', marginBottom: '10px', fontSize: '16px' }}>
-                      📈 1Y Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{value}%</span>
-                    </div>
-                    <div style={{ color: '#06b6d4', marginBottom: '10px', fontSize: '16px' }}>
-                      📅 6M Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.performance6M}%</span>
-                    </div>
-                    <div style={{ color: '#8b5cf6', marginBottom: '10px', fontSize: '16px' }}>
-                      📆 1M Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.performance1M}%</span>
-                    </div>
-                    <div style={{ color: '#a855f7', marginBottom: '10px', fontSize: '16px' }}>
-                      📊 P/E Ratio: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.pe}</span>
-                    </div>
-                    <div style={{ color: '#f59e0b', marginBottom: '10px', fontSize: '16px' }}>
-                      💰 Dividend Yield: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.dividendYield}%</span>
-                    </div>
-                    <div style={{ 
-                      color: data?.type === 'growth' ? '#22d3ee' : 
-                            data?.type === 'defensive' ? '#22c55e' : '#f59e0b',
-                      fontSize: '16px',
-                      textAlign: 'center',
-                      marginTop: '12px',
-                      padding: '12px',
-                      borderRadius: '12px',
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      border: `2px solid ${data?.type === 'growth' ? '#22d3ee' : 
-                                          data?.type === 'defensive' ? '#22c55e' : '#f59e0b'}`
-                    }}>
-                      🎯 <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{data?.type?.toUpperCase()}</span>
+                    {row('1Y Performance', `${value}%`)}
+                    {row('6M Performance', `${data?.performance6M}%`)}
+                    {row('1M Performance', `${data?.performance1M}%`)}
+                    {row('P/E Ratio', data?.pe)}
+                    {row('Dividend Yield', `${data?.dividendYield}%`)}
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '9999px', backgroundColor: typeColor }} />
+                      <span style={{ color: typeColor, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{data?.type}</span>
                     </div>
                   </div>
                 ];
@@ -1788,11 +1670,11 @@ function VisualAIPageLegacy() {
             <YAxis domain={[40, 60]} stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#1e293b', 
-                border: '3px solid #dc2626', 
-                borderRadius: '16px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                padding: '24px',
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
+                borderRadius: '12px',
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
                 minWidth: '350px'
               }}
               labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
@@ -1808,7 +1690,7 @@ function VisualAIPageLegacy() {
                     <div style={{ color: '#f59e0b', marginBottom: '10px', fontSize: '16px' }}>
                       📊 PMI Composite: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{value}</span>
                     </div>
-                    <div style={{ color: '#a855f7', marginBottom: '10px', fontSize: '16px' }}>
+                    <div style={{ color: '#38bdf8', marginBottom: '10px', fontSize: '16px' }}>
                       🏭 Manufacturing: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.manufacturing}</span>
                     </div>
                     <div style={{ color: '#06b6d4', marginBottom: '10px', fontSize: '16px' }}>
@@ -1918,11 +1800,11 @@ function VisualAIPageLegacy() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#1e293b', 
-                border: '3px solid #10b981', 
-                borderRadius: '16px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                padding: '24px',
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
+                borderRadius: '12px',
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
                 minWidth: '350px'
               }}
               labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
@@ -1981,12 +1863,12 @@ function VisualAIPageLegacy() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#1e293b', 
-                border: '3px solid #8b5cf6', 
-                borderRadius: '16px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                padding: '24px',
-                minWidth: '380px'
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
+                borderRadius: '12px',
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
+                minWidth: '300px'
               }}
               labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
               cursor={{ fill: 'rgba(139, 92, 246, 0.15)' }}
@@ -2011,7 +1893,7 @@ function VisualAIPageLegacy() {
                       ⚖️ Trade Balance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${data?.tradeBalance}B</span>
                     </div>
                     <div style={{ fontSize: '14px', marginTop: '12px' }}>
-                      <div style={{ color: '#a855f7', marginBottom: '6px' }}>
+                      <div style={{ color: '#38bdf8', marginBottom: '6px' }}>
                         🔝 Main Exports: {data?.mainExports?.slice(0, 2).join(', ')}
                       </div>
                       <div style={{ color: '#f59e0b' }}>
@@ -2038,12 +1920,12 @@ function VisualAIPageLegacy() {
             <YAxis stroke="#9ca3af" />
             <Tooltip 
               contentStyle={{ 
-                backgroundColor: '#1e293b', 
-                border: '3px solid #f59e0b', 
-                borderRadius: '16px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                padding: '24px',
-                minWidth: '350px'
+                backgroundColor: 'rgba(11,18,32,0.97)', 
+                border: '1px solid rgba(56,189,248,0.22)', 
+                borderRadius: '12px',
+                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                padding: '14px',
+                minWidth: '300px'
               }}
               labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
               cursor={{ stroke: '#f59e0b', strokeWidth: 2 }}
@@ -2060,7 +1942,7 @@ function VisualAIPageLegacy() {
                     <div style={{ color: '#ef4444', marginBottom: '10px', fontSize: '16px' }}>
                       📊 Volatility: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.volatility}%</span>
                     </div>
-                    <div style={{ color: '#a855f7', marginBottom: '16px', fontSize: '16px' }}>
+                    <div style={{ color: '#38bdf8', marginBottom: '16px', fontSize: '16px' }}>
                       📈 Range: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${data?.historicalRange?.min} - ${data?.historicalRange?.max}</span>
                     </div>
                     <div style={{ 
@@ -2264,7 +2146,7 @@ function VisualAIPageLegacy() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
               {widget.data.predictions?.slice(0, 3).map((pred: any, index: number) => (
                 <div key={index} className="bg-white/5 rounded-lg p-6 text-center border border-white/10">
-                  <div className="text-2xl font-bold text-purple-400 mb-2">
+                  <div className="text-2xl font-bold text-sky-400 mb-2">
                     {pred.predictedPE?.toFixed(1)}
                   </div>
                   <div className="text-sm text-gray-300 mb-2">
@@ -2528,7 +2410,7 @@ function VisualAIPageLegacy() {
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-sky-500/5 rounded-full blur-3xl"></div>
         </div>
         
         <div className="relative container mx-auto px-4 py-8">
@@ -2575,7 +2457,7 @@ function VisualAIPageLegacy() {
                       <div className="text-xs text-gray-400">AI Confidence</div>
                     </div>
                     <div className="flex flex-col items-center px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Activity className="w-5 h-5 text-purple-400 mb-1" />
+                      <Activity className="w-5 h-5 text-sky-400 mb-1" />
                       <div className="text-2xl font-bold text-white">{new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</div>
                       <div className="text-xs text-gray-400">Last Update</div>
                     </div>
@@ -2734,7 +2616,7 @@ function VisualAIPageLegacy() {
                           formatter={(value, name) => [`${value}%`, name === 'us' ? 'US Treasury' : name === 'eu' ? 'EU Bonds' : 'EM Bonds']}
                         />
                         <Line type="monotone" dataKey="us" stroke="#22d3ee" strokeWidth={2} />
-                        <Line type="monotone" dataKey="eu" stroke="#a855f7" strokeWidth={2} />
+                        <Line type="monotone" dataKey="eu" stroke="#38bdf8" strokeWidth={2} />
                         <Line type="monotone" dataKey="em" stroke="#f59e0b" strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -2748,12 +2630,12 @@ function VisualAIPageLegacy() {
                         <YAxis dataKey="dividendYield" stroke="#9ca3af" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            border: '3px solid #3b82f6', 
-                            borderRadius: '16px',
-                            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.9)',
-                            padding: '24px',
-                            minWidth: '380px'
+                            backgroundColor: 'rgba(11,18,32,0.97)', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
+                            borderRadius: '12px',
+                            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
+                            padding: '14px',
+                            minWidth: '260px'
                           }}
                           labelStyle={{ 
                             color: '#f9fafb', 
@@ -2777,7 +2659,7 @@ function VisualAIPageLegacy() {
                                   </div>
                                   
                                   <div style={{ 
-                                    color: '#a855f7', 
+                                    color: '#38bdf8', 
                                     marginBottom: '10px', 
                                     fontSize: '16px'
                                   }}>
@@ -2868,7 +2750,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #059669', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -2887,7 +2769,7 @@ function VisualAIPageLegacy() {
                                 <div style={{ color: '#10b981', marginBottom: '8px', fontSize: '15px' }}>
                                   📈 1Y Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{value}%</span>
                                 </div>
-                                <div style={{ color: '#a855f7', marginBottom: '8px', fontSize: '15px' }}>
+                                <div style={{ color: '#38bdf8', marginBottom: '8px', fontSize: '15px' }}>
                                   📊 P/E Ratio: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{data?.pe}</span>
                                 </div>
                                 <div style={{ color: '#f59e0b', marginBottom: '8px', fontSize: '15px' }}>
@@ -2896,7 +2778,7 @@ function VisualAIPageLegacy() {
                                 <div style={{ color: '#06b6d4', marginBottom: '8px', fontSize: '15px' }}>
                                   📅 6M Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{data?.performance6M}%</span>
                                 </div>
-                                <div style={{ color: '#8b5cf6', marginBottom: '8px', fontSize: '15px' }}>
+                                <div style={{ color: '#38bdf8', marginBottom: '8px', fontSize: '15px' }}>
                                   📆 1M Performance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{data?.performance1M}%</span>
                                 </div>
                                 <div style={{ 
@@ -2936,7 +2818,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #dc2626', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -2956,7 +2838,7 @@ function VisualAIPageLegacy() {
                                 <div style={{ color: '#f59e0b', marginBottom: '8px', fontSize: '15px' }}>
                                   📊 PMI Composite: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{value}</span>
                                 </div>
-                                <div style={{ color: '#a855f7', marginBottom: '8px', fontSize: '15px' }}>
+                                <div style={{ color: '#38bdf8', marginBottom: '8px', fontSize: '15px' }}>
                                   🏭 Manufacturing: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>{data?.manufacturing}</span>
                                 </div>
                                 <div style={{ color: '#06b6d4', marginBottom: '8px', fontSize: '15px' }}>
@@ -3002,7 +2884,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #f59e0b', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -3050,7 +2932,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #10b981', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -3088,7 +2970,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #8b5cf6', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -3096,7 +2978,7 @@ function VisualAIPageLegacy() {
                           }}
                           labelStyle={{ color: '#f9fafb', fontSize: '16px', fontWeight: 'bold' }}
                         />
-                        <Bar dataKey="tradeBalance" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="tradeBalance" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -3129,7 +3011,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#1e293b', 
-                            border: '3px solid #22c55e', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -3151,7 +3033,7 @@ function VisualAIPageLegacy() {
                         <Tooltip 
                           contentStyle={{ 
                             backgroundColor: '#0f172a', 
-                            border: '3px solid #facc15', 
+                            border: '1px solid rgba(56,189,248,0.22)', 
                             borderRadius: '16px',
                             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
                             padding: '20px',
@@ -3173,7 +3055,7 @@ function VisualAIPageLegacy() {
                                   </span>
                                 </div>
                               )}
-                              <div style={{ color: '#a855f7', fontSize: '12px', fontStyle: 'italic' }}>
+                              <div style={{ color: '#38bdf8', fontSize: '12px', fontStyle: 'italic' }}>
                                 {props.payload?.metal === 'Gold' ? '🏆 Safe Haven Asset' :
                                  props.payload?.metal === 'Silver' ? '⚡ Industrial & Investment' :
                                  props.payload?.metal === 'Platinum' ? '🚗 Automotive Demand' : '💎 Precious Metal'}
@@ -3362,7 +3244,7 @@ function VisualAIPageLegacy() {
                         
                         <div className="space-y-2">
                           <div className="text-sm text-gray-400">
-                            Predicted: <span className="text-purple-400 font-semibold">
+                            Predicted: <span className="text-sky-400 font-semibold">
                               {widget.data.predictions?.[0]?.predictedPE?.toFixed(1)}
                             </span>
                           </div>
@@ -3454,13 +3336,13 @@ function VisualAIPageLegacy() {
                 </div>
 
                 {/* AI Insight + Action */}
-                <div className="relative flex items-start justify-between gap-4 p-4 -mx-2 rounded-xl bg-gradient-to-r from-purple-500/5 to-blue-500/5 border border-purple-500/10">
+                <div className="relative flex items-start justify-between gap-4 p-4 -mx-2 rounded-xl bg-gradient-to-r from-sky-500/5 to-blue-500/5 border border-sky-500/10">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-purple-500/20">
-                        <Brain className="w-3.5 h-3.5 text-purple-400" />
+                      <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-sky-500/20">
+                        <Brain className="w-3.5 h-3.5 text-sky-400" />
                       </div>
-                      <span className="text-purple-300 font-semibold text-sm">{widget.aiInsight.title}</span>
+                      <span className="text-sky-300 font-semibold text-sm">{widget.aiInsight.title}</span>
                     </div>
                     <p className="text-gray-400 text-sm leading-relaxed line-clamp-2">{widget.aiInsight.content}</p>
                   </div>
@@ -3520,7 +3402,7 @@ function VisualAIPageLegacy() {
                     <div className="flex flex-wrap gap-3 mb-3 items-center text-xs">
                       <span className="text-gray-400">X Axis:</span>
                       {['pe','dividendYield'].map(ax => (
-                        <button key={ax} onClick={()=>setCountryAxisMetric(ax as any)} className={`px-2 py-1 rounded border ${countryAxisMetric===ax?'bg-purple-500/20 border-purple-400 text-purple-300':'border-white/10 text-gray-300 hover:border-white/30'}`}>{ax==='pe'?'P/E':'Dividend Yield'}</button>
+                        <button key={ax} onClick={()=>setCountryAxisMetric(ax as any)} className={`px-2 py-1 rounded border ${countryAxisMetric===ax?'bg-sky-500/20 border-sky-400 text-sky-300':'border-white/10 text-gray-300 hover:border-white/30'}`}>{ax==='pe'?'P/E':'Dividend Yield'}</button>
                       ))}
                     </div>
                   )}
@@ -3625,7 +3507,7 @@ function VisualAIPageLegacy() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                   <div className="bg-white/5 rounded-lg p-3 border border-white/10">
                     <div className="flex items-center gap-2 mb-2">
-                      <Brain className="w-4 h-4 text-purple-400" />
+                      <Brain className="w-4 h-4 text-sky-400" />
                       <h3 className="text-base font-semibold text-white">AI Analysis</h3>
                     </div>
                     <p className="text-gray-300 text-xs mb-3 leading-relaxed">{selectedWidget.aiInsight.content}</p>

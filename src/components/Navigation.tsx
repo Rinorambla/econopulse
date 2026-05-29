@@ -121,7 +121,7 @@ export function Navigation({ className }: NavigationProps) {
       </div>
 
       {/* Center: Links (desktop) */}
-  <nav className="hidden md:flex flex-1 min-w-0 items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <nav className="hidden md:flex flex-1 min-w-0 items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 whitespace-nowrap">
         {/* Always show feature links; grouped into a single dropdown menu */}
   <div className="relative shrink-0" data-tools-menu>
           <button
@@ -129,10 +129,14 @@ export function Navigation({ className }: NavigationProps) {
             onClick={() => setToolsMenuOpen(v => !v)}
             aria-haspopup="menu"
             aria-expanded={toolsMenuOpen}
-            className="group relative text-white/90 hover:text-white px-3 sm:px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105 flex items-center gap-1.5"
+            aria-label="Open menu"
+            className="group relative inline-flex items-center justify-center text-white/90 hover:text-white p-2 rounded-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-purple-500/20 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105"
           >
-            <span className="relative z-10">Menu</span>
-            <svg className={`relative z-10 h-3.5 w-3.5 text-white/70 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            <svg className="h-6 w-6 relative z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
           </button>
           {toolsMenuOpen && (
             <div role="menu" className="absolute left-0 top-full mt-2 w-52 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100] py-1">

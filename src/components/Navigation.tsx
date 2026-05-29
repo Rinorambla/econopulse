@@ -44,6 +44,7 @@ export function Navigation({ className }: NavigationProps) {
   const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const isIOSApp = useIsIOSApp();
   
   const handleSignOut = async () => {
@@ -54,16 +55,17 @@ export function Navigation({ className }: NavigationProps) {
   
   // Close on ESC
   useEffect(() => {
-    if (!mobileOpen && !userMenuOpen) return;
+    if (!mobileOpen && !userMenuOpen && !toolsMenuOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setMobileOpen(false);
         setUserMenuOpen(false);
+        setToolsMenuOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mobileOpen, userMenuOpen]);
+  }, [mobileOpen, userMenuOpen, toolsMenuOpen]);
 
   // Close user menu on outside click
   useEffect(() => {
@@ -75,6 +77,17 @@ export function Navigation({ className }: NavigationProps) {
     window.addEventListener('mousedown', onClick);
     return () => window.removeEventListener('mousedown', onClick);
   }, [userMenuOpen]);
+
+  // Close AI tools menu on outside click
+  useEffect(() => {
+    if (!toolsMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-tools-menu]')) setToolsMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [toolsMenuOpen]);
   
   return (
   <div className={`relative flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full min-w-0`}> 
@@ -118,18 +131,31 @@ export function Navigation({ className }: NavigationProps) {
           <span className="relative z-10 flex items-center gap-1">AI Portfolio</span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
         </NavigationLink>
-  <NavigationLink href="/ai-pulse" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-rose-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1">AI Pulse</span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  <NavigationLink href="/visual-ai" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-violet-500/20 hover:to-indigo-500/20 hover:shadow-lg hover:shadow-violet-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Visual AI</span></span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
-  <NavigationLink href="/market-dna" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-amber-500/20 hover:to-orange-500/20 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105">
-          <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market DNA</span></span>
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-        </NavigationLink>
+  <div className="relative shrink-0" data-tools-menu>
+          <button
+            type="button"
+            onClick={() => setToolsMenuOpen(v => !v)}
+            aria-haspopup="menu"
+            aria-expanded={toolsMenuOpen}
+            className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-violet-500/20 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105 flex items-center gap-1"
+          >
+            <span className="relative z-10">AI Tools</span>
+            <svg className={`relative z-10 h-3 w-3 text-white/70 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </button>
+          {toolsMenuOpen && (
+            <div role="menu" className="absolute left-0 top-full mt-2 w-48 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100]">
+              <NavigationLink href="/ai-pulse" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-pink-600/30" onClick={() => setToolsMenuOpen(false)}>
+                AI Pulse
+              </NavigationLink>
+              <NavigationLink href="/visual-ai" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-violet-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Visual AI
+              </NavigationLink>
+              <NavigationLink href="/market-dna" className="block px-4 py-2.5 text-[12px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Market DNA
+              </NavigationLink>
+            </div>
+          )}
+        </div>
   <NavigationLink href="/market-data" className="group relative text-white/90 hover:text-white px-2 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-[12px] font-semibold transition-all duration-300 hover:bg-gradient-to-r hover:from-fuchsia-500/20 hover:to-blue-500/20 hover:shadow-lg hover:shadow-fuchsia-500/25 hover:scale-105">
           <span className="relative z-10 flex items-center gap-1"><span className="text-white">Market Data</span></span>
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-fuchsia-600 to-blue-600 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>

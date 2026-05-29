@@ -437,7 +437,7 @@ export default function MarketDataPage() {
       <div className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
         <div className="px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-2 shrink-0">
-            <Logo size={30} showText textVariant="domain" layout="inline" />
+            <Logo size={30} showText={false} layout="inline" />
             <p className="hidden lg:block text-[10px] text-gray-400">Pro Technical Analysis Terminal</p>
           </div>
 

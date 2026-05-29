@@ -1415,11 +1415,6 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
         <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
-        {/* Brand watermark (bottom-right) */}
-        <div className="absolute bottom-2 right-2 z-[6] flex items-center gap-1.5 pointer-events-none select-none opacity-80">
-          <img src="/logo-econopulse-wave.svg" alt="" width={18} height={18} className="shrink-0 select-none" />
-          <span className="text-xs font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-500 to-blue-600 bg-clip-text text-transparent">ECONOPULSE.AI</span>
-        </div>
         <canvas
           ref={overlayCanvasRef}
           className="absolute inset-0"

@@ -196,6 +196,13 @@ export default function MarketDataPage() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute); ro?.disconnect() }
   }, [panelOpen])
 
+  // On phones/tablets the watchlist would push the chart off-screen, so collapse
+  // it by default there; it stays open on desktop where there is room beside the chart.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.matchMedia('(max-width: 1023px)').matches) setPanelOpen(false)
+  }, [])
+
   const showToast = useCallback((msg: string) => {
     setToast(msg)
     window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 2600)
@@ -476,7 +483,7 @@ export default function MarketDataPage() {
   const currentQuote = quotes[symbol.toUpperCase()]
 
   return (
-    <div className="bg-[#05070d] text-white lg:overflow-hidden lg:h-[calc(100dvh-3rem)]">
+    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3rem)] flex flex-col">
       {/* HEADER */}
       <div ref={headerRef} className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
         <div className="px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap">
@@ -838,8 +845,8 @@ export default function MarketDataPage() {
       </div>
 
       {/* MAIN */}
-      <div ref={mainRef} className="flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
-        <div className="flex-1 min-w-0">
+      <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
+        <div className="flex-1 min-w-0 min-h-0">
           <AdvancedChart
             symbol={symbol}
             onSymbolChange={(s) => setSymbol(s)}
@@ -850,7 +857,10 @@ export default function MarketDataPage() {
 
         {/* Watchlist side panel (TradingView-style) */}
         {panelOpen ? (
-        <aside className="lg:w-80 xl:w-96 shrink-0 rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden flex flex-col">
+        <>
+        {/* Mobile backdrop */}
+        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setPanelOpen(false)} />
+        <aside className="fixed inset-x-3 bottom-3 top-16 z-50 lg:static lg:inset-auto lg:top-auto lg:z-auto lg:w-80 xl:w-96 shrink-0 rounded-lg border border-white/10 bg-slate-900/95 lg:bg-slate-900/60 backdrop-blur overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
             <div className="flex items-center gap-1.5 min-w-0">
               <Star className="w-3.5 h-3.5 text-amber-400 shrink-0" fill="currentColor" />
@@ -903,7 +913,7 @@ export default function MarketDataPage() {
             <span className="text-right w-16">Chg%</span>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 16 }}>
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {watchlist.length === 0 && (
               <div className="p-6 text-center text-[11px] text-gray-500">
                 Empty list — type a symbol above and press Add.
@@ -949,6 +959,7 @@ export default function MarketDataPage() {
             })}
           </div>
         </aside>
+        </>
         ) : (
           <button
             onClick={() => setPanelOpen(true)}

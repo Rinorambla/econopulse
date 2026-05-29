@@ -612,7 +612,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const container = chartContainerRef.current
     const chart = createChart(container, {
       width: container.clientWidth,
-      height,
+      height: container.clientHeight || height,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#9ca3af',
@@ -1006,8 +1006,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         roRaf = 0
         if (chartContainerRef.current && chartRef.current) {
           const w = chartContainerRef.current.clientWidth
+          const h2 = chartContainerRef.current.clientHeight
           if (w > 0) {
-            chartRef.current.applyOptions({ width: w })
+            chartRef.current.applyOptions({ width: w, ...(h2 > 0 ? { height: h2 } : {}) })
             redrawOverlay()
           }
         }
@@ -1169,9 +1170,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const pctColor = lastPrice ? (lastPrice.changePct >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'
 
   return (
-    <div className={`bg-slate-900/60 border border-white/10 rounded-lg overflow-hidden ${className}`}>
+    <div className={`flex flex-col h-full bg-slate-900/60 border border-white/10 rounded-lg overflow-hidden ${className}`}>
       {/* ===== TOP BAR ===== */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-slate-800/50 border-b border-white/10">
+      <div className="flex flex-wrap items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-800/50 border-b border-white/10">
         {/* Active symbol pill (read-only — search is in page header) */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-white font-bold tracking-wide">{symbol}</span>
@@ -1263,7 +1264,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         </div>
 
         {/* Compare input */}
-        <div className="flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-1">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">vs</span>
           <input
             value={compareInput || compareSym}
@@ -1288,7 +1289,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       </div>
 
       {/* ===== INDICATORS BAR (single dropdown) ===== */}
-      <div className="px-3 py-1.5 bg-slate-800/30 border-b border-white/5">
+      <div className="px-2 sm:px-3 py-1.5 bg-slate-800/30 border-b border-white/5">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <button
@@ -1353,7 +1354,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         </div>
         {/* Active indicator legend */}
         {indicators.size > 0 && (
-          <div className="flex items-center gap-3 text-[9px] flex-wrap">
+          <div className="hidden sm:flex items-center gap-3 text-[9px] flex-wrap">
             {indicators.has('sma20') && <span className="text-amber-400">● SMA 20</span>}
             {indicators.has('sma50') && <span className="text-purple-400">● SMA 50</span>}
             {indicators.has('sma100') && <span className="text-cyan-400">● SMA 100</span>}
@@ -1397,7 +1398,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       </div>
 
       {/* ===== CHART AREA ===== */}
-      <div style={{ height, position: 'relative' }} className="[&_a[href*='tradingview']]:!hidden">
+      <div style={{ position: 'relative' }} className="flex-1 min-h-0 [&_a[href*='tradingview']]:!hidden">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/70">
             <div className="flex items-center gap-2 text-sm text-gray-400">

@@ -121,7 +121,7 @@ export function Navigation({ className }: NavigationProps) {
       </div>
 
       {/* Center: Links (desktop) */}
-  <nav className="hidden md:flex flex-1 min-w-0 items-center flex-nowrap gap-1 xs:gap-2 sm:gap-2 mx-1 sm:mx-2 whitespace-nowrap">
+  <nav className="hidden md:flex items-center flex-nowrap gap-1 sm:gap-2 ml-1 sm:ml-2 whitespace-nowrap">
         {/* Always show feature links; grouped into a single dropdown menu */}
   <div className="relative shrink-0" data-tools-menu>
           <button

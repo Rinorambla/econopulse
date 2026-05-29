@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useLocalStorage } from '@/hooks/useLocalStorage'
 import {
   createChart,
   CandlestickSeries,
@@ -90,6 +91,21 @@ const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: strin
   { key: '1Y', label: '1Y', range: '1y', interval: '1d' },
   { key: '5Y', label: '5Y', range: '5y', interval: '1wk' },
   { key: 'MAX', label: 'MAX', range: 'max', interval: '1mo' },
+]
+
+// Drawing tools surfaced inside the chart toolbar dropdown
+const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
+  { id: 'cursor', label: 'Cursor' },
+  { id: 'crosshair', label: 'Crosshair' },
+  { id: 'trendline', label: 'Trend Line' },
+  { id: 'horizontal', label: 'Horizontal Line' },
+  { id: 'vertical', label: 'Vertical Line' },
+  { id: 'rect', label: 'Rectangle' },
+  { id: 'ellipse', label: 'Ellipse' },
+  { id: 'triangle', label: 'Triangle' },
+  { id: 'fib-retr', label: 'Fib Retracement' },
+  { id: 'fib-ext', label: 'Fib Extension' },
+  { id: 'text', label: 'Text / Note' },
 ]
 
 const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: string }[] }[] = [
@@ -409,11 +425,22 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const [symbol, setSymbol] = useState(propSymbol)
-  const [inputVal, setInputVal] = useState(propSymbol)
-  const [rangeKey, setRangeKey] = useState<RangeKey>('1Y')
-  const [chartStyle, setChartStyle] = useState<ChartStyle>('candle')
-  const [indicators, setIndicators] = useState<Set<IndicatorKey>>(new Set(['volume']))
-  const [openCategory, setOpenCategory] = useState<string | null>(null)
+  const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('mkt:rangeKey', '1Y')
+  const [chartStyle, setChartStyle] = useLocalStorage<ChartStyle>('mkt:chartStyle', 'candle')
+  const [indicatorList, setIndicatorList] = useLocalStorage<IndicatorKey[]>('mkt:indicators', ['volume'])
+  const indicators = useMemo(() => new Set(indicatorList), [indicatorList])
+  const setIndicators = useCallback((updater: Set<IndicatorKey> | ((prev: Set<IndicatorKey>) => Set<IndicatorKey>)) => {
+    setIndicatorList((prev) => {
+      const prevSet = new Set(prev)
+      const nextSet = typeof updater === 'function' ? updater(prevSet) : updater
+      return Array.from(nextSet)
+    })
+  }, [setIndicatorList])
+  const [indicatorsOpen, setIndicatorsOpen] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [compareSym, setCompareSym] = useLocalStorage<string>('mkt:compareSym', '')
+  const [compareInput, setCompareInput] = useState('')
+  const [compareBars, setCompareBars] = useState<Bar[]>([])
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -428,7 +455,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     onToolChange?.(t)
     setPendingPts([])
   }
-  const [drawings, setDrawings] = useState<Drawing[]>([])
+  const [drawings, setDrawings] = useLocalStorage<Drawing[]>('mkt:drawings', [])
   const [pendingPts, setPendingPts] = useState<DrawPoint[]>([])
   const [hoverPt, setHoverPt] = useState<DrawPoint | null>(null)
 
@@ -439,7 +466,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const hoverPtRef = useRef(hoverPt); useEffect(() => { hoverPtRef.current = hoverPt }, [hoverPt])
 
   // Sync prop → state
-  useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol); setInputVal(propSymbol) } }, [propSymbol])
+  useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
 
   const currentRange = useMemo(() => RANGE_OPTS.find(r => r.key === rangeKey) || RANGE_OPTS[3], [rangeKey])
 
@@ -491,6 +518,33 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [symbol, currentRange])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Fetch compare symbol bars (ratio overlay)
+  useEffect(() => {
+    if (!compareSym) { setCompareBars([]); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const qs = new URLSearchParams({ symbol: compareSym, range: currentRange.range, interval: currentRange.interval })
+        const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+        if (!res.ok) throw new Error()
+        const json = await res.json()
+        const raw = json?.bars || json?.data?.bars || json?.data || []
+        if (!Array.isArray(raw)) throw new Error()
+        const parsed: Bar[] = raw
+          .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
+          .map((b: any) => ({
+            time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
+            open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
+          }))
+          .sort((a: Bar, b: Bar) => a.time - b.time)
+        if (!cancelled) setCompareBars(parsed)
+      } catch {
+        if (!cancelled) setCompareBars([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [compareSym, currentRange])
 
   // ========== Chart Creation / Update ==========
   // Tick used to safely re-trigger the effect once when the container width is 0
@@ -793,6 +847,29 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       addSubLine(obvVals.map(v => v as number | null), sid, '#22d3ee')
     }
 
+    // ===== COMPARE OVERLAY (ratio line on its own price scale) =====
+    if (compareSym && compareBars.length > 1) {
+      try {
+        const cmpMap = new Map<number, number>()
+        for (const cb of compareBars) cmpMap.set(cb.time, cb.close)
+        const ratio: LineData[] = []
+        for (const b of bars) {
+          const c = cmpMap.get(b.time)
+          if (c && c > 0) ratio.push({ time: formatTime(b.time) as Time, value: b.close / c })
+        }
+        if (ratio.length > 1) {
+          const cmpSeries = chart.addSeries(LineSeries, {
+            color: '#f472b6', lineWidth: 2, priceScaleId: 'compare',
+            crosshairMarkerVisible: false, lastValueVisible: true,
+            title: `${symbol}/${compareSym}`,
+          })
+          cmpSeries.setData(ratio)
+          chart.priceScale('compare').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 }, visible: true })
+          overlaySeriesRef.current.push(cmpSeries)
+        }
+      } catch { /* ignore */ }
+    }
+
     // Fit content
     chart.timeScale().fitContent()
 
@@ -895,7 +972,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSym, compareBars, symbol])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -906,13 +983,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     })
   }, [])
 
-  const applySymbol = useCallback(() => {
-    const v = inputVal.trim().toUpperCase()
-    if (v && v !== symbol) {
-      setSymbol(v)
-      onSymbolChange?.(v)
-    }
-  }, [inputVal, symbol, onSymbolChange])
+  // (Symbol changes are now driven exclusively by the parent page search bar.)
 
   // ========== Drawing overlay renderer ==========
   const redrawOverlay = useCallback(() => {
@@ -1040,27 +1111,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     <div className={`bg-slate-900/60 border border-white/10 rounded-lg overflow-hidden ${className}`}>
       {/* ===== TOP BAR ===== */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-slate-800/50 border-b border-white/10">
-        {/* Symbol input */}
-        <div className="flex items-center gap-1.5">
-          <input
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value.toUpperCase())}
-            onKeyDown={e => { if (e.key === 'Enter') applySymbol() }}
-            className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white font-semibold w-24 focus:outline-none focus:border-blue-500"
-            placeholder="Symbol"
-          />
-          <button onClick={applySymbol} className="px-2 py-1 text-[10px] rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors">Go</button>
+        {/* Active symbol pill (read-only — search is in page header) */}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-white font-bold tracking-wide">{symbol}</span>
+          {lastPrice && (
+            <>
+              <span className="text-white font-bold">${lastPrice.price.toFixed(2)}</span>
+              <span className={pctColor}>
+                {lastPrice.change >= 0 ? '+' : ''}{lastPrice.change.toFixed(2)} ({lastPrice.changePct >= 0 ? '+' : ''}{lastPrice.changePct.toFixed(2)}%)
+              </span>
+            </>
+          )}
         </div>
-
-        {/* Price header */}
-        {lastPrice && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-white font-bold">${lastPrice.price.toFixed(2)}</span>
-            <span className={pctColor}>
-              {lastPrice.change >= 0 ? '+' : ''}{lastPrice.change.toFixed(2)} ({lastPrice.changePct >= 0 ? '+' : ''}{lastPrice.changePct.toFixed(2)}%)
-            </span>
-          </div>
-        )}
 
         {/* Separator */}
         <div className="h-5 w-px bg-white/15 mx-1" />
@@ -1083,67 +1145,142 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         <div className="h-5 w-px bg-white/15 mx-1" />
 
         {/* Range buttons */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 flex-wrap">
           {RANGE_OPTS.map(r => (
             <button
               key={r.key}
               onClick={() => setRangeKey(r.key)}
               className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${rangeKey === r.key ? 'bg-blue-600/80 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+              title={r.key === 'MAX' ? 'Max history available from Yahoo' : r.label}
             >
               {r.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* ===== INDICATOR BAR (grouped dropdowns) ===== */}
-      <div className="px-3 py-1.5 bg-slate-800/30 border-b border-white/5 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          {IND_CATEGORIES.map(cat => {
-            const activeCount = cat.items.filter(i => indicators.has(i.key)).length
-            const open = openCategory === cat.category
-            return (
-              <div key={cat.category} className="relative">
-                <button
-                  onClick={() => setOpenCategory(open ? null : cat.category)}
-                  className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
-                    activeCount > 0
-                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-200'
-                      : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
-                  }`}
-                >
-                  <span className="font-semibold uppercase tracking-wider text-[10px]">{cat.category}</span>
-                  {activeCount > 0 && (
-                    <span className="px-1 rounded bg-blue-500/30 text-blue-100 text-[9px]">{activeCount}</span>
-                  )}
-                  <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-                </button>
-                {open && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setOpenCategory(null)} />
-                    <div className="absolute left-0 top-full mt-1 z-30 min-w-[160px] p-1.5 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
-                      <div className="flex flex-col gap-0.5">
-                        {cat.items.map(ind => (
-                          <button
-                            key={ind.key}
-                            onClick={() => toggleIndicator(ind.key)}
-                            className={`flex items-center justify-between px-2 py-1 text-[11px] rounded transition-colors ${
-                              indicators.has(ind.key)
-                                ? 'bg-blue-600/30 text-blue-200'
-                                : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                            }`}
-                          >
-                            <span>{ind.label}</span>
-                            {indicators.has(ind.key) && <span className="text-blue-400">✓</span>}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
+        {/* Separator */}
+        <div className="h-5 w-px bg-white/15 mx-1" />
+
+        {/* Tools dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => { setToolsOpen(o => !o); setIndicatorsOpen(false) }}
+            className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+              activeTool !== 'cursor' && activeTool !== 'crosshair'
+                ? 'bg-amber-600/20 border-amber-500/40 text-amber-200'
+                : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
+            }`}
+          >
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Tools</span>
+            <span className="text-[10px] opacity-70">{CHART_TOOLS.find(t => t.id === activeTool)?.label}</span>
+            <svg className={`w-3 h-3 transition-transform ${toolsOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </button>
+          {toolsOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setToolsOpen(false)} />
+              <div className="absolute left-0 top-full mt-1 z-30 min-w-[180px] p-1.5 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+                {CHART_TOOLS.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setActiveTool(t.id); setToolsOpen(false) }}
+                    className={`w-full text-left px-2 py-1 text-[11px] rounded transition-colors ${
+                      activeTool === t.id ? 'bg-amber-600/30 text-amber-200' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+                {drawings.length > 0 && (
+                  <div className="border-t border-white/10 mt-1 pt-1 flex gap-1">
+                    <button onClick={() => { undoDrawing(); setToolsOpen(false) }} className="flex-1 px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-white/10 text-gray-300">↶ Undo</button>
+                    <button onClick={() => { clearDrawings(); setToolsOpen(false) }} className="flex-1 px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-rose-500/20 text-rose-300">Clear</button>
+                  </div>
                 )}
               </div>
-            )
-          })}
+            </>
+          )}
+        </div>
+
+        {/* Compare input */}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider">vs</span>
+          <input
+            value={compareInput || compareSym}
+            onChange={(e) => setCompareInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { setCompareSym(compareInput.trim().toUpperCase()); setCompareInput('') }
+              if (e.key === 'Escape') { setCompareInput(''); setCompareSym('') }
+            }}
+            placeholder="Compare (e.g. SPY)"
+            className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
+          />
+          {compareSym && (
+            <button
+              onClick={() => { setCompareSym(''); setCompareInput('') }}
+              className="text-[10px] text-gray-400 hover:text-rose-300"
+              title="Remove compare"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ===== INDICATORS BAR (single dropdown) ===== */}
+      <div className="px-3 py-1.5 bg-slate-800/30 border-b border-white/5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => { setIndicatorsOpen(o => !o); setToolsOpen(false) }}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                indicators.size > 0
+                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-200'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
+              }`}
+            >
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Indicators</span>
+              {indicators.size > 0 && (
+                <span className="px-1 rounded bg-blue-500/30 text-blue-100 text-[9px]">{indicators.size}</span>
+              )}
+              <svg className={`w-3 h-3 transition-transform ${indicatorsOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            </button>
+            {indicatorsOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setIndicatorsOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 z-30 w-[520px] max-w-[90vw] p-2 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl max-h-[70vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {IND_CATEGORIES.map(cat => {
+                      const activeCount = cat.items.filter(i => indicators.has(i.key)).length
+                      return (
+                        <div key={cat.category} className="bg-white/5 rounded p-1.5">
+                          <div className="flex items-center justify-between mb-1 px-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{cat.category}</span>
+                            {activeCount > 0 && <span className="px-1 rounded bg-blue-500/30 text-blue-100 text-[9px]">{activeCount}</span>}
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            {cat.items.map(ind => (
+                              <button
+                                key={ind.key}
+                                onClick={() => toggleIndicator(ind.key)}
+                                className={`flex items-center justify-between px-2 py-1 text-[11px] rounded transition-colors ${
+                                  indicators.has(ind.key)
+                                    ? 'bg-blue-600/30 text-blue-200'
+                                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                }`}
+                              >
+                                <span>{ind.label}</span>
+                                {indicators.has(ind.key) && <span className="text-blue-400">✓</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           {indicators.size > 0 && (
             <button
               onClick={() => setIndicators(new Set())}

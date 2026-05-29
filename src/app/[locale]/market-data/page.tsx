@@ -6,43 +6,31 @@ import {
   Search,
   Star,
   Bell,
-  MousePointer2,
-  Crosshair,
-  Target,
-  Circle,
-  Square,
-  Type as TypeIcon,
-  Triangle,
-  Spline,
-  Activity,
-  CalendarRange,
   ChevronDown,
   TrendingUp,
   TrendingDown,
-  Zap,
-  Layers,
-  BookOpen,
-  PenLine,
-  FunctionSquare,
   Sparkles,
   Plus,
   X,
   RefreshCw,
+  Activity,
+  List,
+  Pencil,
+  Trash2,
+  Check,
 } from 'lucide-react'
+import { useLocalStorage } from '@/hooks/useLocalStorage'
 
 const AdvancedChart = dynamic(
   () => import('@/components/analytics/AdvancedChart'),
   { ssr: false, loading: () => <ChartSkeleton /> }
 )
 
-// ============================================================
-// Constants
-// ============================================================
-
-const WATCHLIST_DEFAULT = [
-  'SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META',
-  'GOOGL', 'AMD', 'NFLX', 'JPM', 'XOM', 'GLD', 'BTC-USD', 'ETH-USD',
-]
+const DEFAULT_WATCHLISTS: Record<string, string[]> = {
+  Main: ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'JPM', 'XOM', 'GLD', 'BTC-USD', 'ETH-USD'],
+  Tech: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AVGO', 'CRM', 'ORCL', 'ADBE'],
+  Crypto: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD'],
+}
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX'] },
@@ -61,41 +49,7 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
   { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
   { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
-  { label: 'Metal ETFs', symbols: ['GLD', 'IAU', 'SLV', 'PPLT', 'PALL', 'GDX', 'GDXJ', 'SIL', 'COPX'] },
-  { label: 'Energy ETFs', symbols: ['USO', 'UNG', 'BNO', 'UCO', 'XOP', 'OIH', 'AMLP', 'ICLN', 'TAN', 'URA'] },
-  { label: 'Thematic', symbols: ['ARKK', 'ARKG', 'ARKW', 'ARKF', 'ARKQ', 'BOTZ', 'ROBO', 'AIQ', 'WCLD', 'BLOK', 'HACK', 'JETS', 'KWEB', 'INDA', 'EWJ', 'EWZ', 'EWY', 'EWG', 'EWU', 'EWQ'] },
-  { label: 'Leveraged', symbols: ['TQQQ', 'SQQQ', 'UPRO', 'SPXL', 'SPXS', 'SOXL', 'SOXS', 'TNA', 'TZA', 'FAS', 'FAZ', 'TMF', 'TMV'] },
 ]
-
-import { Minus, MoveHorizontal, MoveVertical } from 'lucide-react'
-
-const DRAWING_TOOLS = [
-  { id: 'cursor', label: 'Arrow', icon: MousePointer2 },
-  { id: 'crosshair', label: 'Crosshairs', icon: Crosshair },
-  { id: 'trendline', label: 'Trend Line', icon: TrendingUp },
-  { id: 'horizontal', label: 'Horizontal Line', icon: MoveHorizontal },
-  { id: 'vertical', label: 'Vertical Line', icon: MoveVertical },
-  { id: 'rect', label: 'Rectangle', icon: Square },
-  { id: 'ellipse', label: 'Ellipse', icon: Circle },
-  { id: 'triangle', label: 'Triangle', icon: Triangle },
-  { id: 'fib-retr', label: 'Fib Retracement', icon: FunctionSquare },
-  { id: 'fib-ext', label: 'Fib Extension', icon: FunctionSquare },
-  { id: 'text', label: 'Text / Note', icon: TypeIcon },
-] as const
-
-type DrawingToolId = typeof DRAWING_TOOLS[number]['id']
-
-const TOOL_TABS = [
-  { id: 'tools', label: 'Tools', icon: PenLine },
-  { id: 'fn', label: 'Functions', icon: FunctionSquare },
-  { id: 'starred', label: 'Starred', icon: Star },
-] as const
-
-type ToolTab = typeof TOOL_TABS[number]['id']
-
-// ============================================================
-// Helpers
-// ============================================================
 
 interface Quote {
   ticker: string
@@ -135,10 +89,6 @@ function timeAgo(d: Date): string {
   return `${Math.floor(s / 86400)}d`
 }
 
-// ============================================================
-// Skeleton
-// ============================================================
-
 function ChartSkeleton() {
   return (
     <div className="w-full h-[560px] bg-slate-900/40 border border-white/10 rounded-lg flex items-center justify-center">
@@ -150,26 +100,32 @@ function ChartSkeleton() {
   )
 }
 
-// ============================================================
-// Page
-// ============================================================
-
 export default function MarketDataPage() {
-  const [symbol, setSymbol] = useState('AAPL')
+  // Persisted state
+  const [symbol, setSymbol] = useLocalStorage<string>('mkt:symbol', 'AAPL')
+  const [watchlists, setWatchlists] = useLocalStorage<Record<string, string[]>>('mkt:watchlists', DEFAULT_WATCHLISTS)
+  const [activeListName, setActiveListName] = useLocalStorage<string>('mkt:activeList', 'Main')
+  const [readSet, setReadSet] = useLocalStorage<number[]>('mkt:notifRead', [])
+  const [dismissedSet, setDismissedSet] = useLocalStorage<number[]>('mkt:notifDismissed', [])
+
+  // Ephemeral state
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchVal, setSearchVal] = useState('')
-  const [toolTab, setToolTab] = useState<ToolTab>('tools')
-  const [activeTool, setActiveTool] = useState<string>('cursor')
-  const [starred, setStarred] = useState<Set<string>>(new Set(['trendline', 'fib-retr', 'rect']))
-  const [watchlist, setWatchlist] = useState<string[]>(WATCHLIST_DEFAULT)
+  const [popularOpen, setPopularOpen] = useState<string>('US Indices')
+  const [watchlistMenuOpen, setWatchlistMenuOpen] = useState(false)
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false)
+  const [notificationTab, setNotificationTab] = useState<'all' | 'system' | 'results' | 'scans' | 'alerts'>('all')
+  const [renamingList, setRenamingList] = useState<string | null>(null)
+  const [renameVal, setRenameVal] = useState('')
+  const [newListName, setNewListName] = useState('')
+
+  const watchlist = useMemo(() => watchlists[activeListName] || [], [watchlists, activeListName])
+
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [loadingQuotes, setLoadingQuotes] = useState(false)
-  const [popularOpen, setPopularOpen] = useState<string>('Indices')
-  const [notificationTab, setNotificationTab] = useState<'all' | 'system' | 'results' | 'scans' | 'alerts'>('all')
-  const [readSet, setReadSet] = useState<Set<number>>(new Set())
-  const [dismissedSet, setDismissedSet] = useState<Set<number>>(new Set())
+  const readSetMem = useMemo(() => new Set(readSet), [readSet])
+  const dismissedSetMem = useMemo(() => new Set(dismissedSet), [dismissedSet])
 
-  // ===== Fetch live quotes for watchlist =====
   const fetchQuotes = useCallback(async () => {
     if (!watchlist.length) return
     setLoadingQuotes(true)
@@ -195,43 +151,71 @@ export default function MarketDataPage() {
   }, [watchlist])
 
   useEffect(() => { fetchQuotes() }, [fetchQuotes])
-
-  // Periodic refresh
   useEffect(() => {
     const id = setInterval(fetchQuotes, 60_000)
     return () => clearInterval(id)
   }, [fetchQuotes])
 
-  // ===== Search submit =====
   const submitSearch = useCallback((s?: string) => {
     const v = (s ?? searchVal).trim().toUpperCase()
     if (!v) return
     setSymbol(v)
     setSearchOpen(false)
     setSearchVal('')
-    setWatchlist((wl) => (wl.includes(v) ? wl : [v, ...wl].slice(0, 30)))
-  }, [searchVal])
-
-  const toggleStar = useCallback((id: string) => {
-    setStarred((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
+    setWatchlists((wls) => {
+      const cur = wls[activeListName] || []
+      if (cur.includes(v)) return wls
+      return { ...wls, [activeListName]: [v, ...cur].slice(0, 50) }
     })
-  }, [])
+  }, [searchVal, activeListName, setSymbol, setWatchlists])
 
   const removeFromWatchlist = useCallback((sym: string) => {
-    setWatchlist((wl) => wl.filter((s) => s !== sym))
+    setWatchlists((wls) => ({ ...wls, [activeListName]: (wls[activeListName] || []).filter((s) => s !== sym) }))
+  }, [activeListName, setWatchlists])
+
+  const addNewList = useCallback(() => {
+    const name = newListName.trim()
+    if (!name || watchlists[name]) return
+    setWatchlists((wls) => ({ ...wls, [name]: [] }))
+    setActiveListName(name)
+    setNewListName('')
+  }, [newListName, watchlists, setWatchlists, setActiveListName])
+
+  const deleteList = useCallback((name: string) => {
+    if (Object.keys(watchlists).length <= 1) return
+    setWatchlists((wls) => {
+      const next = { ...wls }
+      delete next[name]
+      return next
+    })
+    if (activeListName === name) {
+      const remaining = Object.keys(watchlists).filter((k) => k !== name)
+      if (remaining[0]) setActiveListName(remaining[0])
+    }
+  }, [watchlists, activeListName, setWatchlists, setActiveListName])
+
+  const startRename = useCallback((name: string) => {
+    setRenamingList(name)
+    setRenameVal(name)
   }, [])
 
-  // ===== Current symbol quote =====
-  const currentQuote = quotes[symbol.toUpperCase()]
-  const filteredTools = useMemo(() => {
-    if (toolTab === 'starred') return DRAWING_TOOLS.filter((t) => starred.has(t.id))
-    return DRAWING_TOOLS
-  }, [toolTab, starred])
+  const commitRename = useCallback(() => {
+    const next = renameVal.trim()
+    if (!renamingList || !next || next === renamingList || watchlists[next]) {
+      setRenamingList(null); return
+    }
+    setWatchlists((wls) => {
+      const out: Record<string, string[]> = {}
+      for (const [k, v] of Object.entries(wls)) {
+        out[k === renamingList ? next : k] = v
+      }
+      return out
+    })
+    if (activeListName === renamingList) setActiveListName(next)
+    setRenamingList(null)
+  }, [renamingList, renameVal, watchlists, activeListName, setWatchlists, setActiveListName])
 
-  // ===== Notifications driven by live quotes =====
+  // Notifications
   type Notif = { id: number; type: 'system' | 'results' | 'scans' | 'alerts'; icon: React.ComponentType<{ className?: string }>; color: string; title: string; desc: string; date: Date }
 
   const notifications = useMemo<Notif[]>(() => {
@@ -240,7 +224,6 @@ export default function MarketDataPage() {
     const q = quotes[sym]
     const list: Notif[] = []
 
-    // Active symbol live snapshot
     if (q && Number.isFinite(q.price)) {
       const up = q.changePercent >= 0
       list.push({
@@ -260,7 +243,6 @@ export default function MarketDataPage() {
       }
     }
 
-    // Top 3 movers across watchlist
     Object.values(quotes)
       .filter((x) => Number.isFinite(x.changePercent))
       .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
@@ -278,24 +260,18 @@ export default function MarketDataPage() {
     list.push({
       id: 3001, type: 'results', icon: TrendingUp, color: 'text-emerald-400',
       title: 'Watchlist scan complete',
-      desc: `${Object.keys(quotes).length} symbols evaluated`,
+      desc: `${Object.keys(quotes).length} symbols evaluated in "${activeListName}"`,
       date: new Date(now - 30 * 60 * 1000),
     })
     list.push({
       id: 4001, type: 'system', icon: Sparkles, color: 'text-cyan-400',
       title: 'Pro tip',
-      desc: 'Use the Fib Retracement tool on the latest swing high/low',
+      desc: 'Use Compare (vs) in the chart toolbar to overlay ratios like QQQ/SPY',
       date: new Date(now - 60 * 60 * 1000),
     })
-    list.push({
-      id: 4002, type: 'system', icon: Sparkles, color: 'text-amber-400',
-      title: 'New: World indices & EU/Asia stocks added',
-      desc: 'Open the Search dropdown to browse all categories',
-      date: new Date(now - 3 * 60 * 60 * 1000),
-    })
 
-    return list.filter((n) => !dismissedSet.has(n.id))
-  }, [symbol, quotes, dismissedSet])
+    return list.filter((n) => !dismissedSetMem.has(n.id))
+  }, [symbol, quotes, dismissedSetMem, activeListName])
 
   const tabCounts = useMemo(() => {
     const c: Record<string, number> = { all: notifications.length, system: 0, results: 0, scans: 0, alerts: 0 }
@@ -304,8 +280,8 @@ export default function MarketDataPage() {
   }, [notifications])
 
   const unreadCount = useMemo(
-    () => notifications.filter((n) => !readSet.has(n.id)).length,
-    [notifications, readSet]
+    () => notifications.filter((n) => !readSetMem.has(n.id)).length,
+    [notifications, readSetMem]
   )
 
   const filteredNotifs = notifications.filter((n) =>
@@ -313,34 +289,36 @@ export default function MarketDataPage() {
   )
 
   const markAllRead = useCallback(() => {
-    setReadSet(new Set(notifications.map((n) => n.id)))
-  }, [notifications])
+    setReadSet(notifications.map((n) => n.id))
+  }, [notifications, setReadSet])
 
   const clearAll = useCallback(() => {
-    setDismissedSet(new Set(notifications.map((n) => n.id)))
-  }, [notifications])
+    setDismissedSet([...dismissedSet, ...notifications.map((n) => n.id)])
+  }, [notifications, dismissedSet, setDismissedSet])
 
   const toggleRead = useCallback((id: number) => {
-    setReadSet((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }, [])
+    setReadSet((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }, [setReadSet])
 
   const dismissOne = useCallback((id: number) => {
-    setDismissedSet((prev) => {
-      const next = new Set(prev)
-      next.add(id)
-      return next
-    })
+    setDismissedSet((prev) => prev.includes(id) ? prev : [...prev, id])
+  }, [setDismissedSet])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchOpen(false); setWatchlistMenuOpen(false); setNotifMenuOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const currentQuote = quotes[symbol.toUpperCase()]
 
   return (
     <div className="min-h-screen bg-[#05070d] text-white">
-      {/* ========================================================== */}
-      {/* TOP HEADER                                                  */}
-      {/* ========================================================== */}
+      {/* HEADER */}
       <div className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -351,7 +329,7 @@ export default function MarketDataPage() {
             </div>
           </div>
 
-          {/* Symbol picker */}
+          {/* Single search bar */}
           <div className="relative ml-2 flex-1 max-w-md">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -376,46 +354,47 @@ export default function MarketDataPage() {
               )}
             </div>
 
-            {/* Quick picks dropdown */}
             {searchOpen && (
-              <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[420px] overflow-y-auto z-40">
-                <div className="px-3 py-2 border-b border-white/5 flex items-center gap-1 flex-wrap">
-                  {POPULAR_GROUPS.map((g) => (
-                    <button
-                      key={g.label}
-                      onClick={() => setPopularOpen(g.label)}
-                      className={`px-2 py-0.5 text-[10px] rounded ${popularOpen === g.label ? 'bg-blue-600/40 text-blue-200' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="p-2 grid grid-cols-2 gap-1">
-                  {(POPULAR_GROUPS.find((g) => g.label === popularOpen)?.symbols || []).map((s) => {
-                    const q = quotes[s.toUpperCase()]
-                    return (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setSearchOpen(false)} />
+                <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[420px] overflow-y-auto z-40">
+                  <div className="px-3 py-2 border-b border-white/5 flex items-center gap-1 flex-wrap">
+                    {POPULAR_GROUPS.map((g) => (
                       <button
-                        key={s}
-                        onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
-                        className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
+                        key={g.label}
+                        onClick={() => setPopularOpen(g.label)}
+                        className={`px-2 py-0.5 text-[10px] rounded ${popularOpen === g.label ? 'bg-blue-600/40 text-blue-200' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}
                       >
-                        <span className="text-xs font-semibold">{s}</span>
-                        {q && (
-                          <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {fmtPct(q.changePercent)}
-                          </span>
-                        )}
+                        {g.label}
                       </button>
-                    )
-                  })}
+                    ))}
+                  </div>
+                  <div className="p-2 grid grid-cols-2 gap-1">
+                    {(POPULAR_GROUPS.find((g) => g.label === popularOpen)?.symbols || []).map((s) => {
+                      const q = quotes[s.toUpperCase()]
+                      return (
+                        <button
+                          key={s}
+                          onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
+                          className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
+                        >
+                          <span className="text-xs font-semibold">{s}</span>
+                          {q && (
+                            <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {fmtPct(q.changePercent)}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Current symbol quick info */}
           {currentQuote && (
-            <div className="flex items-center gap-3 text-sm">
+            <div className="hidden md:flex items-center gap-3 text-sm">
               <div className="flex flex-col items-end">
                 <span className="font-bold">${fmtPrice(currentQuote.price)}</span>
                 <span className={`text-[10px] ${currentQuote.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -426,6 +405,216 @@ export default function MarketDataPage() {
           )}
 
           <div className="ml-auto flex items-center gap-2">
+            {/* Watchlist dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => { setWatchlistMenuOpen((o) => !o); setNotifMenuOpen(false) }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+              >
+                <List className="w-3.5 h-3.5 text-blue-300" />
+                <span className="font-semibold">{activeListName}</span>
+                <span className="text-gray-400">({watchlist.length})</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${watchlistMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {watchlistMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setWatchlistMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-40 w-80 bg-slate-900 border border-white/15 rounded-md shadow-xl p-2">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1 px-1">Your Watchlists</div>
+                    <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                      {Object.keys(watchlists).map((name) => {
+                        const isActive = name === activeListName
+                        const isRenaming = renamingList === name
+                        return (
+                          <div
+                            key={name}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded ${isActive ? 'bg-blue-600/20' : 'hover:bg-white/5'}`}
+                          >
+                            {isRenaming ? (
+                              <>
+                                <input
+                                  autoFocus
+                                  value={renameVal}
+                                  onChange={(e) => setRenameVal(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') commitRename()
+                                    if (e.key === 'Escape') setRenamingList(null)
+                                  }}
+                                  className="flex-1 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-xs outline-none focus:border-blue-500"
+                                />
+                                <button onClick={commitRename} className="text-emerald-400 hover:text-emerald-300" title="Save">
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => setRenamingList(null)} className="text-gray-400 hover:text-white">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => { setActiveListName(name); setWatchlistMenuOpen(false) }}
+                                  className="flex-1 flex items-center gap-2 text-left text-xs"
+                                >
+                                  <Star className={`w-3 h-3 ${isActive ? 'text-amber-400' : 'text-gray-500'}`} fill={isActive ? 'currentColor' : 'none'} />
+                                  <span className={isActive ? 'font-semibold text-white' : 'text-gray-200'}>{name}</span>
+                                  <span className="text-[10px] text-gray-500 ml-auto">{(watchlists[name] || []).length}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); startRename(name) }}
+                                  className="opacity-60 hover:opacity-100 text-gray-300 hover:text-white"
+                                  title="Rename"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deleteList(name) }}
+                                  disabled={Object.keys(watchlists).length <= 1}
+                                  className="opacity-60 hover:opacity-100 text-gray-300 hover:text-rose-400 disabled:opacity-20 disabled:cursor-not-allowed"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-white/10 flex items-center gap-1">
+                      <input
+                        value={newListName}
+                        onChange={(e) => setNewListName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') addNewList() }}
+                        placeholder="New watchlist…"
+                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs outline-none focus:border-blue-500 placeholder-gray-500"
+                      />
+                      <button
+                        onClick={addNewList}
+                        disabled={!newListName.trim() || !!watchlists[newListName.trim()]}
+                        className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Notifications dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => { setNotifMenuOpen((o) => !o); setWatchlistMenuOpen(false) }}
+                className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+              >
+                <Bell className="w-3.5 h-3.5 text-amber-300" />
+                <span className="font-semibold">Alerts</span>
+                {unreadCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/40 text-blue-100 text-[9px] font-bold leading-none">
+                    {unreadCount}
+                  </span>
+                )}
+                <ChevronDown className={`w-3 h-3 transition-transform ${notifMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {notifMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setNotifMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-40 w-96 bg-slate-900 border border-white/15 rounded-md shadow-xl flex flex-col">
+                    <div className="p-3 border-b border-white/5">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold flex items-center gap-2">
+                          Notifications
+                          {unreadCount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 text-[10px] font-semibold">{unreadCount}</span>
+                          )}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={markAllRead}
+                            disabled={unreadCount === 0}
+                            className="text-[10px] text-gray-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Mark read
+                          </button>
+                          <button
+                            onClick={clearAll}
+                            disabled={notifications.length === 0}
+                            className="text-[10px] text-gray-400 hover:text-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 mt-2 text-[10px] overflow-x-auto">
+                        {(['all', 'system', 'results', 'scans', 'alerts'] as const).map((t) => {
+                          const active = notificationTab === t
+                          const count = tabCounts[t] || 0
+                          return (
+                            <button
+                              key={t}
+                              onClick={() => setNotificationTab(t)}
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded capitalize whitespace-nowrap transition-colors ${
+                                active
+                                  ? 'bg-blue-600/30 text-white border border-blue-500/40'
+                                  : 'text-gray-400 hover:text-white border border-transparent hover:bg-white/5'
+                              }`}
+                            >
+                              <span>{t}</span>
+                              {count > 0 && (
+                                <span className={`px-1 rounded text-[9px] ${active ? 'bg-blue-500/40 text-blue-100' : 'bg-white/10 text-gray-300'}`}>
+                                  {count}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto max-h-[60vh]">
+                      {filteredNotifs.map((n) => {
+                        const Icon = n.icon
+                        const isRead = readSetMem.has(n.id)
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => toggleRead(n.id)}
+                            className={`group px-3 py-2.5 border-b border-white/5 hover:bg-white/5 cursor-pointer flex items-start gap-2 ${isRead ? 'opacity-60' : ''}`}
+                          >
+                            <div className={`relative w-7 h-7 rounded-md bg-white/5 flex items-center justify-center ${n.color}`}>
+                              <Icon className="w-3.5 h-3.5" />
+                              {!isRead && (
+                                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-slate-900" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-xs truncate ${isRead ? 'text-gray-300' : 'text-white font-medium'}`}>{n.title}</div>
+                              <div className="text-[10px] text-gray-400 truncate">{n.desc}</div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="text-[10px] text-gray-500 whitespace-nowrap">{timeAgo(n.date)}</div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); dismissOne(n.id) }}
+                                className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
+                                title="Dismiss"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {filteredNotifs.length === 0 && (
+                        <div className="p-6 text-center text-[11px] text-gray-500">
+                          <Bell className="w-5 h-5 mx-auto mb-2 opacity-30" />
+                          No notifications in this category
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={fetchQuotes}
               disabled={loadingQuotes}
@@ -438,313 +627,103 @@ export default function MarketDataPage() {
         </div>
       </div>
 
-      {/* ========================================================== */}
-      {/* MAIN LAYOUT                                                 */}
-      {/* ========================================================== */}
-      <div className="flex flex-col lg:flex-row gap-3 p-3">
-        {/* ====== LEFT: DRAWING TOOLS ====== */}
-        <aside className="lg:w-56 shrink-0 bg-slate-900/60 border border-white/10 rounded-lg p-2 flex flex-col">
-          <div className="flex items-center justify-between gap-1 mb-2">
-            {TOOL_TABS.map((t) => {
-              const Icon = t.icon
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setToolTab(t.id)}
-                  className={`flex-1 flex items-center justify-center py-1.5 rounded text-[10px] font-medium ${
-                    toolTab === t.id ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-                  title={t.label}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                </button>
-              )
-            })}
+      {/* MAIN */}
+      <div className="flex flex-col gap-3 p-3">
+        <AdvancedChart
+          symbol={symbol}
+          onSymbolChange={(s) => setSymbol(s)}
+          height={620}
+          className="shadow-xl shadow-black/40"
+        />
+
+        {/* Watchlist strip */}
+        <div className="bg-slate-900/60 border border-white/10 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+              <List className="w-3 h-3" /> {activeListName}
+            </h3>
+            <span className="text-[10px] text-gray-500">{watchlist.length} symbols · auto-refresh</span>
           </div>
-
-          <div className="flex items-center justify-between px-1 mb-1">
-            <span className="text-xs font-semibold text-gray-300 flex items-center gap-1">
-              <PenLine className="w-3 h-3" /> Tools
-              <ChevronDown className="w-3 h-3 text-gray-500" />
-            </span>
-          </div>
-
-          <div className="relative mb-2">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
-            <input
-              placeholder="Search"
-              className="w-full bg-white/5 border border-white/10 rounded pl-7 pr-2 py-1 text-[11px] placeholder-gray-500 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 max-h-[60vh] lg:max-h-none">
-            {filteredTools.map((t) => {
-              const Icon = t.icon
-              const isActive = activeTool === t.id
-              const isStarred = starred.has(t.id)
-              return (
-                <div
-                  key={t.id}
-                  className={`group flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${
-                    isActive ? 'bg-blue-600/20 text-blue-200' : 'text-gray-300 hover:bg-white/5'
-                  }`}
-                  onClick={() => setActiveTool(t.id)}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-[11px] flex-1 truncate">{t.label}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleStar(t.id) }}
-                    className={`opacity-0 group-hover:opacity-100 transition ${isStarred ? '!opacity-100 text-amber-400' : 'text-gray-500'}`}
-                  >
-                    <Star className="w-3 h-3" fill={isStarred ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-              )
-            })}
-            {filteredTools.length === 0 && (
-              <div className="text-[10px] text-gray-500 text-center py-4">No starred tools yet</div>
-            )}
-          </div>
-
-          <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-gray-500 leading-snug">
-            Active: <span className="text-gray-300 font-medium">{DRAWING_TOOLS.find((t) => t.id === activeTool)?.label}</span>
-          </div>
-        </aside>
-
-        {/* ====== CENTER: CHART + STATS ====== */}
-        <main className="flex-1 min-w-0 space-y-3">
-          <AdvancedChart
-            symbol={symbol}
-            onSymbolChange={(s) => setSymbol(s)}
-            height={580}
-            className="shadow-xl shadow-black/40"
-            activeTool={activeTool as DrawingToolId}
-            onToolChange={(t) => setActiveTool(t)}
-          />
-
-          {/* Watchlist strip */}
-          <div className="bg-slate-900/60 border border-white/10 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Watchlist</h3>
-              <span className="text-[10px] text-gray-500">{watchlist.length} symbols · live</span>
-            </div>
-            <div className="overflow-x-auto">
-              <div className="flex gap-2 min-w-min">
-                {watchlist.map((s) => {
-                  const q = quotes[s.toUpperCase()]
-                  const pos = q ? q.changePercent >= 0 : true
-                  const active = s.toUpperCase() === symbol.toUpperCase()
-                  return (
-                    <div
-                      key={s}
-                      onClick={() => setSymbol(s)}
-                      className={`group relative min-w-[120px] cursor-pointer rounded-lg border px-3 py-2 ${
-                        active ? 'border-blue-500/60 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
-                      }`}
-                    >
-                      <button
-                        onClick={(e) => { e.stopPropagation(); removeFromWatchlist(s) }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-400"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                      <div className="text-xs font-bold">{s}</div>
-                      <div className="text-sm font-semibold mt-0.5">{q ? fmtPrice(q.price) : '—'}</div>
-                      <div className={`text-[10px] flex items-center gap-1 ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {pos ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-                        {q ? fmtPct(q.changePercent) : '—'}
-                      </div>
-                    </div>
-                  )
-                })}
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  className="min-w-[60px] rounded-lg border border-dashed border-white/15 text-gray-400 hover:text-white hover:border-white/30 flex items-center justify-center"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick stats / education strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Symbol"
-              value={symbol.toUpperCase()}
-              hint={currentQuote?.name?.slice(0, 30) || 'Loading…'}
-            />
-            <StatCard
-              label="Last"
-              value={currentQuote ? `$${fmtPrice(currentQuote.price)}` : '—'}
-              hint={currentQuote ? fmtPct(currentQuote.changePercent) : ''}
-              tone={currentQuote ? (currentQuote.changePercent >= 0 ? 'up' : 'down') : 'neutral'}
-            />
-            <StatCard
-              label="Volume"
-              value={fmtVol(currentQuote?.volume)}
-              hint="last session"
-            />
-            <StatCard
-              label="Active Tool"
-              value={DRAWING_TOOLS.find((t) => t.id === activeTool)?.label || '—'}
-              hint={`${starred.size} starred`}
-            />
-          </div>
-
-          {/* Help / shortcuts */}
-          <div className="bg-slate-900/40 border border-white/10 rounded-lg p-4 text-xs text-gray-400">
-            <div className="flex items-start gap-3">
-              <Sparkles className="w-4 h-4 text-amber-400 mt-0.5" />
-              <div>
-                <div className="text-gray-200 font-semibold mb-1">Pro tips</div>
-                <ul className="space-y-0.5 list-disc list-inside">
-                  <li>Type any ticker — stocks (AAPL), crypto (BTC-USD), forex (EURUSD=X), futures (CL=F), indices (^GSPC).</li>
-                  <li>Use the chart toolbar above the candles to switch timeframe, style (candle/line/area) and enable 25+ indicators.</li>
-                  <li>Star your favourite drawing tools to keep them one click away in the <b>Starred</b> tab.</li>
-                  <li>Quotes auto-refresh every minute. Click the refresh icon to force update.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </main>
-
-        {/* ====== RIGHT: NOTIFICATIONS ====== */}
-        <aside className="lg:w-72 shrink-0 bg-slate-900/60 border border-white/10 rounded-lg flex flex-col">
-          <div className="p-3 border-b border-white/5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold flex items-center gap-2">
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 text-[10px] font-semibold">
-                    {unreadCount}
-                  </span>
-                )}
-              </h3>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={markAllRead}
-                  disabled={unreadCount === 0}
-                  className="text-[10px] text-gray-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Mark all as read"
-                >
-                  Mark read
-                </button>
-                <span className="text-gray-600">·</span>
-                <button
-                  onClick={clearAll}
-                  disabled={notifications.length === 0}
-                  className="text-[10px] text-gray-400 hover:text-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Dismiss all"
-                >
-                  Clear
-                </button>
-                <Bell className="w-4 h-4 text-gray-400 ml-1" />
-              </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2 text-[11px] overflow-x-auto">
-              {(['all', 'system', 'results', 'scans', 'alerts'] as const).map((t) => {
-                const active = notificationTab === t
-                const count = tabCounts[t] || 0
+          <div className="overflow-x-auto">
+            <div className="flex gap-2 min-w-min">
+              {watchlist.map((s) => {
+                const q = quotes[s.toUpperCase()]
+                const pos = q ? q.changePercent >= 0 : true
+                const active = s.toUpperCase() === symbol.toUpperCase()
                 return (
-                  <button
-                    key={t}
-                    onClick={() => setNotificationTab(t)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded capitalize whitespace-nowrap transition-colors ${
-                      active
-                        ? 'bg-blue-600/30 text-white border border-blue-500/40'
-                        : 'text-gray-400 hover:text-white border border-transparent hover:bg-white/5'
+                  <div
+                    key={s}
+                    onClick={() => setSymbol(s)}
+                    className={`group relative min-w-[120px] cursor-pointer rounded-lg border px-3 py-2 ${
+                      active ? 'border-blue-500/60 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
                     }`}
                   >
-                    <span>{t}</span>
-                    {count > 0 && (
-                      <span
-                        className={`px-1 rounded text-[9px] ${
-                          active ? 'bg-blue-500/40 text-blue-100' : 'bg-white/10 text-gray-300'
-                        }`}
-                      >
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto max-h-[70vh]">
-            <div className="px-3 py-1.5 text-[9px] text-gray-500 uppercase tracking-wider bg-slate-900/40">Today</div>
-            {filteredNotifs.map((n) => {
-              const Icon = n.icon
-              const isRead = readSet.has(n.id)
-              return (
-                <div
-                  key={n.id}
-                  onClick={() => toggleRead(n.id)}
-                  className={`group px-3 py-2.5 border-b border-white/5 hover:bg-white/5 cursor-pointer flex items-start gap-2 ${
-                    isRead ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div className={`relative w-7 h-7 rounded-md bg-white/5 flex items-center justify-center ${n.color}`}>
-                    <Icon className="w-3.5 h-3.5" />
-                    {!isRead && (
-                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-slate-900" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-xs truncate ${isRead ? 'text-gray-300 font-normal' : 'text-white font-medium'}`}>
-                      {n.title}
-                    </div>
-                    <div className="text-[10px] text-gray-400 truncate">{n.desc}</div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="text-[10px] text-gray-500 whitespace-nowrap">{timeAgo(n.date)}</div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); dismissOne(n.id) }}
-                      className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
-                      title="Dismiss"
+                      onClick={(e) => { e.stopPropagation(); removeFromWatchlist(s) }}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-400"
                     >
                       <X className="w-3 h-3" />
                     </button>
+                    <div className="text-xs font-bold">{s}</div>
+                    <div className="text-sm font-semibold mt-0.5">{q ? fmtPrice(q.price) : '—'}</div>
+                    <div className={`text-[10px] flex items-center gap-1 ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {pos ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+                      {q ? fmtPct(q.changePercent) : '—'}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-            {filteredNotifs.length === 0 && (
-              <div className="p-6 text-center text-[11px] text-gray-500">
-                <Bell className="w-5 h-5 mx-auto mb-2 opacity-30" />
-                No notifications in this category
-              </div>
-            )}
+                )
+              })}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="min-w-[60px] rounded-lg border border-dashed border-white/15 text-gray-400 hover:text-white hover:border-white/30 flex items-center justify-center"
+                title="Add a symbol via search"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </aside>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Symbol" value={symbol.toUpperCase()} hint={currentQuote?.name?.slice(0, 30) || 'Loading…'} />
+          <StatCard
+            label="Last"
+            value={currentQuote ? `$${fmtPrice(currentQuote.price)}` : '—'}
+            hint={currentQuote ? fmtPct(currentQuote.changePercent) : ''}
+            tone={currentQuote ? (currentQuote.changePercent >= 0 ? 'up' : 'down') : 'neutral'}
+          />
+          <StatCard label="Volume" value={fmtVol(currentQuote?.volume)} hint="last session" />
+          <StatCard label="Watchlist" value={activeListName} hint={`${watchlist.length} symbols`} />
+        </div>
+
+        <div className="bg-slate-900/40 border border-white/10 rounded-lg p-4 text-xs text-gray-400">
+          <div className="flex items-start gap-3">
+            <Sparkles className="w-4 h-4 text-amber-400 mt-0.5" />
+            <div>
+              <div className="text-gray-200 font-semibold mb-1">Pro tips</div>
+              <ul className="space-y-0.5 list-disc list-inside">
+                <li>Single search bar: type any ticker (AAPL, BTC-USD, EURUSD=X, ^GSPC, CL=F).</li>
+                <li>Open the <b>Indicators</b> dropdown in the chart toolbar to enable Trend / Volatility / Volume / Momentum / S-R indicators.</li>
+                <li>Use <b>Tools</b> for drawing (trend lines, Fib, rectangles, notes). Drawings persist across reloads.</li>
+                <li>Compare two symbols with the <b>vs</b> input in the chart toolbar (e.g. QQQ vs SPY).</li>
+                <li>Create multiple watchlists from the <b>Watchlist</b> menu — they’re saved to your browser.</li>
+                <li>Range <b>MAX</b> loads the longest history available from Yahoo (decades for indices).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-// ============================================================
-// Subcomponents
-// ============================================================
-
-function StatCard({
-  label,
-  value,
-  hint,
-  tone = 'neutral',
-}: {
-  label: string
-  value: string
-  hint?: string
-  tone?: 'up' | 'down' | 'neutral'
-}) {
-  const toneCls =
-    tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : 'text-gray-400'
+function StatCard({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: 'up' | 'down' | 'neutral' }) {
+  const toneClass = tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : 'text-gray-300'
   return (
     <div className="bg-slate-900/60 border border-white/10 rounded-lg p-3">
-      <div className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</div>
-      <div className="text-lg font-bold mt-1 truncate">{value}</div>
-      {hint && <div className={`text-[10px] mt-0.5 truncate ${toneCls}`}>{hint}</div>}
+      <div className="text-[10px] uppercase tracking-wider text-gray-400">{label}</div>
+      <div className="text-lg font-bold mt-0.5">{value}</div>
+      {hint && <div className={`text-[10px] mt-0.5 ${toneClass}`}>{hint}</div>}
     </div>
   )
 }

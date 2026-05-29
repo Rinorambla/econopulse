@@ -9,6 +9,7 @@ import AuthHashHandler from '@/components/AuthHashHandler';
 import SafeBoundary from '@/components/SafeBoundary';
 import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
 import NativeFeaturesInit from '@/components/NativeFeaturesInit';
+import PWAUpdateAndInstall from '@/components/PWAUpdateAndInstall';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -132,6 +133,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Site-wide cookie consent banner */}
           <SafeBoundary>
             <CookieConsent />
+          </SafeBoundary>
+          {/* Install-to-device (PWA) + update prompt: lets users save the app
+              on phones, tablets and desktops, and works offline for cached parts. */}
+          <SafeBoundary>
+            <PWAUpdateAndInstall />
           </SafeBoundary>
         </AuthProvider>
       </body>

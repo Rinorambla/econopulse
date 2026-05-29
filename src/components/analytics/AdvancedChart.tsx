@@ -1415,10 +1415,10 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
         <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
-        {/* Brand watermark (bottom-left) */}
-        <div className="absolute bottom-2 left-2 z-[6] flex items-center gap-1.5 pointer-events-none select-none opacity-80">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[11px] font-black text-white shadow">E</div>
-          <span className="text-xs font-bold bg-gradient-to-r from-blue-300 to-purple-300 bg-clip-text text-transparent tracking-tight">Econopulse.ai</span>
+        {/* Brand watermark (bottom-right) */}
+        <div className="absolute bottom-2 right-2 z-[6] flex items-center gap-1.5 pointer-events-none select-none opacity-80">
+          <img src="/logo-econopulse-wave.svg" alt="" width={18} height={18} className="shrink-0 select-none" />
+          <span className="text-xs font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-500 to-blue-600 bg-clip-text text-transparent">ECONOPULSE.AI</span>
         </div>
         <canvas
           ref={overlayCanvasRef}
@@ -1444,7 +1444,10 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       {/* ===== BOTTOM STATUS BAR ===== */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/30 border-t border-white/10 text-[10px] text-gray-500">
         <span>{symbol} · {currentRange.interval}</span>
-        <span>{bars.length} bars{lastPrice ? ` · Last: $${lastPrice.price.toFixed(2)}` : ''}</span>
+        <span className="flex items-center gap-1.5 select-none">
+          <img src="/logo-econopulse-wave.svg" alt="" width={14} height={14} className="shrink-0" />
+          <span className="font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-500 to-blue-600 bg-clip-text text-transparent">ECONOPULSE.AI</span>
+        </span>
       </div>
     </div>
   )

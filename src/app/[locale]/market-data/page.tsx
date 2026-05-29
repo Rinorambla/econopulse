@@ -21,7 +21,15 @@ import {
   Save,
   Share2,
 } from 'lucide-react'
+import Logo from '@/components/Logo'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+
+interface SearchResult {
+  symbol: string
+  name: string
+  exchange: string
+  type: string
+}
 
 const AdvancedChart = dynamic(
   () => import('@/components/analytics/AdvancedChart'),
@@ -141,6 +149,8 @@ export default function MarketDataPage() {
   // Ephemeral state
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchVal, setSearchVal] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
   const [popularOpen, setPopularOpen] = useState<string>('US Indices')
   const [watchlistMenuOpen, setWatchlistMenuOpen] = useState(false)
   const [notifMenuOpen, setNotifMenuOpen] = useState(false)
@@ -149,6 +159,19 @@ export default function MarketDataPage() {
   const [renameVal, setRenameVal] = useState('')
   const [newListName, setNewListName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [chartHeight, setChartHeight] = useState(620)
+
+  // Responsive chart height — adapts the terminal to phones, tablets and desktops.
+  useEffect(() => {
+    const compute = () => {
+      const h = window.innerHeight
+      // Leave room for the sticky header + padding, clamp to a sensible range.
+      setChartHeight(Math.max(360, Math.min(760, Math.round(h - 150))))
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -191,6 +214,25 @@ export default function MarketDataPage() {
     const id = setInterval(fetchQuotes, 60_000)
     return () => clearInterval(id)
   }, [fetchQuotes])
+
+  // Live Yahoo symbol search — finds ANY instrument across all global exchanges.  useEffect(() => {
+    const q = searchVal.trim()
+    if (!searchOpen || q.length < 1) { setSearchResults([]); setSearchLoading(false); return }
+    let aborted = false
+    setSearchLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        const json = await res.json()
+        if (!aborted) setSearchResults(Array.isArray(json?.data) ? json.data : [])
+      } catch {
+        if (!aborted) setSearchResults([])
+      } finally {
+        if (!aborted) setSearchLoading(false)
+      }
+    }, 220)
+    return () => { aborted = true; clearTimeout(t) }
+  }, [searchVal, searchOpen])
 
   const submitSearch = useCallback((s?: string) => {
     const v = (s ?? searchVal).trim().toUpperCase()
@@ -392,17 +434,14 @@ export default function MarketDataPage() {
     <div className="min-h-screen bg-[#05070d] text-white">
       {/* HEADER */}
       <div className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
-        <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-black">M</div>
-            <div>
-              <h1 className="text-lg font-bold leading-none">Market Data</h1>
-              <p className="text-[10px] text-gray-400 mt-0.5">Pro Technical Analysis Terminal</p>
-            </div>
+        <div className="px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
+            <Logo size={30} showText textVariant="domain" layout="inline" />
+            <p className="hidden lg:block text-[10px] text-gray-400">Pro Technical Analysis Terminal</p>
           </div>
 
           {/* Single search bar */}
-          <div className="relative ml-2 flex-1 max-w-md">
+          <div className="relative order-last w-full sm:order-none sm:w-auto sm:ml-2 sm:flex-1 sm:max-w-md">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
               <input
@@ -413,8 +452,8 @@ export default function MarketDataPage() {
                   if (e.key === 'Enter') submitSearch()
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchVal('') }
                 }}
-                placeholder="Search symbol (AAPL, BTC-USD, EURUSD=X)…"
-                className="bg-transparent text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500"
+                placeholder="Search any symbol (AAPL, Tesla, BTC-USD, EURUSD=X)…"
+                className="bg-transparent text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500 min-w-0"
               />
               {searchOpen && searchVal && (
                 <button
@@ -429,37 +468,74 @@ export default function MarketDataPage() {
             {searchOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setSearchOpen(false)} />
-                <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[420px] overflow-y-auto z-40">
-                  <div className="px-3 py-2 border-b border-white/5 flex items-center gap-1 flex-wrap">
-                    {POPULAR_GROUPS.map((g) => (
-                      <button
-                        key={g.label}
-                        onClick={() => setPopularOpen(g.label)}
-                        className={`px-2 py-0.5 text-[10px] rounded ${popularOpen === g.label ? 'bg-blue-600/40 text-blue-200' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="p-2 grid grid-cols-2 gap-1">
-                    {(POPULAR_GROUPS.find((g) => g.label === popularOpen)?.symbols || []).map((s) => {
-                      const q = quotes[s.toUpperCase()]
-                      return (
-                        <button
-                          key={s}
-                          onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
-                          className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
-                        >
-                          <span className="text-xs font-semibold">{s}</span>
-                          {q && (
-                            <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {fmtPct(q.changePercent)}
+                <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-40">
+                  {searchVal.trim() ? (
+                    <div className="py-1">
+                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                        Yahoo Finance results
+                        {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}
+                      </div>
+                      {!searchLoading && searchResults.length === 0 && (
+                        <div className="px-3 py-3 text-xs text-gray-500">No matches. Press Go to use “{searchVal}” directly.</div>
+                      )}
+                      {searchResults.map((r) => {
+                        const q = quotes[r.symbol.toUpperCase()]
+                        return (
+                          <button
+                            key={`${r.symbol}-${r.exchange}`}
+                            onMouseDown={(e) => { e.preventDefault(); submitSearch(r.symbol) }}
+                            className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between gap-2"
+                          >
+                            <span className="min-w-0">
+                              <span className="text-xs font-bold text-white">{r.symbol}</span>
+                              {r.name && <span className="block text-[11px] text-gray-400 truncate">{r.name}</span>}
                             </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
+                            <span className="shrink-0 text-right">
+                              {r.exchange && <span className="block text-[9px] uppercase tracking-wide text-gray-500">{r.exchange}{r.type ? ` · ${r.type}` : ''}</span>}
+                              {q && (
+                                <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {fmtPct(q.changePercent)}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="px-3 py-2 border-b border-white/5 flex items-center gap-1 flex-wrap">
+                        {POPULAR_GROUPS.map((g) => (
+                          <button
+                            key={g.label}
+                            onClick={() => setPopularOpen(g.label)}
+                            className={`px-2 py-0.5 text-[10px] rounded ${popularOpen === g.label ? 'bg-blue-600/40 text-blue-200' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
+                        {(POPULAR_GROUPS.find((g) => g.label === popularOpen)?.symbols || []).map((s) => {
+                          const q = quotes[s.toUpperCase()]
+                          return (
+                            <button
+                              key={s}
+                              onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
+                              className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
+                            >
+                              <span className="text-xs font-semibold">{s}</span>
+                              {q && (
+                                <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {fmtPct(q.changePercent)}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -717,11 +793,11 @@ export default function MarketDataPage() {
       </div>
 
       {/* MAIN */}
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-col gap-3 p-2 sm:p-3">
         <AdvancedChart
           symbol={symbol}
           onSymbolChange={(s) => setSymbol(s)}
-          height={620}
+          height={chartHeight}
           className="shadow-xl shadow-black/40"
         />
       </div>

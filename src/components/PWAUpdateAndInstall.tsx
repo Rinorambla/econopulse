@@ -14,6 +14,8 @@ export const PWAUpdateAndInstall: React.FC = () => {
   // Listen to service worker updates
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    // Register the service worker so the app is installable (save to device) and works offline.
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     navigator.serviceWorker.getRegistration().then(reg => {
       if (!reg) return;
       // If there's already a waiting SW

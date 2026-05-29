@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import {
   Search,
@@ -169,18 +169,24 @@ export default function MarketDataPage() {
   const [chartHeight, setChartHeight] = useState(620)
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
+  const mainRef = useRef<HTMLDivElement | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   useEffect(() => {
     const compute = () => {
-      const h = window.innerHeight
-      // Leave room for the sticky header + padding, clamp to a sensible range.
-      setChartHeight(Math.max(360, Math.min(760, Math.round(h - 150))))
+      const top = mainRef.current?.getBoundingClientRect().top ?? 110
+      const pad = 20 // bottom padding
+      // AdvancedChart renders a toolbar + status bar around the chart canvas;
+      // subtract that chrome so the whole terminal fits the viewport without scroll.
+      const chartChrome = 96
+      const h = window.innerHeight - top - pad - chartChrome
+      setChartHeight(Math.max(300, Math.min(900, Math.round(h))))
     }
-    compute()
+    // run after layout is ready
+    const raf = requestAnimationFrame(compute)
     window.addEventListener('resize', compute)
-    return () => window.removeEventListener('resize', compute)
-  }, [])
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute) }
+  }, [panelOpen])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -824,7 +830,7 @@ export default function MarketDataPage() {
       </div>
 
       {/* MAIN */}
-      <div className="flex flex-col lg:flex-row gap-3 p-2 sm:p-3">
+      <div ref={mainRef} className="flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
         <div className="flex-1 min-w-0">
           <AdvancedChart
             symbol={symbol}
@@ -889,7 +895,7 @@ export default function MarketDataPage() {
             <span className="text-right w-16">Chg%</span>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 120 }}>
+          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 16 }}>
             {watchlist.length === 0 && (
               <div className="p-6 text-center text-[11px] text-gray-500">
                 Empty list — type a symbol above and press Add.

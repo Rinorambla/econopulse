@@ -127,6 +127,13 @@ function timeAgo(d: Date): string {
   return `${Math.floor(s / 86400)}d`
 }
 
+// Deterministic brand-ish color for a symbol avatar (TradingView-style logo fallback).
+function symbolColor(sym: string): string {
+  let h = 0
+  for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) % 360
+  return `linear-gradient(135deg, hsl(${h} 70% 45%), hsl(${(h + 40) % 360} 70% 35%))`
+}
+
 function ChartSkeleton() {
   return (
     <div className="w-full h-[560px] bg-slate-900/40 border border-white/10 rounded-lg flex items-center justify-center">
@@ -247,6 +254,14 @@ export default function MarketDataPage() {
       return { ...wls, [activeListName]: [v, ...cur].slice(0, 50) }
     })
   }, [searchVal, activeListName, setSymbol, setWatchlists])
+
+  // Remove a symbol from the currently active watchlist.
+  const removeFromWatchlist = useCallback((sym: string) => {
+    setWatchlists((wls) => {
+      const cur = wls[activeListName] || []
+      return { ...wls, [activeListName]: cur.filter((s) => s.toUpperCase() !== sym.toUpperCase()) }
+    })
+  }, [activeListName, setWatchlists])
 
   // Smart save files the current symbol into its sector watchlist (creating it if needed).
   const saveToSector = useCallback(() => {
@@ -794,13 +809,86 @@ export default function MarketDataPage() {
       </div>
 
       {/* MAIN */}
-      <div className="flex flex-col gap-3 p-2 sm:p-3">
-        <AdvancedChart
-          symbol={symbol}
-          onSymbolChange={(s) => setSymbol(s)}
-          height={chartHeight}
-          className="shadow-xl shadow-black/40"
-        />
+      <div className="flex flex-col lg:flex-row gap-3 p-2 sm:p-3">
+        <div className="flex-1 min-w-0">
+          <AdvancedChart
+            symbol={symbol}
+            onSymbolChange={(s) => setSymbol(s)}
+            height={chartHeight}
+            className="shadow-xl shadow-black/40"
+          />
+        </div>
+
+        {/* Watchlist side panel (TradingView-style) */}
+        <aside className="lg:w-80 xl:w-96 shrink-0 rounded-lg border border-white/10 bg-slate-900/60 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Star className="w-3.5 h-3.5 text-amber-400 shrink-0" fill="currentColor" />
+              <span className="text-sm font-bold truncate">{activeListName}</span>
+              <span className="text-[10px] text-gray-500">({watchlist.length})</span>
+            </div>
+            <button
+              onClick={() => { setWatchlistMenuOpen((o) => !o); setNotifMenuOpen(false) }}
+              className="p-1 rounded hover:bg-white/10 text-gray-300"
+              title="Manage watchlists"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Column header */}
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-white/5">
+            <span>Symbol</span>
+            <span className="text-right w-20">Last</span>
+            <span className="text-right w-16">Chg%</span>
+          </div>
+
+          <div className="overflow-y-auto" style={{ maxHeight: chartHeight - 80 }}>
+            {watchlist.length === 0 && (
+              <div className="p-6 text-center text-[11px] text-gray-500">
+                Empty list — search a symbol to add it.
+              </div>
+            )}
+            {watchlist.map((sym) => {
+              const q = quotes[sym.toUpperCase()]
+              const active = sym.toUpperCase() === symbol.toUpperCase()
+              const up = (q?.changePercent ?? 0) >= 0
+              return (
+                <div
+                  key={sym}
+                  onClick={() => setSymbol(sym.toUpperCase())}
+                  className={`group grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 border-b border-white/5 cursor-pointer ${active ? 'bg-blue-600/15' : 'hover:bg-white/5'}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-black text-white"
+                      style={{ background: symbolColor(sym) }}
+                    >
+                      {sym.replace(/[-=^.].*$/, '').slice(0, 2)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs font-bold truncate ${active ? 'text-white' : 'text-gray-100'}`}>{sym}</span>
+                      {q?.name && <span className="block text-[10px] text-gray-500 truncate">{q.name}</span>}
+                    </span>
+                  </div>
+                  <span className="text-right w-20 text-xs font-semibold tabular-nums">{q ? fmtPrice(q.price) : '—'}</span>
+                  <span className="text-right w-16 flex items-center justify-end gap-1">
+                    <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {q ? fmtPct(q.changePercent) : '—'}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeFromWatchlist(sym) }}
+                      className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
+                      title="Remove"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </aside>
       </div>
 
       {/* Toast */}

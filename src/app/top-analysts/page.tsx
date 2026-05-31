@@ -8,9 +8,7 @@ import {
   StarIcon,
   TrophyIcon,
   MagnifyingGlassIcon,
-  BoltIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
+  ChartBarIcon,
   ChevronUpDownIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
@@ -27,22 +25,12 @@ type Analyst = {
   lastRating: string
 }
 
-type LiveRating = {
-  symbol: string
-  firm: string
-  fromGrade: string
-  toGrade: string
-  action: string
-  date: string
-}
-
 type ApiData = {
   ok: boolean
   asOf: string
   provider: string
   sectors: string[]
   analysts: Analyst[]
-  liveActivity: LiveRating[]
 }
 
 type SortKey = 'rank' | 'successRate' | 'avgReturn' | 'ratings' | 'lastRating'
@@ -75,13 +63,6 @@ function Stars({ score }: { score: number }) {
   )
 }
 
-function actionClass(action: string): string {
-  const a = (action || '').toLowerCase()
-  if (a === 'up' || a === 'init') return 'text-emerald-400'
-  if (a === 'down') return 'text-red-400'
-  return 'text-gray-300'
-}
-
 export default function TopAnalystsPage() {
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,6 +89,12 @@ export default function TopAnalystsPage() {
 
   useEffect(() => {
     load()
+  }, [load])
+
+  // Auto refresh every 5 minutes
+  useEffect(() => {
+    const id = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(id)
   }, [load])
 
   const sectors = useMemo(() => ['All', ...(data?.sectors || [])], [data])
@@ -165,8 +152,6 @@ export default function TopAnalystsPage() {
     }
   }
 
-  const live = data?.liveActivity || []
-
   const totalRatings = useMemo(
     () => ranked.reduce((acc, a) => acc + a.ratings, 0),
     [ranked]
@@ -174,6 +159,28 @@ export default function TopAnalystsPage() {
   const avgSuccess = useMemo(() => {
     if (!ranked.length) return 0
     return ranked.reduce((acc, a) => acc + a.successRate, 0) / ranked.length
+  }, [ranked])
+
+  // Sector conviction: which sectors analysts are buying the most (by avg expected return)
+  const sectorStats = useMemo(() => {
+    const map = new Map<string, { count: number; ratings: number; sumReturn: number; sumSuccess: number }>()
+    for (const a of ranked) {
+      const cur = map.get(a.sector) || { count: 0, ratings: 0, sumReturn: 0, sumSuccess: 0 }
+      cur.count++
+      cur.ratings += a.ratings
+      cur.sumReturn += a.avgReturn
+      cur.sumSuccess += a.successRate
+      map.set(a.sector, cur)
+    }
+    return Array.from(map.entries())
+      .map(([sector, s]) => ({
+        sector,
+        count: s.count,
+        ratings: s.ratings,
+        avgReturn: s.sumReturn / s.count,
+        avgSuccess: s.sumSuccess / s.count,
+      }))
+      .sort((a, b) => b.avgReturn - a.avgReturn)
   }, [ranked])
 
   const SortHeader = ({ label, k, align = 'right' }: { label: string; k: SortKey; align?: 'left' | 'right' }) => (
@@ -243,11 +250,8 @@ export default function TopAnalystsPage() {
               <div className="text-2xl font-bold tabular-nums">{totalRatings.toLocaleString('en-US')}</div>
             </div>
             <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500">Live Feed</div>
-              <div className="text-2xl font-bold tabular-nums flex items-center gap-1.5">
-                <BoltIcon className={`h-5 w-5 ${data?.provider === 'finnhub' ? 'text-amber-400' : 'text-slate-600'}`} />
-                {data?.provider === 'finnhub' ? 'On' : 'Off'}
-              </div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">Sectors Covered</div>
+              <div className="text-2xl font-bold tabular-nums">{sectorStats.length || '—'}</div>
             </div>
           </div>
 
@@ -362,58 +366,71 @@ export default function TopAnalystsPage() {
               </div>
             </section>
 
-            {/* Live analyst activity */}
+            {/* Sector conviction chart */}
             <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4 h-fit">
-              <div className="flex items-center gap-2 mb-3">
-                <BoltIcon className="h-5 w-5 text-amber-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Live Analyst Activity</h2>
+              <div className="flex items-center gap-2 mb-1">
+                <ChartBarIcon className="h-5 w-5 text-amber-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Sectors Analysts Are Buying</h2>
               </div>
-              {data?.provider !== 'finnhub' && !loading && (
-                <p className="text-[12px] text-gray-500 mb-3">
-                  Connect a Finnhub API key (<code className="text-amber-300">FINNHUB_API_KEY</code>) to stream real-time
-                  upgrades and downgrades from major firms.
-                </p>
-              )}
-              <div className="space-y-2">
+              <p className="text-[11px] text-gray-500 mb-4">Average expected return by sector across ranked analysts</p>
+              <div className="space-y-2.5">
                 {loading && !data
-                  ? Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="h-10 bg-slate-700/30 rounded animate-pulse" />
+                  ? Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-8 bg-slate-700/30 rounded animate-pulse" />
                     ))
-                  : live.length === 0
-                  ? !loading && (
-                      <p className="text-[12px] text-gray-500">No recent rating changes available.</p>
-                    )
-                  : live.map((r, i) => (
-                      <div
-                        key={`${r.symbol}-${i}`}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-white text-sm">{r.symbol}</span>
-                            {r.action.toLowerCase() === 'up' ? (
-                              <ArrowTrendingUpIcon className="h-3.5 w-3.5 text-emerald-400" />
-                            ) : r.action.toLowerCase() === 'down' ? (
-                              <ArrowTrendingDownIcon className="h-3.5 w-3.5 text-red-400" />
-                            ) : null}
+                  : sectorStats.map((s, i) => {
+                      const max = sectorStats[0]?.avgReturn || 1
+                      const w = Math.max(6, (s.avgReturn / max) * 100)
+                      return (
+                        <div key={s.sector}>
+                          <div className="flex items-center justify-between text-[11px] mb-0.5">
+                            <span className="font-semibold text-gray-200">{s.sector}</span>
+                            <span className="tabular-nums">
+                              <span className="text-sky-300 font-semibold">{fmtPct(s.avgReturn)}</span>
+                              <span className="text-gray-600"> · {s.count} analysts</span>
+                            </span>
                           </div>
-                          <div className="text-[11px] text-gray-400 truncate">{r.firm}</div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className={`text-[11px] font-semibold ${actionClass(r.action)}`}>
-                            {r.fromGrade ? `${r.fromGrade} → ${r.toGrade}` : r.toGrade || '—'}
+                          <div className="h-2.5 rounded bg-slate-900/60 overflow-hidden">
+                            <div
+                              className={`h-full rounded ${i === 0 ? 'bg-amber-400' : 'bg-gradient-to-r from-sky-500 to-emerald-500'}`}
+                              style={{ width: `${w}%` }}
+                            />
                           </div>
-                          <div className="text-[10px] text-gray-500">{fmtDate(r.date)}</div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
+              </div>
+
+              {/* Most-covered sectors by total ratings */}
+              <div className="mt-5 pt-4 border-t border-slate-700/50">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2.5">Most Covered Sectors</h3>
+                <div className="space-y-2">
+                  {[...sectorStats]
+                    .sort((a, b) => b.ratings - a.ratings)
+                    .slice(0, 5)
+                    .map((s) => {
+                      const maxR = Math.max(...sectorStats.map((x) => x.ratings), 1)
+                      const w = Math.max(6, (s.ratings / maxR) * 100)
+                      return (
+                        <div key={s.sector} className="flex items-center gap-2 text-[11px]">
+                          <span className="w-24 truncate text-gray-300">{s.sector}</span>
+                          <div className="flex-1 h-2 rounded bg-slate-900/60 overflow-hidden">
+                            <div className="h-full rounded bg-violet-500/70" style={{ width: `${w}%` }} />
+                          </div>
+                          <span className="w-14 text-right tabular-nums text-gray-400">
+                            {s.ratings.toLocaleString('en-US')}
+                          </span>
+                        </div>
+                      )
+                    })}
+                </div>
               </div>
             </section>
           </div>
 
           <p className="text-[11px] text-gray-500 text-center mt-6">
-            Top Analyst AI ranks Wall Street analysts by success rate and average return. Live rating changes powered by
-            Finnhub. For information only — not investment advice.
+            Top Analyst AI ranks Wall Street analysts by success rate and average return, auto-refreshed every 5 minutes.
+            For information only — not investment advice.
           </p>
         </div>
         <Footer />

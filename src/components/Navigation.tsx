@@ -161,6 +161,9 @@ export function Navigation({ className }: NavigationProps) {
               <NavigationLink href="/econoai" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-sky-600/30" onClick={() => setToolsMenuOpen(false)}>
                 UpdateAI
               </NavigationLink>
+              <NavigationLink href="/top-analysts" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
+                Top Analyst AI
+              </NavigationLink>
               <NavigationLink href="/news" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-cyan-600/30" onClick={() => setToolsMenuOpen(false)}>
                 News
               </NavigationLink>
@@ -289,6 +292,9 @@ export function Navigation({ className }: NavigationProps) {
               </NavigationLink>
               <NavigationLink href="/econoai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 UpdateAI
+              </NavigationLink>
+              <NavigationLink href="/top-analysts" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
+                Top Analyst AI
               </NavigationLink>
               <NavigationLink href="/news" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 News

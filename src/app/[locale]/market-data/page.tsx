@@ -168,21 +168,29 @@ export default function MarketDataPage() {
   const [newListName, setNewListName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [chartHeight, setChartHeight] = useState(620)
+  const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
   const mainRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   useEffect(() => {
     const compute = () => {
+      // Measure the real distance from the top of the viewport to the terminal
+      // container (i.e. the actual height of the sticky site header). This makes
+      // the page fit the viewport exactly on every device, with no page scroll.
+      const cTop = containerRef.current?.getBoundingClientRect().top ?? 56
+      const vh = window.visualViewport?.height ?? window.innerHeight
+      setContainerH(Math.max(360, Math.round(vh - cTop)))
       const top = mainRef.current?.getBoundingClientRect().top ?? 110
       const pad = 24 // bottom padding + safety margin so nothing overflows
       // AdvancedChart renders a toolbar + indicators bar + crosshair row + status
       // bar around the chart canvas; subtract that chrome plus a small buffer so the
       // whole terminal always fits the viewport without any vertical scroll.
       const chartChrome = 132
-      const h = window.innerHeight - top - pad - chartChrome
+      const h = vh - top - pad - chartChrome
       setChartHeight(Math.max(280, Math.min(820, Math.round(h))))
     }
     // run after layout is ready
@@ -538,8 +546,8 @@ export default function MarketDataPage() {
 
             {searchOpen && (
               <>
-                <div className="fixed inset-0 z-30" onClick={() => setSearchOpen(false)} />
-                <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-40">
+                <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)} />
+                <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1 sm:w-96 max-w-[calc(100vw-1rem)] bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
                       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-2">
@@ -630,8 +638,8 @@ export default function MarketDataPage() {
             </button>
             {menuOpen && (
               <>
-                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-40 w-60 bg-slate-900 border border-white/15 rounded-md shadow-xl p-1">
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 sm:w-60 max-w-[calc(100vw-1rem)] z-50 bg-slate-900 border border-white/15 rounded-md shadow-xl p-1">
                   <button onClick={() => { setWatchlistMenuOpen(true); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-white/5 text-xs text-gray-200">
                     <List className="w-4 h-4 text-blue-300 shrink-0" />
                     <span className="font-semibold">Watchlists</span>
@@ -661,8 +669,8 @@ export default function MarketDataPage() {
             )}
             {watchlistMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-30" onClick={() => setWatchlistMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-40 w-80 bg-slate-900 border border-white/15 rounded-md shadow-xl p-2">
+                  <div className="fixed inset-0 z-40" onClick={() => setWatchlistMenuOpen(false)} />
+                  <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 sm:w-80 max-w-[calc(100vw-1rem)] z-50 bg-slate-900 border border-white/15 rounded-md shadow-xl p-2">
                     <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1 px-1">Your Watchlists</div>
                     <div className="space-y-0.5 max-h-64 overflow-y-auto">
                       {Object.keys(watchlists).map((name) => {
@@ -744,8 +752,8 @@ export default function MarketDataPage() {
               )}
             {notifMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-30" onClick={() => setNotifMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-40 w-96 bg-slate-900 border border-white/15 rounded-md shadow-xl flex flex-col">
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifMenuOpen(false)} />
+                  <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 sm:w-96 max-w-[calc(100vw-1rem)] max-h-[70vh] z-50 bg-slate-900 border border-white/15 rounded-md shadow-xl flex flex-col">
                     <div className="p-3 border-b border-white/5">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-bold flex items-center gap-2">
@@ -843,7 +851,11 @@ export default function MarketDataPage() {
   )
 
   return (
-    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3.5rem)] flex flex-col">
+    <div
+      ref={containerRef}
+      style={containerH ? { height: containerH } : undefined}
+      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
+    >
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
         <div className="flex-1 min-w-0 min-h-0">

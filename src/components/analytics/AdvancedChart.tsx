@@ -1313,7 +1313,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         </div>
 
         {/* Compare input (multi-symbol) */}
-        <div className="hidden sm:flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">vs</span>
           <input
             value={compareInput}

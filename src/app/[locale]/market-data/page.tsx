@@ -19,9 +19,9 @@ import {
   Trash2,
   Check,
   Save,
-  Share2,
+  Download,
+  MoreHorizontal,
 } from 'lucide-react'
-import Logo from '@/components/Logo'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 
 interface SearchResult {
@@ -159,6 +159,7 @@ export default function MarketDataPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [popularOpen, setPopularOpen] = useState<string>('US Indices')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [watchlistMenuOpen, setWatchlistMenuOpen] = useState(false)
   const [notifMenuOpen, setNotifMenuOpen] = useState(false)
   const [notificationTab, setNotificationTab] = useState<'all' | 'system' | 'results' | 'scans' | 'alerts'>('all')
@@ -170,7 +171,7 @@ export default function MarketDataPage() {
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
   const mainRef = useRef<HTMLDivElement | null>(null)
-  const headerRef = useRef<HTMLDivElement | null>(null)
+  const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   useEffect(() => {
@@ -189,9 +190,9 @@ export default function MarketDataPage() {
     // Recompute whenever the header height changes (price badge appearing,
     // toolbar buttons wrapping to a new line, etc.) so we never need to scroll.
     let ro: ResizeObserver | undefined
-    if (typeof ResizeObserver !== 'undefined' && headerRef.current) {
+    if (typeof ResizeObserver !== 'undefined' && mainRef.current) {
       ro = new ResizeObserver(() => requestAnimationFrame(compute))
-      ro.observe(headerRef.current)
+      ro.observe(mainRef.current)
     }
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute); ro?.disconnect() }
   }, [panelOpen])
@@ -313,9 +314,38 @@ export default function MarketDataPage() {
     showToast(`Saved ${v} → ${sector}`)
   }, [symbol, setWatchlists, setActiveListName, showToast])
 
-  // Share — copies a deep link to the current symbol to the clipboard.
+  // Share — exports the current chart as a PNG image. On mobile it offers the
+  // native share sheet (Save to Photos / gallery); on desktop it downloads the file.
   const shareCurrent = useCallback(async () => {
     const v = symbol.trim().toUpperCase()
+    const canvas = chartApiRef.current?.screenshot?.() || null
+    if (canvas) {
+      try {
+        const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))
+        if (blob) {
+          const fileName = `${v}-econopulse-${new Date().toISOString().slice(0, 10)}.png`
+          const file = new File([blob], fileName, { type: 'image/png' })
+          const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
+          if (nav.canShare && nav.canShare({ files: [file] }) && navigator.share) {
+            await navigator.share({ files: [file], title: `${v} • Econopulse.ai`, text: `${v} chart` })
+            return
+          }
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = fileName
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+          showToast('Chart image saved')
+          return
+        }
+      } catch {
+        // fall through to link sharing
+      }
+    }
+    // Fallback: share/copy a deep link to the current symbol.
     try {
       const url = new URL(window.location.href)
       url.searchParams.set('symbol', v)
@@ -480,19 +510,8 @@ export default function MarketDataPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const currentQuote = quotes[symbol.toUpperCase()]
-
-  return (
-    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3rem)] flex flex-col">
-      {/* HEADER */}
-      <div ref={headerRef} className="border-b border-white/10 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
-        <div className="px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 shrink-0">
-            <Logo size={26} showText={false} layout="inline" />
-          </div>
-
-          {/* Single search bar */}
-          <div className="relative order-last w-full sm:order-none sm:w-auto sm:ml-2 sm:flex-1 sm:max-w-md">
+  const searchSlot = (
+          <div className="relative w-40 sm:w-52 md:w-64 shrink-0">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
               <input
@@ -591,31 +610,55 @@ export default function MarketDataPage() {
               </>
             )}
           </div>
+  )
 
-          {currentQuote && (
-            <div className="hidden md:flex items-center gap-3 text-sm">
-              <div className="flex flex-col items-end">
-                <span className="font-bold">${fmtPrice(currentQuote.price)}</span>
-                <span className={`text-[10px] ${currentQuote.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {currentQuote.changePercent >= 0 ? '+' : ''}{fmtPrice(currentQuote.change)} ({fmtPct(currentQuote.changePercent)})
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="ml-auto flex items-center gap-2">
-            {/* Watchlist dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => { setWatchlistMenuOpen((o) => !o); setNotifMenuOpen(false) }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
-              >
-                <List className="w-3.5 h-3.5 text-blue-300" />
-                <span className="font-semibold">{activeListName}</span>
-                <span className="text-gray-400">({watchlist.length})</span>
-                <ChevronDown className={`w-3 h-3 transition-transform ${watchlistMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {watchlistMenuOpen && (
+  const actionsSlot = (
+          <div className="relative">
+            <button
+              onClick={() => { setMenuOpen((o) => !o); setWatchlistMenuOpen(false); setNotifMenuOpen(false) }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+              title="Menu"
+            >
+              <MoreHorizontal className="w-4 h-4 text-blue-300" />
+              <span className="font-semibold hidden sm:inline">{activeListName}</span>
+              <span className="text-gray-400">({watchlist.length})</span>
+              {unreadCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-500/40 text-blue-100 text-[9px] font-bold leading-none">{unreadCount}</span>
+              )}
+              <ChevronDown className={`w-3 h-3 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-40 w-60 bg-slate-900 border border-white/15 rounded-md shadow-xl p-1">
+                  <button onClick={() => { setWatchlistMenuOpen(true); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-white/5 text-xs text-gray-200">
+                    <List className="w-4 h-4 text-blue-300 shrink-0" />
+                    <span className="font-semibold">Watchlists</span>
+                    <span className="ml-auto text-gray-500 truncate">{activeListName} ({watchlist.length})</span>
+                  </button>
+                  <button onClick={() => { setNotifMenuOpen(true); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-white/5 text-xs text-gray-200">
+                    <Bell className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span className="font-semibold">Alerts</span>
+                    {unreadCount > 0 && <span className="ml-auto px-1.5 py-0.5 rounded-full bg-blue-500/40 text-blue-100 text-[9px] font-bold">{unreadCount}</span>}
+                  </button>
+                  <div className="my-1 border-t border-white/10" />
+                  <button onClick={() => { saveToSector(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-emerald-500/15 text-xs text-emerald-200">
+                    <Save className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Save to watchlist</span>
+                  </button>
+                  <button onClick={() => { shareCurrent(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-blue-500/15 text-xs text-blue-200">
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Save / Share chart image</span>
+                  </button>
+                  <div className="my-1 border-t border-white/10" />
+                  <button onClick={() => { fetchQuotes(); setMenuOpen(false) }} disabled={loadingQuotes} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-white/5 text-xs text-gray-300 disabled:opacity-50">
+                    <RefreshCw className={`w-4 h-4 shrink-0 ${loadingQuotes ? 'animate-spin' : ''}`} />
+                    <span className="font-semibold">Refresh quotes</span>
+                  </button>
+                </div>
+              </>
+            )}
+            {watchlistMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setWatchlistMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 z-40 w-80 bg-slate-900 border border-white/15 rounded-md shadow-xl p-2">
@@ -698,24 +741,7 @@ export default function MarketDataPage() {
                   </div>
                 </>
               )}
-            </div>
-
-            {/* Notifications dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => { setNotifMenuOpen((o) => !o); setWatchlistMenuOpen(false) }}
-                className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
-              >
-                <Bell className="w-3.5 h-3.5 text-amber-300" />
-                <span className="font-semibold">Alerts</span>
-                {unreadCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/40 text-blue-100 text-[9px] font-bold leading-none">
-                    {unreadCount}
-                  </span>
-                )}
-                <ChevronDown className={`w-3 h-3 transition-transform ${notifMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {notifMenuOpen && (
+            {notifMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setNotifMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 z-40 w-96 bg-slate-900 border border-white/15 rounded-md shadow-xl flex flex-col">
@@ -812,37 +838,11 @@ export default function MarketDataPage() {
                   </div>
                 </>
               )}
-            </div>
-
-            <button
-              onClick={saveToSector}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-emerald-500/15 hover:border-emerald-500/40 text-xs text-emerald-200"
-              title="Smart save: file this symbol into its sector watchlist"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline font-semibold">Save</span>
-            </button>
-            <button
-              onClick={shareCurrent}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-blue-500/15 hover:border-blue-500/40 text-xs text-blue-200"
-              title="Share a link to this symbol"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline font-semibold">Share</span>
-            </button>
-
-            <button
-              onClick={fetchQuotes}
-              disabled={loadingQuotes}
-              className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-50"
-              title="Refresh quotes"
-            >
-              <RefreshCw className={`w-4 h-4 ${loadingQuotes ? 'animate-spin' : ''}`} />
-            </button>
           </div>
-        </div>
-      </div>
+  )
 
+  return (
+    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3rem)] flex flex-col">
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
         <div className="flex-1 min-w-0 min-h-0">
@@ -851,6 +851,9 @@ export default function MarketDataPage() {
             onSymbolChange={(s) => setSymbol(s)}
             height={chartHeight}
             className="shadow-xl shadow-black/40"
+            leftSlot={searchSlot}
+            rightSlot={actionsSlot}
+            onChartApi={(api) => { chartApiRef.current = api }}
           />
         </div>
 

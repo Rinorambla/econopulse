@@ -53,6 +53,12 @@ interface Props {
   className?: string
   activeTool?: DrawingTool
   onToolChange?: (t: DrawingTool) => void
+  /** Custom node rendered at the far left of the toolbar (e.g. the symbol search bar). */
+  leftSlot?: React.ReactNode
+  /** Custom node rendered after the timeframe buttons (e.g. grouped actions menu). */
+  rightSlot?: React.ReactNode
+  /** Receives an imperative API to capture the chart as an image. */
+  onChartApi?: (api: { screenshot: () => HTMLCanvasElement | null }) => void
 }
 
 export type DrawingTool =
@@ -460,7 +466,7 @@ function computeVolumeProfile(bars: Bar[], bins = 24): {
 }
 
 // ========== Component ==========
-export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '', activeTool: activeToolProp, onToolChange }: Props) {
+export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '', activeTool: activeToolProp, onToolChange, leftSlot, rightSlot, onChartApi }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
@@ -468,6 +474,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const overlaySeriesRef = useRef<ISeriesApi<SeriesType>[]>([])
   const tooltipRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Expose an imperative screenshot API to the parent (reads chartRef at call time).
+  const onChartApiRef = useRef(onChartApi)
+  onChartApiRef.current = onChartApi
+  useEffect(() => {
+    onChartApiRef.current?.({
+      screenshot: () => {
+        try { return chartRef.current?.takeScreenshot() ?? null } catch { return null }
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [symbol, setSymbol] = useState(propSymbol)
   const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('mkt:rangeKey', '1Y')
@@ -1193,6 +1211,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     <div className={`flex flex-col h-full bg-slate-900/60 border border-white/10 rounded-lg overflow-hidden ${className}`}>
       {/* ===== TOP BAR ===== */}
       <div className="flex flex-wrap items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-800/50 border-b border-white/10">
+        {/* Custom left slot (symbol search bar injected by the page) */}
+        {leftSlot}
+
         {/* Active symbol pill (read-only — search is in page header) */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-white font-bold tracking-wide">{symbol}</span>
@@ -1239,6 +1260,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </button>
           ))}
         </div>
+
+        {/* Custom right slot (grouped actions menu injected by the page) */}
+        {rightSlot && (
+          <>
+            <div className="h-5 w-px bg-white/15 mx-1" />
+            {rightSlot}
+          </>
+        )}
 
         {/* Separator */}
         <div className="h-5 w-px bg-white/15 mx-1" />

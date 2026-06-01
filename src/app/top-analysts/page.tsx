@@ -10,6 +10,8 @@ import {
   MagnifyingGlassIcon,
   ChartBarIcon,
   ChevronUpDownIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 
@@ -71,6 +73,7 @@ export default function TopAnalystsPage() {
   const [sector, setSector] = useState('All')
   const [sortKey, setSortKey] = useState<SortKey>('rank')
   const [sortAsc, setSortAsc] = useState(true)
+  const [expanded, setExpanded] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -152,15 +155,6 @@ export default function TopAnalystsPage() {
     }
   }
 
-  const totalRatings = useMemo(
-    () => ranked.reduce((acc, a) => acc + a.ratings, 0),
-    [ranked]
-  )
-  const avgSuccess = useMemo(() => {
-    if (!ranked.length) return 0
-    return ranked.reduce((acc, a) => acc + a.successRate, 0) / ranked.length
-  }, [ranked])
-
   // Sector conviction: which sectors analysts are buying the most (by avg expected return)
   const sectorStats = useMemo(() => {
     const map = new Map<string, { count: number; ratings: number; sumReturn: number; sumSuccess: number }>()
@@ -183,6 +177,12 @@ export default function TopAnalystsPage() {
       .sort((a, b) => b.avgReturn - a.avgReturn)
   }, [ranked])
 
+  // Collapse the long list by default; show all when expanded or while searching/filtering
+  const COLLAPSE_LIMIT = 15
+  const isFiltering = query.trim() !== '' || sector !== 'All'
+  const showAll = expanded || isFiltering
+  const visibleRows = showAll ? filtered : filtered.slice(0, COLLAPSE_LIMIT)
+
   const SortHeader = ({ label, k, align = 'right' }: { label: string; k: SortKey; align?: 'left' | 'right' }) => (
     <button
       onClick={() => toggleSort(k)}
@@ -191,7 +191,7 @@ export default function TopAnalystsPage() {
       }`}
     >
       {label}
-      <ChevronUpDownIcon className={`h-3.5 w-3.5 ${sortKey === k ? 'text-sky-400' : 'text-slate-600'}`} />
+      <ChevronUpDownIcon className={`h-3.5 w-3.5 ${sortKey === k ? 'text-blue-400' : 'text-slate-600'}`} />
     </button>
   )
 
@@ -202,7 +202,7 @@ export default function TopAnalystsPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-3">
             <div>
-              <div className="flex items-center gap-2 text-amber-400 text-xs uppercase tracking-wider font-semibold mb-1">
+              <div className="flex items-center gap-2 text-blue-400 text-xs uppercase tracking-wider font-semibold mb-1">
                 <TrophyIcon className="h-4 w-4" />
                 <span>Top Analyst AI · Wall Street Leaderboard</span>
               </div>
@@ -221,7 +221,7 @@ export default function TopAnalystsPage() {
               <button
                 onClick={load}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-3 py-1.5 text-sm font-semibold text-amber-200 transition disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 px-3 py-1.5 text-sm font-semibold text-blue-200 transition disabled:opacity-50"
               >
                 <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -235,26 +235,6 @@ export default function TopAnalystsPage() {
             </div>
           )}
 
-          {/* Stat strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500">Analysts Ranked</div>
-              <div className="text-2xl font-bold tabular-nums">{ranked.length || '—'}</div>
-            </div>
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500">Avg Success Rate</div>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400">{fmtPct(avgSuccess)}</div>
-            </div>
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500">Total Ratings</div>
-              <div className="text-2xl font-bold tabular-nums">{totalRatings.toLocaleString('en-US')}</div>
-            </div>
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/60 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500">Sectors Covered</div>
-              <div className="text-2xl font-bold tabular-nums">{sectorStats.length || '—'}</div>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Leaderboard */}
             <section className="lg:col-span-2 rounded-xl bg-slate-800/40 border border-slate-700/60 overflow-hidden">
@@ -266,13 +246,13 @@ export default function TopAnalystsPage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search analyst, firm or sector…"
-                    className="w-full rounded-lg bg-slate-900/70 border border-slate-700/60 pl-9 pr-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/50"
+                    className="w-full rounded-lg bg-slate-900/70 border border-slate-700/60 pl-9 pr-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
                   />
                 </div>
                 <select
                   value={sector}
                   onChange={(e) => setSector(e.target.value)}
-                  className="rounded-lg bg-slate-900/70 border border-slate-700/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                  className="rounded-lg bg-slate-900/70 border border-slate-700/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
                 >
                   {sectors.map((s) => (
                     <option key={s} value={s}>
@@ -322,7 +302,7 @@ export default function TopAnalystsPage() {
                             </td>
                           </tr>
                         ))
-                      : filtered.map((a) => (
+                      : visibleRows.map((a) => (
                           <tr key={a.id} className="hover:bg-slate-700/20 transition">
                             <td className="px-3 py-2.5">
                               <span className="inline-flex items-center justify-center min-w-[28px] h-6 rounded-md bg-slate-900/70 border border-slate-700/60 text-[12px] font-bold tabular-nums text-gray-300">
@@ -343,7 +323,7 @@ export default function TopAnalystsPage() {
                             <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-emerald-400">
                               {fmtPct(a.successRate)}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-sky-300">
+                            <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-blue-300">
                               {fmtPct(a.avgReturn)}
                             </td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-gray-300 hidden sm:table-cell">
@@ -364,12 +344,34 @@ export default function TopAnalystsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Expand / collapse */}
+              {!loading && !isFiltering && filtered.length > COLLAPSE_LIMIT && (
+                <div className="border-t border-slate-700/60">
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-blue-300 hover:text-white hover:bg-blue-500/10 transition"
+                  >
+                    {expanded ? (
+                      <>
+                        Show less
+                        <ChevronUpIcon className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Show all {filtered.length} analysts
+                        <ChevronDownIcon className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* Sector conviction chart */}
             <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4 h-fit">
               <div className="flex items-center gap-2 mb-1">
-                <ChartBarIcon className="h-5 w-5 text-amber-400" />
+                <ChartBarIcon className="h-5 w-5 text-blue-400" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Sectors Analysts Are Buying</h2>
               </div>
               <p className="text-[11px] text-gray-500 mb-4">Average expected return by sector across ranked analysts</p>
@@ -386,13 +388,13 @@ export default function TopAnalystsPage() {
                           <div className="flex items-center justify-between text-[11px] mb-0.5">
                             <span className="font-semibold text-gray-200">{s.sector}</span>
                             <span className="tabular-nums">
-                              <span className="text-sky-300 font-semibold">{fmtPct(s.avgReturn)}</span>
+                              <span className="text-blue-300 font-semibold">{fmtPct(s.avgReturn)}</span>
                               <span className="text-gray-600"> · {s.count} analysts</span>
                             </span>
                           </div>
                           <div className="h-2.5 rounded bg-slate-900/60 overflow-hidden">
                             <div
-                              className={`h-full rounded ${i === 0 ? 'bg-amber-400' : 'bg-gradient-to-r from-sky-500 to-emerald-500'}`}
+                              className={`h-full rounded ${i === 0 ? 'bg-gradient-to-r from-blue-500 to-purple-500' : 'bg-gradient-to-r from-blue-600/80 to-blue-400/80'}`}
                               style={{ width: `${w}%` }}
                             />
                           </div>
@@ -415,7 +417,7 @@ export default function TopAnalystsPage() {
                         <div key={s.sector} className="flex items-center gap-2 text-[11px]">
                           <span className="w-24 truncate text-gray-300">{s.sector}</span>
                           <div className="flex-1 h-2 rounded bg-slate-900/60 overflow-hidden">
-                            <div className="h-full rounded bg-violet-500/70" style={{ width: `${w}%` }} />
+                            <div className="h-full rounded bg-purple-500/70" style={{ width: `${w}%` }} />
                           </div>
                           <span className="w-14 text-right tabular-nums text-gray-400">
                             {s.ratings.toLocaleString('en-US')}

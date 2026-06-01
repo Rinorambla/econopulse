@@ -177,12 +177,13 @@ export default function MarketDataPage() {
   useEffect(() => {
     const compute = () => {
       const top = mainRef.current?.getBoundingClientRect().top ?? 110
-      const pad = 16 // bottom padding
-      // AdvancedChart renders a toolbar + status bar around the chart canvas;
-      // subtract that chrome so the whole terminal fits the viewport without scroll.
-      const chartChrome = 96
+      const pad = 24 // bottom padding + safety margin so nothing overflows
+      // AdvancedChart renders a toolbar + indicators bar + crosshair row + status
+      // bar around the chart canvas; subtract that chrome plus a small buffer so the
+      // whole terminal always fits the viewport without any vertical scroll.
+      const chartChrome = 132
       const h = window.innerHeight - top - pad - chartChrome
-      setChartHeight(Math.max(300, Math.min(900, Math.round(h))))
+      setChartHeight(Math.max(280, Math.min(820, Math.round(h))))
     }
     // run after layout is ready
     const raf = requestAnimationFrame(compute)
@@ -842,7 +843,7 @@ export default function MarketDataPage() {
   )
 
   return (
-    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3rem)] flex flex-col">
+    <div className="bg-[#05070d] text-white overflow-hidden h-[calc(100dvh-3.5rem)] flex flex-col">
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
         <div className="flex-1 min-w-0 min-h-0">

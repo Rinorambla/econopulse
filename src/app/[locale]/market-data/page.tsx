@@ -489,7 +489,6 @@ export default function MarketDataPage() {
         <div className="px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 shrink-0">
             <Logo size={26} showText={false} layout="inline" />
-            <p className="hidden xl:block text-[10px] text-gray-400 leading-tight">Pro Technical<br />Analysis Terminal</p>
           </div>
 
           {/* Single search bar */}

@@ -108,6 +108,9 @@ const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
   { id: 'text', label: 'Text / Note' },
 ]
 
+// Distinct colors for multi-symbol compare overlays
+const COMPARE_COLORS = ['#f472b6', '#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#fb7185']
+
 const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: string }[] }[] = [
   {
     category: 'Trend',
@@ -480,9 +483,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [setIndicatorList])
   const [indicatorsOpen, setIndicatorsOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
-  const [compareSym, setCompareSym] = useLocalStorage<string>('mkt:compareSym', '')
+  const [compareSyms, setCompareSyms] = useLocalStorage<string[]>('mkt:compareSyms', [])
   const [compareInput, setCompareInput] = useState('')
-  const [compareBars, setCompareBars] = useState<Bar[]>([])
+  const [compareData, setCompareData] = useState<Record<string, Bar[]>>({})
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -561,32 +564,41 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Fetch compare symbol bars (ratio overlay)
+  // Fetch compare symbols bars (normalized performance overlays)
   useEffect(() => {
-    if (!compareSym) { setCompareBars([]); return }
+    if (!compareSyms.length) { setCompareData({}); return }
     let cancelled = false
     ;(async () => {
-      try {
-        const qs = new URLSearchParams({ symbol: compareSym, range: currentRange.range, interval: currentRange.interval })
-        const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
-        if (!res.ok) throw new Error()
-        const json = await res.json()
-        const raw = json?.bars || json?.data?.bars || json?.data || []
-        if (!Array.isArray(raw)) throw new Error()
-        const parsed: Bar[] = raw
-          .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
-          .map((b: any) => ({
-            time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
-            open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
-          }))
-          .sort((a: Bar, b: Bar) => a.time - b.time)
-        if (!cancelled) setCompareBars(parsed)
-      } catch {
-        if (!cancelled) setCompareBars([])
+      const entries = await Promise.all(
+        compareSyms.map(async (sym): Promise<[string, Bar[]]> => {
+          try {
+            const qs = new URLSearchParams({ symbol: sym, range: currentRange.range, interval: currentRange.interval })
+            const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+            if (!res.ok) throw new Error()
+            const json = await res.json()
+            const raw = json?.bars || json?.data?.bars || json?.data || []
+            if (!Array.isArray(raw)) throw new Error()
+            const parsed: Bar[] = raw
+              .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
+              .map((b: any) => ({
+                time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
+                open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
+              }))
+              .sort((a: Bar, b: Bar) => a.time - b.time)
+            return [sym, parsed]
+          } catch {
+            return [sym, []]
+          }
+        })
+      )
+      if (!cancelled) {
+        const next: Record<string, Bar[]> = {}
+        for (const [sym, b] of entries) next[sym] = b
+        setCompareData(next)
       }
     })()
     return () => { cancelled = true }
-  }, [compareSym, currentRange])
+  }, [compareSyms, currentRange])
 
   // ========== Chart Creation / Update ==========
   // Tick used to safely re-trigger the effect once when the container width is 0
@@ -908,25 +920,33 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       addSubLine(obvVals.map(v => v as number | null), sid, '#22d3ee')
     }
 
-    // ===== COMPARE OVERLAY (ratio line on its own price scale) =====
-    if (compareSym && compareBars.length > 1) {
+    // ===== COMPARE OVERLAY (normalized % performance lines on their own scale) =====
+    const activeCompare = compareSyms.filter((s) => (compareData[s]?.length || 0) > 1)
+    if (activeCompare.length > 0) {
       try {
-        const cmpMap = new Map<number, number>()
-        for (const cb of compareBars) cmpMap.set(cb.time, cb.close)
-        const ratio: LineData[] = []
-        for (const b of bars) {
-          const c = cmpMap.get(b.time)
-          if (c && c > 0) ratio.push({ time: formatTime(b.time) as Time, value: b.close / c })
-        }
-        if (ratio.length > 1) {
+        let scaleUsed = false
+        activeCompare.forEach((sym, idx) => {
+          const cbars = compareData[sym]
+          if (!cbars || cbars.length < 2) return
+          const base = cbars[0].close
+          if (!base || base <= 0) return
+          const line: LineData[] = cbars.map((b) => ({
+            time: formatTime(b.time) as Time,
+            value: (b.close / base - 1) * 100,
+          }))
+          if (line.length < 2) return
+          const color = COMPARE_COLORS[idx % COMPARE_COLORS.length]
           const cmpSeries = chart.addSeries(LineSeries, {
-            color: '#f472b6', lineWidth: 2, priceScaleId: 'compare',
+            color, lineWidth: 2, priceScaleId: 'compare',
             crosshairMarkerVisible: false, lastValueVisible: true,
-            title: `${symbol}/${compareSym}`,
+            title: sym,
           })
-          cmpSeries.setData(ratio)
-          chart.priceScale('compare').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 }, visible: true })
+          cmpSeries.setData(line)
           overlaySeriesRef.current.push(cmpSeries)
+          scaleUsed = true
+        })
+        if (scaleUsed) {
+          chart.priceScale('compare').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 }, visible: true })
         }
       } catch { /* ignore */ }
     }
@@ -1034,7 +1054,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSym, compareBars, symbol])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -1263,26 +1283,49 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           )}
         </div>
 
-        {/* Compare input */}
-        <div className="hidden sm:flex items-center gap-1">
+        {/* Compare input (multi-symbol) */}
+        <div className="hidden sm:flex items-center gap-1 flex-wrap">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">vs</span>
           <input
-            value={compareInput || compareSym}
+            value={compareInput}
             onChange={(e) => setCompareInput(e.target.value.toUpperCase())}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { setCompareSym(compareInput.trim().toUpperCase()); setCompareInput('') }
-              if (e.key === 'Escape') { setCompareInput(''); setCompareSym('') }
+              if (e.key === 'Enter') {
+                const v = compareInput.trim().toUpperCase()
+                if (v && !compareSyms.includes(v) && v !== symbol.toUpperCase() && compareSyms.length < COMPARE_COLORS.length) {
+                  setCompareSyms([...compareSyms, v])
+                }
+                setCompareInput('')
+              }
+              if (e.key === 'Escape') setCompareInput('')
             }}
-            placeholder="Compare (e.g. SPY)"
+            placeholder="Compare (SPY, QQQ…)"
             className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
           />
-          {compareSym && (
-            <button
-              onClick={() => { setCompareSym(''); setCompareInput('') }}
-              className="text-[10px] text-gray-400 hover:text-rose-300"
-              title="Remove compare"
+          {compareSyms.map((s, idx) => (
+            <span
+              key={s}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border"
+              style={{ color: COMPARE_COLORS[idx % COMPARE_COLORS.length], borderColor: `${COMPARE_COLORS[idx % COMPARE_COLORS.length]}66` }}
             >
-              ✕
+              <span className="w-2 h-2 rounded-full" style={{ background: COMPARE_COLORS[idx % COMPARE_COLORS.length] }} />
+              {s}
+              <button
+                onClick={() => setCompareSyms(compareSyms.filter((x) => x !== s))}
+                className="text-gray-400 hover:text-rose-300"
+                title={`Remove ${s}`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          {compareSyms.length > 1 && (
+            <button
+              onClick={() => setCompareSyms([])}
+              className="text-[10px] text-gray-500 hover:text-rose-300"
+              title="Clear all"
+            >
+              clear
             </button>
           )}
         </div>

@@ -9,9 +9,23 @@ export const dynamic = 'force-dynamic'
 export const preferredRegion = 'auto'
 export const maxDuration = 55
 
-// Initialize AI client — supports OpenAI and Groq (free)
+// Initialize AI client — supports Anthropic (Claude), OpenAI and Groq (free)
 function getAIClient(): { client: OpenAI; model: string; fallbackModel: string; provider: string } {
-  // Priority: OpenAI → Groq (free)
+  // Priority: Anthropic (Claude) → OpenAI → Groq (free)
+  // Anthropic exposes an OpenAI-compatible endpoint, so we can reuse the OpenAI SDK.
+  if (process.env.ANTHROPIC_API_KEY) {
+    return {
+      client: new OpenAI({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        baseURL: 'https://api.anthropic.com/v1/',
+      }),
+      // Default to Claude Opus; override with ANTHROPIC_MODEL if needed.
+      model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-20250514',
+      // Cheaper/faster Claude model used if the primary one is unavailable.
+      fallbackModel: process.env.ANTHROPIC_FALLBACK_MODEL || 'claude-3-5-haiku-latest',
+      provider: 'anthropic',
+    }
+  }
   if (process.env.OPENAI_API_KEY) {
     return {
       client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
@@ -28,7 +42,7 @@ function getAIClient(): { client: OpenAI; model: string; fallbackModel: string; 
       provider: 'groq',
     }
   }
-  throw new Error('No AI provider configured (set OPENAI_API_KEY or GROQ_API_KEY)')
+  throw new Error('No AI provider configured (set ANTHROPIC_API_KEY, OPENAI_API_KEY or GROQ_API_KEY)')
 }
 
 // Helper to timeout a promise
@@ -251,8 +265,8 @@ export async function POST(req: NextRequest) {
     }
 
     // If no AI provider is configured, return graceful fallback
-    if (!process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) {
-      console.error('❌ No AI provider configured (need OPENAI_API_KEY or GROQ_API_KEY)')
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) {
+      console.error('❌ No AI provider configured (need ANTHROPIC_API_KEY, OPENAI_API_KEY or GROQ_API_KEY)')
       const res = fallbackResponse('openai_not_configured')
       const headers = rateLimitHeaders(rl)
       Object.entries(headers).forEach(([k, v]) => res.headers.set(k, v))
@@ -431,6 +445,10 @@ Keep prose crisp and professional.`
       if (process.env.OPENAI_API_KEY) {
         const oa = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         candidates.push({ client: oa, model: 'gpt-4o-mini', label: 'openai:gpt-4o-mini' });
+      }
+      if (process.env.ANTHROPIC_API_KEY) {
+        const claude = new OpenAI({ apiKey: process.env.ANTHROPIC_API_KEY, baseURL: 'https://api.anthropic.com/v1/' });
+        candidates.push({ client: claude, model: process.env.ANTHROPIC_FALLBACK_MODEL || 'claude-3-5-haiku-latest', label: 'anthropic:claude-haiku' });
       }
 
       for (let i = 0; i < candidates.length; i++) {

@@ -36,6 +36,57 @@ const AdvancedChart = dynamic(
   { ssr: false, loading: () => <ChartSkeleton /> }
 )
 
+// Composites the EconoPulse logo + brand text as a watermark on the bottom-right
+// of a chart screenshot, so shared images always show their source.
+async function addWatermark(src: HTMLCanvasElement): Promise<HTMLCanvasElement> {
+  const out = document.createElement('canvas')
+  out.width = src.width
+  out.height = src.height
+  const ctx = out.getContext('2d')
+  if (!ctx) return src
+  ctx.drawImage(src, 0, 0)
+
+  const scale = Math.max(1, src.width / 900)
+  const pad = Math.round(12 * scale)
+  const fontSize = Math.round(15 * scale)
+  const logoSize = Math.round(18 * scale)
+
+  // Brand text with cyan→blue gradient (matches the in-app status bar).
+  ctx.font = `700 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`
+  ctx.textBaseline = 'middle'
+  const text = 'ECONOPULSE.AI'
+  const textW = ctx.measureText(text).width
+  const totalW = logoSize + Math.round(6 * scale) + textW
+  const baseX = src.width - pad - totalW
+  const baseY = src.height - pad - logoSize / 2
+
+  // Try to draw the wave logo; fall back to text-only if it fails to load.
+  const logo = new Image()
+  logo.crossOrigin = 'anonymous'
+  const loaded = await new Promise<boolean>((resolve) => {
+    logo.onload = () => resolve(true)
+    logo.onerror = () => resolve(false)
+    logo.src = '/logo-econopulse-wave.svg'
+  })
+
+  ctx.save()
+  ctx.globalAlpha = 0.92
+  let textX = baseX
+  if (loaded) {
+    ctx.drawImage(logo, baseX, baseY - logoSize / 2, logoSize, logoSize)
+    textX = baseX + logoSize + Math.round(6 * scale)
+  }
+  const grad = ctx.createLinearGradient(textX, 0, textX + textW, 0)
+  grad.addColorStop(0, '#67e8f9')
+  grad.addColorStop(0.5, '#0ea5e9')
+  grad.addColorStop(1, '#2563eb')
+  ctx.fillStyle = grad
+  ctx.fillText(text, textX, baseY)
+  ctx.restore()
+
+  return out
+}
+
 const DEFAULT_WATCHLISTS: Record<string, string[]> = {
   Main: ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'JPM', 'XOM', 'GLD', 'BTC-USD', 'ETH-USD'],
   Tech: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AVGO', 'CRM', 'ORCL', 'ADBE'],
@@ -327,7 +378,8 @@ export default function MarketDataPage() {
   // native share sheet (Save to Photos / gallery); on desktop it downloads the file.
   const shareCurrent = useCallback(async () => {
     const v = symbol.trim().toUpperCase()
-    const canvas = chartApiRef.current?.screenshot?.() || null
+    const baseCanvas = chartApiRef.current?.screenshot?.() || null
+    const canvas = baseCanvas ? await addWatermark(baseCanvas) : null
     if (canvas) {
       try {
         const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))

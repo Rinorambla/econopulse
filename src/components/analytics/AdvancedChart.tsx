@@ -18,6 +18,7 @@ import {
   type LineData,
   type Time,
   type SeriesType,
+  type IPriceLine,
 } from 'lightweight-charts'
 
 // ========== Types ==========
@@ -66,7 +67,7 @@ export type DrawingTool =
   | 'trendline' | 'horizontal' | 'vertical'
   | 'rect' | 'ellipse' | 'triangle'
   | 'fib-retr' | 'fib-ext'
-  | 'text'
+  | 'text' | 'alert'
 
 interface DrawPoint { logical: number; price: number }
 interface Drawing {
@@ -82,7 +83,7 @@ const TOOL_STEPS: Record<DrawingTool, number> = {
   trendline: 2, horizontal: 1, vertical: 1,
   rect: 2, ellipse: 2, triangle: 3,
   'fib-retr': 2, 'fib-ext': 2,
-  text: 1,
+  text: 1, alert: 1,
 }
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
@@ -112,6 +113,7 @@ const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
   { id: 'fib-retr', label: 'Fib Retracement' },
   { id: 'fib-ext', label: 'Fib Extension' },
   { id: 'text', label: 'Text / Note' },
+  { id: 'alert', label: '⏰ Price Alert' },
 ]
 
 // Distinct colors for multi-symbol compare overlays
@@ -522,6 +524,49 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [pendingPts, setPendingPts] = useState<DrawPoint[]>([])
   const [hoverPt, setHoverPt] = useState<DrawPoint | null>(null)
 
+  // ===== Price alerts (TradingView-style) =====
+  type PriceAlert = { id: number; price: number }
+  const [alertsMap, setAlertsMap] = useLocalStorage<Record<string, PriceAlert[]>>('mkt:priceAlerts', {})
+  const [alertInput, setAlertInput] = useState('')
+  const [triggeredAlert, setTriggeredAlert] = useState<{ price: number } | null>(null)
+  const priceLinesRef = useRef<IPriceLine[]>([])
+  const prevPriceRef = useRef<number | null>(null)
+  const symKey = symbol.toUpperCase()
+  const currentAlerts = useMemo(() => alertsMap[symKey] || [], [alertsMap, symKey])
+  const addAlert = useCallback((price: number) => {
+    if (!Number.isFinite(price) || price <= 0) return
+    setAlertsMap((m) => {
+      const list = m[symKey] || []
+      if (list.some((a) => Math.abs(a.price - price) < price * 1e-6)) return m
+      return { ...m, [symKey]: [...list, { id: Date.now(), price }].sort((a, b) => b.price - a.price) }
+    })
+  }, [setAlertsMap, symKey])
+  const removeAlert = useCallback((id: number) => {
+    setAlertsMap((m) => ({ ...m, [symKey]: (m[symKey] || []).filter((a) => a.id !== id) }))
+  }, [setAlertsMap, symKey])
+
+  // Detect when the live price crosses an alert level and notify the user.
+  useEffect(() => {
+    const cur = lastPrice?.price
+    if (cur == null) return
+    const prev = prevPriceRef.current
+    prevPriceRef.current = cur
+    if (prev == null) return
+    for (const a of currentAlerts) {
+      const crossed = (prev < a.price && cur >= a.price) || (prev > a.price && cur <= a.price)
+      if (crossed) {
+        setTriggeredAlert({ price: a.price })
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(`${symKey} hit ${a.price}`, { body: `Price alert triggered at ${cur.toFixed(2)}` })
+          }
+        } catch { /* ignore */ }
+        window.setTimeout(() => setTriggeredAlert(null), 6000)
+        removeAlert(a.id)
+      }
+    }
+  }, [lastPrice, currentAlerts, removeAlert, symKey])
+
   // Refs for handlers (avoid stale closures)
   const activeToolRef = useRef(activeTool); useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
   const drawingsRef = useRef(drawings); useEffect(() => { drawingsRef.current = drawings }, [drawings])
@@ -722,6 +767,24 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       })
       as_.setData(closes.map((c, i) => ({ time: timeLabels[i], value: c } as LineData)))
       mainSeriesRef.current = as_
+    }
+
+    // ===== Price alert lines (TradingView-style horizontal markers) =====
+    priceLinesRef.current = []
+    if (mainSeriesRef.current && currentAlerts.length) {
+      for (const a of currentAlerts) {
+        try {
+          const pl = mainSeriesRef.current.createPriceLine({
+            price: a.price,
+            color: '#f59e0b',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `⏰ ${a.price}`,
+          })
+          priceLinesRef.current.push(pl)
+        } catch { /* ignore */ }
+      }
     }
 
     // ===== Helper to add overlay line =====
@@ -1014,6 +1077,12 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       if (logical == null || price == null) return
       const pt: DrawPoint = { logical, price }
 
+      if (tool === 'alert') {
+        addAlert(Math.round(price * 100) / 100)
+        setActiveTool('cursor')
+        return
+      }
+
       if (tool === 'text') {
         const txt = window.prompt('Note text:')
         if (txt && txt.trim()) {
@@ -1072,7 +1141,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -1358,6 +1427,45 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </button>
           )}
         </div>
+
+        {/* Price alerts */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <button
+            onClick={() => {
+              try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission() } catch {}
+              setActiveTool(activeTool === 'alert' ? 'cursor' : 'alert')
+            }}
+            className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+              activeTool === 'alert' ? 'bg-amber-600/30 border-amber-500/50 text-amber-200' : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-amber-400/40'
+            }`}
+            title="Add a price alert — then click on the chart at the desired price"
+          >
+            <span className="text-amber-300">＋</span>
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Alert</span>
+          </button>
+          <input
+            value={alertInput}
+            onChange={(e) => setAlertInput(e.target.value.replace(/[^0-9.]/g, ''))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const p = parseFloat(alertInput)
+                if (Number.isFinite(p)) { addAlert(p); setAlertInput('') }
+              }
+              if (e.key === 'Escape') setAlertInput('')
+            }}
+            placeholder={lastPrice ? `${lastPrice.price.toFixed(2)}` : 'price'}
+            className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-20 focus:outline-none focus:border-amber-500 placeholder-gray-500"
+          />
+          {currentAlerts.map((a) => (
+            <span
+              key={a.id}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-amber-500/40 text-amber-200"
+            >
+              ⏰ {a.price}
+              <button onClick={() => removeAlert(a.id)} className="text-gray-400 hover:text-rose-300" title="Remove alert">✕</button>
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* ===== INDICATORS BAR (single dropdown) ===== */}
@@ -1494,7 +1602,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           style={{ pointerEvents: 'none', zIndex: 5 }}
         />
         <div ref={tooltipRef} />
-        {activeTool !== 'cursor' && activeTool !== 'crosshair' && (
+        {triggeredAlert && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-100 text-xs font-semibold shadow-lg">
+            ⏰ {symbol} reached {triggeredAlert.price}
+            <button onClick={() => setTriggeredAlert(null)} className="text-amber-300 hover:text-white">✕</button>
+          </div>
+        )}
+        {activeTool === 'alert' && (
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-amber-500/50 text-[10px] text-amber-200">
+            <span className="font-semibold uppercase tracking-wider">Alert</span>
+            <span className="text-gray-400">click on the chart at the target price</span>
+            <button onClick={() => setActiveTool('cursor')} className="text-gray-400 hover:text-white">✕</button>
+          </div>
+        )}
+        {activeTool !== 'cursor' && activeTool !== 'crosshair' && activeTool !== 'alert' && (
           <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-blue-500/40 text-[10px] text-blue-200">
             <span className="font-semibold uppercase tracking-wider">{activeTool}</span>
             <span className="text-gray-400">click {TOOL_STEPS[activeTool] - pendingPts.length} more</span>

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import Footer from '@/components/Footer'
 import RequirePlan from '@/components/RequirePlan'
 import {
@@ -128,15 +128,11 @@ export default function UpdateAIPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Auto refresh every 5 minutes
+  // Auto refresh market snapshot every 5 minutes
   useEffect(() => {
     const id = setInterval(load, 5 * 60 * 1000)
     return () => clearInterval(id)
   }, [load])
-
-  const dateLabel = useMemo(() => {
-    return new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  }, [refreshedAt])
 
   const quotes = data?.quotes || []
   const sectors = data?.sectors || []
@@ -144,188 +140,295 @@ export default function UpdateAIPage() {
   const bottom = data?.movers?.bottom || []
   const news = data?.news || []
 
+  // ===== Conversational AI agent =====
+  type ChatMsg = { role: 'user' | 'assistant'; content: string; ts: number }
+  const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const scrollRef = React.useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages, sending])
+
+  // Build a compact, grounded context string from the live market snapshot.
+  const buildContext = useCallback((): string => {
+    if (!data) return ''
+    const q = quotes.slice(0, 12).map((x) => `${x.name || x.symbol}: ${fmtPrice(x.price)} (${fmtPct(x.changePct)})`).join('; ')
+    const sec = sectors.slice(0, 11).map((s: any) => `${s.name || s.sector || s.symbol}: ${fmtPct(s.changePercent ?? s.performance)}`).join('; ')
+    const g = top.slice(0, 5).map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent ?? m.performance)}`).join(', ')
+    const l = bottom.slice(0, 5).map((m: any) => `${m.symbol || m.ticker} ${fmtPct(m.changePercent ?? m.performance)}`).join(', ')
+    const h = news.slice(0, 6).map((n: any) => `• ${n.title}${n.source ? ` (${n.source})` : ''}`).join('\n')
+    return [
+      `Live market snapshot as of ${data.asOf ? new Date(data.asOf).toLocaleString('en-US') : 'now'}:`,
+      `Indices: ${q}`,
+      `Sectors: ${sec}`,
+      `Top gainers: ${g}`,
+      `Top losers: ${l}`,
+      `Headlines:\n${h}`,
+    ].join('\n')
+  }, [data, quotes, sectors, top, bottom, news])
+
+  const send = useCallback(async (text: string) => {
+    const q = text.trim()
+    if (!q || sending) return
+    setInput('')
+    setMessages((m) => [...m, { role: 'user', content: q, ts: Date.now() }])
+    setSending(true)
+    try {
+      const r = await fetch('/api/econoai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, userId: 'econoai-web', context: buildContext() }),
+      })
+      const j = await r.json().catch(() => ({}))
+      const answer = j?.answer || j?.error || 'Sorry, I could not generate a response right now. Please try again.'
+      setMessages((m) => [...m, { role: 'assistant', content: answer, ts: Date.now() }])
+    } catch {
+      setMessages((m) => [...m, { role: 'assistant', content: 'Network error. Please try again in a moment.', ts: Date.now() }])
+    } finally {
+      setSending(false)
+    }
+  }, [sending, buildContext])
+
+  const suggestions = [
+    'What is the market doing today and why?',
+    'Compare AAPL vs MSFT performance and outlook',
+    'Read the SPY chart: trend, key support and resistance',
+    'Which sectors are leading and lagging right now?',
+    'Summarize the most important headlines for investors',
+    'Is NVDA overbought? What levels matter?',
+  ]
+
   return (
     <RequirePlan min="premium">
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-0 flex flex-col">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex-1 min-h-0 flex flex-col">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-3">
-            <div>
-              <div className="flex items-center gap-2 text-sky-400 text-xs uppercase tracking-wider font-semibold mb-1">
-                <SparklesIcon className="h-4 w-4" />
-                <span>UpdateAI · Daily Market Wrap</span>
+          <div className="flex items-center justify-between py-4 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                <SparklesIcon className="h-5 w-5 text-white" />
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Today's Market Update</h1>
-              <p className="text-gray-400 text-sm mt-1">{dateLabel}</p>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-none">EconoAI</h1>
+                <p className="text-gray-400 text-xs mt-0.5">Your AI market analyst — charts, comparisons, news & macro</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {data?.asOf && (
-                <span className="text-[11px] text-gray-500">
-                  Updated {new Date(data.asOf).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              <button
-                onClick={load}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-3 py-1.5 text-sm font-semibold text-sky-200 transition disabled:opacity-50"
-              >
-                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-3 py-1.5 text-xs font-semibold text-sky-200 transition disabled:opacity-50"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh data</span>
+            </button>
           </div>
 
-          {/* AI provider status */}
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-200 text-sm">
-              Failed to load market wrap: {error}
-            </div>
-          )}
+          {/* Main grid: chat (left) + live snapshot (right) */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4 pb-4">
+            {/* Chat column */}
+            <section className="lg:col-span-2 flex flex-col min-h-0 rounded-2xl bg-slate-900/50 border border-slate-700/60 overflow-hidden">
+              <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-5 space-y-4">
+                {messages.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                    <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mb-4 shadow-lg shadow-sky-500/20">
+                      <SparklesIcon className="h-7 w-7 text-white" />
+                    </div>
+                    <h2 className="text-lg font-bold mb-1">Ask me anything about the markets</h2>
+                    <p className="text-gray-400 text-sm max-w-md mb-5">
+                      Charts, technical levels, stock comparisons, sector rotation, macro, and the latest news — grounded on live data.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => send(s)}
+                          className="text-left text-[12.5px] text-gray-200 rounded-xl border border-slate-700/60 bg-slate-800/40 hover:bg-slate-800/80 hover:border-sky-500/40 px-3 py-2.5 transition"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          {/* Top: Indices grid */}
-          <section className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <GlobeAltIcon className="h-5 w-5 text-sky-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">At a Glance</h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {(loading && !data ? Array.from({ length: 12 }) : quotes).map((q: any, i: number) => (
-                <div key={q?.symbol || i} className="rounded-lg bg-slate-800/60 border border-slate-700/60 px-3 py-2.5 hover:border-sky-500/40 transition">
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wider truncate">{q?.name || '—'}</div>
-                  <div className="text-base font-bold tabular-nums">{q ? fmtPrice(q.price) : <span className="text-gray-600">…</span>}</div>
-                  <div className={`text-xs font-semibold tabular-nums ${pctClass(q?.changePct)}`}>{fmtPct(q?.changePct)}</div>
-                </div>
-              ))}
-            </div>
-          </section>
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {m.role === 'assistant' && (
+                      <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mr-2 mt-0.5">
+                        <SparklesIcon className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                        m.role === 'user'
+                          ? 'bg-sky-600 text-white rounded-br-sm'
+                          : 'bg-slate-800/70 border border-slate-700/60 text-gray-100 rounded-bl-sm'
+                      }`}
+                    >
+                      {m.role === 'assistant'
+                        ? <div className="prose-invert">{renderBrief(m.content)}</div>
+                        : <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>}
+                    </div>
+                  </div>
+                ))}
 
-          {/* Two-column: AI Brief + Sectors/Movers */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-            {/* AI Brief */}
-            <section className="lg:col-span-2 rounded-xl bg-gradient-to-br from-slate-800/70 to-slate-900/70 border border-slate-700/60 p-5">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <SparklesIcon className="h-5 w-5 text-sky-400" />
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">AI Daily Brief</h2>
-                </div>
-                {data?.provider && data.provider !== 'none' && (
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">EconoPulse engine</span>
+                {sending && (
+                  <div className="flex justify-start">
+                    <div className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mr-2">
+                      <SparklesIcon className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
                 )}
               </div>
-              {loading && !data?.brief && (
-                <div className="space-y-2 animate-pulse">
-                  <div className="h-3 bg-slate-700/50 rounded w-1/3" />
-                  <div className="h-3 bg-slate-700/50 rounded w-full" />
-                  <div className="h-3 bg-slate-700/50 rounded w-11/12" />
-                  <div className="h-3 bg-slate-700/50 rounded w-3/4" />
-                  <div className="h-3 bg-slate-700/50 rounded w-1/4 mt-3" />
-                  <div className="h-3 bg-slate-700/50 rounded w-full" />
-                  <div className="h-3 bg-slate-700/50 rounded w-10/12" />
+
+              {/* Composer */}
+              <div className="border-t border-slate-700/60 bg-slate-900/70 p-3">
+                {messages.length > 0 && (
+                  <div className="flex gap-1.5 mb-2 overflow-x-auto pb-1">
+                    {suggestions.slice(0, 4).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => send(s)}
+                        disabled={sending}
+                        className="shrink-0 text-[11px] text-gray-300 rounded-full border border-slate-700/60 bg-slate-800/40 hover:bg-slate-800/80 hover:text-white px-3 py-1 transition disabled:opacity-50"
+                      >
+                        {s.length > 38 ? s.slice(0, 38) + '…' : s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) }
+                    }}
+                    rows={1}
+                    placeholder="Ask about a stock, a chart, a comparison, the news…"
+                    className="flex-1 resize-none max-h-32 rounded-xl bg-slate-800/70 border border-slate-700/60 focus:border-sky-500/60 focus:outline-none px-3.5 py-2.5 text-sm text-white placeholder-gray-500"
+                  />
+                  <button
+                    onClick={() => send(input)}
+                    disabled={sending || !input.trim()}
+                    className="shrink-0 h-10 w-10 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:hover:bg-sky-600 flex items-center justify-center transition"
+                    title="Send"
+                  >
+                    <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 text-center">
+                  EconoAI uses live market data. For information only — not investment advice.
+                </p>
+              </div>
+            </section>
+
+            {/* Live snapshot column */}
+            <aside className="hidden lg:flex flex-col min-h-0 gap-4">
+              {error && (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-red-200 text-xs">
+                  {error}
                 </div>
               )}
-              {!loading && data?.brief && <div className="prose-invert">{renderBrief(data.brief)}</div>}
-              {!loading && data && !data.brief && (
-                <p className="text-gray-400 text-sm">AI brief unavailable. Live numbers, sectors, movers, and headlines are still updated below.</p>
-              )}
-            </section>
-
-            {/* Sectors */}
-            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ChartBarIcon className="h-5 w-5 text-emerald-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Sector Performance</h2>
-              </div>
-              <div className="space-y-1.5">
-                {(loading && !data ? Array.from({ length: 11 }) : sectors).map((s: any, i: number) => {
-                  const name = s?.name || s?.sector || s?.symbol || `…`
-                  const pct = s?.changePercent ?? s?.performance
-                  const wPct = pct == null ? 0 : Math.min(100, Math.abs(pct) * 12)
-                  const positive = (pct || 0) >= 0
-                  return (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <div className="w-24 truncate text-gray-300">{name}</div>
-                      <div className="relative flex-1 h-2 bg-slate-700/40 rounded">
-                        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600/80" />
-                        {pct != null && isFinite(pct) && (
-                          <div
-                            className={`absolute top-0 bottom-0 ${positive ? 'left-1/2 bg-emerald-500/70' : 'right-1/2 bg-red-500/70'} rounded`}
-                            style={{ width: `${wPct / 2}%` }}
-                          />
-                        )}
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+                {/* Indices */}
+                <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-3">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <GlobeAltIcon className="h-4 w-4 text-sky-400" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-wider text-gray-300">Markets at a Glance</h2>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(loading && !data ? Array.from({ length: 8 }) : quotes.slice(0, 10)).map((q: any, i: number) => (
+                      <div key={q?.symbol || i} className="rounded-lg bg-slate-900/50 border border-slate-700/50 px-2.5 py-1.5">
+                        <div className="text-[9px] text-gray-500 uppercase tracking-wider truncate">{q?.name || '—'}</div>
+                        <div className="text-sm font-bold tabular-nums leading-tight">{q ? fmtPrice(q.price) : '…'}</div>
+                        <div className={`text-[11px] font-semibold tabular-nums ${pctClass(q?.changePct)}`}>{fmtPct(q?.changePct)}</div>
                       </div>
-                      <div className={`w-14 text-right tabular-nums font-semibold ${pctClass(pct)}`}>{fmtPct(pct)}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          </div>
-
-          {/* Movers + News */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ArrowTrendingUpIcon className="h-5 w-5 text-emerald-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Top Gainers</h2>
-              </div>
-              <div className="divide-y divide-slate-700/40">
-                {(top.length ? top : Array.from({ length: 5 })).map((m: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white">{m?.symbol || m?.ticker || '…'}</span>
-                      {m?.name && <span className="text-[10px] text-gray-500 truncate max-w-[140px]">{m.name}</span>}
-                    </div>
-                    <span className={`font-semibold tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
+                </section>
 
-            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ArrowTrendingDownIcon className="h-5 w-5 text-red-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Top Losers</h2>
-              </div>
-              <div className="divide-y divide-slate-700/40">
-                {(bottom.length ? bottom : Array.from({ length: 5 })).map((m: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white">{m?.symbol || m?.ticker || '…'}</span>
-                      {m?.name && <span className="text-[10px] text-gray-500 truncate max-w-[140px]">{m.name}</span>}
-                    </div>
-                    <span className={`font-semibold tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                {/* Sectors */}
+                <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-3">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <ChartBarIcon className="h-4 w-4 text-emerald-400" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-wider text-gray-300">Sectors</h2>
                   </div>
-                ))}
-              </div>
-            </section>
+                  <div className="space-y-1">
+                    {(loading && !data ? Array.from({ length: 8 }) : sectors).map((s: any, i: number) => {
+                      const name = s?.name || s?.sector || s?.symbol || '…'
+                      const pct = s?.changePercent ?? s?.performance
+                      return (
+                        <div key={i} className="flex items-center justify-between text-[11px]">
+                          <span className="text-gray-300 truncate max-w-[60%]">{name}</span>
+                          <span className={`tabular-nums font-semibold ${pctClass(pct)}`}>{fmtPct(pct)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
 
-            <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <NewspaperIcon className="h-5 w-5 text-sky-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">Headlines</h2>
-              </div>
-              <div className="space-y-2">
-                {(news.length ? news : Array.from({ length: 5 })).slice(0, 6).map((n: any, i: number) => (
-                  <a
-                    key={n?.id || i}
-                    href={n?.url || '#'}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="block group"
-                  >
-                    <div className="text-[12.5px] text-gray-200 group-hover:text-sky-300 transition leading-snug font-medium line-clamp-2">
-                      {n?.title || <span className="text-gray-600">Loading headline…</span>}
+                {/* Movers */}
+                <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <ArrowTrendingUpIcon className="h-4 w-4 text-emerald-400" />
+                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Gainers</h3>
+                      </div>
+                      <div className="space-y-1">
+                        {(top.length ? top : Array.from({ length: 4 })).slice(0, 5).map((m: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-white">{m?.symbol || m?.ticker || '…'}</span>
+                            <span className={`tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    {n?.source && <div className="text-[10px] text-gray-500 mt-0.5">{n.source}</div>}
-                  </a>
-                ))}
-              </div>
-            </section>
-          </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <ArrowTrendingDownIcon className="h-4 w-4 text-red-400" />
+                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Losers</h3>
+                      </div>
+                      <div className="space-y-1">
+                        {(bottom.length ? bottom : Array.from({ length: 4 })).slice(0, 5).map((m: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-white">{m?.symbol || m?.ticker || '…'}</span>
+                            <span className={`tabular-nums ${pctClass(m?.changePercent ?? m?.performance)}`}>{fmtPct(m?.changePercent ?? m?.performance)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
 
-          <p className="text-[11px] text-gray-500 text-center">
-            UpdateAI summarizes live market data with AI. Auto-refreshes every 5 minutes. For information only — not investment advice.
-          </p>
+                {/* News */}
+                <section className="rounded-xl bg-slate-800/40 border border-slate-700/60 p-3">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <NewspaperIcon className="h-4 w-4 text-sky-400" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-wider text-gray-300">Headlines</h2>
+                  </div>
+                  <div className="space-y-2">
+                    {(news.length ? news : Array.from({ length: 4 })).slice(0, 6).map((n: any, i: number) => (
+                      <a key={n?.id || i} href={n?.url || '#'} target="_blank" rel="noreferrer noopener" className="block group">
+                        <div className="text-[11.5px] text-gray-200 group-hover:text-sky-300 transition leading-snug font-medium line-clamp-2">
+                          {n?.title || 'Loading…'}
+                        </div>
+                        {n?.source && <div className="text-[9px] text-gray-500 mt-0.5">{n.source}</div>}
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </aside>
+          </div>
         </div>
         <Footer />
       </div>

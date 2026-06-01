@@ -25,6 +25,18 @@ type Analyst = {
   avgReturn: number
   ratings: number
   lastRating: string
+  coverage?: Coverage[]
+}
+
+type RatingAction = 'Buy' | 'Hold' | 'Sell'
+
+type Coverage = {
+  ticker: string
+  company: string
+  action: RatingAction
+  expectedReturn: number
+  priceTarget: number
+  date: string
 }
 
 type ApiData = {
@@ -177,6 +189,29 @@ export default function TopAnalystsPage() {
       .sort((a, b) => b.avgReturn - a.avgReturn)
   }, [ranked])
 
+  // Most-covered companies: aggregate every analyst's coverage into Buy/Hold/Sell tallies.
+  const companyStats = useMemo(() => {
+    const map = new Map<string, { ticker: string; company: string; buy: number; hold: number; sell: number; total: number; sumTarget: number; sumExpected: number }>()
+    for (const a of ranked) {
+      for (const c of a.coverage || []) {
+        const cur = map.get(c.ticker) || { ticker: c.ticker, company: c.company, buy: 0, hold: 0, sell: 0, total: 0, sumTarget: 0, sumExpected: 0 }
+        if (c.action === 'Buy') cur.buy++
+        else if (c.action === 'Sell') cur.sell++
+        else cur.hold++
+        cur.total++
+        cur.sumTarget += c.priceTarget
+        cur.sumExpected += c.expectedReturn
+        map.set(c.ticker, cur)
+      }
+    }
+    return Array.from(map.values())
+      .map((s) => ({ ...s, avgTarget: s.sumTarget / s.total, avgExpected: s.sumExpected / s.total }))
+      .sort((a, b) => b.total - a.total)
+  }, [ranked])
+
+  // Selected analyst for the detail modal (their buy/sell calls)
+  const [selected, setSelected] = useState<Analyst | null>(null)
+
   // Collapse the long list by default; show all when expanded or while searching/filtering
   const COLLAPSE_LIMIT = 15
   const isFiltering = query.trim() !== '' || sector !== 'All'
@@ -303,16 +338,26 @@ export default function TopAnalystsPage() {
                           </tr>
                         ))
                       : visibleRows.map((a) => (
-                          <tr key={a.id} className="hover:bg-slate-700/20 transition">
+                          <tr
+                            key={a.id}
+                            onClick={() => setSelected(a)}
+                            className="hover:bg-blue-500/10 transition cursor-pointer group"
+                            title={`See ${a.name}'s buy/sell calls`}
+                          >
                             <td className="px-3 py-2.5">
                               <span className="inline-flex items-center justify-center min-w-[28px] h-6 rounded-md bg-slate-900/70 border border-slate-700/60 text-[12px] font-bold tabular-nums text-gray-300">
                                 {a.rank}
                               </span>
                             </td>
                             <td className="px-3 py-2.5">
-                              <div className="font-semibold text-white leading-tight">{a.name}</div>
+                              <div className="font-semibold text-white leading-tight group-hover:text-blue-300 transition">{a.name}</div>
                               <Stars score={a.rating} />
                               <div className="text-[10px] text-gray-500 md:hidden mt-0.5">{a.company}</div>
+                              {a.coverage && a.coverage.length > 0 && (
+                                <div className="text-[10px] text-blue-400/80 mt-0.5">
+                                  Covers {a.coverage.length}: {a.coverage.slice(0, 4).map((c) => c.ticker).join(', ')}{a.coverage.length > 4 ? '…' : ''}
+                                </div>
+                              )}
                             </td>
                             <td className="px-3 py-2.5 text-gray-300 hidden md:table-cell">{a.company}</td>
                             <td className="px-3 py-2.5 hidden lg:table-cell">
@@ -427,6 +472,50 @@ export default function TopAnalystsPage() {
                     })}
                 </div>
               </div>
+
+              {/* Most-covered companies (what analysts are buying / selling) */}
+              <div className="mt-5 pt-4 border-t border-slate-700/50">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Most Covered Companies</h3>
+                  <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider">
+                    <span className="flex items-center gap-1 text-emerald-400"><span className="w-2 h-2 rounded-sm bg-emerald-500" />Buy</span>
+                    <span className="flex items-center gap-1 text-gray-400"><span className="w-2 h-2 rounded-sm bg-slate-500" />Hold</span>
+                    <span className="flex items-center gap-1 text-rose-400"><span className="w-2 h-2 rounded-sm bg-rose-500" />Sell</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-3">Total analyst calls per stock — buy/hold/sell split</p>
+                <div className="space-y-2">
+                  {loading && !data
+                    ? Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-7 bg-slate-700/30 rounded animate-pulse" />
+                      ))
+                    : companyStats.slice(0, 10).map((s) => {
+                        const maxT = companyStats[0]?.total || 1
+                        const w = Math.max(8, (s.total / maxT) * 100)
+                        const buyW = (s.buy / s.total) * 100
+                        const holdW = (s.hold / s.total) * 100
+                        const sellW = (s.sell / s.total) * 100
+                        return (
+                          <div key={s.ticker}>
+                            <div className="flex items-center justify-between text-[11px] mb-0.5">
+                              <span className="font-semibold text-gray-200">
+                                {s.ticker}
+                                <span className="text-gray-500 font-normal"> · {s.company}</span>
+                              </span>
+                              <span className="tabular-nums text-gray-400">
+                                {s.total} calls · <span className="text-blue-300">{fmtPct(s.avgExpected)}</span>
+                              </span>
+                            </div>
+                            <div className="h-2.5 rounded bg-slate-900/60 overflow-hidden flex" style={{ width: `${w}%` }} title={`${s.buy} Buy · ${s.hold} Hold · ${s.sell} Sell`}>
+                              <div className="h-full bg-emerald-500" style={{ width: `${buyW}%` }} />
+                              <div className="h-full bg-slate-500" style={{ width: `${holdW}%` }} />
+                              <div className="h-full bg-rose-500" style={{ width: `${sellW}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                </div>
+              </div>
             </section>
           </div>
 
@@ -437,6 +526,107 @@ export default function TopAnalystsPage() {
         </div>
         <Footer />
       </div>
+
+      {/* ===== Analyst detail modal: what they bought / sold ===== */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="w-full sm:max-w-2xl max-h-[88vh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-slate-700/60">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-white">{selected.name}</h3>
+                  <Stars score={selected.rating} />
+                </div>
+                <p className="text-[12px] text-gray-400 mt-0.5">
+                  {selected.company} · <span className="text-gray-300">{selected.sector}</span>
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]">
+                  <span className="text-gray-400">Success: <span className="text-emerald-400 font-semibold">{fmtPct(selected.successRate)}</span></span>
+                  <span className="text-gray-400">Avg return: <span className="text-blue-300 font-semibold">{fmtPct(selected.avgReturn)}</span></span>
+                  <span className="text-gray-400">Ratings: <span className="text-gray-200 font-semibold">{selected.ratings.toLocaleString('en-US')}</span></span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="shrink-0 h-8 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-400 hover:text-white flex items-center justify-center transition"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Summary chips */}
+            {(() => {
+              const cov = selected.coverage || []
+              const buy = cov.filter((c) => c.action === 'Buy').length
+              const hold = cov.filter((c) => c.action === 'Hold').length
+              const sell = cov.filter((c) => c.action === 'Sell').length
+              return (
+                <div className="flex items-center gap-2 px-4 sm:px-5 py-3 border-b border-slate-700/60 text-[12px]">
+                  <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">{buy} Buy</span>
+                  <span className="px-2.5 py-1 rounded-md bg-slate-600/20 border border-slate-500/30 text-gray-300 font-semibold">{hold} Hold</span>
+                  <span className="px-2.5 py-1 rounded-md bg-rose-500/15 border border-rose-500/30 text-rose-300 font-semibold">{sell} Sell</span>
+                  <span className="ml-auto text-gray-500">{cov.length} stocks covered</span>
+                </div>
+              )
+            })()}
+
+            {/* Coverage list */}
+            <div className="overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-900">
+                  <tr className="border-b border-slate-700/60 text-[10px] uppercase tracking-wider text-gray-500">
+                    <th className="px-4 sm:px-5 py-2 text-left">Stock</th>
+                    <th className="px-3 py-2 text-center">Action</th>
+                    <th className="px-3 py-2 text-right">Price Target</th>
+                    <th className="px-3 py-2 text-right">Implied</th>
+                    <th className="px-4 sm:px-5 py-2 text-right hidden sm:table-cell">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {(selected.coverage || []).map((c) => {
+                    const badge =
+                      c.action === 'Buy' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      : c.action === 'Sell' ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                      : 'bg-slate-600/20 border-slate-500/30 text-gray-300'
+                    return (
+                      <tr key={c.ticker} className="hover:bg-slate-800/40 transition">
+                        <td className="px-4 sm:px-5 py-2.5">
+                          <div className="font-bold text-white">{c.ticker}</div>
+                          <div className="text-[11px] text-gray-500">{c.company}</div>
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded-md border text-[11px] font-semibold ${badge}`}>{c.action}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-gray-200">${c.priceTarget.toLocaleString('en-US')}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${c.expectedReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {c.expectedReturn >= 0 ? '+' : ''}{c.expectedReturn.toFixed(1)}%
+                        </td>
+                        <td className="px-4 sm:px-5 py-2.5 text-right text-[12px] text-gray-400 hidden sm:table-cell">{fmtDate(c.date)}</td>
+                      </tr>
+                    )
+                  })}
+                  {(!selected.coverage || selected.coverage.length === 0) && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-gray-500 text-sm">No coverage data available.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 sm:px-5 py-2.5 border-t border-slate-700/60 text-[10px] text-gray-600 text-center">
+              Price targets and calls are illustrative — for information only, not investment advice.
+            </div>
+          </div>
+        </div>
+      )}
     </RequirePlan>
   )
 }

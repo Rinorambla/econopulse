@@ -25,10 +25,22 @@ export type Analyst = {
   avgReturn: number // %
   ratings: number // total ratings issued
   lastRating: string // ISO date
+  coverage: Coverage[] // stocks this analyst actively covers (buy/sell calls)
+}
+
+export type RatingAction = 'Buy' | 'Hold' | 'Sell'
+
+export type Coverage = {
+  ticker: string
+  company: string
+  action: RatingAction
+  expectedReturn: number // % implied upside/downside vs current price
+  priceTarget: number // analyst price target
+  date: string // ISO date of the call
 }
 
 // Base curated roster (unranked). Rank is computed at request time.
-const ROSTER: Omit<Analyst, 'id'>[] = [
+const ROSTER: Omit<Analyst, 'id' | 'coverage'>[] = [
   { name: 'Mark Mahaney', rating: 4.99, company: 'Evercore ISI', sector: 'Technology', successRate: 78.2, avgReturn: 31.4, ratings: 1620, lastRating: '2026-05-30' },
   { name: 'Brian White', rating: 4.98, company: 'Monness Crespi Hardt', sector: 'Technology', successRate: 76.5, avgReturn: 42.1, ratings: 920, lastRating: '2026-05-29' },
   { name: 'Wamsi Mohan', rating: 4.98, company: 'Bank of America', sector: 'Technology', successRate: 74.9, avgReturn: 28.7, ratings: 1140, lastRating: '2026-05-28' },
@@ -153,6 +165,139 @@ const ROSTER: Omit<Analyst, 'id'>[] = [
   { name: 'Anthony Crowdell', rating: 4.60, company: 'Mizuho', sector: 'Utilities', successRate: 70.1, avgReturn: 14.1, ratings: 640, lastRating: '2026-05-23' },
 ]
 
+// ============================================================================
+// Coverage universe — representative stocks each analyst follows, by sector.
+// Used to derive which companies/tickers analysts cover and their buy/sell calls.
+// ============================================================================
+const SECTOR_UNIVERSE: Record<AnalystSector, Array<[string, string]>> = {
+  Technology: [
+    ['AAPL', 'Apple'], ['MSFT', 'Microsoft'], ['NVDA', 'Nvidia'], ['AVGO', 'Broadcom'],
+    ['AMD', 'AMD'], ['ORCL', 'Oracle'], ['CRM', 'Salesforce'], ['ADBE', 'Adobe'],
+    ['INTC', 'Intel'], ['QCOM', 'Qualcomm'], ['MU', 'Micron'], ['PLTR', 'Palantir'],
+    ['SMCI', 'Super Micro'], ['NOW', 'ServiceNow'], ['CSCO', 'Cisco'], ['TXN', 'Texas Instruments'],
+    ['AMAT', 'Applied Materials'], ['LRCX', 'Lam Research'], ['ASML', 'ASML'], ['DELL', 'Dell'],
+  ],
+  Healthcare: [
+    ['LLY', 'Eli Lilly'], ['UNH', 'UnitedHealth'], ['JNJ', 'Johnson & Johnson'], ['MRK', 'Merck'],
+    ['ABBV', 'AbbVie'], ['PFE', 'Pfizer'], ['TMO', 'Thermo Fisher'], ['ABT', 'Abbott'],
+    ['DHR', 'Danaher'], ['AMGN', 'Amgen'], ['ISRG', 'Intuitive Surgical'], ['VRTX', 'Vertex'],
+    ['GILD', 'Gilead'], ['REGN', 'Regeneron'], ['BSX', 'Boston Scientific'], ['MDT', 'Medtronic'],
+    ['CVS', 'CVS Health'], ['BMY', 'Bristol Myers'],
+  ],
+  Financials: [
+    ['JPM', 'JPMorgan'], ['BAC', 'Bank of America'], ['WFC', 'Wells Fargo'], ['GS', 'Goldman Sachs'],
+    ['MS', 'Morgan Stanley'], ['C', 'Citigroup'], ['BLK', 'BlackRock'], ['SCHW', 'Charles Schwab'],
+    ['AXP', 'American Express'], ['SPGI', 'S&P Global'], ['BX', 'Blackstone'], ['KKR', 'KKR'],
+    ['USB', 'U.S. Bancorp'], ['PNC', 'PNC Financial'], ['COF', 'Capital One'],
+  ],
+  Industrials: [
+    ['CAT', 'Caterpillar'], ['BA', 'Boeing'], ['GE', 'GE Aerospace'], ['HON', 'Honeywell'],
+    ['UNP', 'Union Pacific'], ['RTX', 'RTX'], ['DE', 'Deere'], ['LMT', 'Lockheed Martin'],
+    ['UPS', 'UPS'], ['ETN', 'Eaton'], ['EMR', 'Emerson'], ['GD', 'General Dynamics'],
+    ['CSX', 'CSX'], ['NOC', 'Northrop Grumman'], ['MMM', '3M'],
+  ],
+  Energy: [
+    ['XOM', 'Exxon Mobil'], ['CVX', 'Chevron'], ['COP', 'ConocoPhillips'], ['SLB', 'Schlumberger'],
+    ['EOG', 'EOG Resources'], ['MPC', 'Marathon Petroleum'], ['PSX', 'Phillips 66'], ['OXY', 'Occidental'],
+    ['WMB', 'Williams'], ['KMI', 'Kinder Morgan'], ['VLO', 'Valero'], ['HAL', 'Halliburton'],
+    ['DVN', 'Devon Energy'],
+  ],
+  Consumer: [
+    ['AMZN', 'Amazon'], ['TSLA', 'Tesla'], ['HD', 'Home Depot'], ['MCD', "McDonald's"],
+    ['NKE', 'Nike'], ['SBUX', 'Starbucks'], ['LOW', "Lowe's"], ['TGT', 'Target'],
+    ['COST', 'Costco'], ['WMT', 'Walmart'], ['PG', 'Procter & Gamble'], ['KO', 'Coca-Cola'],
+    ['PEP', 'PepsiCo'], ['MDLZ', 'Mondelez'], ['CL', 'Colgate-Palmolive'],
+  ],
+  Communication: [
+    ['GOOGL', 'Alphabet'], ['META', 'Meta'], ['NFLX', 'Netflix'], ['DIS', 'Disney'],
+    ['CMCSA', 'Comcast'], ['T', 'AT&T'], ['VZ', 'Verizon'], ['TMUS', 'T-Mobile'],
+    ['CHTR', 'Charter'], ['EA', 'Electronic Arts'], ['WBD', 'Warner Bros Discovery'], ['TTWO', 'Take-Two'],
+  ],
+  Materials: [
+    ['LIN', 'Linde'], ['FCX', 'Freeport-McMoRan'], ['NEM', 'Newmont'], ['SHW', 'Sherwin-Williams'],
+    ['APD', 'Air Products'], ['ECL', 'Ecolab'], ['DOW', 'Dow'], ['DD', 'DuPont'],
+    ['NUE', 'Nucor'], ['CTVA', 'Corteva'], ['ALB', 'Albemarle'],
+  ],
+  'Real Estate': [
+    ['PLD', 'Prologis'], ['AMT', 'American Tower'], ['EQIX', 'Equinix'], ['WELL', 'Welltower'],
+    ['SPG', 'Simon Property'], ['O', 'Realty Income'], ['PSA', 'Public Storage'], ['CCI', 'Crown Castle'],
+    ['DLR', 'Digital Realty'], ['VICI', 'VICI Properties'],
+  ],
+  Utilities: [
+    ['NEE', 'NextEra Energy'], ['DUK', 'Duke Energy'], ['SO', 'Southern Company'], ['D', 'Dominion'],
+    ['AEP', 'American Electric'], ['EXC', 'Exelon'], ['SRE', 'Sempra'], ['XEL', 'Xcel Energy'],
+    ['ED', 'Consolidated Edison'], ['PEG', 'Public Service Enterprise'],
+  ],
+}
+
+// Approximate reference prices to derive plausible price targets (curated, static).
+const REF_PRICE: Record<string, number> = {
+  AAPL: 228, MSFT: 470, NVDA: 135, AVGO: 235, AMD: 165, ORCL: 175, CRM: 320, ADBE: 540,
+  INTC: 23, QCOM: 170, MU: 105, PLTR: 38, SMCI: 45, NOW: 1000, CSCO: 58, TXN: 200,
+  AMAT: 215, LRCX: 95, ASML: 980, DELL: 130, LLY: 870, UNH: 520, JNJ: 158, MRK: 105,
+  ABBV: 185, PFE: 28, TMO: 600, ABT: 115, DHR: 250, AMGN: 320, ISRG: 480, VRTX: 480,
+  GILD: 90, REGN: 1080, BSX: 88, MDT: 88, CVS: 62, BMY: 52, JPM: 215, BAC: 42, WFC: 62,
+  GS: 500, MS: 105, C: 65, BLK: 950, SCHW: 72, AXP: 270, SPGI: 510, BX: 145, KKR: 130,
+  USB: 45, PNC: 185, COF: 165, CAT: 360, BA: 180, GE: 175, HON: 215, UNP: 235, RTX: 120,
+  DE: 410, LMT: 480, UPS: 130, ETN: 320, EMR: 115, GD: 290, CSX: 33, NOC: 480, MMM: 130,
+  XOM: 115, CVX: 155, COP: 105, SLB: 43, EOG: 125, MPC: 165, PSX: 130, OXY: 52, WMB: 48,
+  KMI: 26, VLO: 145, HAL: 32, DVN: 42, AMZN: 185, TSLA: 250, HD: 365, MCD: 295, NKE: 78,
+  SBUX: 95, LOW: 245, TGT: 145, COST: 880, WMT: 80, PG: 168, KO: 62, PEP: 170, MDLZ: 68,
+  CL: 95, GOOGL: 175, META: 580, NFLX: 700, DIS: 95, CMCSA: 40, T: 22, VZ: 42, TMUS: 195,
+  CHTR: 360, EA: 145, WBD: 9, TTWO: 165, LIN: 460, FCX: 45, NEM: 45, SHW: 360, APD: 290,
+  ECL: 240, DOW: 50, DD: 85, NUE: 150, CTVA: 60, ALB: 95, PLD: 115, AMT: 200, EQIX: 870,
+  WELL: 120, SPG: 165, O: 58, PSA: 320, CCI: 105, DLR: 150, VICI: 30, NEE: 78, DUK: 110,
+  SO: 88, D: 52, AEP: 95, EXC: 38, SRE: 78, XEL: 62, ED: 98, PEG: 80,
+}
+
+// Deterministic seeded RNG so coverage is stable across requests/renders.
+function hashStr(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+function mulberry32(seed: number) {
+  return function () {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function buildCoverage(name: string, sector: AnalystSector, avgReturn: number, lastRating: string): Coverage[] {
+  const rng = mulberry32(hashStr(name + '|' + sector))
+  const pool = [...SECTOR_UNIVERSE[sector]]
+  // Shuffle deterministically
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  const n = 5 + Math.floor(rng() * 5) // 5–9 covered names
+  const picks = pool.slice(0, Math.min(n, pool.length))
+  const baseDate = new Date(lastRating).getTime() || Date.now()
+
+  return picks.map(([ticker, company]) => {
+    const r = rng()
+    // Skew bullish: ~58% Buy, ~30% Hold, ~12% Sell
+    const action: RatingAction = r < 0.58 ? 'Buy' : r < 0.88 ? 'Hold' : 'Sell'
+    const variance = (rng() - 0.5) * avgReturn * 0.9
+    let expected =
+      action === 'Buy' ? avgReturn * (0.6 + rng() * 0.9) + Math.abs(variance)
+      : action === 'Sell' ? -(Math.abs(avgReturn) * (0.3 + rng() * 0.6))
+      : (rng() - 0.5) * Math.max(6, avgReturn * 0.4)
+    expected = Math.round(expected * 10) / 10
+    const ref = REF_PRICE[ticker] || 100
+    const priceTarget = Math.round(ref * (1 + expected / 100) * 100) / 100
+    const date = new Date(baseDate - Math.floor(rng() * 60) * 86400000).toISOString().slice(0, 10)
+    return { ticker, company, action, expectedReturn: expected, priceTarget, date }
+  }).sort((a, b) => b.expectedReturn - a.expectedReturn)
+}
+
 export function buildLeaderboard(): Analyst[] {
   const sorted = [...ROSTER].sort((a, b) => {
     if (b.rating !== a.rating) return b.rating - a.rating
@@ -162,6 +307,7 @@ export function buildLeaderboard(): Analyst[] {
   return sorted.map((a, i) => ({
     id: `${a.name.toLowerCase().replace(/[^a-z]+/g, '-')}`,
     ...a,
+    coverage: buildCoverage(a.name, a.sector, a.avgReturn, a.lastRating),
   }))
 }
 

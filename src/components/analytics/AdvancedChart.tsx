@@ -28,13 +28,17 @@ type IndicatorKey =
   // Trend
   | 'sma20' | 'sma50' | 'sma100' | 'sma200'
   | 'ema9' | 'ema20' | 'ema50' | 'ema200'
+  | 'wma20' | 'wma50' | 'hma' | 'dema' | 'tema' | 'vwma'
+  | 'psar' | 'supertrend'
   | 'ichimoku'
   // Volatility
-  | 'bb' | 'keltner' | 'atr' | 'donchian'
+  | 'bb' | 'keltner' | 'atr' | 'donchian' | 'envelopes' | 'stddev'
   // Volume
   | 'volume' | 'vwap' | 'obv' | 'volprofile'
+  | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
+  | 'adx' | 'stochrsi' | 'roc' | 'trix' | 'uo' | 'ao' | 'ppo' | 'aroon' | 'vortex'
   // Support/Resistance
   | 'pivots'
 
@@ -131,6 +135,14 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'ema20', label: 'EMA 20' },
       { key: 'ema50', label: 'EMA 50' },
       { key: 'ema200', label: 'EMA 200' },
+      { key: 'wma20', label: 'WMA 20' },
+      { key: 'wma50', label: 'WMA 50' },
+      { key: 'hma', label: 'Hull MA (16)' },
+      { key: 'dema', label: 'DEMA 20' },
+      { key: 'tema', label: 'TEMA 20' },
+      { key: 'vwma', label: 'VWMA 20' },
+      { key: 'psar', label: 'Parabolic SAR' },
+      { key: 'supertrend', label: 'SuperTrend' },
       { key: 'ichimoku', label: 'Ichimoku' },
     ],
   },
@@ -139,8 +151,10 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
     items: [
       { key: 'bb', label: 'Bollinger' },
       { key: 'keltner', label: 'Keltner Ch.' },
-      { key: 'atr', label: 'ATR (14)' },
       { key: 'donchian', label: 'Donchian' },
+      { key: 'envelopes', label: 'MA Envelopes' },
+      { key: 'atr', label: 'ATR (14)' },
+      { key: 'stddev', label: 'Std Dev (20)' },
     ],
   },
   {
@@ -150,6 +164,11 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'vwap', label: 'VWAP' },
       { key: 'obv', label: 'OBV' },
       { key: 'volprofile', label: 'Volume Profile' },
+      { key: 'mfi', label: 'Money Flow (MFI)' },
+      { key: 'cmf', label: 'Chaikin MF' },
+      { key: 'adl', label: 'Accum/Dist' },
+      { key: 'chaikinosc', label: 'Chaikin Osc.' },
+      { key: 'forceindex', label: 'Force Index' },
     ],
   },
   {
@@ -158,9 +177,18 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'rsi', label: 'RSI (14)' },
       { key: 'macd', label: 'MACD' },
       { key: 'stochastic', label: 'Stochastic' },
+      { key: 'stochrsi', label: 'Stoch RSI' },
       { key: 'cci', label: 'CCI (20)' },
       { key: 'williamsR', label: 'Williams %R' },
       { key: 'mom', label: 'Momentum' },
+      { key: 'roc', label: 'ROC (12)' },
+      { key: 'adx', label: 'ADX / DMI' },
+      { key: 'aroon', label: 'Aroon (25)' },
+      { key: 'ao', label: 'Awesome Osc.' },
+      { key: 'ppo', label: 'PPO' },
+      { key: 'trix', label: 'TRIX' },
+      { key: 'uo', label: 'Ultimate Osc.' },
+      { key: 'vortex', label: 'Vortex' },
     ],
   },
   {
@@ -465,6 +493,411 @@ function computeVolumeProfile(bars: Bar[], bins = 24): {
     levels,
     maxVolume: vol[pocIdx] || 1,
   }
+}
+
+// ===== Extended TA helpers (extra moving averages, trend, momentum, volume) =====
+function computeWMA(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = []
+  const denom = (period * (period + 1)) / 2
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    let sum = 0
+    for (let j = 0; j < period; j++) sum += closes[i - period + 1 + j] * (j + 1)
+    out.push(sum / denom)
+  }
+  return out
+}
+
+// EMA over a sparse series that may contain nulls (skips leading nulls).
+function emaOfNullable(vals: (number | null)[], period: number): (number | null)[] {
+  const out: (number | null)[] = []
+  const k = 2 / (period + 1)
+  let prev: number | null = null
+  let seeded = false
+  const buf: number[] = []
+  for (let i = 0; i < vals.length; i++) {
+    const v = vals[i]
+    if (v === null) { out.push(null); continue }
+    if (!seeded) {
+      buf.push(v)
+      if (buf.length < period) { out.push(null); continue }
+      prev = buf.reduce((s, x) => s + x, 0) / period
+      seeded = true
+      out.push(prev)
+    } else {
+      prev = v * k + (prev as number) * (1 - k)
+      out.push(prev)
+    }
+  }
+  return out
+}
+
+function computeHMA(closes: number[], period = 16): (number | null)[] {
+  const half = Math.max(1, Math.round(period / 2))
+  const sqrtP = Math.max(1, Math.round(Math.sqrt(period)))
+  const wmaHalf = computeWMA(closes, half)
+  const wmaFull = computeWMA(closes, period)
+  const diff = closes.map((_, i) =>
+    wmaHalf[i] !== null && wmaFull[i] !== null ? 2 * (wmaHalf[i] as number) - (wmaFull[i] as number) : null
+  )
+  // WMA of a nullable series → compute only over the valid tail.
+  const out: (number | null)[] = new Array(closes.length).fill(null)
+  const validStart = diff.findIndex(v => v !== null)
+  if (validStart === -1) return out
+  const tail = diff.slice(validStart).map(v => v as number)
+  const wmaTail = computeWMA(tail, sqrtP)
+  for (let i = 0; i < wmaTail.length; i++) out[validStart + i] = wmaTail[i]
+  return out
+}
+
+function computeDEMA(closes: number[], period = 20): (number | null)[] {
+  const ema = computeEMA(closes, period)
+  const emaOfEma = emaOfNullable(ema, period)
+  return closes.map((_, i) =>
+    ema[i] !== null && emaOfEma[i] !== null ? 2 * (ema[i] as number) - (emaOfEma[i] as number) : null
+  )
+}
+
+function computeTEMA(closes: number[], period = 20): (number | null)[] {
+  const e1 = computeEMA(closes, period)
+  const e2 = emaOfNullable(e1, period)
+  const e3 = emaOfNullable(e2, period)
+  return closes.map((_, i) =>
+    e1[i] !== null && e2[i] !== null && e3[i] !== null
+      ? 3 * (e1[i] as number) - 3 * (e2[i] as number) + (e3[i] as number)
+      : null
+  )
+}
+
+function computeVWMA(bars: Bar[], period = 20): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    let pv = 0, vv = 0
+    for (let j = i - period + 1; j <= i; j++) { pv += bars[j].close * bars[j].volume; vv += bars[j].volume }
+    out.push(vv > 0 ? pv / vv : null)
+  }
+  return out
+}
+
+// Parabolic SAR (Wilder). Returns the stop-and-reverse dots per bar.
+function computePSAR(bars: Bar[], step = 0.02, maxStep = 0.2): (number | null)[] {
+  if (bars.length < 2) return bars.map(() => null)
+  const out: (number | null)[] = [null]
+  let uptrend = bars[1].close >= bars[0].close
+  let af = step
+  let ep = uptrend ? bars[0].high : bars[0].low
+  let sar = uptrend ? bars[0].low : bars[0].high
+  for (let i = 1; i < bars.length; i++) {
+    const b = bars[i]
+    sar = sar + af * (ep - sar)
+    if (uptrend) {
+      sar = Math.min(sar, bars[i - 1].low, i >= 2 ? bars[i - 2].low : bars[i - 1].low)
+      if (b.high > ep) { ep = b.high; af = Math.min(af + step, maxStep) }
+      if (b.low < sar) { uptrend = false; sar = ep; ep = b.low; af = step }
+    } else {
+      sar = Math.max(sar, bars[i - 1].high, i >= 2 ? bars[i - 2].high : bars[i - 1].high)
+      if (b.low < ep) { ep = b.low; af = Math.min(af + step, maxStep) }
+      if (b.high > sar) { uptrend = true; sar = ep; ep = b.high; af = step }
+    }
+    out.push(sar)
+  }
+  return out
+}
+
+// SuperTrend (ATR-based). Returns the trailing line plus its trend direction.
+function computeSuperTrend(bars: Bar[], period = 10, mult = 3): { line: (number | null)[]; up: boolean[] } {
+  const atr = computeATR(bars, period)
+  const line: (number | null)[] = []
+  const up: boolean[] = []
+  let prevUpper = NaN, prevLower = NaN, prevSt = NaN, trendUp = true
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i]
+    const a = atr[i]
+    if (a === null) { line.push(null); up.push(true); prevSt = NaN; continue }
+    const mid = (b.high + b.low) / 2
+    let upper = mid + mult * a
+    let lower = mid - mult * a
+    if (!Number.isNaN(prevUpper)) upper = upper < prevUpper || bars[i - 1].close > prevUpper ? upper : prevUpper
+    if (!Number.isNaN(prevLower)) lower = lower > prevLower || bars[i - 1].close < prevLower ? lower : prevLower
+    if (Number.isNaN(prevSt)) {
+      trendUp = b.close >= mid
+    } else if (prevSt === prevUpper) {
+      trendUp = b.close > upper ? true : false
+    } else {
+      trendUp = b.close < lower ? false : true
+    }
+    const st = trendUp ? lower : upper
+    line.push(st)
+    up.push(trendUp)
+    prevUpper = upper; prevLower = lower; prevSt = st
+  }
+  return { line, up }
+}
+
+// Moving-average envelopes (% bands around an SMA).
+function computeEnvelopes(closes: number[], period = 20, pct = 2.5): { basis: (number | null)[]; upper: (number | null)[]; lower: (number | null)[] } {
+  const basis = computeSMA(closes, period)
+  const upper = basis.map(v => v === null ? null : v * (1 + pct / 100))
+  const lower = basis.map(v => v === null ? null : v * (1 - pct / 100))
+  return { basis, upper, lower }
+}
+
+// Rolling standard deviation (sub-panel).
+function computeStdDev(closes: number[], period = 20): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    const slice = closes.slice(i - period + 1, i + 1)
+    const mean = slice.reduce((s, v) => s + v, 0) / period
+    const variance = slice.reduce((s, v) => s + (v - mean) ** 2, 0) / period
+    out.push(Math.sqrt(variance))
+  }
+  return out
+}
+
+// ADX with directional indicators (+DI / -DI).
+function computeADX(bars: Bar[], period = 14): { adx: (number | null)[]; plusDI: (number | null)[]; minusDI: (number | null)[] } {
+  const n = bars.length
+  const tr: number[] = new Array(n).fill(0)
+  const plusDM: number[] = new Array(n).fill(0)
+  const minusDM: number[] = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    const up = bars[i].high - bars[i - 1].high
+    const down = bars[i - 1].low - bars[i].low
+    plusDM[i] = up > down && up > 0 ? up : 0
+    minusDM[i] = down > up && down > 0 ? down : 0
+    const pc = bars[i - 1].close
+    tr[i] = Math.max(bars[i].high - bars[i].low, Math.abs(bars[i].high - pc), Math.abs(bars[i].low - pc))
+  }
+  const wilder = (arr: number[]) => {
+    const sm: (number | null)[] = new Array(n).fill(null)
+    if (n <= period) return sm
+    let seed = 0
+    for (let i = 1; i <= period; i++) seed += arr[i]
+    sm[period] = seed
+    for (let i = period + 1; i < n; i++) {
+      sm[i] = (sm[i - 1] as number) - (sm[i - 1] as number) / period + arr[i]
+    }
+    return sm
+  }
+  const trS = wilder(tr)
+  const plusS = wilder(plusDM)
+  const minusS = wilder(minusDM)
+  const plusDI: (number | null)[] = new Array(n).fill(null)
+  const minusDI: (number | null)[] = new Array(n).fill(null)
+  const dx: (number | null)[] = new Array(n).fill(null)
+  for (let i = 0; i < n; i++) {
+    if (trS[i] === null || (trS[i] as number) === 0) continue
+    const pdi = 100 * (plusS[i] as number) / (trS[i] as number)
+    const mdi = 100 * (minusS[i] as number) / (trS[i] as number)
+    plusDI[i] = pdi; minusDI[i] = mdi
+    const sum = pdi + mdi
+    dx[i] = sum === 0 ? 0 : 100 * Math.abs(pdi - mdi) / sum
+  }
+  const adx: (number | null)[] = new Array(n).fill(null)
+  let started = false, prevAdx = 0, count = 0, acc = 0
+  for (let i = 0; i < n; i++) {
+    if (dx[i] === null) continue
+    if (!started) {
+      acc += dx[i] as number; count++
+      if (count === period) { prevAdx = acc / period; adx[i] = prevAdx; started = true }
+    } else {
+      prevAdx = (prevAdx * (period - 1) + (dx[i] as number)) / period
+      adx[i] = prevAdx
+    }
+  }
+  return { adx, plusDI, minusDI }
+}
+
+// Stochastic RSI (0-100).
+function computeStochRSI(closes: number[], rsiPeriod = 14, stochPeriod = 14, kSmooth = 3, dSmooth = 3): { k: (number | null)[]; d: (number | null)[] } {
+  const rsi = computeRSI(closes, rsiPeriod)
+  const raw: (number | null)[] = []
+  for (let i = 0; i < rsi.length; i++) {
+    if (i < stochPeriod - 1 || rsi[i] === null) { raw.push(null); continue }
+    let hi = -Infinity, lo = Infinity, valid = true
+    for (let j = i - stochPeriod + 1; j <= i; j++) {
+      const r = rsi[j]
+      if (r === null) { valid = false; break }
+      hi = Math.max(hi, r); lo = Math.min(lo, r)
+    }
+    if (!valid) { raw.push(null); continue }
+    const range = hi - lo
+    raw.push(range === 0 ? 0 : ((rsi[i] as number) - lo) / range * 100)
+  }
+  const k = smaOfNullable(raw, kSmooth)
+  const d = smaOfNullable(k, dSmooth)
+  return { k, d }
+}
+
+function smaOfNullable(vals: (number | null)[], period: number): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < vals.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    let sum = 0, ok = true
+    for (let j = i - period + 1; j <= i; j++) { if (vals[j] === null) { ok = false; break } sum += vals[j] as number }
+    out.push(ok ? sum / period : null)
+  }
+  return out
+}
+
+// Rate of Change (%).
+function computeROC(closes: number[], period = 12): (number | null)[] {
+  return closes.map((c, i) => i < period || closes[i - period] === 0 ? null : (c - closes[i - period]) / closes[i - period] * 100)
+}
+
+// TRIX: 1-bar % change of a triple-smoothed EMA.
+function computeTRIX(closes: number[], period = 15): (number | null)[] {
+  const e1 = computeEMA(closes, period)
+  const e2 = emaOfNullable(e1, period)
+  const e3 = emaOfNullable(e2, period)
+  return e3.map((v, i) => v === null || e3[i - 1] === null || (e3[i - 1] as number) === 0 ? null : (v - (e3[i - 1] as number)) / (e3[i - 1] as number) * 10000)
+}
+
+// Awesome Oscillator: SMA(median,5) − SMA(median,34).
+function computeAO(bars: Bar[]): (number | null)[] {
+  const med = bars.map(b => (b.high + b.low) / 2)
+  const fast = computeSMA(med, 5)
+  const slow = computeSMA(med, 34)
+  return med.map((_, i) => fast[i] !== null && slow[i] !== null ? (fast[i] as number) - (slow[i] as number) : null)
+}
+
+// Percentage Price Oscillator.
+function computePPO(closes: number[], fast = 12, slow = 26): (number | null)[] {
+  const ef = computeEMA(closes, fast)
+  const es = computeEMA(closes, slow)
+  return closes.map((_, i) => ef[i] !== null && es[i] !== null && (es[i] as number) !== 0 ? ((ef[i] as number) - (es[i] as number)) / (es[i] as number) * 100 : null)
+}
+
+// Ultimate Oscillator.
+function computeUO(bars: Bar[], s1 = 7, s2 = 14, s3 = 28): (number | null)[] {
+  const n = bars.length
+  const bp: number[] = new Array(n).fill(0)
+  const tr: number[] = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    const pc = bars[i - 1].close
+    const low = Math.min(bars[i].low, pc)
+    const high = Math.max(bars[i].high, pc)
+    bp[i] = bars[i].close - low
+    tr[i] = high - low
+  }
+  const out: (number | null)[] = new Array(n).fill(null)
+  const sumRange = (arr: number[], i: number, p: number) => { let s = 0; for (let j = i - p + 1; j <= i; j++) s += arr[j]; return s }
+  for (let i = 0; i < n; i++) {
+    if (i < s3) continue
+    const avg1 = sumRange(bp, i, s1) / (sumRange(tr, i, s1) || 1)
+    const avg2 = sumRange(bp, i, s2) / (sumRange(tr, i, s2) || 1)
+    const avg3 = sumRange(bp, i, s3) / (sumRange(tr, i, s3) || 1)
+    out[i] = 100 * (4 * avg1 + 2 * avg2 + avg3) / 7
+  }
+  return out
+}
+
+// Aroon Up / Aroon Down (0-100).
+function computeAroon(bars: Bar[], period = 25): { up: (number | null)[]; down: (number | null)[] } {
+  const up: (number | null)[] = []
+  const down: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period) { up.push(null); down.push(null); continue }
+    let hiIdx = i, loIdx = i
+    for (let j = i - period; j <= i; j++) {
+      if (bars[j].high >= bars[hiIdx].high) hiIdx = j
+      if (bars[j].low <= bars[loIdx].low) loIdx = j
+    }
+    up.push(100 * (period - (i - hiIdx)) / period)
+    down.push(100 * (period - (i - loIdx)) / period)
+  }
+  return { up, down }
+}
+
+// Vortex Indicator (VI+ / VI−).
+function computeVortex(bars: Bar[], period = 14): { plus: (number | null)[]; minus: (number | null)[] } {
+  const n = bars.length
+  const vmPlus: number[] = new Array(n).fill(0)
+  const vmMinus: number[] = new Array(n).fill(0)
+  const tr: number[] = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    vmPlus[i] = Math.abs(bars[i].high - bars[i - 1].low)
+    vmMinus[i] = Math.abs(bars[i].low - bars[i - 1].high)
+    const pc = bars[i - 1].close
+    tr[i] = Math.max(bars[i].high - bars[i].low, Math.abs(bars[i].high - pc), Math.abs(bars[i].low - pc))
+  }
+  const plus: (number | null)[] = new Array(n).fill(null)
+  const minus: (number | null)[] = new Array(n).fill(null)
+  for (let i = period; i < n; i++) {
+    let sp = 0, sm = 0, st = 0
+    for (let j = i - period + 1; j <= i; j++) { sp += vmPlus[j]; sm += vmMinus[j]; st += tr[j] }
+    if (st === 0) continue
+    plus[i] = sp / st
+    minus[i] = sm / st
+  }
+  return { plus, minus }
+}
+
+// Money Flow Index (volume-weighted RSI).
+function computeMFI(bars: Bar[], period = 14): (number | null)[] {
+  const n = bars.length
+  const tp = bars.map(b => (b.high + b.low + b.close) / 3)
+  const posFlow: number[] = new Array(n).fill(0)
+  const negFlow: number[] = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    const raw = tp[i] * bars[i].volume
+    if (tp[i] > tp[i - 1]) posFlow[i] = raw
+    else if (tp[i] < tp[i - 1]) negFlow[i] = raw
+  }
+  const out: (number | null)[] = new Array(n).fill(null)
+  for (let i = period; i < n; i++) {
+    let pos = 0, neg = 0
+    for (let j = i - period + 1; j <= i; j++) { pos += posFlow[j]; neg += negFlow[j] }
+    out[i] = neg === 0 ? 100 : 100 - 100 / (1 + pos / neg)
+  }
+  return out
+}
+
+// Accumulation / Distribution Line.
+function computeADL(bars: Bar[]): number[] {
+  const out: number[] = []
+  let acc = 0
+  for (const b of bars) {
+    const range = b.high - b.low
+    const mfm = range === 0 ? 0 : ((b.close - b.low) - (b.high - b.close)) / range
+    acc += mfm * b.volume
+    out.push(acc)
+  }
+  return out
+}
+
+// Chaikin Money Flow.
+function computeCMF(bars: Bar[], period = 20): (number | null)[] {
+  const n = bars.length
+  const mfv: number[] = bars.map(b => {
+    const range = b.high - b.low
+    const mfm = range === 0 ? 0 : ((b.close - b.low) - (b.high - b.close)) / range
+    return mfm * b.volume
+  })
+  const out: (number | null)[] = new Array(n).fill(null)
+  for (let i = period - 1; i < n; i++) {
+    let sv = 0, sVol = 0
+    for (let j = i - period + 1; j <= i; j++) { sv += mfv[j]; sVol += bars[j].volume }
+    out[i] = sVol === 0 ? 0 : sv / sVol
+  }
+  return out
+}
+
+// Chaikin Oscillator: EMA3(ADL) − EMA10(ADL).
+function computeChaikinOsc(bars: Bar[]): (number | null)[] {
+  const adl = computeADL(bars)
+  const e3 = computeEMA(adl, 3)
+  const e10 = computeEMA(adl, 10)
+  return adl.map((_, i) => e3[i] !== null && e10[i] !== null ? (e3[i] as number) - (e10[i] as number) : null)
+}
+
+// Force Index (EMA-smoothed).
+function computeForceIndex(bars: Bar[], period = 13): (number | null)[] {
+  const raw: number[] = [0]
+  for (let i = 1; i < bars.length; i++) raw.push((bars[i].close - bars[i - 1].close) * bars[i].volume)
+  return computeEMA(raw, period)
 }
 
 // ========== Component ==========
@@ -795,7 +1228,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     }
 
     // Check how many sub-panels we need (for proper margin allocation)
-    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv']
+    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex']
     const activeSubPanels = subPanelKeys.filter(k => indicators.has(k))
     const hasVolume = indicators.has('volume')
 
@@ -825,6 +1258,25 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     if (indicators.has('ema20')) addOverlay(computeEMA(closes, 20), '#06b6d4', LineStyle.Dashed)
     if (indicators.has('ema50')) addOverlay(computeEMA(closes, 50), '#f472b6', LineStyle.Dashed)
     if (indicators.has('ema200')) addOverlay(computeEMA(closes, 200), '#fb923c', LineStyle.Dashed, 2)
+    if (indicators.has('wma20')) addOverlay(computeWMA(closes, 20), '#eab308')
+    if (indicators.has('wma50')) addOverlay(computeWMA(closes, 50), '#84cc16')
+    if (indicators.has('hma')) addOverlay(computeHMA(closes, 16), '#22d3ee', LineStyle.Solid, 2)
+    if (indicators.has('dema')) addOverlay(computeDEMA(closes, 20), '#c084fc')
+    if (indicators.has('tema')) addOverlay(computeTEMA(closes, 20), '#fb7185')
+    if (indicators.has('vwma')) addOverlay(computeVWMA(bars, 20), '#38bdf8')
+
+    // Parabolic SAR (plotted as a thin dotted line tracing the stops)
+    if (indicators.has('psar')) addOverlay(computePSAR(bars), '#e879f9', LineStyle.Dotted, 2)
+
+    // SuperTrend (trailing ATR line)
+    if (indicators.has('supertrend')) {
+      const st = computeSuperTrend(bars)
+      // Split into up/down colored segments by inserting nulls on direction flips.
+      const upLine = st.line.map((v, i) => st.up[i] ? v : null)
+      const downLine = st.line.map((v, i) => !st.up[i] ? v : null)
+      addOverlay(upLine, '#22c55e', LineStyle.Solid, 2)
+      addOverlay(downLine, '#ef4444', LineStyle.Solid, 2)
+    }
 
     // Ichimoku Cloud
     if (indicators.has('ichimoku')) {
@@ -852,6 +1304,12 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const dc = computeDonchian(bars)
       addOverlay(dc.upper, 'rgba(251,191,36,0.5)')
       addOverlay(dc.lower, 'rgba(251,191,36,0.5)')
+    }
+    if (indicators.has('envelopes')) {
+      const env = computeEnvelopes(closes, 20, 2.5)
+      addOverlay(env.upper, 'rgba(96,165,250,0.55)')
+      addOverlay(env.basis, 'rgba(96,165,250,0.3)', LineStyle.Dashed)
+      addOverlay(env.lower, 'rgba(96,165,250,0.55)')
     }
 
     // ── Volume Overlays ──
@@ -999,6 +1457,100 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const sid = 'obv-panel'
       setupSubScale(sid)
       addSubLine(obvVals.map(v => v as number | null), sid, '#22d3ee')
+    }
+
+    // Std Dev (sub-panel)
+    if (indicators.has('stddev')) {
+      addSubLine(computeStdDev(closes, 20), 'stddev-panel', '#94a3b8')
+    }
+
+    // Money Flow Index (0-100, with 20/80 guides)
+    if (indicators.has('mfi')) {
+      const sid = 'mfi-panel'
+      addSubLine(computeMFI(bars), sid, '#10b981')
+      const pane = getPane(sid)
+      const g20 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, pane)
+      g20.setData(timeLabels.map(t => ({ time: t, value: 20 } as LineData))); overlaySeriesRef.current.push(g20)
+      const g80 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, pane)
+      g80.setData(timeLabels.map(t => ({ time: t, value: 80 } as LineData))); overlaySeriesRef.current.push(g80)
+    }
+
+    // Chaikin Money Flow (oscillates around 0)
+    if (indicators.has('cmf')) {
+      addSubHistogram(computeCMF(bars, 20), 'cmf-panel')
+    }
+
+    // Accumulation / Distribution Line
+    if (indicators.has('adl')) {
+      addSubLine(computeADL(bars).map(v => v as number | null), 'adl-panel', '#60a5fa')
+    }
+
+    // Chaikin Oscillator
+    if (indicators.has('chaikinosc')) {
+      addSubHistogram(computeChaikinOsc(bars), 'chaikinosc-panel')
+    }
+
+    // Force Index
+    if (indicators.has('forceindex')) {
+      addSubHistogram(computeForceIndex(bars, 13), 'forceindex-panel')
+    }
+
+    // ADX with +DI / -DI
+    if (indicators.has('adx')) {
+      const a = computeADX(bars)
+      const sid = 'adx-panel'
+      addSubLine(a.adx, sid, '#eab308', LineStyle.Solid, 2)
+      addSubLine(a.plusDI, sid, '#22c55e')
+      addSubLine(a.minusDI, sid, '#ef4444')
+    }
+
+    // Stochastic RSI
+    if (indicators.has('stochrsi')) {
+      const s = computeStochRSI(closes)
+      const sid = 'stochrsi-panel'
+      addSubLine(s.k, sid, '#06b6d4')
+      addSubLine(s.d, sid, '#f97316', LineStyle.Dashed)
+    }
+
+    // Rate of Change
+    if (indicators.has('roc')) {
+      addSubLine(computeROC(closes, 12), 'roc-panel', '#a78bfa')
+    }
+
+    // TRIX
+    if (indicators.has('trix')) {
+      addSubLine(computeTRIX(closes, 15), 'trix-panel', '#f472b6')
+    }
+
+    // Ultimate Oscillator
+    if (indicators.has('uo')) {
+      addSubLine(computeUO(bars), 'uo-panel', '#14b8a6')
+    }
+
+    // Awesome Oscillator (histogram)
+    if (indicators.has('ao')) {
+      addSubHistogram(computeAO(bars), 'ao-panel')
+    }
+
+    // PPO
+    if (indicators.has('ppo')) {
+      addSubLine(computePPO(closes), 'ppo-panel', '#3b82f6')
+    }
+
+    // Aroon Up / Down
+    if (indicators.has('aroon')) {
+      const ar = computeAroon(bars, 25)
+      const sid = 'aroon-panel'
+      addSubLine(ar.up, sid, '#22c55e')
+      addSubLine(ar.down, sid, '#ef4444')
+    }
+
+    // Vortex VI+ / VI-
+    if (indicators.has('vortex')) {
+      const v = computeVortex(bars, 14)
+      const sid = 'vortex-panel'
+      addSubLine(v.plus, sid, '#22c55e')
+      addSubLine(v.minus, sid, '#ef4444')
     }
 
     // ===== COMPARE OVERLAY (normalized % performance lines on their own scale) =====

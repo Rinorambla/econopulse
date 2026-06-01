@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+import { getYahooQuotes } from '@/lib/yahooFinance'
 
 // Ensure Node.js runtime for OpenAI SDK
 export const runtime = 'nodejs'
@@ -38,8 +39,167 @@ const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
   })
 }
 
+// ============================================================================
+// LIVE MARKET DATA ENRICHMENT
+// Pulls real, up-to-date numbers so the AI grounds answers on facts, not guesses.
+// Everything here is best-effort and time-boxed; failures never block the answer.
+// ============================================================================
+
+// Common company / asset names → ticker, so "apple", "bitcoin", "gold" resolve.
+const NAME_TO_TICKER: Record<string, string> = {
+  apple: 'AAPL', microsoft: 'MSFT', nvidia: 'NVDA', tesla: 'TSLA', amazon: 'AMZN',
+  google: 'GOOGL', alphabet: 'GOOGL', meta: 'META', facebook: 'META', netflix: 'NFLX',
+  amd: 'AMD', intel: 'INTC', broadcom: 'AVGO', oracle: 'ORCL', salesforce: 'CRM',
+  palantir: 'PLTR', 'super micro': 'SMCI', supermicro: 'SMCI', adobe: 'ADBE',
+  jpmorgan: 'JPM', 'jp morgan': 'JPM', 'goldman sachs': 'GS', 'bank of america': 'BAC',
+  visa: 'V', mastercard: 'MA', berkshire: 'BRK-B', walmart: 'WMT', costco: 'COST',
+  exxon: 'XOM', chevron: 'CVX', 'eli lilly': 'LLY', 'united health': 'UNH', pfizer: 'PFE',
+  boeing: 'BA', disney: 'DIS', coca: 'KO', 'coca cola': 'KO', pepsi: 'PEP', mcdonalds: 'MCD',
+  'mcdonald\'s': 'MCD', starbucks: 'SBUX', nike: 'NKE', ford: 'F', 'general motors': 'GM',
+  uber: 'UBER', airbnb: 'ABNB', coinbase: 'COIN', 'micro strategy': 'MSTR', microstrategy: 'MSTR',
+  bitcoin: 'BTC-USD', btc: 'BTC-USD', ethereum: 'ETH-USD', eth: 'ETH-USD', solana: 'SOL-USD',
+  ripple: 'XRP-USD', xrp: 'XRP-USD', dogecoin: 'DOGE-USD', cardano: 'ADA-USD',
+  gold: 'GC=F', silver: 'SI=F', oil: 'CL=F', crude: 'CL=F', 'wti': 'CL=F', 'natural gas': 'NG=F',
+  copper: 'HG=F', 'sp500': 'SPY', 's&p': 'SPY', 's&p 500': 'SPY', 'sp 500': 'SPY',
+  nasdaq: 'QQQ', 'dow': 'DIA', 'dow jones': 'DIA', 'russell': 'IWM', vix: '^VIX',
+  'dollar': 'DX-Y.NYB', 'us dollar': 'DX-Y.NYB', dxy: 'DX-Y.NYB', euro: 'EURUSD=X', 'eur/usd': 'EURUSD=X',
+  treasury: 'TLT', bonds: 'TLT', 'yield': 'TLT', 'yields': 'TLT',
+}
+
+// A reasonable set of words that look like tickers but aren't, to avoid noise.
+const TICKER_STOPWORDS = new Set(['I', 'A', 'THE', 'AND', 'OR', 'FOR', 'IS', 'IT', 'TO', 'IN', 'ON', 'AT', 'OF', 'AI', 'US', 'EU', 'CEO', 'CFO', 'GDP', 'CPI', 'PPI', 'FED', 'FOMC', 'ETF', 'IPO', 'PE', 'EPS', 'YOY', 'QOQ', 'USD', 'EUR', 'WSJ', 'NYSE', 'DYOR', 'ATH', 'YTD', 'Q1', 'Q2', 'Q3', 'Q4', 'OK', 'NO', 'WHY', 'HOW', 'BUY', 'SELL'])
+
+function extractTickers(question: string): string[] {
+  const found = new Set<string>()
+  // $TICKER form (highest confidence)
+  for (const m of question.matchAll(/\$([A-Za-z][A-Za-z.\-]{0,6})/g)) {
+    found.add(m[1].toUpperCase())
+  }
+  // Bare uppercase tokens that look like tickers (2-5 letters)
+  for (const m of question.matchAll(/\b([A-Z]{2,5})\b/g)) {
+    const t = m[1].toUpperCase()
+    if (!TICKER_STOPWORDS.has(t)) found.add(t)
+  }
+  // Company / asset names
+  const lower = ` ${question.toLowerCase()} `
+  for (const [name, ticker] of Object.entries(NAME_TO_TICKER)) {
+    if (lower.includes(` ${name} `) || lower.includes(`${name},`) || lower.includes(`${name}.`) || lower.includes(`${name}?`) || lower.includes(`${name}'`)) {
+      found.add(ticker)
+    }
+  }
+  return Array.from(found).slice(0, 8)
+}
+
+function pct(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return 'n/a'
+  return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+function price(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return 'n/a'
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (n >= 1) return n.toFixed(2)
+  return n.toFixed(4)
+}
+
+// Fetch ~1y of daily bars and derive technical levels for one ticker.
+async function fetchTechnical(ticker: string): Promise<string | null> {
+  try {
+    const r = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1y`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(7000), cache: 'no-store' }
+    )
+    if (!r.ok) return null
+    const j = await r.json()
+    const res = j?.chart?.result?.[0]
+    const closes: number[] = (res?.indicators?.quote?.[0]?.close || []).filter((x: any) => typeof x === 'number')
+    if (closes.length < 30) return null
+    const last = closes[closes.length - 1]
+    const sma = (n: number) => {
+      if (closes.length < n) return null
+      const slice = closes.slice(-n)
+      return slice.reduce((a, b) => a + b, 0) / n
+    }
+    const sma20 = sma(20), sma50 = sma(50), sma200 = sma(200)
+    const hi52 = Math.max(...closes), lo52 = Math.min(...closes)
+    const ret = (n: number) => closes.length > n ? ((last - closes[closes.length - 1 - n]) / closes[closes.length - 1 - n]) * 100 : null
+    // 14-period RSI
+    let gains = 0, losses = 0
+    for (let i = closes.length - 14; i < closes.length; i++) {
+      const d = closes[i] - closes[i - 1]
+      if (d >= 0) gains += d; else losses -= d
+    }
+    const rs = losses === 0 ? 100 : gains / losses
+    const rsi = 100 - 100 / (1 + rs)
+    const trend = sma50 && sma200 ? (sma50 > sma200 ? 'uptrend (50DMA>200DMA)' : 'downtrend (50DMA<200DMA)') : 'n/a'
+    return [
+      `${ticker} technicals: last ${price(last)};`,
+      `1M ${pct(ret(21))}, 3M ${pct(ret(63))}, 6M ${pct(ret(126))};`,
+      `52w range ${price(lo52)}–${price(hi52)} (now ${(((last - lo52) / (hi52 - lo52)) * 100).toFixed(0)}% of range);`,
+      `SMA20 ${price(sma20)}, SMA50 ${price(sma50)}, SMA200 ${price(sma200)};`,
+      `RSI(14) ${rsi.toFixed(0)}; trend ${trend}.`,
+    ].join(' ')
+  } catch {
+    return null
+  }
+}
+
+// Assemble a single, factual context string from all available live sources.
+async function buildLiveContext(req: NextRequest, question: string, clientContext: unknown): Promise<string> {
+  const parts: string[] = []
+  parts.push(`Server timestamp: ${new Date().toISOString()} (live data follows; use these exact numbers).`)
+
+  // 1) Market-wide snapshot from our own wrap endpoint (indices, sectors, movers, news).
+  try {
+    const origin = req.nextUrl?.origin || `https://${req.headers.get('host') || 'www.econopulse.ai'}`
+    const wr = await withTimeout(
+      fetch(`${origin}/api/updateai/wrap`, { cache: 'no-store', signal: AbortSignal.timeout(9000) }).then(r => r.ok ? r.json() : null),
+      10000
+    ).catch(() => null)
+    if (wr) {
+      if (Array.isArray(wr.quotes)) {
+        parts.push('Indices & macro: ' + wr.quotes.map((q: any) => `${q.name} ${price(q.price)} (${pct(q.changePct)})`).join('; ') + '.')
+      }
+      if (Array.isArray(wr.sectors) && wr.sectors.length) {
+        parts.push('Sectors: ' + wr.sectors.map((s: any) => `${s.name || s.sector} ${pct(s.changePercent ?? s.performance)}`).join('; ') + '.')
+      }
+      if (wr.movers?.top?.length) parts.push('Top gainers: ' + wr.movers.top.map((m: any) => `${m.symbol || m.ticker} ${pct(m.changePercent)}`).join(', ') + '.')
+      if (wr.movers?.bottom?.length) parts.push('Top losers: ' + wr.movers.bottom.map((m: any) => `${m.symbol || m.ticker} ${pct(m.changePercent)}`).join(', ') + '.')
+      if (Array.isArray(wr.news) && wr.news.length) {
+        parts.push('Latest headlines:\n' + wr.news.slice(0, 8).map((n: any) => `• ${n.title}${n.source ? ` (${n.source})` : ''}`).join('\n'))
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 2) Live quotes + technicals for tickers mentioned in the question.
+  const tickers = extractTickers(question)
+  if (tickers.length) {
+    try {
+      const quotes = await withTimeout(getYahooQuotes(tickers), 9000).catch(() => [])
+      if (Array.isArray(quotes) && quotes.length) {
+        parts.push('Quotes for mentioned symbols: ' + quotes.map((q: any) =>
+          `${q.ticker} ${q.name ? `(${q.name}) ` : ''}${price(q.price)} ${pct(q.changePercent)} vol ${q.volume?.toLocaleString?.('en-US') || 'n/a'}`
+        ).join('; ') + '.')
+      }
+      // Detailed technicals for up to 3 of them.
+      const techs = await Promise.all(tickers.slice(0, 3).map(t => fetchTechnical(t)))
+      for (const t of techs) if (t) parts.push(t)
+    } catch { /* ignore */ }
+  }
+
+  // 3) Whatever extra context the client passed (e.g. on-screen snapshot).
+  if (clientContext) {
+    try {
+      const c = typeof clientContext === 'string' ? clientContext : JSON.stringify(clientContext)
+      if (c && c.length > 4) parts.push('Client-provided on-screen context:\n' + c.slice(0, 3000))
+    } catch { /* ignore */ }
+  }
+
+  return parts.join('\n\n')
+}
+
 export async function POST(req: NextRequest) {
   let parsedQuestion = ''
+  let liveCtxForRetry = ''
   try {
     const { question, userId, context } = await req.json()
     parsedQuestion = question || ''
@@ -102,6 +262,16 @@ export async function POST(req: NextRequest) {
     const { client: aiClient, model: primaryModel, fallbackModel, provider } = getAIClient()
     console.log(`✅ AI client initialized (${provider}: ${primaryModel})`)
 
+    // Build a real, up-to-date market data context server-side (best-effort, time-boxed).
+    let liveContext = ''
+    try {
+      liveContext = await withTimeout(buildLiveContext(req, question, context), 14000)
+      liveCtxForRetry = liveContext
+      console.log(`📡 Live context built (${liveContext.length} chars)`)
+    } catch (e: any) {
+      console.warn('⚠️ Live context build failed/timed out:', e?.message)
+    }
+
   // System prompt for financial analysis
   const systemPrompt = `You are EconoAI, an expert financial analyst and market strategist at EconoPulse with 20+ years of Wall Street experience. You provide comprehensive market intelligence across ALL asset classes and market topics.
 
@@ -142,6 +312,13 @@ TONE & STYLE:
 
 CRITICAL: Answer EVERY question asked, even if you need to make reasonable market assumptions based on typical conditions. Never say "I don't have real-time data" - provide framework-based analysis instead.
 
+USING LIVE DATA (highest priority):
+- A message labeled "LIVE MARKET DATA" contains REAL, up-to-the-minute numbers fetched from the market (index levels, % changes, sector performance, top movers, the specific quotes/technicals for any ticker the user mentioned, and the latest news headlines).
+- You MUST anchor your answer to these exact numbers. Quote the real price, % change, RSI, moving averages, 52-week range, and cite the actual headlines provided.
+- Do NOT invent or estimate values that are present in the LIVE MARKET DATA — use them verbatim.
+- If a specific number the user asks about is genuinely missing from the live data, say what you do have and clearly flag the single missing piece, then give framework analysis for just that gap.
+- When you cite a level or move, make clear it is current/real ("currently trading at …", "today …").
+
 If the user provided context, you MUST incorporate it precisely. Context can include: recent market summary, macro indicators, key levels, and top headlines. Prioritize accuracy from context.
 
 When helpful, structure the output JSON-like sections:
@@ -165,7 +342,7 @@ Keep prose crisp and professional.`
         model: primaryModel,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...(context ? [{ role: 'user' as const, content: `Context:\n${JSON.stringify(context).slice(0, 8000)}` }] : []),
+          ...(liveContext ? [{ role: 'user' as const, content: `LIVE MARKET DATA (real, current — use these exact numbers):\n${liveContext}` }] : []),
           { role: 'user', content: question }
         ],
         temperature: 0.8, // Slightly higher for more nuanced financial analysis
@@ -193,7 +370,7 @@ Keep prose crisp and professional.`
         model: fallbackModel,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...(context ? [{ role: 'user' as const, content: `Context:\n${JSON.stringify(context).slice(0, 8000)}` }] : []),
+          ...(liveContext ? [{ role: 'user' as const, content: `LIVE MARKET DATA (real, current — use these exact numbers):\n${liveContext}` }] : []),
           { role: 'user', content: question }
         ],
         temperature: 0.8,
@@ -266,7 +443,8 @@ Keep prose crisp and professional.`
             client.chat.completions.create({
               model,
               messages: [
-                { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly.' },
+                { role: 'system', content: 'You are EconoAI, an expert financial analyst. Answer concisely with specific data, levels, and actionable takeaways. Always answer the question directly. If LIVE MARKET DATA is provided, anchor your answer to those exact real numbers and headlines.' },
+                ...(liveCtxForRetry ? [{ role: 'user' as const, content: `LIVE MARKET DATA (real, current — use these exact numbers):\n${liveCtxForRetry}` }] : []),
                 { role: 'user', content: parsedQuestion || 'market overview' }
               ],
               temperature: 0.7,

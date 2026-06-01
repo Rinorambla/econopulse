@@ -37,8 +37,9 @@ const AdvancedChart = dynamic(
 )
 
 // Composites the EconoPulse logo + brand text as a watermark on the bottom-right
-// of a chart screenshot, so shared images always show their source.
-async function addWatermark(src: HTMLCanvasElement): Promise<HTMLCanvasElement> {
+// of a chart screenshot, plus the ticker symbol on the top-left, so shared
+// images always show both what they are and where they came from.
+async function addWatermark(src: HTMLCanvasElement, symbol?: string): Promise<HTMLCanvasElement> {
   const out = document.createElement('canvas')
   out.width = src.width
   out.height = src.height
@@ -50,6 +51,35 @@ async function addWatermark(src: HTMLCanvasElement): Promise<HTMLCanvasElement> 
   const pad = Math.round(12 * scale)
   const fontSize = Math.round(15 * scale)
   const logoSize = Math.round(18 * scale)
+
+  // ===== Ticker symbol (top-left) =====
+  const sym = (symbol || '').trim().toUpperCase()
+  if (sym) {
+    const symFont = Math.round(26 * scale)
+    ctx.save()
+    ctx.font = `800 ${symFont}px Inter, system-ui, -apple-system, sans-serif`
+    ctx.textBaseline = 'top'
+    const symW = ctx.measureText(sym).width
+    // subtle dark plate behind the text for readability on any background
+    const plateH = symFont + Math.round(10 * scale)
+    const plateW = symW + Math.round(18 * scale)
+    ctx.globalAlpha = 0.38
+    ctx.fillStyle = '#0f172a'
+    const r = Math.round(6 * scale)
+    const px = pad, py = pad
+    ctx.beginPath()
+    ctx.moveTo(px + r, py)
+    ctx.arcTo(px + plateW, py, px + plateW, py + plateH, r)
+    ctx.arcTo(px + plateW, py + plateH, px, py + plateH, r)
+    ctx.arcTo(px, py + plateH, px, py, r)
+    ctx.arcTo(px, py, px + plateW, py, r)
+    ctx.closePath()
+    ctx.fill()
+    ctx.globalAlpha = 1
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(sym, px + Math.round(9 * scale), py + Math.round(5 * scale))
+    ctx.restore()
+  }
 
   // Brand text with cyan→blue gradient (matches the in-app status bar).
   ctx.font = `700 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`
@@ -379,7 +409,7 @@ export default function MarketDataPage() {
   const shareCurrent = useCallback(async () => {
     const v = symbol.trim().toUpperCase()
     const baseCanvas = chartApiRef.current?.screenshot?.() || null
-    const canvas = baseCanvas ? await addWatermark(baseCanvas) : null
+    const canvas = baseCanvas ? await addWatermark(baseCanvas, v) : null
     if (canvas) {
       try {
         const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))

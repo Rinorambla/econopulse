@@ -37,6 +37,7 @@ type Coverage = {
   expectedReturn: number
   priceTarget: number
   date: string
+  currentPrice?: number
 }
 
 type ApiData = {
@@ -247,6 +248,12 @@ export default function TopAnalystsPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {data?.provider === 'live' && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live data
+                </span>
+              )}
               {data?.asOf && (
                 <span className="text-[11px] text-gray-500">
                   Updated{' '}
@@ -585,6 +592,7 @@ export default function TopAnalystsPage() {
                   <tr className="border-b border-slate-700/60 text-[10px] uppercase tracking-wider text-gray-500">
                     <th className="px-4 sm:px-5 py-2 text-left">Stock</th>
                     <th className="px-3 py-2 text-center">Action</th>
+                    <th className="px-3 py-2 text-right hidden sm:table-cell">Current</th>
                     <th className="px-3 py-2 text-right">Price Target</th>
                     <th className="px-3 py-2 text-right">Implied</th>
                     <th className="px-4 sm:px-5 py-2 text-right hidden sm:table-cell">Date</th>
@@ -605,6 +613,7 @@ export default function TopAnalystsPage() {
                         <td className="px-3 py-2.5 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded-md border text-[11px] font-semibold ${badge}`}>{c.action}</span>
                         </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-gray-400 hidden sm:table-cell">{c.currentPrice ? `$${c.currentPrice.toLocaleString('en-US')}` : '—'}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-gray-200">${c.priceTarget.toLocaleString('en-US')}</td>
                         <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${c.expectedReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {c.expectedReturn >= 0 ? '+' : ''}{c.expectedReturn.toFixed(1)}%
@@ -615,7 +624,7 @@ export default function TopAnalystsPage() {
                   })}
                   {(!selected.coverage || selected.coverage.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-gray-500 text-sm">No coverage data available.</td>
+                      <td colSpan={6} className="px-5 py-8 text-center text-gray-500 text-sm">No coverage data available.</td>
                     </tr>
                   )}
                 </tbody>

@@ -37,6 +37,7 @@ export type Coverage = {
   expectedReturn: number // % implied upside/downside vs current price
   priceTarget: number // analyst price target
   date: string // ISO date of the call
+  currentPrice?: number // live price (when enriched with real data)
 }
 
 // Base curated roster (unranked). Rank is computed at request time.

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { getPolygonClient } from '@/lib/polygonFinance';
+import { getYahooQuotes } from '@/lib/yahooFinance';
 
 interface MarketFeatures {
   vix: number;
@@ -105,26 +106,57 @@ const HISTORICAL_EVENTS = [
   }
 ];
 
+// Fetch real market metrics from Yahoo Finance (primary, free, reliable)
+// SPY = S&P 500 ETF, ^VIX = volatility index, DX-Y.NYB = US Dollar Index, GC=F = gold futures
+async function fetchYahooMetrics() {
+  try {
+    const quotes = await getYahooQuotes(['SPY', '^VIX', 'DX-Y.NYB', 'GC=F']);
+    const by = (t: string) => quotes.find(q => q.ticker.toUpperCase() === t.toUpperCase())?.price;
+    const spyPrice = by('SPY');
+    const vixLevel = by('^VIX');
+    const dollarIndex = by('DX-Y.NYB');
+    const goldPrice = by('GC=F');
+    if (!spyPrice && !vixLevel && !dollarIndex && !goldPrice) return null;
+    return {
+      spyPrice: spyPrice && spyPrice > 0 ? spyPrice : undefined,
+      vixLevel: vixLevel && vixLevel > 0 ? vixLevel : undefined,
+      dollarIndex: dollarIndex && dollarIndex > 0 ? dollarIndex : undefined,
+      goldPrice: goldPrice && goldPrice > 0 ? goldPrice : undefined,
+    };
+  } catch (error) {
+    console.error('Yahoo metrics error:', error);
+    return null;
+  }
+}
+
 // Fetch real market data from multiple sources
 async function getCurrentMarketFeatures(): Promise<MarketFeatures> {
   try {
     const promises = await Promise.allSettled([
       fetchFREDData(),
       fetchTwelveDataMetrics(),
-      fetchPolygonData()
+      fetchPolygonData(),
+      fetchYahooMetrics()
     ]);
 
     // Combine results from all sources
     const fredData = promises[0].status === 'fulfilled' ? promises[0].value : null;
     const twelveData = promises[1].status === 'fulfilled' ? promises[1].value : null;
     const polygonData = promises[2].status === 'fulfilled' ? promises[2].value : null;
+    const yahooData = promises[3].status === 'fulfilled' ? promises[3].value : null;
 
     // Calculate derived metrics
     const bondEquityCorr = calculateBondEquityCorrelation(polygonData);
     const sectorRotation = analyzeSectorRotation(polygonData);
-    
+
+    // Resolve each metric with priority: Yahoo (live) > provider-specific > static fallback
+    const spyPrice = yahooData?.spyPrice ?? polygonData?.spyPrice ?? 450.0;
+    const vixLevel = yahooData?.vixLevel ?? twelveData?.vixLevel ?? 19.2;
+    const dollarIndex = yahooData?.dollarIndex ?? twelveData?.dollarIndex ?? 103.5;
+    const goldPrice = yahooData?.goldPrice ?? polygonData?.goldPrice ?? 2050.0;
+
     return {
-      vix: twelveData?.vixLevel || 19.2,
+      vix: vixLevel,
       bondEquityCorr: bondEquityCorr || 0.42,
       creditSpreads: 152, // Would be calculated from bond data
       sectorRotation: sectorRotation || 'defensive',
@@ -135,10 +167,10 @@ async function getCurrentMarketFeatures(): Promise<MarketFeatures> {
         gdpGrowth: fredData?.gdpGrowth || 2.1
       },
       marketMetrics: {
-        spyPrice: polygonData?.spyPrice || 450.0,
-        vixLevel: twelveData?.vixLevel || 19.2,
-        dollarIndex: twelveData?.dollarIndex || 103.5,
-        goldPrice: polygonData?.goldPrice || 2050.0
+        spyPrice,
+        vixLevel,
+        dollarIndex,
+        goldPrice
       }
     };
   } catch (error) {

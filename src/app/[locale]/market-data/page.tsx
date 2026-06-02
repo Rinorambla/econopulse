@@ -86,9 +86,11 @@ async function addWatermark(src: HTMLCanvasElement, symbol?: string): Promise<HT
   ctx.textBaseline = 'middle'
   const text = 'ECONOPULSE.AI'
   const textW = ctx.measureText(text).width
-  // Bottom-LEFT placement (TradingView style) so it never overlaps the date axis on the right.
+  // Bottom-LEFT placement (TradingView style), lifted ABOVE the date axis so the
+  // brand sits inside the plot area and never covers the date labels at the bottom.
+  const dateAxisGap = Math.round(46 * scale)
   const baseX = pad
-  const baseY = src.height - pad - logoSize / 2
+  const baseY = src.height - dateAxisGap - logoSize / 2
 
   // Try to draw the wave logo; fall back to text-only if it fails to load.
   const logo = new Image()

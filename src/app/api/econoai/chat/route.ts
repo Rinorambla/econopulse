@@ -162,13 +162,22 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
   const parts: string[] = []
   parts.push(`Server timestamp: ${new Date().toISOString()} (live data follows; use these exact numbers).`)
 
-  // 1) Market-wide snapshot from our own wrap endpoint (indices, sectors, movers, news).
-  try {
-    const origin = req.nextUrl?.origin || `https://${req.headers.get('host') || 'www.econopulse.ai'}`
-    const wr = await withTimeout(
-      fetch(`${origin}/api/updateai/wrap`, { cache: 'no-store', signal: AbortSignal.timeout(9000) }).then(r => r.ok ? r.json() : null),
-      10000
+  const origin = req.nextUrl?.origin || `https://${req.headers.get('host') || 'www.econopulse.ai'}`
+  const q = question.toLowerCase()
+  // Pull a JSON endpoint with a hard timeout; never throws.
+  const fetchJson = (path: string, ms = 8000): Promise<any> =>
+    withTimeout(
+      fetch(`${origin}${path}`, { cache: 'no-store', signal: AbortSignal.timeout(ms) }).then(r => r.ok ? r.json() : null),
+      ms + 1000
     ).catch(() => null)
+
+  // 1) Market-wide snapshot from our own wrap endpoint (indices, sectors, movers, news).
+  //    2) FRED macroeconomic snapshot. Fetched in PARALLEL to keep latency low.
+  const [wr, ed] = await Promise.all([
+    fetchJson('/api/updateai/wrap', 9000),
+    fetchJson('/api/economic-data', 9000),
+  ])
+  try {
     if (wr) {
       if (Array.isArray(wr.quotes)) {
         parts.push('Indices & macro: ' + wr.quotes.map((q: any) => `${q.name} ${price(q.price)} (${pct(q.changePct)})`).join('; ') + '.')
@@ -184,7 +193,94 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     }
   } catch { /* ignore */ }
 
-  // 2) Live quotes + technicals for tickers mentioned in the question.
+  // FRED macroeconomic snapshot — ALWAYS included so the AI can speak to the
+  //    economy, GDP, inflation, jobs, the Fed, consumer/housing/industrial trends.
+  try {
+    const ind = ed?.data?.indicators
+    const cur = ed?.data?.current
+    if (ind) {
+      const v = (x: any) => (x && typeof x.value === 'number') ? x.value : null
+      const macro: string[] = []
+      if (v(ind.gdp) != null) macro.push(`Real GDP growth ${v(ind.gdp)}% (annualized)`)
+      if (ind.inflation && typeof ind.inflation.value === 'number') macro.push(`CPI inflation ${ind.inflation.value}% YoY`)
+      if (v(ind.unemployment) != null) macro.push(`Unemployment ${v(ind.unemployment)}%`)
+      if (v(ind.fedRate) != null) macro.push(`Fed funds ${v(ind.fedRate)}%`)
+      if (v(ind.consumerConfidence) != null) macro.push(`Consumer sentiment ${v(ind.consumerConfidence)}`)
+      if (v(ind.retailSales) != null) macro.push(`Retail sales (index) ${v(ind.retailSales)}`)
+      if (v(ind.housingStarts) != null) macro.push(`Housing starts ${v(ind.housingStarts)}K`)
+      if (v(ind.industrialProduction) != null) macro.push(`Industrial production (index) ${v(ind.industrialProduction)}`)
+      if (macro.length) parts.push('US macro (FRED, latest): ' + macro.join('; ') + '.')
+    }
+    if (cur?.cycle) parts.push(`Economic cycle: ${cur.cycle} (growth ${cur.growth ?? 'n/a'}, inflation ${cur.inflation ?? 'n/a'}).`)
+  } catch { /* ignore */ }
+
+  // 3) Topic-gated specialized data (only fetched when the question is about it,
+  //    to keep latency low while covering rates, real estate, debt, geopolitics, P/E…).
+  const topicFetches: Promise<void>[] = []
+  const wants = (...kw: string[]) => kw.some(k => q.includes(k))
+
+  // Treasury yields / yield curve
+  if (wants('yield', 'treasury', 'bond', 'curve', 'rates', '10y', '2y', 'duration')) {
+    topicFetches.push((async () => {
+      const y = await fetchJson('/api/visual-ai/yields', 8000)
+      const rows = y?.data
+      if (Array.isArray(rows) && rows.length) {
+        const us = rows.map((r: any) => `${r.maturity} ${typeof r.us === 'number' ? r.us.toFixed(2) + '%' : 'n/a'}`).join(', ')
+        parts.push('US Treasury yield curve: ' + us + '.')
+      }
+    })())
+  }
+  // Real estate / housing
+  if (wants('real estate', 'housing', 'home', 'mortgage', 'property', 'reit', 'immobil', 'case')) {
+    topicFetches.push((async () => {
+      const re = await fetchJson('/api/visual-ai/real-estate', 8000)
+      const s = re?.summary || re?.data || re
+      if (s) parts.push('Real estate / housing snapshot: ' + JSON.stringify(s).slice(0, 900) + '.')
+    })())
+  }
+  // Government / national debt
+  if (wants('debt', 'deficit', 'borrowing', 'fiscal', 'debito')) {
+    topicFetches.push((async () => {
+      const d = await fetchJson('/api/visual-ai/debt', 8000)
+      const s = d?.summary || d?.data || d
+      if (s) parts.push('Government debt / fiscal snapshot: ' + JSON.stringify(s).slice(0, 900) + '.')
+    })())
+  }
+  // Wars / geopolitics
+  if (wants('war', 'geopolit', 'conflict', 'sanction', 'russia', 'ukraine', 'china', 'iran', 'israel', 'middle east', 'guerra', 'tariff', 'trade war')) {
+    topicFetches.push((async () => {
+      const g = await fetchJson('/api/visual-ai/geopolitical-risk', 8000)
+      const s = g?.summary || g?.data || g
+      if (s) parts.push('Geopolitical risk snapshot: ' + JSON.stringify(s).slice(0, 900) + '.')
+    })())
+  }
+  // Valuations / P/E
+  if (wants('p/e', 'pe ratio', 'valuation', 'multiple', 'overvalued', 'undervalued', 'earnings yield')) {
+    topicFetches.push((async () => {
+      const pe = await fetchJson('/api/visual-ai/pe-predictor', 8000)
+      const s = pe?.summary || pe?.data || pe
+      if (s) parts.push('Valuation / P/E snapshot: ' + JSON.stringify(s).slice(0, 900) + '.')
+    })())
+  }
+  // Fed / monetary policy
+  if (wants('fed', 'fomc', 'rate cut', 'rate hike', 'powell', 'monetary', 'central bank')) {
+    topicFetches.push((async () => {
+      const fw = await fetchJson('/api/fed-watch', 8000)
+      const s = fw?.data || fw
+      if (s) parts.push('Fed Watch (rate-path probabilities): ' + JSON.stringify(s).slice(0, 700) + '.')
+    })())
+  }
+  // Recession / cycle risk
+  if (wants('recession', 'slowdown', 'downturn', 'hard landing', 'soft landing', 'recessione')) {
+    topicFetches.push((async () => {
+      const rec = await fetchJson('/api/recession-index', 8000)
+      const s = rec?.data || rec
+      if (s) parts.push('Recession indicators: ' + JSON.stringify(s).slice(0, 700) + '.')
+    })())
+  }
+  if (topicFetches.length) { try { await Promise.all(topicFetches) } catch { /* ignore */ } }
+
+  // 4) Live quotes + technicals for tickers mentioned in the question.
   const tickers = extractTickers(question)
   if (tickers.length) {
     try {
@@ -200,7 +296,7 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     } catch { /* ignore */ }
   }
 
-  // 3) Whatever extra context the client passed (e.g. on-screen snapshot).
+  // 5) Whatever extra context the client passed (e.g. on-screen snapshot).
   if (clientContext) {
     try {
       const c = typeof clientContext === 'string' ? clientContext : JSON.stringify(clientContext)
@@ -302,7 +398,7 @@ export async function POST(req: NextRequest) {
     // Build a real, up-to-date market data context server-side (best-effort, time-boxed).
     let liveContext = ''
     try {
-      liveContext = await withTimeout(buildLiveContext(req, question, context), 14000)
+      liveContext = await withTimeout(buildLiveContext(req, question, context), 22000)
       liveCtxForRetry = liveContext
       console.log(`📡 Live context built (${liveContext.length} chars)`)
     } catch (e: any) {
@@ -349,9 +445,11 @@ TONE & STYLE:
 
 CRITICAL: Answer EVERY question asked, even if you need to make reasonable market assumptions based on typical conditions. Never say "I don't have real-time data" - provide framework-based analysis instead.
 
+YOU CAN ANSWER ANY ECONOMIC/FINANCIAL TOPIC. The live data feed routinely includes: economy & macroeconomics, GDP growth, CPI/inflation, unemployment/labor, the Fed & rate path, consumer sentiment & retail sales/consumption, housing/real estate, industrial production, government debt & fiscal deficits, corporate earnings, P/E & valuations, Treasury yields & the yield curve, recession indicators, geopolitics/wars/sanctions/tariffs, market indices, sectors, movers, and breaking news. Use whichever of these are present to answer thoroughly. Never refuse a topic — if the user asks about economy, wars, debt, real estate, consumption, earnings, P/E, GDP, indicators or comparisons, answer it with the data provided plus your framework.
+
 USING LIVE DATA (highest priority):
-- A message labeled "LIVE MARKET DATA" contains REAL, up-to-the-minute numbers fetched from the market (index levels, % changes, sector performance, top movers, the specific quotes/technicals for any ticker the user mentioned, and the latest news headlines).
-- You MUST anchor your answer to these exact numbers. Quote the real price, % change, RSI, moving averages, 52-week range, and cite the actual headlines provided.
+- A message labeled "LIVE MARKET DATA" contains REAL, up-to-the-minute numbers fetched from the market and the economy (index levels, % changes, sector performance, top movers, US macro from FRED — GDP, inflation, unemployment, Fed funds, consumer sentiment, retail sales, housing starts, industrial production — plus topic snapshots for yields, real estate, debt, geopolitical risk, valuations/P-E, Fed Watch and recession indicators, the specific quotes/technicals for any ticker mentioned, and the latest news headlines).
+- You MUST anchor your answer to these exact numbers. Quote the real price, % change, GDP, CPI, unemployment, Fed funds, yields, RSI, moving averages, 52-week range, and cite the actual headlines provided.
 - Do NOT invent or estimate values that are present in the LIVE MARKET DATA — use them verbatim.
 - If a specific number the user asks about is genuinely missing from the live data, say what you do have and clearly flag the single missing piece, then give framework analysis for just that gap.
 - When you cite a level or move, make clear it is current/real ("currently trading at …", "today …").

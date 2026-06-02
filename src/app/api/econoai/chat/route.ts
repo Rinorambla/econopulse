@@ -211,6 +211,29 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
   return parts.join('\n\n')
 }
 
+// Lightweight diagnostic: GET /api/econoai/chat → which AI providers the server can see.
+// Never exposes key values, only whether each env var is present.
+export async function GET() {
+  const providers = {
+    anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+    openai: Boolean(process.env.OPENAI_API_KEY),
+    groq: Boolean(process.env.GROQ_API_KEY),
+  }
+  const anyConfigured = providers.anthropic || providers.openai || providers.groq
+  const active = providers.anthropic ? 'anthropic' : providers.openai ? 'openai' : providers.groq ? 'groq' : 'none'
+  const res = NextResponse.json({
+    ok: anyConfigured,
+    active,
+    providers,
+    message: anyConfigured
+      ? `AI is configured. Active provider: ${active}.`
+      : 'No AI provider configured. Add GROQ_API_KEY (free) or OPENAI_API_KEY / ANTHROPIC_API_KEY in Vercel env, then redeploy.',
+    timestamp: new Date().toISOString(),
+  })
+  res.headers.set('Cache-Control', 'no-store')
+  return res
+}
+
 export async function POST(req: NextRequest) {
   let parsedQuestion = ''
   let liveCtxForRetry = ''

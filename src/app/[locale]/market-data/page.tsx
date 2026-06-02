@@ -86,8 +86,8 @@ async function addWatermark(src: HTMLCanvasElement, symbol?: string): Promise<HT
   ctx.textBaseline = 'middle'
   const text = 'ECONOPULSE.AI'
   const textW = ctx.measureText(text).width
-  const totalW = logoSize + Math.round(6 * scale) + textW
-  const baseX = src.width - pad - totalW
+  // Bottom-LEFT placement (TradingView style) so it never overlaps the date axis on the right.
+  const baseX = pad
   const baseY = src.height - pad - logoSize / 2
 
   // Try to draw the wave logo; fall back to text-only if it fails to load.
@@ -98,6 +98,26 @@ async function addWatermark(src: HTMLCanvasElement, symbol?: string): Promise<HT
     logo.onerror = () => resolve(false)
     logo.src = '/logo-econopulse-wave.svg'
   })
+
+  // Dark rounded plate behind the brand for readability over candles / grid lines.
+  const brandW = (loaded ? logoSize + Math.round(6 * scale) : 0) + textW
+  ctx.save()
+  ctx.globalAlpha = 0.38
+  ctx.fillStyle = '#0f172a'
+  const br = Math.round(6 * scale)
+  const bx = baseX - Math.round(7 * scale)
+  const bh = Math.max(logoSize, fontSize) + Math.round(10 * scale)
+  const by = baseY - bh / 2
+  const bw = brandW + Math.round(14 * scale)
+  ctx.beginPath()
+  ctx.moveTo(bx + br, by)
+  ctx.arcTo(bx + bw, by, bx + bw, by + bh, br)
+  ctx.arcTo(bx + bw, by + bh, bx, by + bh, br)
+  ctx.arcTo(bx, by + bh, bx, by, br)
+  ctx.arcTo(bx, by, bx + bw, by, br)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
 
   ctx.save()
   ctx.globalAlpha = 0.92
@@ -116,7 +136,6 @@ async function addWatermark(src: HTMLCanvasElement, symbol?: string): Promise<HT
 
   return out
 }
-
 const DEFAULT_WATCHLISTS: Record<string, string[]> = {
   Main: ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'JPM', 'XOM', 'GLD', 'BTC-USD', 'ETH-USD'],
   Tech: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AVGO', 'CRM', 'ORCL', 'ADBE'],

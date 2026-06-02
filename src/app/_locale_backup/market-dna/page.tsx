@@ -441,8 +441,64 @@ export default function MarketDNAPage() {
             </div>
           )}
 
+          {/* ═══════ LIVE KPI TERMINAL BAR ═══════ */}
+          {(() => {
+            const m = data.marketMetrics;
+            const regime = data.riskSummary?.regime;
+            const dna = data.currentDNAScore;
+            const kpis: Array<{ label: string; value: string; tone: string; sub?: string }> = [
+              { label: 'DNA Score', value: `${dna}%`, tone: dna >= 80 ? 'text-red-400' : dna >= 60 ? 'text-amber-400' : dna >= 40 ? 'text-yellow-400' : 'text-emerald-400', sub: data.dominantPattern },
+              { label: 'Regime', value: regime || '—', tone: regime === 'Risk-Off' ? 'text-red-400' : regime === 'Risk-On' ? 'text-emerald-400' : 'text-amber-400', sub: data.riskSummary ? `${data.riskSummary.votes.on + data.riskSummary.votes.off} signals` : undefined },
+              { label: 'Top Match', value: `${data.topHistoricalMatch.similarity}%`, tone: data.topHistoricalMatch.similarity >= 80 ? 'text-red-400' : 'text-amber-400', sub: data.topHistoricalMatch.eventType },
+              { label: 'S&P 500', value: m?.spyPrice ? m.spyPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—', tone: 'text-sky-300', sub: 'SPY' },
+              { label: 'VIX', value: m?.vixLevel ? m.vixLevel.toFixed(1) : '—', tone: (m?.vixLevel ?? 0) > 25 ? 'text-red-400' : (m?.vixLevel ?? 0) > 18 ? 'text-amber-400' : 'text-emerald-400', sub: 'Volatility' },
+              { label: 'US Dollar', value: m?.dollarIndex ? m.dollarIndex.toFixed(1) : '—', tone: 'text-indigo-300', sub: 'DXY' },
+              { label: 'Gold', value: m?.goldPrice ? `$${m.goldPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—', tone: 'text-yellow-300', sub: 'XAU' },
+              ...(peakSignals ? [{ label: 'Peak Signals', value: `${peakSignals.current.percent}%`, tone: peakSignals.current.percent > 60 ? 'text-red-400' : peakSignals.current.percent > 30 ? 'text-amber-400' : 'text-emerald-400', sub: 'Triggered' }] : []),
+            ];
+            return (
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c1222]/80 backdrop-blur-xl">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/[0.04] via-transparent to-blue-600/[0.04] pointer-events-none" />
+                <div className="relative grid grid-flow-col auto-cols-[minmax(118px,1fr)] sm:auto-cols-fr divide-x divide-white/[0.05] overflow-x-auto no-scrollbar">
+                  {kpis.map((k) => (
+                    <div key={k.label} className="px-4 py-3 min-w-[118px]">
+                      <div className="text-[9px] uppercase tracking-widest text-gray-500 font-medium whitespace-nowrap">{k.label}</div>
+                      <div className={`text-lg font-black tabular-nums leading-tight mt-0.5 ${k.tone}`}>{k.value}</div>
+                      {k.sub && <div className="text-[9px] text-gray-600 truncate mt-0.5 max-w-[120px]">{k.sub}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ═══════ SECTION NAVIGATION ═══════ */}
+          <nav className="sticky top-[52px] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-[#060a13]/90 backdrop-blur-xl border-b border-white/[0.05]">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'overview', label: 'Overview' },
+                { id: 'patterns', label: 'Patterns' },
+                { id: 'regime', label: 'Risk Regime' },
+                { id: 'peak', label: 'Peak Signals' },
+                { id: 'analytics', label: 'Analytics' },
+                { id: 'sectors', label: 'Sectors' },
+                { id: 'clusters', label: 'Clusters' },
+                { id: 'correlations', label: 'Correlations' },
+                { id: 'insight', label: 'AI Insight' },
+              ].map((s) => (
+                <a
+                  key={s.id}
+                  href={`#${s.id}`}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.05] transition-colors"
+                >
+                  {s.label}
+                </a>
+              ))}
+            </div>
+          </nav>
+
           {/* ═══════ HERO: DNA SCORE + PATTERN MATCH ═══════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div id="overview" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* DNA Score Card */}
             <div className="lg:col-span-2 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.07] via-sky-500/[0.04] to-blue-600/[0.07] rounded-2xl" />
@@ -547,7 +603,7 @@ export default function MarketDNAPage() {
           </div>
 
           {/* ═══════ ADDITIONAL HISTORICAL PATTERNS ═══════ */}
-          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div id="patterns" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="px-6 py-5 border-b border-white/[0.06]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center">
@@ -580,7 +636,7 @@ export default function MarketDNAPage() {
 
           {/* ═══════ CROSS-ASSET RISK REGIME ═══════ */}
           {data.riskSummary && (
-            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div id="regime" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
               <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/10 border border-indigo-500/20 flex items-center justify-center">
@@ -643,7 +699,7 @@ export default function MarketDNAPage() {
 
           {/* ═══════ PEAK SIGNALS MATRIX ═══════ */}
           {peakSignals && (
-            <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div id="peak" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
               <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500/20 to-amber-500/10 border border-red-500/20 flex items-center justify-center">
@@ -748,7 +804,7 @@ export default function MarketDNAPage() {
           )}
 
           {/* ═══════ ADVANCED ANALYTICS DASHBOARD ═══════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div id="analytics" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Market Regime Evolution */}
             <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
               <div className="px-6 py-5 border-b border-white/[0.06]">
@@ -795,7 +851,7 @@ export default function MarketDNAPage() {
           </div>
 
           {/* ═══════ SECTOR VULNERABILITY ANALYSIS ═══════ */}
-          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div id="sectors" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/20 flex items-center justify-center">
@@ -927,7 +983,7 @@ export default function MarketDNAPage() {
           </div>
 
           {/* ═══════ MARKET CLUSTERS ═══════ */}
-          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div id="clusters" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="px-6 py-5 border-b border-white/[0.06]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500/20 to-emerald-500/10 border border-teal-500/20 flex items-center justify-center">
@@ -968,7 +1024,7 @@ export default function MarketDNAPage() {
           </div>
 
           {/* ═══════ CORRELATION ANOMALIES ═══════ */}
-          <div className="bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div id="correlations" className="scroll-mt-28 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="px-6 py-5 border-b border-white/[0.06]">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500/20 to-blue-500/10 border border-sky-500/20 flex items-center justify-center">
@@ -1104,7 +1160,7 @@ export default function MarketDNAPage() {
           </div>
 
           {/* ═══════ AI INSIGHT + RISK GAUGE ═══════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div id="insight" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* AI Market DNA Insight */}
             <div className="lg:col-span-2 bg-[#0c1222]/80 backdrop-blur-xl rounded-2xl border border-white/[0.06] shadow-[0_0_40px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-blue-500/[0.03] pointer-events-none"></div>

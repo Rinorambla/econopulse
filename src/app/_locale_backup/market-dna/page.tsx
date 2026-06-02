@@ -458,7 +458,6 @@ export default function MarketDNAPage() {
               { label: 'VIX', value: m?.vixLevel ? m.vixLevel.toFixed(1) : '—', tone: (m?.vixLevel ?? 0) > 25 ? 'text-red-400' : (m?.vixLevel ?? 0) > 18 ? 'text-amber-400' : 'text-emerald-400', sub: 'Volatility' },
               { label: 'US Dollar', value: m?.dollarIndex ? m.dollarIndex.toFixed(1) : '—', tone: 'text-indigo-300', sub: 'DXY' },
               { label: 'Gold', value: m?.goldPrice ? `$${m.goldPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—', tone: 'text-yellow-300', sub: 'XAU' },
-              ...(peakSignals ? [{ label: 'Peak Signals', value: `${peakSignals.current.percent}%`, tone: peakSignals.current.percent > 60 ? 'text-red-400' : peakSignals.current.percent > 30 ? 'text-amber-400' : 'text-emerald-400', sub: 'Triggered' }] : []),
             ];
             return (
               <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c1222]/80 backdrop-blur-xl">
@@ -741,9 +740,24 @@ export default function MarketDNAPage() {
                       <XAxis dataKey="date" stroke="#475569" fontSize={10} />
                       <YAxis stroke="#475569" fontSize={10} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                       <Tooltip
-                        contentStyle={getTooltipStyle()}
-                        formatter={(value: any, name: any) => [`${value}%`, 'Triggered']}
-                        labelStyle={getTooltipLabelStyle()}
+                        cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                        content={({ active, payload }: any) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const p = payload[0].payload;
+                          const pct = p.percent as number;
+                          const tone = pct > 60 ? '#f87171' : pct > 30 ? '#fbbf24' : '#34d399';
+                          const label = p.type === 'current' ? 'Current' : p.type === 'recent' ? 'Recent' : 'Historical peak';
+                          return (
+                            <div style={{ background: '#0f172a', border: '1px solid #475569', borderRadius: 8, padding: '8px 10px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.4)' }}>
+                              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 12 }}>{p.date}</div>
+                              <div style={{ color: '#94a3b8', fontSize: 10, marginBottom: 4 }}>{label}</div>
+                              <div style={{ color: tone, fontWeight: 700, fontSize: 13 }}>{pct}% signals triggered</div>
+                              {typeof p.spy === 'number' && (
+                                <div style={{ color: '#e2e8f0', fontSize: 11, marginTop: 2 }}>S&amp;P 500: {p.spy.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                              )}
+                            </div>
+                          );
+                        }}
                       />
                       <Bar dataKey="percent" radius={[4, 4, 0, 0]} barSize={28}>
                         {[

@@ -63,24 +63,33 @@ export default function WorldEconomicCycleMap() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async (showSpinner: boolean) => {
       try {
-        setLoading(true);
+        if (showSpinner) setLoading(true);
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 30000);
-        const r = await fetch('/api/world-economic-cycles', { signal: ctrl.signal });
+        const r = await fetch('/api/world-economic-cycles', { cache: 'no-store', signal: ctrl.signal });
         clearTimeout(t);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j: ApiResponse = await r.json();
-        if (!cancelled) setData(j);
+        if (!cancelled) { setData(j); setError(''); }
       } catch (e) {
-        if (!cancelled) setError('World cycles unavailable');
+        if (!cancelled && showSpinner) setError('World cycles unavailable');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showSpinner) setLoading(false);
       }
-    })();
+    };
+    load(true);
+    // Keep macro cycle data current with a periodic refresh while the tab is visible.
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') load(false);
+    }, 600000);
+    const onVisible = () => { if (document.visibilityState === 'visible') load(false); };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 

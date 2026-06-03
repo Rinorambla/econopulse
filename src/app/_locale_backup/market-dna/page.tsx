@@ -314,12 +314,13 @@ export default function MarketDNAPage() {
   const fetchPeakSignals = async () => {
     try {
       setLoadingPeak(true);
-      const res = await fetch('/api/peak-signals');
+      const res = await fetchT('/api/peak-signals', 12000);
       if (res.ok) {
         const json: PeakSignalsApi = await res.json();
         setPeakSignals(json);
       }
-    } finally { setLoadingPeak(false);} }
+    } catch { /* ignore — peak signals are supplementary */ }
+    finally { setLoadingPeak(false);} }
   useEffect(()=>{ fetchPeakSignals(); }, []);
   const categoryColor = (cat:string) => cat==='Sentiment'?'text-cyan-300 border-cyan-500/30': cat==='Valuation'?'text-amber-300 border-amber-500/30':'text-sky-300 border-sky-500/30';
   const checkMark = (active:boolean, status?:string) => active ? <span className="text-emerald-300">✓</span> : <span className={` ${status==='unavailable'?'text-slate-500':'text-slate-600'}`}>•</span>;

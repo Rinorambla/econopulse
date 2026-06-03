@@ -14,6 +14,7 @@ import {
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
+import { ThirteenFExplorer } from '@/components/analytics/ThirteenFExplorer'
 
 type Analyst = {
   id: string
@@ -525,6 +526,25 @@ export default function TopAnalystsPage() {
               </div>
             </section>
           </div>
+
+          {/* ===== 13F institutional holdings, by quarter ===== */}
+          <section className="mt-6 rounded-xl bg-slate-800/40 border border-slate-700/60 overflow-hidden">
+            <div className="flex items-start gap-2 p-4 border-b border-slate-700/60">
+              <ChartBarIcon className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-300">
+                  13F Institutional Holdings · By Quarter
+                </h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Explore what top institutional managers hold each quarter, straight from their SEC Form 13F filings.
+                  Pick a manager and a quarter to see positions, share counts and values.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              <ThirteenFExplorer />
+            </div>
+          </section>
 
           <p className="text-[11px] text-gray-500 text-center mt-6">
             Top Analyst AI ranks Wall Street analysts by success rate and average return, auto-refreshed every 5 minutes.

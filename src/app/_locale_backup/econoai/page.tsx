@@ -67,6 +67,43 @@ function renderBrief(text: string): React.ReactNode {
     }
   }
 
+  let tableRows: string[] = []
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s)
+  const splitRow = (s: string) =>
+    s.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim())
+  const isSeparatorRow = (s: string) =>
+    splitRow(s).every((c) => /^:?-{2,}:?$/.test(c.replace(/\s/g, '')))
+
+  const flushTable = () => {
+    if (!tableRows.length) return
+    const rows = tableRows.filter((r) => !isSeparatorRow(r)).map(splitRow)
+    tableRows = []
+    if (!rows.length) return
+    const [header, ...body] = rows
+    blocks.push(
+      <div key={`tbl-${blocks.length}`} className="overflow-x-auto -mx-1 my-2 rounded-lg border border-white/10">
+        <table className="w-full text-[12.5px] border-collapse">
+          <thead>
+            <tr className="bg-white/5">
+              {header.map((c, i) => (
+                <th key={i} className="text-left font-semibold text-white px-2.5 py-1.5 whitespace-nowrap border-b border-white/10" dangerouslySetInnerHTML={{ __html: inline(c) }} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((r, ri) => (
+              <tr key={ri} className="even:bg-white/[0.02]">
+                {header.map((_, ci) => (
+                  <td key={ci} className="text-gray-200 px-2.5 py-1.5 whitespace-nowrap border-b border-white/5" dangerouslySetInnerHTML={{ __html: inline(r[ci] ?? '') }} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   function inline(s: string): string {
     return s
       .replace(/&/g, '&amp;')
@@ -78,7 +115,13 @@ function renderBrief(text: string): React.ReactNode {
 
   for (const raw of lines) {
     const line = raw.trimEnd()
-    if (!line.trim()) { flushBullets(); continue }
+    if (!line.trim()) { flushBullets(); flushTable(); continue }
+    if (isTableRow(line)) {
+      flushBullets()
+      tableRows.push(line)
+      continue
+    }
+    flushTable()
     if (line.startsWith('## ')) {
       flushBullets()
       blocks.push(
@@ -101,6 +144,7 @@ function renderBrief(text: string): React.ReactNode {
     blocks.push(<p key={`p-${blocks.length}`} className="text-gray-200 text-[13.5px] leading-relaxed mb-2" dangerouslySetInnerHTML={{ __html: inline(line) }} />)
   }
   flushBullets()
+  flushTable()
   return blocks
 }
 
@@ -261,14 +305,14 @@ export default function UpdateAIPage() {
                       </div>
                     )}
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                      className={`max-w-[85%] min-w-0 rounded-2xl px-4 py-2.5 ${
                         m.role === 'user'
                           ? 'bg-sky-600 text-white rounded-br-sm'
                           : 'bg-slate-800/70 border border-slate-700/60 text-gray-100 rounded-bl-sm'
                       }`}
                     >
                       {m.role === 'assistant'
-                        ? <div className="prose-invert">{renderBrief(m.content)}</div>
+                        ? <div className="prose-invert min-w-0">{renderBrief(m.content)}</div>
                         : <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>}
                     </div>
                   </div>

@@ -60,7 +60,12 @@ async function fetchText(url: string): Promise<string> {
 
 // Find latest 13F filing for a CIK via submissions JSON
 async function getLatest13F(cik10: string): Promise<FilingMeta | null> {
-  const cikNoZeros = stripLeadingZeros(cik10)
+  const list = await getRecent13FList(cik10)
+  return list[0] || null
+}
+
+// Return all recent 13F-HR filings (one per quarter) for a CIK.
+async function getRecent13FList(cik10: string): Promise<FilingMeta[]> {
   const url = `https://data.sec.gov/submissions/CIK${cik10}.json`
   const data: any = await fetchJson(url)
   const forms: string[] = data?.filings?.recent?.form || []
@@ -69,19 +74,20 @@ async function getLatest13F(cik10: string): Promise<FilingMeta | null> {
   const accepted: string[] = data?.filings?.recent?.acceptanceDateTime || []
   const prim: string[] = data?.filings?.recent?.primaryDocument || []
   const period: string[] = data?.filings?.recent?.reportDate || data?.filings?.recent?.reportCalendarOrQuarter || []
-  let idx = -1
+  const out: FilingMeta[] = []
   for (let i = 0; i < forms.length; i++) {
-    const f = String(forms[i]||'')
-    if (f === '13F-HR' || f === '13F-HR/A') { idx = i; break }
+    const f = String(forms[i] || '')
+    if (f === '13F-HR' || f === '13F-HR/A') {
+      out.push({
+        accessionNumber: String(acc[i] || '').trim(),
+        filingDate: String(dates[i] || '').trim(),
+        acceptedDate: String(accepted[i] || '').trim(),
+        primaryDocument: String(prim[i] || '').trim(),
+        reportCalendarOrQuarter: String(period[i] || '').trim(),
+      })
+    }
   }
-  if (idx < 0) return null
-  return {
-    accessionNumber: String(acc[idx]||'').trim(),
-    filingDate: String(dates[idx]||'').trim(),
-    acceptedDate: String(accepted[idx]||'').trim(),
-    primaryDocument: String(prim[idx]||'').trim(),
-    reportCalendarOrQuarter: String(period[idx]||'').trim(),
-  }
+  return out
 }
 
 // Given cik and accession, list files in the filing folder and pick the infotable XML
@@ -210,12 +216,31 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const cikRaw = (searchParams.get('cik') || '').trim()
   const urlRaw = (searchParams.get('url') || '').trim()
+  const accRaw = (searchParams.get('accession') || '').trim()
+  const wantList = ['1', 'true', 'yes'].includes((searchParams.get('list') || '').toLowerCase())
   const asCsv = (searchParams.get('format') || '').toLowerCase() === 'csv'
 
   if (!cikRaw && !urlRaw) {
     const res = NextResponse.json({ error: 'Provide either cik=########## or url=https://www.sec.gov/Archives/... to a specific filing.' }, { status: 400 })
     Object.entries(rateLimitHeaders(rl)).forEach(([k,v]) => res.headers.set(k, v))
     return res
+  }
+
+  // List mode: return all recent 13F filings (one per quarter) so the UI can
+  // offer a quarter picker without downloading every infoTable.
+  if (wantList && cikRaw) {
+    try {
+      const cik10 = padCik(cikRaw)
+      const filings = await getRecent13FList(cik10)
+      const res = NextResponse.json({ ok: true, filer: { cik: cik10 }, filings })
+      Object.entries(rateLimitHeaders(rl)).forEach(([k,v]) => res.headers.set(k, v))
+      res.headers.set('Cache-Control', 'public, max-age=600')
+      return res
+    } catch (e: any) {
+      const res = NextResponse.json({ ok: false, error: 'Failed to list 13F filings', detail: String(e?.message||e) }, { status: 500 })
+      Object.entries(rateLimitHeaders(rl)).forEach(([k,v]) => res.headers.set(k, v))
+      return res
+    }
   }
 
   try {
@@ -246,6 +271,12 @@ export async function GET(req: NextRequest) {
 
     // If no accession provided, discover latest 13F
     let meta: FilingMeta | null = null
+    if (!accession && accRaw) {
+      // Explicit quarter requested: resolve its metadata from the recent list.
+      const list = await getRecent13FList(cik10).catch(() => [] as FilingMeta[])
+      meta = list.find(f => unDash(f.accessionNumber) === unDash(accRaw)) || { accessionNumber: accRaw }
+      accession = accRaw
+    }
     if (!accession) {
       meta = await getLatest13F(cik10)
       if (!meta) throw new Error('No recent 13F filings found for this CIK')

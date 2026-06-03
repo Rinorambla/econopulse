@@ -671,7 +671,18 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           <tr key={m.symbol}
                             className={`hover:bg-white/[0.03] cursor-pointer transition-colors ${selectedSymbol === m.symbol ? 'bg-blue-500/10' : ''}`}
                             onClick={() => setSelectedSymbol(m.symbol)}>
-                            <td className="py-1 px-2 font-semibold text-white">{m.symbol}</td>
+                            <td className="py-1 px-2 font-semibold text-white">
+                              <span className="flex items-center gap-1.5">
+                                <img
+                                  src={`https://assets.parqet.com/logos/symbol/${m.symbol}?format=jpg`}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-4 h-4 rounded-full bg-slate-700 object-cover shrink-0"
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                                />
+                                {m.symbol}
+                              </span>
+                            </td>
                             <td className="py-1 px-2 text-right font-mono tabular-nums text-gray-300">${fmt(m.price)}</td>
                             <td className={`py-1 px-2 text-right font-mono tabular-nums font-semibold ${pctColor(m.changePercent)}`}>{fmtPct(m.changePercent)}%</td>
                           </tr>
@@ -721,7 +732,16 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   ) : stockDetail ? (
                     <div className="p-3 space-y-2 text-[10px]">
                       <div className="flex items-center justify-between">
-                        <span className="text-base font-bold text-white">{stockDetail.symbol}</span>
+                        <span className="flex items-center gap-2">
+                          <img
+                            src={`https://assets.parqet.com/logos/symbol/${stockDetail.symbol}?format=jpg`}
+                            alt=""
+                            loading="lazy"
+                            className="w-6 h-6 rounded-full bg-slate-700 object-cover shrink-0"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                          />
+                          <span className="text-base font-bold text-white">{stockDetail.symbol}</span>
+                        </span>
                         <span className={`text-sm font-bold ${pctColor(stockDetail.regularMarketChangePercent ?? 0)}`}>
                           {stockDetail.regularMarketPrice ? `$${fmt(stockDetail.regularMarketPrice)}` : '—'}
                         </span>

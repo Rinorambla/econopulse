@@ -22,6 +22,13 @@ interface MarketFeatures {
   };
 }
 
+// Simple in-memory cache for the computed Market DNA payload. The full analysis
+// hits several upstream APIs (Yahoo x2, FRED, Polygon, OpenAI) so without this every
+// page load recomputes everything and feels slow. Serve a cached payload for a few
+// minutes to make repeat loads near-instant.
+let DNA_CACHE: { at: number; payload: any } | null = null;
+const DNA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // Historical market events with detailed features for pattern matching
 const HISTORICAL_EVENTS = [
   {
@@ -412,6 +419,7 @@ async function generateAIInsight(topMatch: any, currentFeatures: MarketFeatures,
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(6000),
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
@@ -525,6 +533,18 @@ export async function GET(request: NextRequest) {
     if (!rl.ok) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
     }
+
+    // Serve a recent cached payload instantly when available.
+    if (DNA_CACHE && Date.now() - DNA_CACHE.at < DNA_CACHE_TTL) {
+      return NextResponse.json(DNA_CACHE.payload, {
+        headers: {
+          ...rateLimitHeaders(rl),
+          'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+          'X-Cache': 'HIT',
+        },
+      });
+    }
+
     console.log('🧠 Starting Market DNA analysis with REAL DATA...');
     
     // Get current market features from multiple data sources
@@ -802,6 +822,7 @@ export async function GET(request: NextRequest) {
   riskSummary
     };
     
+  DNA_CACHE = { at: Date.now(), payload: response };
   return NextResponse.json(response, {
     headers: {
       ...rateLimitHeaders(rl),

@@ -24,9 +24,29 @@ type ApiOut = {
   source: 'sec' | 'snapshot'
 }
 
+type FilingMeta = {
+  accessionNumber: string
+  reportCalendarOrQuarter?: string
+  filingDate?: string
+}
+
 function fmt(n?: number, digits = 0) {
   if (!Number.isFinite(n as number)) return '-'
   return (n as number).toLocaleString(undefined, { maximumFractionDigits: digits })
+}
+
+// Turn a report date (e.g. "2024-09-30") into a readable quarter label ("Q3 2024").
+function quarterLabel(f: FilingMeta): string {
+  const raw = (f.reportCalendarOrQuarter || '').trim()
+  const m = raw.match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (m) {
+    const year = m[1]
+    const month = parseInt(m[2], 10)
+    const q = Math.min(4, Math.max(1, Math.ceil(month / 3)))
+    return `Q${q} ${year}`
+  }
+  if (raw) return raw
+  return f.filingDate ? `Filed ${f.filingDate}` : f.accessionNumber
 }
 
 const PRESETS: Array<{ label: string; cik: string }> = [
@@ -41,15 +61,18 @@ export function ThirteenFExplorer() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const [data, setData] = useState<ApiOut | null>(null)
+  const [filings, setFilings] = useState<FilingMeta[]>([])
+  const [accession, setAccession] = useState<string>('')
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<'value'|'issuer'|'shares'>('value')
   const [sortDir, setSortDir] = useState<'desc'|'asc'>('desc')
 
-  async function fetch13f(targetCik: string) {
+  async function fetch13f(targetCik: string, targetAccession?: string) {
     try {
       setLoading(true)
       setError('')
-      const r = await fetch(`/api/13f?cik=${encodeURIComponent(targetCik)}`, { cache: 'no-store' })
+      const accParam = targetAccession ? `&accession=${encodeURIComponent(targetAccession)}` : ''
+      const r = await fetch(`/api/13f?cik=${encodeURIComponent(targetCik)}${accParam}`, { cache: 'no-store' })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const j = await r.json()
       setData(j)
@@ -61,8 +84,27 @@ export function ThirteenFExplorer() {
     }
   }
 
+  // Load the list of available quarters for a manager, then load the latest one.
+  async function loadManager(targetCik: string) {
+    setFilings([])
+    setAccession('')
+    try {
+      const r = await fetch(`/api/13f?cik=${encodeURIComponent(targetCik)}&list=1`, { cache: 'no-store' })
+      if (r.ok) {
+        const j = await r.json()
+        const list: FilingMeta[] = Array.isArray(j?.filings) ? j.filings : []
+        setFilings(list)
+        const first = list[0]?.accessionNumber || ''
+        setAccession(first)
+        await fetch13f(targetCik, first || undefined)
+        return
+      }
+    } catch { /* fall back to latest */ }
+    await fetch13f(targetCik)
+  }
+
   useEffect(() => {
-    fetch13f(cik)
+    loadManager(cik)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -104,12 +146,26 @@ export function ThirteenFExplorer() {
         </div>
         <div>
           <label className="text-xs text-gray-400">Presets</label>
-          <select onChange={e=>{ const v = e.target.value; if (v) { setCik(v); fetch13f(v) } }} className="bg-slate-800 text-white border border-white/10 rounded px-3 py-2 w-64">
+          <select onChange={e=>{ const v = e.target.value; if (v) { setCik(v); loadManager(v) } }} className="bg-slate-800 text-white border border-white/10 rounded px-3 py-2 w-64">
             <option value="">Select a famous manager…</option>
             {PRESETS.map(p => <option key={p.cik} value={p.cik}>{p.label}</option>)}
           </select>
         </div>
-        <button onClick={()=>fetch13f(cik)} disabled={loading || !cik} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2 disabled:opacity-50">
+        {filings.length > 0 && (
+          <div>
+            <label className="text-xs text-gray-400">Quarter</label>
+            <select
+              value={accession}
+              onChange={e=>{ const v = e.target.value; setAccession(v); fetch13f(cik, v || undefined) }}
+              className="bg-slate-800 text-white border border-white/10 rounded px-3 py-2 w-44"
+            >
+              {filings.map(f => (
+                <option key={f.accessionNumber} value={f.accessionNumber}>{quarterLabel(f)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <button onClick={()=>loadManager(cik)} disabled={loading || !cik} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2 disabled:opacity-50">
           <Search className="w-4 h-4" /> Load 13F
         </button>
         <button onClick={downloadCsv} disabled={!data} className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 disabled:opacity-50">

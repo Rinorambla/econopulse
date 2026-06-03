@@ -2406,6 +2406,24 @@ function VisualAIPageLegacy() {
   return (
     <RequirePlan min="premium">
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+        {/* Keep chart tooltips inside the viewport so details never overlap/clip on small screens */}
+        <style jsx global>{`
+          .recharts-tooltip-wrapper { z-index: 40 !important; pointer-events: none; }
+          .recharts-tooltip-wrapper > div,
+          .recharts-tooltip-wrapper .recharts-default-tooltip {
+            max-width: min(88vw, 360px) !important;
+            white-space: normal !important;
+            word-break: break-word;
+            box-sizing: border-box;
+          }
+          @media (max-width: 640px) {
+            .recharts-tooltip-wrapper > div,
+            .recharts-tooltip-wrapper .recharts-default-tooltip {
+              min-width: 0 !important;
+              max-width: 88vw !important;
+            }
+          }
+        `}</style>
         {/* Animated background elements */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>

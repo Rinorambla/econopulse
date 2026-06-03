@@ -380,15 +380,12 @@ export default function MarketDataPage() {
   const submitSearch = useCallback((s?: string) => {
     const v = (s ?? searchVal).trim().toUpperCase()
     if (!v) return
+    // Only load the symbol on the chart. Do NOT auto-save it to a watchlist —
+    // the user decides what to save via the explicit "Save" action / side panel.
     setSymbol(v)
     setSearchOpen(false)
     setSearchVal('')
-    setWatchlists((wls) => {
-      const cur = wls[activeListName] || []
-      if (cur.includes(v)) return wls
-      return { ...wls, [activeListName]: [v, ...cur].slice(0, 50) }
-    })
-  }, [searchVal, activeListName, setSymbol, setWatchlists])
+  }, [searchVal, setSymbol])
 
   // Remove a symbol from the currently active watchlist.
   const removeFromWatchlist = useCallback((sym: string) => {
@@ -654,7 +651,7 @@ export default function MarketDataPage() {
                   {searchVal.trim() ? (
                     <div className="py-1">
                       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                        Yahoo Finance results
+                        Search results
                         {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}
                       </div>
                       {!searchLoading && searchResults.length === 0 && (
@@ -668,9 +665,18 @@ export default function MarketDataPage() {
                             onMouseDown={(e) => { e.preventDefault(); submitSearch(r.symbol) }}
                             className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between gap-2"
                           >
-                            <span className="min-w-0">
-                              <span className="text-xs font-bold text-white">{r.symbol}</span>
-                              {r.name && <span className="block text-[11px] text-gray-400 truncate">{r.name}</span>}
+                            <span className="min-w-0 flex items-center gap-2">
+                              <img
+                                src={`https://assets.parqet.com/logos/symbol/${r.symbol}?format=jpg`}
+                                alt=""
+                                loading="lazy"
+                                className="w-5 h-5 rounded-full bg-slate-700 object-cover shrink-0"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                              />
+                              <span className="min-w-0">
+                                <span className="text-xs font-bold text-white">{r.symbol}</span>
+                                {r.name && <span className="block text-[11px] text-gray-400 truncate">{r.name}</span>}
+                              </span>
                             </span>
                             <span className="shrink-0 text-right">
                               {r.exchange && <span className="block text-[9px] uppercase tracking-wide text-gray-500">{r.exchange}{r.type ? ` · ${r.type}` : ''}</span>}
@@ -706,7 +712,16 @@ export default function MarketDataPage() {
                               onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
                               className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
                             >
-                              <span className="text-xs font-semibold">{s}</span>
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <img
+                                  src={`https://assets.parqet.com/logos/symbol/${s}?format=jpg`}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-4 h-4 rounded-full bg-slate-700 object-cover shrink-0"
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                                />
+                                <span className="text-xs font-semibold truncate">{s}</span>
+                              </span>
                               {q && (
                                 <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {fmtPct(q.changePercent)}
@@ -1048,11 +1063,20 @@ export default function MarketDataPage() {
                   className={`group grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 border-b border-white/5 cursor-pointer ${active ? 'bg-blue-600/15' : 'hover:bg-white/5'}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-black text-white"
-                      style={{ background: symbolColor(sym) }}
-                    >
-                      {sym.replace(/[-=^.].*$/, '').slice(0, 2)}
+                    <span className="relative w-6 h-6 rounded-full shrink-0 overflow-hidden">
+                      <span
+                        className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white"
+                        style={{ background: symbolColor(sym) }}
+                      >
+                        {sym.replace(/[-=^.].*$/, '').slice(0, 2)}
+                      </span>
+                      <img
+                        src={`https://assets.parqet.com/logos/symbol/${sym}?format=jpg`}
+                        alt=""
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
                     </span>
                     <span className="min-w-0">
                       <span className={`block text-xs font-bold truncate ${active ? 'text-white' : 'text-gray-100'}`}>{sym}</span>

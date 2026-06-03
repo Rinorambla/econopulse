@@ -11,6 +11,7 @@ import {
   ColorType,
   CrosshairMode,
   LineStyle,
+  PriceScaleMode,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
@@ -1138,6 +1139,10 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       rightPriceScale: {
         borderColor: 'rgba(148,163,184,0.15)',
         scaleMargins: { top: 0.05, bottom: indicators.has('volume') ? 0.25 : 0.05 },
+        // Long ranges span huge relative price moves (e.g. AAPL $0.11 → $200). A linear
+        // axis squashes the early years into a flat line at the bottom, making the chart
+        // look "cut in half". A logarithmic axis shows proportional moves across decades.
+        mode: (rangeKey === 'MAX' || rangeKey === '5Y') ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
       },
       timeScale: {
         borderColor: 'rgba(148,163,184,0.15)',

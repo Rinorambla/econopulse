@@ -133,15 +133,29 @@ const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — macro data updates slowly
  * Response shape: { values: { NGDP_RPCH: { USA: { "2024": 2.8, ... }, ITA: { ... } } } }
  */
 async function imfAll(indicator: 'NGDP_RPCH' | 'PCPIPCH'): Promise<Record<string, Record<string, number>>> {
-  try {
-    const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return {};
-    const json: any = await res.json();
-    return json?.values?.[indicator] || {};
-  } catch {
-    return {};
+  const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}`;
+  // IMF's edge blocks requests with no/!browser User-Agent and the all-countries
+  // payload is large, so we send proper headers, allow a generous timeout, and retry
+  // once before giving up (falling back to World Bank would yield stale ~2024 data).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(20000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; EconoPulse/1.0; +https://www.econopulse.ai)',
+          'Accept': 'application/json,*/*;q=0.8',
+        },
+        next: { revalidate: 21600 },
+      });
+      if (!res.ok) continue;
+      const json: any = await res.json();
+      const values = json?.values?.[indicator];
+      if (values && typeof values === 'object' && Object.keys(values).length > 0) return values;
+    } catch {
+      // retry once
+    }
   }
+  return {};
 }
 
 function extractImfSeries(

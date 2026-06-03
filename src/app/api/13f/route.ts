@@ -99,28 +99,33 @@ async function getInfoTableUrl(cik10: string, accession: string): Promise<string
   const indexUrl = `${base}/index.json`
   const idx: any = await fetchJson(indexUrl)
   const items: Array<{ name: string }> = idx?.directory?.item || []
-  // Consider XML and TXT candidates (some filers provide infotable as .txt)
-  const cand = items.filter(it => /\.(xml|txt)$/i.test(it.name))
-  // Try to pick by filename first
+  // Real holdings live in a dedicated information-table XML. Exclude the cover
+  // page (primary_doc.xml) and consider the remaining XML files first; the full
+  // submission .txt is only a last resort.
+  const xmlFiles = items.filter(it => /\.xml$/i.test(it.name) && !/primary_doc\.xml$/i.test(it.name))
+  // 1) Prefer files whose name hints at an information table
   const preferredNames = [
     /info\s*table/i,
     /form13f.*info/i,
     /informationtable/i,
+    /infotable/i,
   ]
   for (const rx of preferredNames) {
-    const hit = cand.find(it => rx.test(it.name))
+    const hit = xmlFiles.find(it => rx.test(it.name))
     if (hit) return `${base}/${hit.name}`
   }
-  // Fallback: probe first few candidates to find one containing <infoTable>
-  const probe = cand.slice(0, 6)
-  for (const it of probe) {
+  // 2) Probe XML candidates to find one containing an <infoTable>/<informationTable>
+  for (const it of xmlFiles.slice(0, 8)) {
     const url = `${base}/${it.name}`
     const txt = await fetchText(url).catch(()=>null as any)
-    if (txt && /<\s*infoTable[\s>]/i.test(txt) || /<\s*informationTable[\s>]/i.test(txt)) return url
+    if (txt && (/<\s*(?:[a-z0-9]+:)?infoTable[\s>]/i.test(txt) || /<\s*(?:[a-z0-9]+:)?informationTable[\s>]/i.test(txt))) return url
   }
-  // Last resort: return first XML if exists
-  const xmlOnly = cand.find(it => /\.xml$/i.test(it.name))
-  return xmlOnly ? `${base}/${xmlOnly.name}` : null
+  // 3) If exactly one non-cover XML exists, use it
+  if (xmlFiles.length === 1) return `${base}/${xmlFiles[0].name}`
+  // 4) Last resort: full submission .txt (parser extracts the embedded infoTable XML)
+  const txtFile = items.find(it => /\.txt$/i.test(it.name))
+  if (txtFile) return `${base}/${txtFile.name}`
+  return xmlFiles[0] ? `${base}/${xmlFiles[0].name}` : null
 }
 
 // Lightweight XML parser tailored for 13F infoTable
@@ -142,7 +147,7 @@ function parseInfoTableXml(xml: string): Holding[] {
 
   const pickTag = (src: string, tag: string) => {
     // Case-insensitive, tolerant of extraneous attributes
-    const m = src.match(new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i'))
+    const m = src.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))
     return m ? m[1].trim() : undefined
   }
   const pickNum = (src: string, tag: string) => {
@@ -154,7 +159,7 @@ function parseInfoTableXml(xml: string): Holding[] {
   }
   const pickVote = (src: string, tag: string) => {
     const sect = pickTag(src, 'votingAuthority') || ''
-    const m = sect.match(new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i'))
+    const m = sect.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))
     const raw = m ? String(m[1]) : ''
     const n = Number(raw.replace(/[,\s]/g, ''))
     return Number.isFinite(n) ? n : undefined

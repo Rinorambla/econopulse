@@ -90,6 +90,41 @@ async function getRecent13FList(cik10: string): Promise<FilingMeta[]> {
   return out
 }
 
+// Search SEC EDGAR for institutional managers (any investor / hedge fund) that
+// file Form 13F, by (partial) name. Returns up to `limit` matches.
+async function findManagers(name: string, limit = 25): Promise<Array<{ cik: string; name: string }>> {
+  const q = encodeURIComponent(name.trim())
+  const url = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${q}&type=13F-HR&dateb=&owner=include&count=${limit}&output=atom`
+  const xml = await fetchText(url).catch(() => '')
+  if (!xml) return []
+  const out: Array<{ cik: string; name: string }> = []
+  const seen = new Set<string>()
+  // Multi-result feed: each match is a <company-info> block (or, for a single
+  // match, one block). Pair each <cik> with its nearest <conformed-name>.
+  const blocks = xml.match(/<company-info[\s\S]*?<\/company-info>/gi) || []
+  const sources = blocks.length > 0 ? blocks : [xml]
+  for (const b of sources) {
+    const cikM = b.match(/<cik>\s*(\d{1,10})\s*<\/cik>/i)
+    const nameM = b.match(/<conformed-name>\s*([\s\S]*?)\s*<\/conformed-name>/i)
+    if (cikM) {
+      const cik = cikM[1].padStart(10, '0')
+      const nm = (nameM?.[1] || '').replace(/\s+/g, ' ').trim() || cik
+      if (!seen.has(cik)) { seen.add(cik); out.push({ cik, name: nm }) }
+    }
+  }
+  // Fallback: some multi-result feeds list companies inside <entry><title>…(CIK)…
+  if (out.length === 0) {
+    const titleRx = /<title>([^<(]+)\(0*(\d{1,10})\)/gi
+    let m: RegExpExecArray | null
+    while ((m = titleRx.exec(xml)) && out.length < limit) {
+      const cik = m[2].padStart(10, '0')
+      const nm = m[1].replace(/\s+/g, ' ').trim()
+      if (!seen.has(cik)) { seen.add(cik); out.push({ cik, name: nm }) }
+    }
+  }
+  return out.slice(0, limit)
+}
+
 // Given cik and accession, list files in the filing folder and pick the infotable XML
 async function getInfoTableUrl(cik10: string, accession: string): Promise<string | null> {
   const cikNoZeros = stripLeadingZeros(cik10)
@@ -222,8 +257,25 @@ export async function GET(req: NextRequest) {
   const cikRaw = (searchParams.get('cik') || '').trim()
   const urlRaw = (searchParams.get('url') || '').trim()
   const accRaw = (searchParams.get('accession') || '').trim()
+  const findRaw = (searchParams.get('find') || '').trim()
   const wantList = ['1', 'true', 'yes'].includes((searchParams.get('list') || '').toLowerCase())
   const asCsv = (searchParams.get('format') || '').toLowerCase() === 'csv'
+
+  // Find mode: search EDGAR for managers by name so the UI can offer ANY
+  // institutional investor / hedge fund, not just a handful of presets.
+  if (findRaw) {
+    try {
+      const managers = await findManagers(findRaw)
+      const res = NextResponse.json({ ok: true, query: findRaw, managers })
+      Object.entries(rateLimitHeaders(rl)).forEach(([k,v]) => res.headers.set(k, v))
+      res.headers.set('Cache-Control', 'public, max-age=600')
+      return res
+    } catch (e: any) {
+      const res = NextResponse.json({ ok: false, error: 'Search failed', detail: String(e?.message||e) }, { status: 500 })
+      Object.entries(rateLimitHeaders(rl)).forEach(([k,v]) => res.headers.set(k, v))
+      return res
+    }
+  }
 
   if (!cikRaw && !urlRaw) {
     const res = NextResponse.json({ error: 'Provide either cik=########## or url=https://www.sec.gov/Archives/... to a specific filing.' }, { status: 400 })

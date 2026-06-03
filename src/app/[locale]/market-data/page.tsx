@@ -270,7 +270,6 @@ export default function MarketDataPage() {
   const [newListName, setNewListName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [chartHeight, setChartHeight] = useState(620)
-  const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
   const mainRef = useRef<HTMLDivElement | null>(null)
@@ -278,34 +277,41 @@ export default function MarketDataPage() {
   const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
+  // We measure the rendered height of the flex main area (which is driven by the
+  // CSS `svh` container below). Using `svh` + measuring the real box — instead of
+  // visualViewport math — keeps the layout rock-steady on phones: the mobile
+  // address bar collapsing/expanding and the on-screen keyboard no longer resize
+  // the chart. A threshold guard + debounce prevent any residual jitter/loops.
   useEffect(() => {
+    let lastH = -1
     const compute = () => {
-      // Measure the real distance from the top of the viewport to the terminal
-      // container (i.e. the actual height of the sticky site header). This makes
-      // the page fit the viewport exactly on every device, with no page scroll.
-      const cTop = containerRef.current?.getBoundingClientRect().top ?? 56
-      const vh = window.visualViewport?.height ?? window.innerHeight
-      setContainerH(Math.max(360, Math.round(vh - cTop)))
-      const top = mainRef.current?.getBoundingClientRect().top ?? 110
-      const pad = 24 // bottom padding + safety margin so nothing overflows
+      const main = mainRef.current
+      if (!main) return
+      const avail = main.clientHeight
+      if (avail <= 0) return
       // AdvancedChart renders a toolbar + indicators bar + crosshair row + status
-      // bar around the chart canvas; subtract that chrome plus a small buffer so the
-      // whole terminal always fits the viewport without any vertical scroll.
+      // bar around the chart canvas; subtract that chrome so the whole terminal
+      // always fits without any vertical scroll.
       const chartChrome = 132
-      const h = vh - top - pad - chartChrome
-      setChartHeight(Math.max(280, Math.min(820, Math.round(h))))
+      const h = Math.max(280, Math.min(820, Math.round(avail - chartChrome)))
+      // Ignore sub-threshold changes (address bar / keyboard) to stay stable.
+      if (Math.abs(h - lastH) < 24) return
+      lastH = h
+      setChartHeight(h)
     }
-    // run after layout is ready
     const raf = requestAnimationFrame(compute)
-    window.addEventListener('resize', compute)
-    // Recompute whenever the header height changes (price badge appearing,
-    // toolbar buttons wrapping to a new line, etc.) so we never need to scroll.
+    let t: ReturnType<typeof setTimeout> | undefined
+    const schedule = () => { if (t) clearTimeout(t); t = setTimeout(compute, 150) }
+    window.addEventListener('resize', schedule)
+    window.addEventListener('orientationchange', schedule)
+    // Observe the stable svh container (not the chart's own box) to avoid a
+    // resize feedback loop, recomputing when the panel layout actually changes.
     let ro: ResizeObserver | undefined
-    if (typeof ResizeObserver !== 'undefined' && mainRef.current) {
-      ro = new ResizeObserver(() => requestAnimationFrame(compute))
-      ro.observe(mainRef.current)
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(schedule)
+      ro.observe(containerRef.current)
     }
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', compute); ro?.disconnect() }
+    return () => { cancelAnimationFrame(raf); if (t) clearTimeout(t); window.removeEventListener('resize', schedule); window.removeEventListener('orientationchange', schedule); ro?.disconnect() }
   }, [panelOpen])
 
   // On phones/tablets the watchlist would push the chart off-screen, so collapse
@@ -971,8 +977,7 @@ export default function MarketDataPage() {
   return (
     <div
       ref={containerRef}
-      style={containerH ? { height: containerH } : undefined}
-      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
+      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100svh-3.5rem)]"
     >
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">

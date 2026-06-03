@@ -270,6 +270,7 @@ export default function MarketDataPage() {
   const [newListName, setNewListName] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [chartHeight, setChartHeight] = useState(620)
+  const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
   const mainRef = useRef<HTMLDivElement | null>(null)
@@ -277,35 +278,43 @@ export default function MarketDataPage() {
   const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
-  // We measure the rendered height of the flex main area (which is driven by the
-  // CSS `svh` container below). Using `svh` + measuring the real box — instead of
-  // visualViewport math — keeps the layout rock-steady on phones: the mobile
-  // address bar collapsing/expanding and the on-screen keyboard no longer resize
-  // the chart. A threshold guard + debounce prevent any residual jitter/loops.
+  // We measure the REAL distance from the top of the viewport to the terminal
+  // container (the actual sticky header height) so the page fits the viewport
+  // exactly on every device with no page scroll. A threshold guard + debounce
+  // absorb the tiny viewport changes a phone's address bar / keyboard cause, so
+  // the chart stays steady instead of jumping while you work on mobile.
   useEffect(() => {
-    let lastH = -1
+    let lastContainerH = -1
+    let lastChartH = -1
     const compute = () => {
-      const main = mainRef.current
-      if (!main) return
-      const avail = main.clientHeight
-      if (avail <= 0) return
+      const cTop = containerRef.current?.getBoundingClientRect().top ?? 56
+      // Use innerHeight (stable) rather than visualViewport.height (which shrinks
+      // when the on-screen keyboard opens) so focusing an input never resizes the chart.
+      const vh = window.innerHeight
+      const nextContainer = Math.max(360, Math.round(vh - cTop))
+      if (Math.abs(nextContainer - lastContainerH) >= 24) {
+        lastContainerH = nextContainer
+        setContainerH(nextContainer)
+      }
+      const top = mainRef.current?.getBoundingClientRect().top ?? 110
+      const pad = 24 // bottom padding + safety margin so nothing overflows
       // AdvancedChart renders a toolbar + indicators bar + crosshair row + status
-      // bar around the chart canvas; subtract that chrome so the whole terminal
-      // always fits without any vertical scroll.
+      // bar around the chart canvas; subtract that chrome plus a small buffer so the
+      // whole terminal always fits the viewport without any vertical scroll.
       const chartChrome = 132
-      const h = Math.max(280, Math.min(820, Math.round(avail - chartChrome)))
-      // Ignore sub-threshold changes (address bar / keyboard) to stay stable.
-      if (Math.abs(h - lastH) < 24) return
-      lastH = h
-      setChartHeight(h)
+      const nextChart = Math.max(280, Math.min(820, Math.round(vh - top - pad - chartChrome)))
+      if (Math.abs(nextChart - lastChartH) >= 24) {
+        lastChartH = nextChart
+        setChartHeight(nextChart)
+      }
     }
     const raf = requestAnimationFrame(compute)
     let t: ReturnType<typeof setTimeout> | undefined
-    const schedule = () => { if (t) clearTimeout(t); t = setTimeout(compute, 150) }
+    const schedule = () => { if (t) clearTimeout(t); t = setTimeout(compute, 120) }
     window.addEventListener('resize', schedule)
     window.addEventListener('orientationchange', schedule)
-    // Observe the stable svh container (not the chart's own box) to avoid a
-    // resize feedback loop, recomputing when the panel layout actually changes.
+    // Recompute when the header height changes (price badge, toolbar wrapping),
+    // observing the container itself so we never feed the chart's own size back in.
     let ro: ResizeObserver | undefined
     if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
       ro = new ResizeObserver(schedule)
@@ -977,7 +986,8 @@ export default function MarketDataPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100svh-3.5rem)]"
+      style={containerH ? { height: containerH } : undefined}
+      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
     >
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">

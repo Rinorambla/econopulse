@@ -1736,6 +1736,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         if (txt && txt.trim()) {
           setDrawings(d => [...d, { id: Date.now(), tool, pts: [pt], color: '#fbbf24', text: txt.trim() }])
         }
+        // Apply the tool once, then return to the cursor.
+        setActiveTool('cursor')
         return
       }
 
@@ -1744,6 +1746,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       if (next.length >= need) {
         setDrawings(d => [...d, { id: Date.now(), tool, pts: next, color: '#3b82f6' }])
         setPendingPts([])
+        // Drawing finished — switch back to the cursor so it isn't redrawn on every click.
+        setActiveTool('cursor')
       } else {
         setPendingPts(next)
       }

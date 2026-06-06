@@ -81,7 +81,24 @@ interface Drawing {
   pts: DrawPoint[]
   color: string
   text?: string
+  width?: number
 }
+
+// Shortest distance from point (px,py) to the segment (x1,y1)-(x2,y2). Used for
+// click hit-testing so the user can select a drawing by clicking near its line.
+function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1, dy = y2 - y1
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1)
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+}
+
+// Editable colors offered in the drawing context menu (TradingView-style).
+const DRAW_COLORS = ['#3b82f6', '#60a5fa', '#22c55e', '#eab308', '#f97316', '#ef4444', '#a855f7', '#ec4899', '#14b8a6', '#ffffff']
+const DRAW_WIDTHS = [1, 2, 3]
+
 
 const TOOL_STEPS: Record<DrawingTool, number> = {
   cursor: 0, crosshair: 0,
@@ -104,6 +121,30 @@ const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: strin
   { key: '5Y', label: '5Y', range: '5y', interval: '1wk' },
   { key: 'MAX', label: 'MAX', range: 'max', interval: '1mo' },
 ]
+
+// To draw long moving averages (e.g. SMA/EMA 200) across the WHOLE visible window
+// instead of only the right half, we fetch extra "warm-up" history before the
+// requested window, compute indicators over the full set, then zoom the view back
+// to the requested window. Maps a range key → the larger range to actually fetch.
+// (Intraday 1D/5D and full-history MAX need no warm-up.)
+const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
+  '1M': '1y',
+  '3M': '2y',
+  '6M': '2y',
+  'YTD': '2y',
+  '1Y': '2y',
+  '5Y': '10y',
+}
+
+// Approx seconds covered by the requested window, used to zoom back after warm-up.
+const WINDOW_SECONDS: Partial<Record<RangeKey, number>> = {
+  '1M': 31 * 86400,
+  '3M': 93 * 86400,
+  '6M': 186 * 86400,
+  '1Y': 372 * 86400,
+  '5Y': 5 * 372 * 86400,
+}
+
 
 // Drawing tools surfaced inside the chart toolbar dropdown
 const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
@@ -953,10 +994,15 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setActiveToolLocal(t)
     onToolChange?.(t)
     setPendingPts([])
+    setSelectedDrawingId(null)
+    setDrawMenu(null)
   }
   const [drawings, setDrawings] = useLocalStorage<Drawing[]>('mkt:drawings', [])
   const [pendingPts, setPendingPts] = useState<DrawPoint[]>([])
   const [hoverPt, setHoverPt] = useState<DrawPoint | null>(null)
+  // Selected drawing + floating edit menu (click a drawing with the cursor tool)
+  const [selectedDrawingId, setSelectedDrawingId] = useState<number | null>(null)
+  const [drawMenu, setDrawMenu] = useState<{ x: number; y: number; id: number; flipX: boolean; flipY: boolean } | null>(null)
 
   // ===== Price alerts (TradingView-style) =====
   type PriceAlert = { id: number; price: number }
@@ -1006,6 +1052,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const drawingsRef = useRef(drawings); useEffect(() => { drawingsRef.current = drawings }, [drawings])
   const pendingPtsRef = useRef(pendingPts); useEffect(() => { pendingPtsRef.current = pendingPts }, [pendingPts])
   const hoverPtRef = useRef(hoverPt); useEffect(() => { hoverPtRef.current = hoverPt }, [hoverPt])
+  const selectedDrawingIdRef = useRef(selectedDrawingId); useEffect(() => { selectedDrawingIdRef.current = selectedDrawingId }, [selectedDrawingId])
 
   // Sync prop → state
   useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
@@ -1017,7 +1064,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ symbol, range: currentRange.range, interval: currentRange.interval })
+      // Fetch a larger range when warm-up is configured so long MAs cover the full window.
+      const fetchRange = WARMUP_FETCH[rangeKey] || currentRange.range
+      const qs = new URLSearchParams({ symbol, range: fetchRange, interval: currentRange.interval })
       const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
       if (!res.ok) throw new Error(`API ${res.status}`)
       const json = await res.json()
@@ -1057,7 +1106,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     } finally {
       setLoading(false)
     }
-  }, [symbol, currentRange])
+  }, [symbol, currentRange, rangeKey])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1589,8 +1638,34 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       } catch { /* ignore */ }
     }
 
-    // Fit content
-    chart.timeScale().fitContent()
+    // Fit content — but when warm-up history was fetched, zoom to the requested
+    // window so long moving averages span the entire visible chart (not half).
+    const warmupActive = !!WARMUP_FETCH[rangeKey]
+    if (warmupActive && bars.length > 2) {
+      const lastSec = bars[bars.length - 1].time
+      let startSec: number
+      if (rangeKey === 'YTD') {
+        startSec = Math.floor(Date.UTC(new Date(lastSec * 1000).getUTCFullYear(), 0, 1) / 1000)
+      } else {
+        startSec = lastSec - (WINDOW_SECONDS[rangeKey] || 372 * 86400)
+      }
+      let fromIdx = bars.findIndex(b => b.time >= startSec)
+      if (fromIdx < 0) fromIdx = 0
+      const N = bars.length
+      // Only zoom if there is real warm-up data to hide on the left.
+      if (fromIdx > 1) {
+        const rightMargin = Math.max(1, Math.round((N - fromIdx) * 0.04))
+        try {
+          chart.timeScale().setVisibleLogicalRange({ from: fromIdx - 0.5, to: (N - 1) + rightMargin })
+        } catch {
+          chart.timeScale().fitContent()
+        }
+      } else {
+        chart.timeScale().fitContent()
+      }
+    } else {
+      chart.timeScale().fitContent()
+    }
 
     // Crosshair move → tooltip + drawing preview
     chart.subscribeCrosshairMove((param) => {
@@ -1627,8 +1702,24 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // ===== Drawing: click handler =====
     chart.subscribeClick((param) => {
       const tool = activeToolRef.current
-      if (tool === 'cursor' || tool === 'crosshair') return
       if (!param.point || !mainSeriesRef.current) return
+
+      // Cursor tool: clicking a drawing selects it and opens the edit menu.
+      if (tool === 'cursor') {
+        const id = hitTestDrawings(param.point.x, param.point.y)
+        if (id != null) {
+          const cw = chartContainerRef.current?.clientWidth ?? 0
+          const ch = chartContainerRef.current?.clientHeight ?? 0
+          setSelectedDrawingId(id)
+          setDrawMenu({ x: param.point.x, y: param.point.y, id, flipX: param.point.x > cw - 210, flipY: param.point.y > ch - 130 })
+        } else {
+          setSelectedDrawingId(null)
+          setDrawMenu(null)
+        }
+        return
+      }
+      if (tool === 'crosshair') return
+
       const logical = chart.timeScale().coordinateToLogical(param.point.x)
       const price = mainSeriesRef.current.coordinateToPrice(param.point.y)
       if (logical == null || price == null) return
@@ -1698,7 +1789,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -1736,13 +1827,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       return { x, y }
     }
 
-    const drawShape = (d: Drawing | { tool: DrawingTool; pts: DrawPoint[]; color: string; text?: string }, isPreview = false) => {
+    const drawShape = (d: Drawing | { tool: DrawingTool; pts: DrawPoint[]; color: string; text?: string; width?: number }, isPreview = false, selected = false) => {
       const pts = d.pts.map(toXY).filter(Boolean) as { x: number; y: number }[]
       if (pts.length === 0) return
       ctx.save()
       ctx.strokeStyle = d.color
       ctx.fillStyle = d.color
-      ctx.lineWidth = isPreview ? 1 : 1.5
+      const baseW = (d as Drawing).width || 1.5
+      ctx.lineWidth = isPreview ? 1 : (selected ? baseW + 1 : baseW)
       if (isPreview) ctx.setLineDash([5, 4])
       const [a, b, c] = pts
 
@@ -1806,10 +1898,21 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           }
           break
       }
+      // Selection handles: small squares at each anchor of the selected drawing.
+      if (selected && !isPreview) {
+        ctx.setLineDash([])
+        ctx.lineWidth = 1
+        for (const p of pts) {
+          ctx.fillStyle = '#0ea5e9'
+          ctx.strokeStyle = '#ffffff'
+          ctx.fillRect(p.x - 3.5, p.y - 3.5, 7, 7)
+          ctx.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7)
+        }
+      }
       ctx.restore()
     }
 
-    drawingsRef.current.forEach(d => drawShape(d))
+    drawingsRef.current.forEach(d => drawShape(d, false, d.id === selectedDrawingIdRef.current))
 
     // Preview pending drawing with current hover
     const tool = activeToolRef.current
@@ -1826,10 +1929,126 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [])
 
   // Trigger redraw on drawings/pending/hover/tool changes
-  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, redrawOverlay, bars])
+  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, selectedDrawingId, redrawOverlay, bars])
 
-  const clearDrawings = useCallback(() => { setDrawings([]); setPendingPts([]) }, [])
-  const undoDrawing = useCallback(() => { setDrawings(d => d.slice(0, -1)) }, [])
+  const clearDrawings = useCallback(() => { setDrawings([]); setPendingPts([]); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
+  const undoDrawing = useCallback(() => { setDrawings(d => d.slice(0, -1)); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
+
+  // Map a drawing point to pixel coords using the live chart/series scales.
+  const ptToXY = useCallback((p: DrawPoint): { x: number; y: number } | null => {
+    const chart = chartRef.current, main = mainSeriesRef.current
+    if (!chart || !main) return null
+    const x = chart.timeScale().logicalToCoordinate(p.logical as any)
+    const y = main.priceToCoordinate(p.price)
+    if (x == null || y == null) return null
+    return { x, y }
+  }, [])
+
+  // Return the id of the drawing closest to a pixel click (or null). Iterates in
+  // reverse so the topmost (last-drawn) shape wins. Tolerance ≈ 7px.
+  const hitTestDrawings = useCallback((px: number, py: number): number | null => {
+    const container = chartContainerRef.current
+    const W = container?.clientWidth ?? 0
+    const H = container?.clientHeight ?? 0
+    const TOL = 7
+    const list = drawingsRef.current
+    for (let i = list.length - 1; i >= 0; i--) {
+      const d = list[i]
+      const xy = d.pts.map(ptToXY)
+      if (xy.some(p => !p)) continue
+      const [a, b, c] = xy as { x: number; y: number }[]
+      let hit = false
+      switch (d.tool) {
+        case 'trendline':
+          if (a && b) hit = distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL
+          break
+        case 'horizontal':
+          if (a) hit = Math.abs(py - a.y) <= TOL
+          break
+        case 'vertical':
+          if (a) hit = Math.abs(px - a.x) <= TOL
+          break
+        case 'rect':
+          if (a && b) {
+            const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x)
+            const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y)
+            hit = (
+              distToSegment(px, py, x0, y0, x1, y0) <= TOL ||
+              distToSegment(px, py, x1, y0, x1, y1) <= TOL ||
+              distToSegment(px, py, x1, y1, x0, y1) <= TOL ||
+              distToSegment(px, py, x0, y1, x0, y0) <= TOL
+            )
+          }
+          break
+        case 'ellipse':
+          if (a && b) {
+            const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2
+            const rx = Math.abs(b.x - a.x) / 2 || 1, ry = Math.abs(b.y - a.y) / 2 || 1
+            const norm = ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2
+            hit = norm > 0.8 && norm < 1.25
+          }
+          break
+        case 'triangle':
+          if (a && b && c) {
+            hit = (
+              distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL ||
+              distToSegment(px, py, b.x, b.y, c.x, c.y) <= TOL ||
+              distToSegment(px, py, c.x, c.y, a.x, a.y) <= TOL
+            )
+          }
+          break
+        case 'fib-retr':
+        case 'fib-ext':
+          if (a && b) {
+            if (distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL) { hit = true; break }
+            const levels = d.tool === 'fib-retr' ? FIB_LEVELS : FIB_EXT_LEVELS
+            hit = levels.some(lv => Math.abs(py - (a.y + (b.y - a.y) * lv)) <= TOL && px >= 0 && px <= W)
+          }
+          break
+        case 'text':
+          if (a) hit = Math.abs(px - a.x) <= 70 && Math.abs(py - a.y) <= 14
+          break
+      }
+      if (hit) return d.id
+    }
+    void H
+    return null
+  }, [ptToXY])
+
+  const updateSelectedColor = useCallback((color: string) => {
+    const id = selectedDrawingIdRef.current
+    if (id == null) return
+    setDrawings(list => list.map(d => d.id === id ? { ...d, color } : d))
+  }, [setDrawings])
+
+  const updateSelectedWidth = useCallback((width: number) => {
+    const id = selectedDrawingIdRef.current
+    if (id == null) return
+    setDrawings(list => list.map(d => d.id === id ? { ...d, width } : d))
+  }, [setDrawings])
+
+  const deleteSelected = useCallback(() => {
+    const id = selectedDrawingIdRef.current
+    if (id == null) return
+    setDrawings(list => list.filter(d => d.id !== id))
+    setSelectedDrawingId(null)
+    setDrawMenu(null)
+  }, [setDrawings])
+
+  // Keyboard: Delete removes the selected drawing, Escape deselects / cancels.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'Delete' && selectedDrawingIdRef.current != null) {
+        e.preventDefault(); deleteSelected()
+      } else if (e.key === 'Escape') {
+        setSelectedDrawingId(null); setDrawMenu(null); setPendingPts([])
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [deleteSelected])
 
   const pctColor = lastPrice ? (lastPrice.changePct >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'
 
@@ -2089,33 +2308,48 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </button>
           )}
         </div>
-        {/* Active indicator legend */}
-        {indicators.size > 0 && (
-          <div className="hidden sm:flex items-center gap-3 text-[9px] flex-wrap">
-            {indicators.has('sma20') && <span className="text-amber-400">● SMA 20</span>}
-            {indicators.has('sma50') && <span className="text-purple-400">● SMA 50</span>}
-            {indicators.has('sma100') && <span className="text-cyan-400">● SMA 100</span>}
-            {indicators.has('sma200') && <span className="text-red-400">● SMA 200</span>}
-            {indicators.has('ema9') && <span className="text-emerald-400">● EMA 9</span>}
-            {indicators.has('ema20') && <span className="text-cyan-400">● EMA 20</span>}
-            {indicators.has('ema50') && <span className="text-pink-400">● EMA 50</span>}
-            {indicators.has('ema200') && <span className="text-orange-400">● EMA 200</span>}
-            {indicators.has('ichimoku') && <span className="text-blue-400">● Ichimoku</span>}
-            {indicators.has('bb') && <span className="text-purple-400/70">● BB(20,2)</span>}
-            {indicators.has('keltner') && <span className="text-cyan-300">● Keltner</span>}
-            {indicators.has('donchian') && <span className="text-amber-300">● Donchian</span>}
-            {indicators.has('vwap') && <span className="text-pink-400">● VWAP</span>}
-            {indicators.has('obv') && <span className="text-cyan-400">● OBV</span>}
-            {indicators.has('rsi') && <span className="text-purple-400">● RSI</span>}
-            {indicators.has('macd') && <span className="text-blue-400">● MACD</span>}
-            {indicators.has('stochastic') && <span className="text-cyan-400">● Stoch</span>}
-            {indicators.has('cci') && <span className="text-teal-400">● CCI</span>}
-            {indicators.has('williamsR') && <span className="text-rose-400">● W%R</span>}
-            {indicators.has('mom') && <span className="text-violet-400">● Mom</span>}
-            {indicators.has('atr') && <span className="text-orange-400">● ATR</span>}
-            {indicators.has('pivots') && <span className="text-gray-400">● Pivots</span>}
-          </div>
-        )}
+        {/* Active indicator legend — click any chip to remove that indicator */}
+        {indicators.size > 0 && (() => {
+          const LEGEND: { key: IndicatorKey; label: string; cls: string }[] = [
+            { key: 'sma20', label: 'SMA 20', cls: 'text-amber-400' },
+            { key: 'sma50', label: 'SMA 50', cls: 'text-purple-400' },
+            { key: 'sma100', label: 'SMA 100', cls: 'text-cyan-400' },
+            { key: 'sma200', label: 'SMA 200', cls: 'text-red-400' },
+            { key: 'ema9', label: 'EMA 9', cls: 'text-emerald-400' },
+            { key: 'ema20', label: 'EMA 20', cls: 'text-cyan-400' },
+            { key: 'ema50', label: 'EMA 50', cls: 'text-pink-400' },
+            { key: 'ema200', label: 'EMA 200', cls: 'text-orange-400' },
+            { key: 'ichimoku', label: 'Ichimoku', cls: 'text-blue-400' },
+            { key: 'bb', label: 'BB(20,2)', cls: 'text-purple-400/70' },
+            { key: 'keltner', label: 'Keltner', cls: 'text-cyan-300' },
+            { key: 'donchian', label: 'Donchian', cls: 'text-amber-300' },
+            { key: 'vwap', label: 'VWAP', cls: 'text-pink-400' },
+            { key: 'obv', label: 'OBV', cls: 'text-cyan-400' },
+            { key: 'rsi', label: 'RSI', cls: 'text-purple-400' },
+            { key: 'macd', label: 'MACD', cls: 'text-blue-400' },
+            { key: 'stochastic', label: 'Stoch', cls: 'text-cyan-400' },
+            { key: 'cci', label: 'CCI', cls: 'text-teal-400' },
+            { key: 'williamsR', label: 'W%R', cls: 'text-rose-400' },
+            { key: 'mom', label: 'Mom', cls: 'text-violet-400' },
+            { key: 'atr', label: 'ATR', cls: 'text-orange-400' },
+            { key: 'pivots', label: 'Pivots', cls: 'text-gray-400' },
+          ]
+          return (
+            <div className="hidden sm:flex items-center gap-2 text-[9px] flex-wrap">
+              {LEGEND.filter(l => indicators.has(l.key)).map(l => (
+                <button
+                  key={l.key}
+                  onClick={() => toggleIndicator(l.key)}
+                  className={`group inline-flex items-center gap-1 ${l.cls} hover:opacity-100 opacity-90`}
+                  title="Click to remove"
+                >
+                  <span>● {l.label}</span>
+                  <span className="text-gray-500 group-hover:text-red-300">✕</span>
+                </button>
+              ))}
+            </div>
+          )
+        })()}
       </div>
 
       {/* ===== CROSSHAIR TOOLTIP (always rendered, fixed height to prevent layout shift) ===== */}
@@ -2185,6 +2419,60 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             <button onClick={clearDrawings} className="px-2 py-1 text-[10px] rounded bg-slate-900/90 border border-red-400/40 text-red-300 hover:text-red-200" title="Clear all drawings">Clear</button>
           </div>
         )}
+
+        {/* Selected-drawing edit menu (TradingView-style): color, thickness, delete */}
+        {drawMenu && (() => {
+          const sel = drawings.find(d => d.id === drawMenu.id)
+          if (!sel) return null
+          return (
+            <div
+              className="absolute z-30 rounded-lg bg-slate-900/95 border border-white/15 shadow-xl p-2 backdrop-blur"
+              style={{
+                left: drawMenu.x,
+                top: drawMenu.y,
+                transform: `translate(${drawMenu.flipX ? '-100%' : '8px'}, ${drawMenu.flipY ? '-100%' : '8px'})`,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">{sel.tool.replace('-', ' ')}</span>
+                <button onClick={() => { setDrawMenu(null); setSelectedDrawingId(null) }} className="text-gray-400 hover:text-white text-[11px] leading-none">✕</button>
+              </div>
+              <div className="flex items-center gap-1 mb-2">
+                {DRAW_COLORS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => updateSelectedColor(c)}
+                    className={`w-4 h-4 rounded-full border ${sel.color === c ? 'border-white ring-1 ring-white' : 'border-white/20'}`}
+                    style={{ backgroundColor: c }}
+                    title={c}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {DRAW_WIDTHS.map(w => (
+                    <button
+                      key={w}
+                      onClick={() => updateSelectedWidth(w)}
+                      className={`px-1.5 py-1 rounded border text-[10px] ${(sel.width || 1.5) === w ? 'border-blue-400 bg-blue-500/20 text-white' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
+                      title={`Thickness ${w}`}
+                    >
+                      <span className="block bg-current rounded-full" style={{ width: 14, height: w }} />
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={deleteSelected}
+                  className="ml-auto px-2 py-1 rounded text-[10px] bg-red-500/15 border border-red-400/40 text-red-300 hover:bg-red-500/25"
+                  title="Delete drawing (Del)"
+                >
+                  🗑 Delete
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* ===== BOTTOM STATUS BAR ===== */}

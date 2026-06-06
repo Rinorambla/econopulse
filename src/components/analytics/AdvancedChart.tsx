@@ -35,7 +35,7 @@ type IndicatorKey =
   // Volatility
   | 'bb' | 'keltner' | 'atr' | 'donchian' | 'envelopes' | 'stddev'
   // Volume
-  | 'volume' | 'vwap' | 'obv' | 'volprofile'
+  | 'volume' | 'vwap' | 'obv' | 'volprofile' | 'vpvr' | 'vpfr'
   | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
@@ -206,6 +206,8 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'vwap', label: 'VWAP' },
       { key: 'obv', label: 'OBV' },
       { key: 'volprofile', label: 'Volume Profile' },
+      { key: 'vpvr', label: 'Vol Profile · Visible Range' },
+      { key: 'vpfr', label: 'Vol Profile · Fixed Range' },
       { key: 'mfi', label: 'Money Flow (MFI)' },
       { key: 'cmf', label: 'Chaikin MF' },
       { key: 'adl', label: 'Accum/Dist' },
@@ -1053,6 +1055,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const pendingPtsRef = useRef(pendingPts); useEffect(() => { pendingPtsRef.current = pendingPts }, [pendingPts])
   const hoverPtRef = useRef(hoverPt); useEffect(() => { hoverPtRef.current = hoverPt }, [hoverPt])
   const selectedDrawingIdRef = useRef(selectedDrawingId); useEffect(() => { selectedDrawingIdRef.current = selectedDrawingId }, [selectedDrawingId])
+  // Bars + active indicators exposed to the canvas overlay renderer (volume profiles).
+  const barsRef = useRef(bars); useEffect(() => { barsRef.current = bars }, [bars])
+  const indicatorsRef = useRef(indicators); useEffect(() => { indicatorsRef.current = indicators }, [indicators])
 
   // Sync prop → state
   useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
@@ -1831,6 +1836,68 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       return { x, y }
     }
 
+    // ===== Volume Profile histograms (VPVR = visible range, VPFR = fixed/full range) =====
+    // Drawn directly on the overlay canvas as horizontal volume bars anchored to the
+    // right edge, with the POC (point of control) and the 70% value area highlighted.
+    const inds = indicatorsRef.current
+    const allBars = barsRef.current
+    const drawVolumeProfile = (profileBars: Bar[], accent: string, label: string) => {
+      const vp = computeVolumeProfile(profileBars, 30)
+      if (!vp) return
+      const maxV = vp.maxVolume || 1
+      const maxBarW = Math.min(180, W * 0.28)
+      // Value-area band edges in price → y for shading.
+      const yVAH = main.priceToCoordinate(vp.vah)
+      const yVAL = main.priceToCoordinate(vp.val)
+      ctx.save()
+      // Each level becomes a horizontal bar growing leftwards from the right edge.
+      const levelH = vp.levels.length > 1
+        ? Math.abs((main.priceToCoordinate(vp.levels[1].price) ?? 0) - (main.priceToCoordinate(vp.levels[0].price) ?? 0))
+        : 6
+      const barH = Math.max(1, levelH - 1)
+      for (const lv of vp.levels) {
+        const y = main.priceToCoordinate(lv.price)
+        if (y == null) continue
+        const w = (lv.volume / maxV) * maxBarW
+        if (w < 0.5) continue
+        const inVA = yVAH != null && yVAL != null && y >= Math.min(yVAH, yVAL) && y <= Math.max(yVAH, yVAL)
+        ctx.fillStyle = inVA ? `${accent}55` : `${accent}26`
+        ctx.fillRect(W - w, y - barH / 2, w, barH)
+      }
+      // POC line (brightest).
+      const yPoc = main.priceToCoordinate(vp.poc)
+      if (yPoc != null) {
+        const wPoc = maxBarW
+        ctx.fillStyle = `${accent}aa`
+        ctx.fillRect(W - wPoc, yPoc - barH / 2, wPoc, barH)
+        ctx.strokeStyle = accent
+        ctx.lineWidth = 1
+        ctx.beginPath(); ctx.moveTo(W - maxBarW, yPoc); ctx.lineTo(W, yPoc); ctx.stroke()
+      }
+      // Label.
+      ctx.fillStyle = accent
+      ctx.font = '9px ui-sans-serif, system-ui'
+      ctx.textAlign = 'right'
+      ctx.fillText(label, W - maxBarW - 4, 12)
+      ctx.textAlign = 'left'
+      ctx.restore()
+    }
+
+    if (inds.has('vpfr') && allBars.length > 4) {
+      drawVolumeProfile(allBars, '#38bdf8', 'VPFR')
+    }
+    if (inds.has('vpvr') && allBars.length > 4) {
+      // Slice bars to the currently visible logical range so the profile updates on pan/zoom.
+      const lr = chart.timeScale().getVisibleLogicalRange()
+      let slice = allBars
+      if (lr) {
+        const from = Math.max(0, Math.floor(lr.from))
+        const to = Math.min(allBars.length - 1, Math.ceil(lr.to))
+        if (to - from >= 4) slice = allBars.slice(from, to + 1)
+      }
+      drawVolumeProfile(slice, '#a78bfa', 'VPVR')
+    }
+
     const drawShape = (d: Drawing | { tool: DrawingTool; pts: DrawPoint[]; color: string; text?: string; width?: number }, isPreview = false, selected = false) => {
       const pts = d.pts.map(toXY).filter(Boolean) as { x: number; y: number }[]
       if (pts.length === 0) return
@@ -1933,7 +2000,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [])
 
   // Trigger redraw on drawings/pending/hover/tool changes
-  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, selectedDrawingId, redrawOverlay, bars])
+  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, selectedDrawingId, indicators, redrawOverlay, bars])
 
   const clearDrawings = useCallback(() => { setDrawings([]); setPendingPts([]); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
   const undoDrawing = useCallback(() => { setDrawings(d => d.slice(0, -1)); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
@@ -2328,6 +2395,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             { key: 'keltner', label: 'Keltner', cls: 'text-cyan-300' },
             { key: 'donchian', label: 'Donchian', cls: 'text-amber-300' },
             { key: 'vwap', label: 'VWAP', cls: 'text-pink-400' },
+            { key: 'vpvr', label: 'VPVR', cls: 'text-violet-400' },
+            { key: 'vpfr', label: 'VPFR', cls: 'text-sky-400' },
             { key: 'obv', label: 'OBV', cls: 'text-cyan-400' },
             { key: 'rsi', label: 'RSI', cls: 'text-purple-400' },
             { key: 'macd', label: 'MACD', cls: 'text-blue-400' },

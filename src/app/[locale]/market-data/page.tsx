@@ -273,6 +273,9 @@ export default function MarketDataPage() {
   const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
   const [panelInput, setPanelInput] = useState('')
+  // Watchlist add-symbol autocomplete (live Yahoo search dropdown)
+  const [panelResults, setPanelResults] = useState<SearchResult[]>([])
+  const [panelSearchOpen, setPanelSearchOpen] = useState(false)
   const mainRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
@@ -422,6 +425,23 @@ export default function MarketDataPage() {
     setPanelInput('')
     showToast(`Added ${v} → ${activeListName}`)
   }, [panelInput, activeListName, setWatchlists, showToast])
+
+  // Debounced autocomplete for the watchlist add-symbol input.
+  useEffect(() => {
+    const q = panelInput.trim()
+    if (q.length < 1) { setPanelResults([]); return }
+    let aborted = false
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        const json = await res.json()
+        if (!aborted) setPanelResults(Array.isArray(json?.data) ? json.data.slice(0, 8) : [])
+      } catch {
+        if (!aborted) setPanelResults([])
+      }
+    }, 220)
+    return () => { aborted = true; clearTimeout(t) }
+  }, [panelInput])
 
   // Smart save files the current symbol into its sector watchlist (creating it if needed).
   const saveToSector = useCallback(() => {
@@ -1034,13 +1054,18 @@ export default function MarketDataPage() {
           </div>
 
           {/* Add-symbol input */}
-          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+          <div className="relative flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
             <div className="flex items-center flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 focus-within:border-blue-500">
               <Plus className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <input
                 value={panelInput}
-                onChange={(e) => setPanelInput(e.target.value.toUpperCase())}
-                onKeyDown={(e) => { if (e.key === 'Enter') addToWatchlist() }}
+                onChange={(e) => { setPanelInput(e.target.value.toUpperCase()); setPanelSearchOpen(true) }}
+                onFocus={() => setPanelSearchOpen(true)}
+                onBlur={() => setTimeout(() => setPanelSearchOpen(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { addToWatchlist(); setPanelSearchOpen(false) }
+                  if (e.key === 'Escape') { setPanelInput(''); setPanelSearchOpen(false) }
+                }}
                 placeholder="Add symbol (AAPL, BTC-USD)…"
                 className="bg-transparent text-xs font-semibold flex-1 ml-1.5 outline-none placeholder-gray-500 min-w-0"
               />
@@ -1052,6 +1077,23 @@ export default function MarketDataPage() {
             >
               Add
             </button>
+            {panelSearchOpen && panelResults.length > 0 && (
+              <div className="absolute z-50 top-full left-3 right-3 mt-1 max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
+                {panelResults.map((r) => (
+                  <button
+                    key={`${r.symbol}-${r.exchange ?? ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); addToWatchlist(r.symbol); setPanelInput(''); setPanelSearchOpen(false) }}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 border-b border-white/5 last:border-0"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-white">{r.symbol}</span>
+                      {r.type && <span className="text-[9px] uppercase text-gray-500">{r.type}</span>}
+                    </div>
+                    {r.name && <div className="text-[10px] text-gray-400 truncate">{r.name}{r.exchange ? ` · ${r.exchange}` : ''}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Column header */}

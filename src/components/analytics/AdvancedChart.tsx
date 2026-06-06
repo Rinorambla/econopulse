@@ -982,6 +982,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [toolsOpen, setToolsOpen] = useState(false)
   const [compareSyms, setCompareSyms] = useLocalStorage<string[]>('mkt:compareSyms', [])
   const [compareInput, setCompareInput] = useState('')
+  // Compare-symbol autocomplete (live Yahoo search dropdown)
+  const [compareResults, setCompareResults] = useState<{ symbol: string; name: string; exchange?: string; type?: string }[]>([])
+  const [compareSearchOpen, setCompareSearchOpen] = useState(false)
   const [compareData, setCompareData] = useState<Record<string, Bar[]>>({})
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(false)
@@ -1150,6 +1153,64 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     })()
     return () => { cancelled = true }
   }, [compareSyms, currentRange])
+
+  // Debounced autocomplete for the compare input (live Yahoo symbol search).
+  useEffect(() => {
+    const q = compareInput.trim()
+    if (q.length < 1) { setCompareResults([]); return }
+    let aborted = false
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        const json = await res.json()
+        if (!aborted) setCompareResults(Array.isArray(json?.data) ? json.data.slice(0, 8) : [])
+      } catch {
+        if (!aborted) setCompareResults([])
+      }
+    }, 220)
+    return () => { aborted = true; clearTimeout(t) }
+  }, [compareInput])
+
+  // Add a symbol to the compare overlays (used by Enter key + dropdown click).
+  const addCompareSymbol = useCallback((raw: string) => {
+    const v = raw.trim().toUpperCase()
+    if (!v) return
+    if (!compareSyms.includes(v) && v !== symbol.toUpperCase() && compareSyms.length < COMPARE_COLORS.length) {
+      setCompareSyms([...compareSyms, v])
+    }
+    setCompareInput('')
+    setCompareResults([])
+    setCompareSearchOpen(false)
+  }, [compareSyms, symbol, setCompareSyms])
+
+  // ===== Chart navigation (zoom / scroll / reset) =====
+  // Zoom by shrinking/expanding the visible logical range around its center.
+  const zoomChart = useCallback((factor: number) => {
+    const chart = chartRef.current
+    if (!chart) return
+    const ts = chart.timeScale()
+    const r = ts.getVisibleLogicalRange()
+    if (!r) return
+    const center = (r.from + r.to) / 2
+    const half = ((r.to - r.from) / 2) * factor
+    try { ts.setVisibleLogicalRange({ from: center - half, to: center + half }) } catch { /* ignore */ }
+  }, [])
+  // Scroll left/right by a fraction of the current window width.
+  const scrollChart = useCallback((dir: -1 | 1) => {
+    const chart = chartRef.current
+    if (!chart) return
+    const ts = chart.timeScale()
+    const r = ts.getVisibleLogicalRange()
+    if (!r) return
+    const shift = (r.to - r.from) * 0.25 * dir
+    try { ts.setVisibleLogicalRange({ from: r.from + shift, to: r.to + shift }) } catch { /* ignore */ }
+  }, [])
+  const resetChartView = useCallback(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    try { chart.timeScale().fitContent() } catch { /* ignore */ }
+  }, [])
+
 
   // ========== Chart Creation / Update ==========
   // Tick used to safely re-trigger the effect once when the container width is 0
@@ -2231,22 +2292,37 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {/* Compare input (multi-symbol) */}
         <div className="flex items-center gap-1 flex-wrap">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">vs</span>
-          <input
-            value={compareInput}
-            onChange={(e) => setCompareInput(e.target.value.toUpperCase())}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const v = compareInput.trim().toUpperCase()
-                if (v && !compareSyms.includes(v) && v !== symbol.toUpperCase() && compareSyms.length < COMPARE_COLORS.length) {
-                  setCompareSyms([...compareSyms, v])
-                }
-                setCompareInput('')
-              }
-              if (e.key === 'Escape') setCompareInput('')
-            }}
-            placeholder="Compare (SPY, QQQ…)"
-            className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
-          />
+          <div className="relative">
+            <input
+              value={compareInput}
+              onChange={(e) => { setCompareInput(e.target.value.toUpperCase()); setCompareSearchOpen(true) }}
+              onFocus={() => setCompareSearchOpen(true)}
+              onBlur={() => setTimeout(() => setCompareSearchOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') addCompareSymbol(compareInput)
+                if (e.key === 'Escape') { setCompareInput(''); setCompareSearchOpen(false) }
+              }}
+              placeholder="Compare (SPY, QQQ…)"
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
+            />
+            {compareSearchOpen && compareResults.length > 0 && (
+              <div className="absolute z-40 mt-1 left-0 w-60 max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
+                {compareResults.map((r) => (
+                  <button
+                    key={`${r.symbol}-${r.exchange ?? ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); addCompareSymbol(r.symbol) }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-white/10 border-b border-white/5 last:border-0"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-white">{r.symbol}</span>
+                      {r.type && <span className="text-[9px] uppercase text-gray-500">{r.type}</span>}
+                    </div>
+                    {r.name && <div className="text-[10px] text-gray-400 truncate">{r.name}{r.exchange ? ` · ${r.exchange}` : ''}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {compareSyms.map((s, idx) => (
             <span
               key={s}
@@ -2442,7 +2518,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       </div>
 
       {/* ===== CHART AREA ===== */}
-      <div style={{ position: 'relative' }} className="flex-1 min-h-0 [&_a[href*='tradingview']]:!hidden">
+      <div style={{ position: 'relative' }} className="group flex-1 min-h-0 [&_a[href*='tradingview']]:!hidden">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/70">
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -2546,6 +2622,25 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </div>
           )
         })()}
+
+        {/* Chart navigation — appears on hover at the bottom-center of the chart */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-1.5 py-1 rounded-lg bg-slate-900/90 border border-white/15 shadow-lg backdrop-blur opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+          <button onClick={() => scrollChart(-1)} title="Scroll left" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5l-5 5 5 5"/></svg>
+          </button>
+          <button onClick={() => zoomChart(0.7)} title="Zoom in" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5l3 3M6.5 9h5M9 6.5v5"/></svg>
+          </button>
+          <button onClick={() => zoomChart(1.4)} title="Zoom out" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5l3 3M6.5 9h5"/></svg>
+          </button>
+          <button onClick={resetChartView} title="Reset chart view" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8a6.5 6.5 0 1 1-.5 2.5"/><path d="M3 5v3h3"/></svg>
+          </button>
+          <button onClick={() => scrollChart(1)} title="Scroll right" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5l5 5-5 5"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* ===== BOTTOM STATUS BAR ===== */}

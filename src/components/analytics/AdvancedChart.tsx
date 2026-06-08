@@ -243,6 +243,93 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
   },
 ]
 
+// ========== Per-indicator customization ==========
+// User-editable settings for every indicator: colors, period/length, line width,
+// line style, multiplier/std-dev and overbought/oversold guide levels. Only the
+// fields present in an indicator's defaults are shown in its settings panel.
+type IndicatorConfig = {
+  visible: boolean
+  color: string
+  color2?: string
+  color3?: string
+  period?: number
+  period2?: number
+  period3?: number
+  mult?: number
+  width: 1 | 2 | 3 | 4
+  style: LineStyle
+  ob?: number
+  os?: number
+}
+
+const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
+  // ── Trend ──
+  sma20: { visible: true, color: '#f59e0b', period: 20, width: 1, style: LineStyle.Solid },
+  sma50: { visible: true, color: '#a855f7', period: 50, width: 1, style: LineStyle.Solid },
+  sma100: { visible: true, color: '#06b6d4', period: 100, width: 1, style: LineStyle.Solid },
+  sma200: { visible: true, color: '#ef4444', period: 200, width: 2, style: LineStyle.Solid },
+  ema9: { visible: true, color: '#34d399', period: 9, width: 1, style: LineStyle.Dashed },
+  ema20: { visible: true, color: '#06b6d4', period: 20, width: 1, style: LineStyle.Dashed },
+  ema50: { visible: true, color: '#f472b6', period: 50, width: 1, style: LineStyle.Dashed },
+  ema200: { visible: true, color: '#fb923c', period: 200, width: 2, style: LineStyle.Dashed },
+  wma20: { visible: true, color: '#eab308', period: 20, width: 1, style: LineStyle.Solid },
+  wma50: { visible: true, color: '#84cc16', period: 50, width: 1, style: LineStyle.Solid },
+  hma: { visible: true, color: '#22d3ee', period: 16, width: 2, style: LineStyle.Solid },
+  dema: { visible: true, color: '#c084fc', period: 20, width: 1, style: LineStyle.Solid },
+  tema: { visible: true, color: '#fb7185', period: 20, width: 1, style: LineStyle.Solid },
+  vwma: { visible: true, color: '#38bdf8', period: 20, width: 1, style: LineStyle.Solid },
+  psar: { visible: true, color: '#e879f9', width: 2, style: LineStyle.Dotted },
+  supertrend: { visible: true, color: '#22c55e', color2: '#ef4444', period: 10, mult: 3, width: 2, style: LineStyle.Solid },
+  ichimoku: { visible: true, color: '#2563eb', color2: '#dc2626', period: 9, period2: 26, period3: 52, width: 1, style: LineStyle.Solid },
+  // ── Volatility ──
+  bb: { visible: true, color: '#a855f7', period: 20, mult: 2, width: 1, style: LineStyle.Solid },
+  keltner: { visible: true, color: '#22d3ee', period: 20, period2: 10, mult: 1.5, width: 1, style: LineStyle.Solid },
+  donchian: { visible: true, color: '#fbbf24', period: 20, width: 1, style: LineStyle.Solid },
+  envelopes: { visible: true, color: '#60a5fa', period: 20, mult: 2.5, width: 1, style: LineStyle.Solid },
+  atr: { visible: true, color: '#fb923c', period: 14, width: 1, style: LineStyle.Solid },
+  stddev: { visible: true, color: '#94a3b8', period: 20, width: 1, style: LineStyle.Solid },
+  // ── Volume ──
+  volume: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
+  vwap: { visible: true, color: '#ec4899', width: 1, style: LineStyle.Dotted },
+  obv: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
+  mfi: { visible: true, color: '#10b981', period: 14, ob: 80, os: 20, width: 1, style: LineStyle.Solid },
+  cmf: { visible: true, color: '#22c55e', color2: '#ef4444', period: 20, width: 1, style: LineStyle.Solid },
+  adl: { visible: true, color: '#60a5fa', width: 1, style: LineStyle.Solid },
+  chaikinosc: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
+  forceindex: { visible: true, color: '#22c55e', color2: '#ef4444', period: 13, width: 1, style: LineStyle.Solid },
+  // ── Momentum ──
+  rsi: { visible: true, color: '#8b5cf6', period: 14, ob: 70, os: 30, width: 1, style: LineStyle.Solid },
+  macd: { visible: true, color: '#3b82f6', color2: '#f97316', period: 12, period2: 26, period3: 9, width: 1, style: LineStyle.Solid },
+  stochastic: { visible: true, color: '#06b6d4', color2: '#f97316', period: 14, period2: 3, ob: 80, os: 20, width: 1, style: LineStyle.Solid },
+  stochrsi: { visible: true, color: '#06b6d4', color2: '#f97316', period: 14, ob: 80, os: 20, width: 1, style: LineStyle.Solid },
+  cci: { visible: true, color: '#14b8a6', period: 20, width: 1, style: LineStyle.Solid },
+  williamsR: { visible: true, color: '#f43f5e', period: 14, width: 1, style: LineStyle.Solid },
+  mom: { visible: true, color: '#a78bfa', period: 10, width: 1, style: LineStyle.Solid },
+  roc: { visible: true, color: '#a78bfa', period: 12, width: 1, style: LineStyle.Solid },
+  adx: { visible: true, color: '#eab308', color2: '#22c55e', color3: '#ef4444', period: 14, width: 2, style: LineStyle.Solid },
+  aroon: { visible: true, color: '#22c55e', color2: '#ef4444', period: 25, width: 1, style: LineStyle.Solid },
+  ao: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
+  ppo: { visible: true, color: '#3b82f6', period: 12, period2: 26, width: 1, style: LineStyle.Solid },
+  trix: { visible: true, color: '#f472b6', period: 15, width: 1, style: LineStyle.Solid },
+  uo: { visible: true, color: '#14b8a6', period: 7, period2: 14, period3: 28, width: 1, style: LineStyle.Solid },
+  vortex: { visible: true, color: '#22c55e', color2: '#ef4444', period: 14, width: 1, style: LineStyle.Solid },
+}
+
+// Friendly labels for the numeric "length" fields, per indicator (falls back to generic).
+const IND_FIELD_LABELS: Partial<Record<IndicatorKey, { period?: string; period2?: string; period3?: string; mult?: string }>> = {
+  supertrend: { period: 'ATR Length', mult: 'Multiplier' },
+  ichimoku: { period: 'Tenkan', period2: 'Kijun', period3: 'Senkou B' },
+  bb: { period: 'Length', mult: 'Std Dev' },
+  keltner: { period: 'EMA Length', period2: 'ATR Length', mult: 'Multiplier' },
+  envelopes: { period: 'Length', mult: 'Percent' },
+  macd: { period: 'Fast', period2: 'Slow', period3: 'Signal' },
+  stochastic: { period: '%K Length', period2: '%D Smooth' },
+  ppo: { period: 'Fast', period2: 'Slow' },
+  uo: { period: 'Fast', period2: 'Mid', period3: 'Slow' },
+}
+
+const DEFAULT_IND_CONFIG: IndicatorConfig = { visible: true, color: '#8b5cf6', width: 1, style: LineStyle.Solid }
+
 // ========== TA Helpers ==========
 function computeSMA(closes: number[], period: number): (number | null)[] {
   const out: (number | null)[] = []
@@ -981,6 +1068,19 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [indicatorsOpen, setIndicatorsOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [rangeOpen, setRangeOpen] = useState(false)
+  // Per-indicator user settings (colors / length / width / style / mult / OB-OS).
+  const [indSettings, setIndSettings] = useLocalStorage<Record<string, Partial<IndicatorConfig>>>('mkt:indSettings', {})
+  const [settingsKey, setSettingsKey] = useState<IndicatorKey | null>(null)
+  const cfgFor = useCallback(
+    (key: IndicatorKey): IndicatorConfig => ({ ...DEFAULT_IND_CONFIG, ...IND_DEFAULTS[key], ...indSettings[key] }),
+    [indSettings],
+  )
+  const updateIndSetting = useCallback((key: IndicatorKey, patch: Partial<IndicatorConfig>) => {
+    setIndSettings(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
+  }, [setIndSettings])
+  const resetIndSetting = useCallback((key: IndicatorKey) => {
+    setIndSettings(prev => { const next = { ...prev }; delete next[key]; return next })
+  }, [setIndSettings])
   const [compareSyms, setCompareSyms] = useLocalStorage<string[]>('mkt:compareSyms', [])
   const [compareInput, setCompareInput] = useState('')
   // Compare-symbol autocomplete (live Yahoo search dropdown)
@@ -1421,6 +1521,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       overlaySeriesRef.current.push(ls)
     }
 
+    // Per-indicator user config (color/length/width/style/mult/OB-OS). `on(key)`
+    // returns true when the indicator is enabled AND its config is visible.
+    const cfg = (key: IndicatorKey): IndicatorConfig => cfgFor(key)
+    const on = (key: IndicatorKey): boolean => indicators.has(key) && cfgFor(key).visible !== false
+    // Add transparency to a #rrggbb colour (for bands / histograms / guides).
+    const hexA = (color: string, a: number): string => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(color.trim())
+      if (!m) return color
+      const n = parseInt(m[1], 16)
+      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+    }
+
     // Check how many sub-panels we need (for proper margin allocation)
     const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex']
     const activeSubPanels = subPanelKeys.filter(k => indicators.has(k))
@@ -1438,76 +1550,82 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       vs.setData(bars.map((b, i) => ({
         time: timeLabels[i],
         value: b.volume,
-        color: b.close >= b.open ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)',
+        color: b.close >= b.open ? hexA(cfg('volume').color, 0.35) : hexA(cfg('volume').color2 || '#ef4444', 0.35),
       } as HistogramData)))
       volumeSeriesRef.current = vs
     }
 
     // ── Trend Overlays ──
-    if (indicators.has('sma20')) addOverlay(computeSMA(closes, 20), '#f59e0b')
-    if (indicators.has('sma50')) addOverlay(computeSMA(closes, 50), '#a855f7')
-    if (indicators.has('sma100')) addOverlay(computeSMA(closes, 100), '#06b6d4')
-    if (indicators.has('sma200')) addOverlay(computeSMA(closes, 200), '#ef4444', LineStyle.Solid, 2)
-    if (indicators.has('ema9')) addOverlay(computeEMA(closes, 9), '#34d399', LineStyle.Dashed)
-    if (indicators.has('ema20')) addOverlay(computeEMA(closes, 20), '#06b6d4', LineStyle.Dashed)
-    if (indicators.has('ema50')) addOverlay(computeEMA(closes, 50), '#f472b6', LineStyle.Dashed)
-    if (indicators.has('ema200')) addOverlay(computeEMA(closes, 200), '#fb923c', LineStyle.Dashed, 2)
-    if (indicators.has('wma20')) addOverlay(computeWMA(closes, 20), '#eab308')
-    if (indicators.has('wma50')) addOverlay(computeWMA(closes, 50), '#84cc16')
-    if (indicators.has('hma')) addOverlay(computeHMA(closes, 16), '#22d3ee', LineStyle.Solid, 2)
-    if (indicators.has('dema')) addOverlay(computeDEMA(closes, 20), '#c084fc')
-    if (indicators.has('tema')) addOverlay(computeTEMA(closes, 20), '#fb7185')
-    if (indicators.has('vwma')) addOverlay(computeVWMA(bars, 20), '#38bdf8')
+    if (on('sma20')) { const c = cfg('sma20'); addOverlay(computeSMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('sma50')) { const c = cfg('sma50'); addOverlay(computeSMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('sma100')) { const c = cfg('sma100'); addOverlay(computeSMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('sma200')) { const c = cfg('sma200'); addOverlay(computeSMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('ema9')) { const c = cfg('ema9'); addOverlay(computeEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('ema20')) { const c = cfg('ema20'); addOverlay(computeEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('ema50')) { const c = cfg('ema50'); addOverlay(computeEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('ema200')) { const c = cfg('ema200'); addOverlay(computeEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('wma20')) { const c = cfg('wma20'); addOverlay(computeWMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('wma50')) { const c = cfg('wma50'); addOverlay(computeWMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('hma')) { const c = cfg('hma'); addOverlay(computeHMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('dema')) { const c = cfg('dema'); addOverlay(computeDEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('tema')) { const c = cfg('tema'); addOverlay(computeTEMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('vwma')) { const c = cfg('vwma'); addOverlay(computeVWMA(bars, c.period!), c.color, c.style, c.width) }
 
     // Parabolic SAR (plotted as a thin dotted line tracing the stops)
-    if (indicators.has('psar')) addOverlay(computePSAR(bars), '#e879f9', LineStyle.Dotted, 2)
+    if (on('psar')) { const c = cfg('psar'); addOverlay(computePSAR(bars), c.color, c.style, c.width) }
 
     // SuperTrend (trailing ATR line)
-    if (indicators.has('supertrend')) {
-      const st = computeSuperTrend(bars)
+    if (on('supertrend')) {
+      const c = cfg('supertrend')
+      const st = computeSuperTrend(bars, c.period!, c.mult!)
       // Split into up/down colored segments by inserting nulls on direction flips.
       const upLine = st.line.map((v, i) => st.up[i] ? v : null)
       const downLine = st.line.map((v, i) => !st.up[i] ? v : null)
-      addOverlay(upLine, '#22c55e', LineStyle.Solid, 2)
-      addOverlay(downLine, '#ef4444', LineStyle.Solid, 2)
+      addOverlay(upLine, c.color, c.style, c.width)
+      addOverlay(downLine, c.color2 || '#ef4444', c.style, c.width)
     }
 
     // Ichimoku Cloud
-    if (indicators.has('ichimoku')) {
-      const ichi = computeIchimoku(bars)
-      addOverlay(ichi.tenkanSen, '#2563eb', LineStyle.Solid) // Tenkan (blue)
-      addOverlay(ichi.kijunSen, '#dc2626', LineStyle.Solid)  // Kijun (red)
-      addOverlay(ichi.senkouA, 'rgba(34,197,94,0.5)', LineStyle.Dotted) // Senkou A
-      addOverlay(ichi.senkouB, 'rgba(239,68,68,0.5)', LineStyle.Dotted) // Senkou B
+    if (on('ichimoku')) {
+      const c = cfg('ichimoku')
+      const ichi = computeIchimoku(bars, c.period!, c.period2!, c.period3!)
+      addOverlay(ichi.tenkanSen, c.color, LineStyle.Solid, c.width) // Tenkan
+      addOverlay(ichi.kijunSen, c.color2 || '#dc2626', LineStyle.Solid, c.width)  // Kijun
+      addOverlay(ichi.senkouA, hexA(c.color, 0.5), LineStyle.Dotted) // Senkou A
+      addOverlay(ichi.senkouB, hexA(c.color2 || '#dc2626', 0.5), LineStyle.Dotted) // Senkou B
     }
 
     // ── Volatility Overlays ──
-    if (indicators.has('bb')) {
-      const { basis, upper, lower } = computeBB(closes, 20, 2)
-      addOverlay(upper, 'rgba(168,85,247,0.5)')
-      addOverlay(basis, 'rgba(168,85,247,0.3)', LineStyle.Dashed)
-      addOverlay(lower, 'rgba(168,85,247,0.5)')
+    if (on('bb')) {
+      const c = cfg('bb')
+      const { basis, upper, lower } = computeBB(closes, c.period!, c.mult!)
+      addOverlay(upper, hexA(c.color, 0.6), c.style, c.width)
+      addOverlay(basis, hexA(c.color, 0.35), LineStyle.Dashed, c.width)
+      addOverlay(lower, hexA(c.color, 0.6), c.style, c.width)
     }
-    if (indicators.has('keltner')) {
-      const kc = computeKeltner(bars)
-      addOverlay(kc.upper, 'rgba(34,211,238,0.5)')
-      addOverlay(kc.basis, 'rgba(34,211,238,0.3)', LineStyle.Dashed)
-      addOverlay(kc.lower, 'rgba(34,211,238,0.5)')
+    if (on('keltner')) {
+      const c = cfg('keltner')
+      const kc = computeKeltner(bars, c.period!, c.period2!, c.mult!)
+      addOverlay(kc.upper, hexA(c.color, 0.6), c.style, c.width)
+      addOverlay(kc.basis, hexA(c.color, 0.35), LineStyle.Dashed, c.width)
+      addOverlay(kc.lower, hexA(c.color, 0.6), c.style, c.width)
     }
-    if (indicators.has('donchian')) {
-      const dc = computeDonchian(bars)
-      addOverlay(dc.upper, 'rgba(251,191,36,0.5)')
-      addOverlay(dc.lower, 'rgba(251,191,36,0.5)')
+    if (on('donchian')) {
+      const c = cfg('donchian')
+      const dc = computeDonchian(bars, c.period!)
+      addOverlay(dc.upper, hexA(c.color, 0.6), c.style, c.width)
+      addOverlay(dc.lower, hexA(c.color, 0.6), c.style, c.width)
     }
-    if (indicators.has('envelopes')) {
-      const env = computeEnvelopes(closes, 20, 2.5)
-      addOverlay(env.upper, 'rgba(96,165,250,0.55)')
-      addOverlay(env.basis, 'rgba(96,165,250,0.3)', LineStyle.Dashed)
-      addOverlay(env.lower, 'rgba(96,165,250,0.55)')
+    if (on('envelopes')) {
+      const c = cfg('envelopes')
+      const env = computeEnvelopes(closes, c.period!, c.mult!)
+      addOverlay(env.upper, hexA(c.color, 0.65), c.style, c.width)
+      addOverlay(env.basis, hexA(c.color, 0.35), LineStyle.Dashed, c.width)
+      addOverlay(env.lower, hexA(c.color, 0.65), c.style, c.width)
     }
 
     // ── Volume Overlays ──
-    if (indicators.has('vwap')) addOverlay(computeVWAP(bars), '#ec4899', LineStyle.Dotted)
+    if (on('vwap')) { const c = cfg('vwap'); addOverlay(computeVWAP(bars), c.color, c.style, c.width) }
 
     // ── Volume Profile (POC + Value Area as horizontal bands) ──
     if (indicators.has('volprofile')) {
@@ -1566,185 +1684,194 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       return ls
     }
 
-    const addSubHistogram = (vals: (number | null)[], key: string) => {
+    const addSubHistogram = (vals: (number | null)[], key: string, upColor = '#22c55e', downColor = '#ef4444') => {
       const pane = getPane(key)
       const hs = chart.addSeries(HistogramSeries, {}, pane)
       hs.setData(vals.map((v, i) => v !== null ? ({
         time: timeLabels[i], value: v,
-        color: v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)',
+        color: v >= 0 ? hexA(upColor, 0.6) : hexA(downColor, 0.6),
       } as HistogramData) : null).filter(Boolean) as HistogramData[])
       overlaySeriesRef.current.push(hs)
     }
 
-    // No-op kept for backwards compatibility with the previous signature; panes handle layout now.
-    const setupSubScale = (_key: string) => { /* handled by pane assignment */ }
+    // Horizontal guide line (e.g. RSI overbought/oversold) in a given pane.
+    const addGuide = (key: string, value: number, color: string) => {
+      const ls = chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, getPane(key))
+      ls.setData(timeLabels.map(t => ({ time: t, value } as LineData)))
+      overlaySeriesRef.current.push(ls)
+    }
 
     // RSI
-    if (indicators.has('rsi')) {
-      const rsiVals = computeRSI(closes)
+    if (on('rsi')) {
+      const c = cfg('rsi')
       const sid = 'rsi-panel'
-      addSubLine(rsiVals, sid, '#8b5cf6')
-      // 30/70 reference lines (same pane as RSI line)
-      const rsiPane = getPane(sid)
-      const line30 = timeLabels.map(t => ({ time: t, value: 30 } as LineData))
-      const line70 = timeLabels.map(t => ({ time: t, value: 70 } as LineData))
-      const ls30 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, rsiPane)
-      ls30.setData(line30); overlaySeriesRef.current.push(ls30)
-      const ls70 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, rsiPane)
-      ls70.setData(line70); overlaySeriesRef.current.push(ls70)
+      addSubLine(computeRSI(closes, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.os ?? 30, 'rgba(34,197,94,0.3)')
+      addGuide(sid, c.ob ?? 70, 'rgba(239,68,68,0.3)')
     }
 
     // MACD
-    if (indicators.has('macd')) {
-      const m = computeMACD(closes)
+    if (on('macd')) {
+      const c = cfg('macd')
+      const m = computeMACD(closes, c.period!, c.period2!, c.period3!)
       const sid = 'macd-panel'
-      setupSubScale(sid)
-      addSubLine(m.macdLine, sid, '#3b82f6')
-      addSubLine(m.signal, sid, '#f97316', LineStyle.Dashed)
-      addSubHistogram(m.histogram, sid)
+      addSubLine(m.macdLine, sid, c.color, c.style, c.width)
+      addSubLine(m.signal, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addSubHistogram(m.histogram, sid, c.color, c.color2 || '#ef4444')
     }
 
     // Stochastic
-    if (indicators.has('stochastic')) {
-      const s = computeStochastic(bars)
+    if (on('stochastic')) {
+      const c = cfg('stochastic')
+      const s = computeStochastic(bars, c.period!, c.period2!)
       const sid = 'stoch-panel'
-      setupSubScale(sid)
-      addSubLine(s.kLine, sid, '#06b6d4')
-      addSubLine(s.dLine, sid, '#f97316', LineStyle.Dashed)
+      addSubLine(s.kLine, sid, c.color, c.style, c.width)
+      addSubLine(s.dLine, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addGuide(sid, c.os ?? 20, 'rgba(34,197,94,0.3)')
+      addGuide(sid, c.ob ?? 80, 'rgba(239,68,68,0.3)')
     }
 
     // CCI
-    if (indicators.has('cci')) {
-      const cciVals = computeCCI(bars)
+    if (on('cci')) {
+      const c = cfg('cci')
       const sid = 'cci-panel'
-      setupSubScale(sid)
-      addSubLine(cciVals, sid, '#14b8a6')
+      addSubLine(computeCCI(bars, c.period!), sid, c.color, c.style, c.width)
     }
 
     // Williams %R
-    if (indicators.has('williamsR')) {
-      const wrVals = computeWilliamsR(bars)
+    if (on('williamsR')) {
+      const c = cfg('williamsR')
       const sid = 'wr-panel'
-      setupSubScale(sid)
-      addSubLine(wrVals, sid, '#f43f5e')
+      addSubLine(computeWilliamsR(bars, c.period!), sid, c.color, c.style, c.width)
     }
 
     // Momentum
-    if (indicators.has('mom')) {
-      const momVals = computeMomentum(closes)
+    if (on('mom')) {
+      const c = cfg('mom')
       const sid = 'mom-panel'
-      setupSubScale(sid)
-      addSubLine(momVals, sid, '#a78bfa')
+      addSubLine(computeMomentum(closes, c.period!), sid, c.color, c.style, c.width)
     }
 
     // ATR (sub-panel)
-    if (indicators.has('atr')) {
-      const atrVals = computeATR(bars)
+    if (on('atr')) {
+      const c = cfg('atr')
       const sid = 'atr-panel'
-      setupSubScale(sid)
-      addSubLine(atrVals, sid, '#fb923c')
+      addSubLine(computeATR(bars, c.period!), sid, c.color, c.style, c.width)
     }
 
     // OBV (sub-panel)
-    if (indicators.has('obv')) {
-      const obvVals = computeOBV(bars)
+    if (on('obv')) {
+      const c = cfg('obv')
       const sid = 'obv-panel'
-      setupSubScale(sid)
-      addSubLine(obvVals.map(v => v as number | null), sid, '#22d3ee')
+      addSubLine(computeOBV(bars).map(v => v as number | null), sid, c.color, c.style, c.width)
     }
 
     // Std Dev (sub-panel)
-    if (indicators.has('stddev')) {
-      addSubLine(computeStdDev(closes, 20), 'stddev-panel', '#94a3b8')
+    if (on('stddev')) {
+      const c = cfg('stddev')
+      addSubLine(computeStdDev(closes, c.period!), 'stddev-panel', c.color, c.style, c.width)
     }
 
-    // Money Flow Index (0-100, with 20/80 guides)
-    if (indicators.has('mfi')) {
+    // Money Flow Index (0-100, with OB/OS guides)
+    if (on('mfi')) {
+      const c = cfg('mfi')
       const sid = 'mfi-panel'
-      addSubLine(computeMFI(bars), sid, '#10b981')
-      const pane = getPane(sid)
-      const g20 = chart.addSeries(LineSeries, { color: 'rgba(34,197,94,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, pane)
-      g20.setData(timeLabels.map(t => ({ time: t, value: 20 } as LineData))); overlaySeriesRef.current.push(g20)
-      const g80 = chart.addSeries(LineSeries, { color: 'rgba(239,68,68,0.3)', lineWidth: 1, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: false, lastValueVisible: false }, pane)
-      g80.setData(timeLabels.map(t => ({ time: t, value: 80 } as LineData))); overlaySeriesRef.current.push(g80)
+      addSubLine(computeMFI(bars, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.os ?? 20, 'rgba(34,197,94,0.3)')
+      addGuide(sid, c.ob ?? 80, 'rgba(239,68,68,0.3)')
     }
 
     // Chaikin Money Flow (oscillates around 0)
-    if (indicators.has('cmf')) {
-      addSubHistogram(computeCMF(bars, 20), 'cmf-panel')
+    if (on('cmf')) {
+      const c = cfg('cmf')
+      addSubHistogram(computeCMF(bars, c.period!), 'cmf-panel', c.color, c.color2 || '#ef4444')
     }
 
     // Accumulation / Distribution Line
-    if (indicators.has('adl')) {
-      addSubLine(computeADL(bars).map(v => v as number | null), 'adl-panel', '#60a5fa')
+    if (on('adl')) {
+      const c = cfg('adl')
+      addSubLine(computeADL(bars).map(v => v as number | null), 'adl-panel', c.color, c.style, c.width)
     }
 
     // Chaikin Oscillator
-    if (indicators.has('chaikinosc')) {
-      addSubHistogram(computeChaikinOsc(bars), 'chaikinosc-panel')
+    if (on('chaikinosc')) {
+      const c = cfg('chaikinosc')
+      addSubHistogram(computeChaikinOsc(bars), 'chaikinosc-panel', c.color, c.color2 || '#ef4444')
     }
 
     // Force Index
-    if (indicators.has('forceindex')) {
-      addSubHistogram(computeForceIndex(bars, 13), 'forceindex-panel')
+    if (on('forceindex')) {
+      const c = cfg('forceindex')
+      addSubHistogram(computeForceIndex(bars, c.period!), 'forceindex-panel', c.color, c.color2 || '#ef4444')
     }
 
     // ADX with +DI / -DI
-    if (indicators.has('adx')) {
-      const a = computeADX(bars)
+    if (on('adx')) {
+      const c = cfg('adx')
+      const a = computeADX(bars, c.period!)
       const sid = 'adx-panel'
-      addSubLine(a.adx, sid, '#eab308', LineStyle.Solid, 2)
-      addSubLine(a.plusDI, sid, '#22c55e')
-      addSubLine(a.minusDI, sid, '#ef4444')
+      addSubLine(a.adx, sid, c.color, c.style, c.width)
+      addSubLine(a.plusDI, sid, c.color2 || '#22c55e', LineStyle.Solid, c.width)
+      addSubLine(a.minusDI, sid, c.color3 || '#ef4444', LineStyle.Solid, c.width)
     }
 
     // Stochastic RSI
-    if (indicators.has('stochrsi')) {
-      const s = computeStochRSI(closes)
+    if (on('stochrsi')) {
+      const c = cfg('stochrsi')
+      const s = computeStochRSI(closes, c.period!)
       const sid = 'stochrsi-panel'
-      addSubLine(s.k, sid, '#06b6d4')
-      addSubLine(s.d, sid, '#f97316', LineStyle.Dashed)
+      addSubLine(s.k, sid, c.color, c.style, c.width)
+      addSubLine(s.d, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addGuide(sid, c.os ?? 20, 'rgba(34,197,94,0.3)')
+      addGuide(sid, c.ob ?? 80, 'rgba(239,68,68,0.3)')
     }
 
     // Rate of Change
-    if (indicators.has('roc')) {
-      addSubLine(computeROC(closes, 12), 'roc-panel', '#a78bfa')
+    if (on('roc')) {
+      const c = cfg('roc')
+      addSubLine(computeROC(closes, c.period!), 'roc-panel', c.color, c.style, c.width)
     }
 
     // TRIX
-    if (indicators.has('trix')) {
-      addSubLine(computeTRIX(closes, 15), 'trix-panel', '#f472b6')
+    if (on('trix')) {
+      const c = cfg('trix')
+      addSubLine(computeTRIX(closes, c.period!), 'trix-panel', c.color, c.style, c.width)
     }
 
     // Ultimate Oscillator
-    if (indicators.has('uo')) {
-      addSubLine(computeUO(bars), 'uo-panel', '#14b8a6')
+    if (on('uo')) {
+      const c = cfg('uo')
+      addSubLine(computeUO(bars, c.period!, c.period2!, c.period3!), 'uo-panel', c.color, c.style, c.width)
     }
 
     // Awesome Oscillator (histogram)
-    if (indicators.has('ao')) {
-      addSubHistogram(computeAO(bars), 'ao-panel')
+    if (on('ao')) {
+      const c = cfg('ao')
+      addSubHistogram(computeAO(bars), 'ao-panel', c.color, c.color2 || '#ef4444')
     }
 
     // PPO
-    if (indicators.has('ppo')) {
-      addSubLine(computePPO(closes), 'ppo-panel', '#3b82f6')
+    if (on('ppo')) {
+      const c = cfg('ppo')
+      addSubLine(computePPO(closes, c.period!, c.period2!), 'ppo-panel', c.color, c.style, c.width)
     }
 
     // Aroon Up / Down
-    if (indicators.has('aroon')) {
-      const ar = computeAroon(bars, 25)
+    if (on('aroon')) {
+      const c = cfg('aroon')
+      const ar = computeAroon(bars, c.period!)
       const sid = 'aroon-panel'
-      addSubLine(ar.up, sid, '#22c55e')
-      addSubLine(ar.down, sid, '#ef4444')
+      addSubLine(ar.up, sid, c.color, c.style, c.width)
+      addSubLine(ar.down, sid, c.color2 || '#ef4444', c.style, c.width)
     }
 
     // Vortex VI+ / VI-
-    if (indicators.has('vortex')) {
-      const v = computeVortex(bars, 14)
+    if (on('vortex')) {
+      const c = cfg('vortex')
+      const v = computeVortex(bars, c.period!)
       const sid = 'vortex-panel'
-      addSubLine(v.plus, sid, '#22c55e')
-      addSubLine(v.minus, sid, '#ef4444')
+      addSubLine(v.plus, sid, c.color, c.style, c.width)
+      addSubLine(v.minus, sid, c.color2 || '#ef4444', c.style, c.width)
     }
 
     // ===== COMPARE OVERLAY (normalized % performance lines on their own scale) =====
@@ -1953,7 +2080,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -2548,20 +2675,35 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                             {activeCount > 0 && <span className="px-1 rounded bg-blue-500/30 text-blue-100 text-[9px]">{activeCount}</span>}
                           </div>
                           <div className="flex flex-col gap-0.5">
-                            {cat.items.map(ind => (
-                              <button
-                                key={ind.key}
-                                onClick={() => toggleIndicator(ind.key)}
-                                className={`flex items-center justify-between px-2 py-1 text-[11px] rounded transition-colors ${
-                                  indicators.has(ind.key)
-                                    ? 'bg-blue-600/30 text-blue-200'
-                                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                                }`}
-                              >
-                                <span>{ind.label}</span>
-                                {indicators.has(ind.key) && <span className="text-blue-400">✓</span>}
-                              </button>
-                            ))}
+                            {cat.items.map(ind => {
+                              const isActive = indicators.has(ind.key)
+                              const hasSettings = !!IND_DEFAULTS[ind.key]
+                              return (
+                                <div
+                                  key={ind.key}
+                                  className={`flex items-center rounded transition-colors ${
+                                    isActive ? 'bg-blue-600/30 text-blue-200' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                  }`}
+                                >
+                                  <button
+                                    onClick={() => toggleIndicator(ind.key)}
+                                    className="flex-1 flex items-center justify-between px-2 py-1 text-[11px] text-left"
+                                  >
+                                    <span>{ind.label}</span>
+                                    {isActive && <span className="text-blue-400">✓</span>}
+                                  </button>
+                                  {isActive && hasSettings && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setSettingsKey(k => k === ind.key ? null : ind.key) }}
+                                      className={`px-1.5 py-1 text-[11px] hover:text-white ${settingsKey === ind.key ? 'text-blue-300' : 'text-gray-400'}`}
+                                      title="Settings"
+                                    >
+                                      ⚙
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )
@@ -2570,6 +2712,82 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                 </div>
               </>
             )}
+            {/* Per-indicator settings editor */}
+            {settingsKey && IND_DEFAULTS[settingsKey] && (() => {
+              const key = settingsKey
+              const def = IND_DEFAULTS[key]!
+              const c = cfgFor(key)
+              const labels = IND_FIELD_LABELS[key] || {}
+              const indLabel = IND_CATEGORIES.flatMap(g => g.items).find(i => i.key === key)?.label || key
+              const numField = (field: 'period' | 'period2' | 'period3' | 'mult' | 'ob' | 'os', label: string, step = 1, min = 1) => (
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-gray-400">{label}</span>
+                  <input
+                    type="number" step={step} min={min}
+                    value={c[field] as number}
+                    onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateIndSetting(key, { [field]: v }) }}
+                    className="w-16 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white text-right focus:outline-none focus:border-blue-500"
+                  />
+                </label>
+              )
+              const colorField = (field: 'color' | 'color2' | 'color3', label: string) => (
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-gray-400">{label}</span>
+                  <input
+                    type="color"
+                    value={(c[field] as string) || '#888888'}
+                    onChange={e => updateIndSetting(key, { [field]: e.target.value })}
+                    className="w-8 h-5 bg-transparent border border-white/10 rounded cursor-pointer"
+                  />
+                </label>
+              )
+              return (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setSettingsKey(null)} />
+                  <div className="absolute left-0 top-full mt-1 z-40 w-60 p-3 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-semibold text-white">{indLabel} settings</span>
+                      <button onClick={() => setSettingsKey(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-[11px]">
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Show on chart</span>
+                        <input type="checkbox" checked={c.visible !== false} onChange={e => updateIndSetting(key, { visible: e.target.checked })} className="accent-blue-500" />
+                      </label>
+                      {def.period !== undefined && numField('period', labels.period || 'Length')}
+                      {def.period2 !== undefined && numField('period2', labels.period2 || 'Length 2')}
+                      {def.period3 !== undefined && numField('period3', labels.period3 || 'Length 3')}
+                      {def.mult !== undefined && numField('mult', labels.mult || 'Multiplier', 0.1, 0.1)}
+                      {colorField('color', def.color2 !== undefined ? 'Color 1' : 'Color')}
+                      {def.color2 !== undefined && colorField('color2', 'Color 2')}
+                      {def.color3 !== undefined && colorField('color3', 'Color 3')}
+                      {def.ob !== undefined && numField('ob', 'Overbought', 1, 0)}
+                      {def.os !== undefined && numField('os', 'Oversold', 1, 0)}
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Line width</span>
+                        <select value={c.width} onChange={e => updateIndSetting(key, { width: Number(e.target.value) as 1 | 2 | 3 | 4 })} className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white focus:outline-none focus:border-blue-500">
+                          {[1, 2, 3, 4].map(w => <option key={w} value={w} className="bg-slate-800">{w}px</option>)}
+                        </select>
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-400">Line style</span>
+                        <select value={c.style} onChange={e => updateIndSetting(key, { style: Number(e.target.value) as LineStyle })} className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-white focus:outline-none focus:border-blue-500">
+                          <option value={LineStyle.Solid} className="bg-slate-800">Solid</option>
+                          <option value={LineStyle.Dashed} className="bg-slate-800">Dashed</option>
+                          <option value={LineStyle.Dotted} className="bg-slate-800">Dotted</option>
+                        </select>
+                      </label>
+                    </div>
+                    <button
+                      onClick={() => resetIndSetting(key)}
+                      className="mt-2 w-full px-2 py-1 text-[10px] rounded border border-white/10 text-gray-300 hover:text-white hover:border-white/30"
+                    >
+                      Reset to default
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
           </div>
           {indicators.size > 0 && (
             <button

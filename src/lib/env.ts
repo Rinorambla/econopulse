@@ -22,6 +22,7 @@ export const env = {
   get NEWSLETTER_CRON_SECRET(): string | undefined { return process.env.NEWSLETTER_CRON_SECRET },
   get TRADINGECONOMICS_CLIENT_KEY(): string | undefined { return process.env.TRADINGECONOMICS_CLIENT_KEY },
   get FINNHUB_API_KEY(): string | undefined { return process.env.FINNHUB_API_KEY },
+  get ALPHAVANTAGE_API_KEY(): string | undefined { return process.env.ALPHAVANTAGE_API_KEY },
 
   // Stripe price ids (CSV) configurabili lato server
   get STRIPE_PRO_PRICE_IDS(): string[] { return (process.env.STRIPE_PRO_PRICE_IDS||'').split(',').map(s=>s.trim()).filter(Boolean) },

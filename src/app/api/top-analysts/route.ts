@@ -8,6 +8,7 @@ import { buildLeaderboard, ANALYST_SECTORS } from '@/lib/top-analysts-data'
 import { getYahooQuotes } from '@/lib/yahooFinance'
 import { getRecommendations, getPriceTargets } from '@/lib/finnhub-analysts'
 import { getFmpConsensus } from '@/lib/fmp-analysts'
+import { getAlphaVantageAnalysts } from '@/lib/alphavantage-analysts'
 
 export async function GET(request: Request) {
   const ip = getClientIp(request)
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
   //  • live prices from Yahoo (free, batched) → real implied return vs price
   //  • FMP grades-consensus → REAL Buy/Hold/Sell street consensus per ticker
   //  • FMP grades → REAL most-recent rating action date
+  //  • Alpha Vantage OVERVIEW → REAL analyst target price (quota-capped, 24h cache)
   //  • Finnhub price targets/recommendation as secondary best-effort
   let provider: 'curated' | 'live' = 'curated'
   try {
@@ -35,11 +37,12 @@ export async function GET(request: Request) {
       new Set(analysts.flatMap((a) => a.coverage.map((c) => c.ticker)))
     )
 
-    const [quotes, recs, targets, fmp] = await Promise.all([
+    const [quotes, recs, targets, fmp, av] = await Promise.all([
       withTimeout(getYahooQuotes(tickers), 9000, [] as Awaited<ReturnType<typeof getYahooQuotes>>),
       withTimeout(getRecommendations(tickers, 40), 8000, new Map()),
       withTimeout(getPriceTargets(tickers, 40), 8000, new Map()),
       withTimeout(getFmpConsensus(tickers, 30), 11_000, new Map()),
+      withTimeout(getAlphaVantageAnalysts(tickers, 6), 12_000, new Map()),
     ])
 
     const priceByTicker = new Map<string, number>()
@@ -54,14 +57,22 @@ export async function GET(request: Request) {
         const tgt = targets.get(c.ticker)
         const rec = recs.get(c.ticker)
         const fc = fmp.get(c.ticker)
-        // Real Buy/Hold/Sell action: FMP consensus first, then Finnhub.
+        const av1 = av.get(c.ticker)
+        // Real Buy/Hold/Sell action: FMP consensus → Alpha Vantage → Finnhub.
         if (fc) {
           c.action = fc.action
+          enriched++
+        } else if (av1?.action) {
+          c.action = av1.action
           enriched++
         } else if (rec) {
           c.action = rec.action
         }
-        if (tgt?.targetMean) {
+        // Real price target: Alpha Vantage → Finnhub.
+        if (av1?.targetPrice) {
+          c.priceTarget = Math.round(av1.targetPrice * 100) / 100
+          enriched++
+        } else if (tgt?.targetMean) {
           c.priceTarget = Math.round(tgt.targetMean * 100) / 100
           enriched++
         }

@@ -42,6 +42,8 @@ export async function GET(request: Request) {
 
     let enriched = 0
     for (const a of analysts) {
+      const liveReturns: number[] = []
+      let latestActivity = ''
       for (const c of a.coverage) {
         const livePrice = priceByTicker.get(c.ticker)
         const tgt = targets.get(c.ticker)
@@ -51,15 +53,39 @@ export async function GET(request: Request) {
           c.priceTarget = Math.round(tgt.targetMean * 100) / 100
           enriched++
         }
+        if (tgt?.lastUpdated && tgt.lastUpdated > latestActivity) {
+          latestActivity = tgt.lastUpdated
+        }
         if (livePrice && c.priceTarget > 0) {
           c.currentPrice = Math.round(livePrice * 100) / 100
           c.expectedReturn = Math.round(((c.priceTarget / livePrice - 1) * 100) * 10) / 10
+          liveReturns.push(c.expectedReturn)
         }
       }
       // Keep best-upside calls on top after re-pricing.
       a.coverage.sort((x, y) => y.expectedReturn - x.expectedReturn)
+      // Reflect live implied upside (real prices vs real targets) as the analyst's current avg return.
+      if (liveReturns.length) {
+        a.avgReturn = Math.round((liveReturns.reduce((s, v) => s + v, 0) / liveReturns.length) * 10) / 10
+      }
+      // Reflect the analyst's most recent real price-target update as last activity.
+      if (latestActivity) {
+        const d = new Date(latestActivity)
+        if (!isNaN(d.getTime())) a.lastRating = d.toISOString().slice(0, 10)
+      }
     }
-    if (enriched > 0 || priceByTicker.size > 0) provider = 'live'
+    if (enriched > 0 || priceByTicker.size > 0) {
+      provider = 'live'
+      // Re-rank with live data: reputation rating stays primary, but the live
+      // average implied upside (and recency) become real, dynamic tie-breakers
+      // so the leaderboard order shifts with the market.
+      analysts.sort(
+        (a, b) =>
+          b.rating - a.rating ||
+          b.avgReturn - a.avgReturn ||
+          new Date(b.lastRating).getTime() - new Date(a.lastRating).getTime()
+      )
+    }
   } catch {
     /* fall back to curated values */
   }

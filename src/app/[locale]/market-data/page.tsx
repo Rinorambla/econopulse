@@ -147,8 +147,8 @@ const DEFAULT_WATCHLISTS: Record<string, string[]> = {
 // Smart sector mapping — used to auto-file a saved symbol into the right watchlist.
 const SECTOR_SYMBOLS: Record<string, string[]> = {
   Technology: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'GOOG', 'META', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'AVGO', 'CSCO', 'QCOM', 'TXN', 'NOW', 'IBM', 'PLTR', 'SHOP', 'UBER', 'ASML', 'SAP', 'TSM', 'MU', 'AMAT', 'LRCX', 'SNOW', 'DELL', 'HPQ'],
-  Financials: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'SQ', 'BRK-B', 'BRK-A', 'USB', 'PNC', 'TFC', 'COF'],
-  Energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'MPC', 'OXY', 'HES', 'PSX', 'VLO', 'WMB', 'KMI', 'DVN'],
+  Financials: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'XYZ', 'BRK-B', 'BRK-A', 'USB', 'PNC', 'TFC', 'COF'],
+  Energy: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'OXY', 'HES', 'PSX', 'VLO', 'WMB', 'KMI', 'DVN'],
   Healthcare: ['UNH', 'LLY', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'NVO', 'CVS', 'MDT'],
   Consumer: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TGT', 'DIS', 'KO', 'PEP', 'PG', 'WMT', 'COST', 'BKNG', 'CMG'],
   Industrials: ['CAT', 'BA', 'HON', 'GE', 'UPS', 'RTX', 'LMT', 'DE', 'MMM', 'UNP', 'FDX', 'EMR', 'ETN'],
@@ -174,18 +174,18 @@ function detectSector(sym: string): string {
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX'] },
-  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', '^FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE'] },
+  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', 'FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE'] },
   { label: 'Index ETFs', symbols: ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'IVV', 'EFA', 'EEM', 'VEA', 'VWO', 'ACWI'] },
   { label: 'Sector ETFs', symbols: ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'SMH', 'SOXX', 'KRE', 'XBI', 'ITA'] },
   { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK-B', 'LLY', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'COST'] },
   { label: 'Tech', symbols: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'META', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'AVGO', 'CSCO', 'QCOM', 'TXN', 'NOW', 'IBM', 'PLTR', 'SHOP', 'UBER'] },
-  { label: 'Finance', symbols: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'SQ'] },
-  { label: 'Energy', symbols: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'PXD', 'MPC', 'OXY', 'HES', 'PSX'] },
+  { label: 'Finance', symbols: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'XYZ'] },
+  { label: 'Energy', symbols: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'OXY', 'HES', 'PSX'] },
   { label: 'Healthcare', symbols: ['UNH', 'LLY', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD'] },
   { label: 'Consumer', symbols: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TGT', 'DIS', 'KO', 'PEP', 'PG', 'WMT', 'COST'] },
   { label: 'EU Stocks', symbols: ['ASML', 'SAP', 'NVO', 'MC.PA', 'OR.PA', 'AIR.PA', 'SAN.PA', 'NESN.SW', 'NOVN.SW', 'ROG.SW', 'SHEL.L', 'ULVR.L', 'AZN.L', 'HSBA.L', 'BP.L', 'RIO.L', 'ISP.MI', 'UCG.MI', 'ENI.MI', 'STLAM.MI'] },
   { label: 'Asia Stocks', symbols: ['7203.T', '6758.T', '9984.T', '6861.T', '0700.HK', '9988.HK', '3690.HK', 'TSM', 'BABA', 'BIDU', 'JD', 'PDD', 'NIO'] },
-  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'MATIC-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD'] },
+  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'XLM-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD'] },
   { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
   { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
   { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
@@ -202,8 +202,7 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
 // (CFD-style index futures and FRED macro series).
 const SYMBOL_LABELS: Record<string, string> = {
   // Index futures (CFD aliases)
-  'ES=F': 'S&P 500 · US500',
-  'NQ=F': 'Nasdaq 100 · US100',
+  'ES=F': 'S&P 500 · US500',  'NQ=F': 'Nasdaq 100 · US100',
   'YM=F': 'Dow 30 · US30',
   'RTY=F': 'Russell 2000 · US2000',
   'NKD=F': 'Nikkei 225 · JP225',
@@ -213,6 +212,9 @@ const SYMBOL_LABELS: Record<string, string> = {
   '6J=F': 'Japanese Yen',
   'BTC=F': 'Bitcoin Futures',
   'DX-Y.NYB': 'US Dollar Index',
+  // Indices / stocks with non-obvious tickers
+  'FTSEMIB.MI': 'FTSE MIB (Italy)',
+  'XYZ': 'Block (ex-SQ)',
   // FRED — Inflation
   'FRED:CPIAUCSL': 'CPI (Consumer Prices)',
   'FRED:CPILFESL': 'Core CPI',

@@ -1081,10 +1081,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         ? `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
         : `/api/yahoo-history?${qs}`
       const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
-      if (!res.ok) throw new Error(`API ${res.status}`)
+      if (!res.ok) {
+        if (isFred && res.status === 503) throw new Error('Macro data unavailable (FRED API key not configured)')
+        throw new Error(`API ${res.status}`)
+      }
       const json = await res.json()
       const raw = json?.bars || json?.data?.bars || json?.data || []
-      if (!Array.isArray(raw) || raw.length < 2) throw new Error('No data')
+      if (!Array.isArray(raw) || raw.length < 2) throw new Error('No data for this symbol')
       const parsed: Bar[] = raw
         .filter((b: any) => b && Number.isFinite(b.close) && (isFred || b.close > 0))
         .map((b: any) => ({

@@ -198,6 +198,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [dataHealth, setDataHealth] = useState({ sector: false, movers: false, ai: false, heatmap: false });
   const [aiError, setAiError] = useState(false);
   const [perfPeriod, setPerfPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'yearly'>('daily');
+  const [rrgPeriod, setRrgPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'yearly'>('daily');
   const [detailLoading, setDetailLoading] = useState(false);
   const [heatmapQuotes, setHeatmapQuotes] = useState<Mover[]>([]);
   const [heatmapPeriod, setHeatmapPeriod] = useState<'daily' | 'weekly' | 'monthly' | '3month' | '6month' | 'ytd' | 'yearly'>('daily');
@@ -389,17 +390,37 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [sectorData]);
 
   const rrg = useMemo(() => {
+    // RRG axes: X = relative strength (longer-term trend), Y = momentum (selected period).
+    // Pair each selectable period with a longer reference period for the strength axis.
+    const PERIOD_PAIR: Record<typeof rrgPeriod, [keyof SectorPerformance, keyof SectorPerformance]> = {
+      daily: ['daily', 'weekly'],
+      weekly: ['weekly', 'monthly'],
+      monthly: ['monthly', 'quarterly'],
+      quarterly: ['quarterly', 'yearly'],
+      ytd: ['ytd', 'yearly'],
+      yearly: ['yearly', 'ytd'],
+    };
+    const [primKey, secKey] = PERIOD_PAIR[rrgPeriod];
+    const valOf = (s: SectorPerformance, k: keyof SectorPerformance) => {
+      const v = s[k];
+      return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    };
+    const maxPrim = Math.max(...sectorData.map(s => Math.abs(valOf(s, primKey))), 1);
+    const maxSec = Math.max(...sectorData.map(s => Math.abs(valOf(s, secKey))), 1);
     return sectorData.map(s => {
-      const rs = 50 + (s.daily * 10) + (s.weekly * 3);
-      const mom = 50 + (s.daily * 8);
+      const prim = valOf(s, primKey);
+      const sec = valOf(s, secKey);
+      // Normalize each axis to ~[15,85] so points spread regardless of timeframe magnitude.
+      const rs = 50 + (sec / maxSec) * 35;   // X: longer-term relative strength
+      const mom = 50 + (prim / maxPrim) * 35; // Y: recent momentum (selected period)
       let quadrant: 'Leading' | 'Weakening' | 'Lagging' | 'Improving';
       if (rs >= 50 && mom >= 50) quadrant = 'Leading';
       else if (rs >= 50 && mom < 50) quadrant = 'Weakening';
       else if (rs < 50 && mom < 50) quadrant = 'Lagging';
       else quadrant = 'Improving';
-      return { sector: s.sector, rs: Math.max(10, Math.min(90, rs)), mom: Math.max(10, Math.min(90, mom)), daily: s.daily, quadrant };
+      return { sector: s.sector, rs: Math.max(10, Math.min(90, rs)), mom: Math.max(10, Math.min(90, mom)), chg: prim, quadrant };
     });
-  }, [sectorData]);
+  }, [sectorData, rrgPeriod]);
 
   // ─── Helpers ───────────────────────────────────────────────────
   const pctColor = (v: number) => v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-gray-400';
@@ -1076,14 +1097,24 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
-              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-6 min-h-[360px]">
+              <Panel title="Relative Rotation Graph" badge="Sectors" className="lg:col-span-6 min-h-[360px]"
+                actions={
+                  <div className="flex gap-0.5">
+                    {(['daily', 'weekly', 'monthly', 'quarterly', 'ytd', 'yearly'] as const).map(p => (
+                      <button key={p} onClick={() => setRrgPeriod(p)}
+                        className={`px-1.5 py-0.5 text-[8px] rounded transition-colors ${rrgPeriod === p ? 'bg-blue-500/30 text-blue-300' : 'text-gray-500 hover:text-gray-300'}`}>
+                        {p === 'daily' ? '1D' : p === 'weekly' ? '1W' : p === 'monthly' ? '1M' : p === 'quarterly' ? '3M' : p === 'ytd' ? 'YTD' : '1Y'}
+                      </button>
+                    ))}
+                  </div>
+                }>
                 <div className="p-3">
                   <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '320px' }} preserveAspectRatio="xMidYMid meet">
                     {/* Quadrant backgrounds */}
-                    <rect x="450" y="0" width="450" height="300" fill="#065f4618" />
-                    <rect x="0" y="0" width="450" height="300" fill="#f5930818" />
-                    <rect x="0" y="300" width="450" height="300" fill="#ef444418" />
-                    <rect x="450" y="300" width="450" height="300" fill="#3b82f618" />
+                    <rect x="450" y="0" width="450" height="300" fill="#10b981" fillOpacity="0.16" />
+                    <rect x="0" y="0" width="450" height="300" fill="#f59e0b" fillOpacity="0.16" />
+                    <rect x="0" y="300" width="450" height="300" fill="#ef4444" fillOpacity="0.16" />
+                    <rect x="450" y="300" width="450" height="300" fill="#3b82f6" fillOpacity="0.16" />
                     {/* Grid lines */}
                     <line x1="0" y1="300" x2="900" y2="300" stroke="#1e293b" strokeWidth="1" strokeDasharray="6 4" />
                     <line x1="450" y1="0" x2="450" y2="600" stroke="#1e293b" strokeWidth="1" strokeDasharray="6 4" />
@@ -1119,8 +1150,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         <g key={pt.sector}>
                           <circle cx={x} cy={y} r="10" fill={color} fillOpacity="0.75" stroke={color} strokeWidth="2" />
                           <text x={x} y={y - 14} textAnchor="middle" fontSize="13" fill="#e2e8f0" fontWeight="700">{short}</text>
-                          <text x={x} y={y + 22} textAnchor="middle" fontSize="10" fill="#94a3b8">{fmtPct(pt.daily)}%</text>
-                          <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, Daily ${fmtPct(pt.daily)}%`}</title>
+                          <text x={x} y={y + 22} textAnchor="middle" fontSize="10" fill="#94a3b8">{fmtPct(pt.chg)}%</text>
+                          <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, ${rrgPeriod === 'daily' ? '1D' : rrgPeriod === 'weekly' ? '1W' : rrgPeriod === 'monthly' ? '1M' : rrgPeriod === 'quarterly' ? '3M' : rrgPeriod === 'ytd' ? 'YTD' : '1Y'} ${fmtPct(pt.chg)}%`}</title>
                         </g>
                       );
                     })}

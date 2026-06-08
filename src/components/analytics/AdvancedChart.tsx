@@ -331,6 +331,14 @@ const IND_FIELD_LABELS: Partial<Record<IndicatorKey, { period?: string; period2?
 const DEFAULT_IND_CONFIG: IndicatorConfig = { visible: true, color: '#8b5cf6', width: 1, style: LineStyle.Solid }
 
 // ========== TA Helpers ==========
+// Guard against corrupt timestamps in upstream data (e.g. a MAX-range bar that
+// decodes to year 16886, which makes lightweight-charts throw "Invalid date
+// string" and blanks the whole chart). Accept only epoch-seconds between
+// 1970-01-01 and ~1 week in the future.
+function isSaneEpoch(tSec: number): boolean {
+  return Number.isFinite(tSec) && tSec > 0 && tSec < (Date.now() / 1000 + 7 * 86400)
+}
+
 function computeSMA(closes: number[], period: number): (number | null)[] {
   const out: (number | null)[] = []
   let sum = 0
@@ -1194,6 +1202,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
             open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
           }))
+          .filter((b: Bar) => isSaneEpoch(b.time))
           .sort((a: Bar, b: Bar) => a.time - b.time)
       }
 
@@ -1256,6 +1265,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           close: b.close,
           volume: b.volume || 0,
         }))
+        .filter((b: Bar) => isSaneEpoch(b.time))
         .sort((a: Bar, b: Bar) => a.time - b.time)
 
       // Deduplicate by time
@@ -1304,6 +1314,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                 time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
                 open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
               }))
+              .filter((b: Bar) => isSaneEpoch(b.time))
               .sort((a: Bar, b: Bar) => a.time - b.time)
             return [sym, parsed]
           } catch {

@@ -249,7 +249,7 @@ export default function TopAnalystsPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {data?.provider === 'live' && (
+              {(data?.provider === 'live' || data?.provider === 'fmp') && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Live data

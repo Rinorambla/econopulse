@@ -7,6 +7,7 @@ import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { buildLeaderboard, ANALYST_SECTORS } from '@/lib/top-analysts-data'
 import { getYahooQuotes } from '@/lib/yahooFinance'
 import { getRecommendations, getPriceTargets } from '@/lib/finnhub-analysts'
+import { getFmpConsensus } from '@/lib/fmp-analysts'
 
 export async function GET(request: Request) {
   const ip = getClientIp(request)
@@ -18,23 +19,27 @@ export async function GET(request: Request) {
     )
   }
 
+  const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+    Promise.race([p, new Promise<T>((res) => setTimeout(() => res(fallback), ms))])
+
   const analysts = buildLeaderboard()
 
-  // Enrich curated coverage with REAL data, best-effort and time-boxed:
+  // Enrich curated roster with REAL data, best-effort and time-boxed:
   //  • live prices from Yahoo (free, batched) → real implied return vs price
-  //  • analyst price targets + recommendation from Finnhub (cached, capped)
+  //  • FMP grades-consensus → REAL Buy/Hold/Sell street consensus per ticker
+  //  • FMP grades → REAL most-recent rating action date
+  //  • Finnhub price targets/recommendation as secondary best-effort
   let provider: 'curated' | 'live' = 'curated'
   try {
     const tickers = Array.from(
       new Set(analysts.flatMap((a) => a.coverage.map((c) => c.ticker)))
     )
-    const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
-      Promise.race([p, new Promise<T>((res) => setTimeout(() => res(fallback), ms))])
 
-    const [quotes, recs, targets] = await Promise.all([
+    const [quotes, recs, targets, fmp] = await Promise.all([
       withTimeout(getYahooQuotes(tickers), 9000, [] as Awaited<ReturnType<typeof getYahooQuotes>>),
       withTimeout(getRecommendations(tickers, 40), 8000, new Map()),
       withTimeout(getPriceTargets(tickers, 40), 8000, new Map()),
+      withTimeout(getFmpConsensus(tickers, 30), 11_000, new Map()),
     ])
 
     const priceByTicker = new Map<string, number>()
@@ -48,12 +53,22 @@ export async function GET(request: Request) {
         const livePrice = priceByTicker.get(c.ticker)
         const tgt = targets.get(c.ticker)
         const rec = recs.get(c.ticker)
-        if (rec) c.action = rec.action
+        const fc = fmp.get(c.ticker)
+        // Real Buy/Hold/Sell action: FMP consensus first, then Finnhub.
+        if (fc) {
+          c.action = fc.action
+          enriched++
+        } else if (rec) {
+          c.action = rec.action
+        }
         if (tgt?.targetMean) {
           c.priceTarget = Math.round(tgt.targetMean * 100) / 100
           enriched++
         }
-        if (tgt?.lastUpdated && tgt.lastUpdated > latestActivity) {
+        // Real most-recent rating action date: FMP grades first, then Finnhub.
+        if (fc?.lastActionDate && fc.lastActionDate > latestActivity) {
+          latestActivity = fc.lastActionDate
+        } else if (tgt?.lastUpdated && tgt.lastUpdated > latestActivity) {
           latestActivity = tgt.lastUpdated
         }
         if (livePrice && c.priceTarget > 0) {
@@ -64,11 +79,11 @@ export async function GET(request: Request) {
       }
       // Keep best-upside calls on top after re-pricing.
       a.coverage.sort((x, y) => y.expectedReturn - x.expectedReturn)
-      // Reflect live implied upside (real prices vs real targets) as the analyst's current avg return.
+      // Reflect live implied upside (real prices vs targets) as the analyst's current avg return.
       if (liveReturns.length) {
         a.avgReturn = Math.round((liveReturns.reduce((s, v) => s + v, 0) / liveReturns.length) * 10) / 10
       }
-      // Reflect the analyst's most recent real price-target update as last activity.
+      // Reflect the most recent real rating activity on covered names.
       if (latestActivity) {
         const d = new Date(latestActivity)
         if (!isNaN(d.getTime())) a.lastRating = d.toISOString().slice(0, 10)

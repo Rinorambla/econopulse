@@ -1074,8 +1074,65 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     try {
       // Macro / economic series (CPI, PPI, Fed Funds, etc.) are served from FRED.
       const isFred = /^fred:/i.test(symbol)
+      // Relative-strength ratio chart: "SPY/QQQ" → one line of SPY ÷ QQQ.
+      const isRatio = !isFred && /^[^/]+\/[^/]+$/.test(symbol.trim())
       // Fetch a larger range when warm-up is configured so long MAs cover the full window.
       const fetchRange = WARMUP_FETCH[rangeKey] || currentRange.range
+
+      // Helper: fetch + normalize bars for a single Yahoo symbol.
+      const fetchYahooBars = async (sym: string, range: string): Promise<Bar[]> => {
+        const q = new URLSearchParams({ symbol: sym, range, interval: currentRange.interval })
+        const r = await fetch(`/api/yahoo-history?${q}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+        if (!r.ok) throw new Error(`API ${r.status}`)
+        const j = await r.json()
+        const rw = j?.bars || j?.data?.bars || j?.data || []
+        if (!Array.isArray(rw)) return []
+        return rw
+          .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
+          .map((b: any) => ({
+            time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
+            open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
+          }))
+          .sort((a: Bar, b: Bar) => a.time - b.time)
+      }
+
+      if (isRatio) {
+        const [numSym, denSym] = symbol.split('/').map((s) => s.trim())
+        const [numBars, denBars] = await Promise.all([
+          fetchYahooBars(numSym, fetchRange),
+          fetchYahooBars(denSym, fetchRange),
+        ])
+        if (numBars.length < 2 || denBars.length < 2) throw new Error(`No data for ${symbol}`)
+        // Align by timestamp and divide to build the relative-strength series.
+        const denMap = new Map<number, Bar>()
+        for (const b of denBars) denMap.set(b.time, b)
+        const ratio: Bar[] = []
+        for (const n of numBars) {
+          const d = denMap.get(n.time)
+          if (!d || d.close <= 0) continue
+          ratio.push({
+            time: n.time,
+            open: (n.open) / (d.open || d.close),
+            high: (n.high) / (d.high || d.close),
+            low: (n.low) / (d.low || d.close),
+            close: n.close / d.close,
+            volume: 0,
+          })
+        }
+        if (ratio.length < 2) throw new Error(`No overlapping data for ${symbol}`)
+        const seenR = new Set<number>()
+        const uniqueR = ratio.filter((b) => { if (seenR.has(b.time)) return false; seenR.add(b.time); return true })
+        setBars(uniqueR)
+        const lastR = uniqueR[uniqueR.length - 1]
+        const prevR = uniqueR[uniqueR.length - 2]
+        setLastPrice({
+          price: lastR.close,
+          change: lastR.close - prevR.close,
+          changePct: prevR.close ? ((lastR.close - prevR.close) / prevR.close) * 100 : 0,
+        })
+        return
+      }
+
       const qs = new URLSearchParams({ symbol, range: fetchRange, interval: currentRange.interval })
       const endpoint = isFred
         ? `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
@@ -1298,9 +1355,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const closes = bars.map(b => b.close)
 
     // Macro / FRED series carry a single value per date — render them as a line
-    // (candles would just show flat crosses).
+    // (candles would just show flat crosses). Ratio (relative-strength) charts
+    // also read best as a single line.
     const isFredSeries = /^fred:/i.test(symbol)
-    const effStyle: ChartStyle = isFredSeries && chartStyle === 'candle' ? 'line' : chartStyle
+    const isRatioSeries = !isFredSeries && /^[^/]+\/[^/]+$/.test(symbol.trim())
+    const effStyle: ChartStyle = (isFredSeries || isRatioSeries) && chartStyle === 'candle' ? 'line' : chartStyle
 
     // Main series
     if (effStyle === 'candle') {
@@ -1720,7 +1779,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Fit content — but when warm-up history was fetched, zoom to the requested
     // window so long moving averages span the entire visible chart (not half).
     // Macro/FRED series are sparse (monthly/weekly) so we always fit their full range.
-    const warmupActive = !/^fred:/i.test(symbol) && !!WARMUP_FETCH[rangeKey]
+    const warmupActive = !/^fred:/i.test(symbol) && !/^[^/]+\/[^/]+$/.test(symbol.trim()) && !!WARMUP_FETCH[rangeKey]
     if (warmupActive && bars.length > 2) {
       const lastSec = bars[bars.length - 1].time
       let startSec: number
@@ -2317,10 +2376,10 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                 if (e.key === 'Escape') { setCompareInput(''); setCompareSearchOpen(false) }
               }}
               placeholder="Compare (SPY, QQQ…)"
-              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-24 sm:w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
             />
             {compareSearchOpen && compareResults.length > 0 && (
-              <div className="absolute z-40 mt-1 left-0 w-60 max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
+              <div className="absolute z-40 mt-1 right-0 w-[min(15rem,calc(100vw-2rem))] max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
                 {compareResults.map((r) => (
                   <button
                     key={`${r.symbol}-${r.exchange ?? ''}`}
@@ -2361,6 +2420,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
               title="Clear all"
             >
               clear
+            </button>
+          )}
+          {compareSyms.length === 1 && !symbol.includes('/') && (
+            <button
+              onClick={() => {
+                const ratio = `${symbol}/${compareSyms[0]}`
+                setCompareSyms([])
+                setSymbol(ratio)
+                onSymbolChange?.(ratio)
+              }}
+              className="px-1.5 py-0.5 text-[10px] rounded border border-pink-500/40 text-pink-300 hover:bg-pink-500/15"
+              title={`Show relative strength ${symbol} / ${compareSyms[0]} as a single line`}
+            >
+              ⇄ RS
             </button>
           )}
         </div>

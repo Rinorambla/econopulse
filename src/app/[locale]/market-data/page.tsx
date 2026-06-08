@@ -737,7 +737,7 @@ export default function MarketDataPage() {
                   if (e.key === 'Enter') submitSearch()
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchVal('') }
                 }}
-                placeholder="Search any symbol (AAPL, Tesla, BTC-USD, EURUSD=X)…"
+                placeholder="Search any symbol (AAPL, Tesla, BTC-USD, SPY/QQQ)…"
                 className="bg-transparent text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500 min-w-0"
               />
               {searchOpen && searchVal && (
@@ -756,6 +756,18 @@ export default function MarketDataPage() {
                 <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1 sm:w-96 max-w-[calc(100vw-1rem)] bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
+                      {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && (
+                        <button
+                          onMouseDown={(e) => { e.preventDefault(); submitSearch(searchVal.trim()) }}
+                          className="w-full text-left px-3 py-2 bg-pink-500/10 hover:bg-pink-500/20 border-b border-pink-500/20 flex items-center gap-2"
+                        >
+                          <span className="text-pink-300 text-sm">⇄</span>
+                          <span className="min-w-0">
+                            <span className="text-xs font-bold text-pink-200">{searchVal.trim().toUpperCase()}</span>
+                            <span className="block text-[11px] text-pink-300/70">Relative strength (ratio) chart</span>
+                          </span>
+                        </button>
+                      )}
                       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-2">
                         Search results
                         {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}

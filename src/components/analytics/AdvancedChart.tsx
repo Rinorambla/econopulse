@@ -24,7 +24,7 @@ import {
 
 // ========== Types ==========
 type ChartStyle = 'candle' | 'line' | 'area'
-type RangeKey = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
+type RangeKey = '1m' | '5m' | '15m' | '30m' | '1h' | '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
 type IndicatorKey =
   // Trend
   | 'sma20' | 'sma50' | 'sma100' | 'sma200'
@@ -110,16 +110,21 @@ const TOOL_STEPS: Record<DrawingTool, number> = {
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 
-const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
-  { key: '1D', label: '1D', range: '1d', interval: '5m' },
-  { key: '5D', label: '5D', range: '5d', interval: '30m' },
-  { key: '1M', label: '1M', range: '1mo', interval: '1d' },
-  { key: '3M', label: '3M', range: '3mo', interval: '1d' },
-  { key: '6M', label: '6M', range: '6mo', interval: '1d' },
-  { key: 'YTD', label: 'YTD', range: 'ytd', interval: '1d' },
-  { key: '1Y', label: '1Y', range: '1y', interval: '1d' },
-  { key: '5Y', label: '5Y', range: '5y', interval: '1wk' },
-  { key: 'MAX', label: 'MAX', range: 'max', interval: '1mo' },
+const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string; group: 'Intraday' | 'History' }[] = [
+  { key: '1m', label: '1m', range: '1d', interval: '1m', group: 'Intraday' },
+  { key: '5m', label: '5m', range: '5d', interval: '5m', group: 'Intraday' },
+  { key: '15m', label: '15m', range: '1mo', interval: '15m', group: 'Intraday' },
+  { key: '30m', label: '30m', range: '1mo', interval: '30m', group: 'Intraday' },
+  { key: '1h', label: '1h', range: '3mo', interval: '60m', group: 'Intraday' },
+  { key: '1D', label: '1D', range: '1d', interval: '5m', group: 'History' },
+  { key: '5D', label: '5D', range: '5d', interval: '30m', group: 'History' },
+  { key: '1M', label: '1M', range: '1mo', interval: '1d', group: 'History' },
+  { key: '3M', label: '3M', range: '3mo', interval: '1d', group: 'History' },
+  { key: '6M', label: '6M', range: '6mo', interval: '1d', group: 'History' },
+  { key: 'YTD', label: 'YTD', range: 'ytd', interval: '1d', group: 'History' },
+  { key: '1Y', label: '1Y', range: '1y', interval: '1d', group: 'History' },
+  { key: '5Y', label: '5Y', range: '5y', interval: '1wk', group: 'History' },
+  { key: 'MAX', label: 'MAX', range: 'max', interval: '1mo', group: 'History' },
 ]
 
 // To draw long moving averages (e.g. SMA/EMA 200) across the WHOLE visible window
@@ -980,6 +985,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [setIndicatorList])
   const [indicatorsOpen, setIndicatorsOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [rangeOpen, setRangeOpen] = useState(false)
   const [compareSyms, setCompareSyms] = useLocalStorage<string[]>('mkt:compareSyms', [])
   const [compareInput, setCompareInput] = useState('')
   // Compare-symbol autocomplete (live Yahoo search dropdown)
@@ -1326,7 +1332,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       },
       timeScale: {
         borderColor: 'rgba(148,163,184,0.15)',
-        timeVisible: currentRange.interval.includes('m'),
+        timeVisible: /m$|h$/.test(currentRange.interval),
         secondsVisible: false,
       },
       handleScroll: { vertTouchDrag: false },
@@ -1804,6 +1810,17 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     } else {
       chart.timeScale().fitContent()
+    }
+
+    // On first paint (and on mobile) the container can still be growing to its
+    // final width when fitContent() runs, which leaves the bars bunched in the
+    // left half ("chart cut in half", most visible on MAX). Re-fit on the next
+    // frames once the layout has settled — but only when the user hasn't zoomed
+    // to a custom warm-up window.
+    if (!warmupActive) {
+      const refit = () => { try { chartRef.current?.timeScale().fitContent() } catch { /* ignore */ } }
+      requestAnimationFrame(refit)
+      setTimeout(refit, 120)
     }
 
     // Crosshair move → tooltip + drawing preview
@@ -2297,18 +2314,40 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {/* Separator */}
         <div className="h-5 w-px bg-white/15 mx-1" />
 
-        {/* Range buttons */}
-        <div className="flex items-center gap-0.5 flex-wrap">
-          {RANGE_OPTS.map(r => (
-            <button
-              key={r.key}
-              onClick={() => setRangeKey(r.key)}
-              className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${rangeKey === r.key ? 'bg-blue-600/80 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
-              title={r.key === 'MAX' ? 'Max history available from Yahoo' : r.label}
-            >
-              {r.label}
-            </button>
-          ))}
+        {/* Timeframe dropdown (1m → MAX) */}
+        <div className="relative">
+          <button
+            onClick={() => { setRangeOpen(o => !o); setToolsOpen(false); setIndicatorsOpen(false) }}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-white/10 bg-white/5 text-gray-200 hover:text-white hover:border-white/20 transition-colors"
+            title="Timeframe"
+          >
+            <span className="font-semibold tracking-wider">{RANGE_OPTS.find(r => r.key === rangeKey)?.label || rangeKey}</span>
+            <svg className={`w-3 h-3 transition-transform ${rangeOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </button>
+          {rangeOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setRangeOpen(false)} />
+              <div className="absolute left-0 top-full mt-1 z-30 w-44 p-2 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+                {(['Intraday', 'History'] as const).map(grp => (
+                  <div key={grp} className="mb-1.5 last:mb-0">
+                    <div className="px-1 pb-1 text-[9px] uppercase tracking-wider text-gray-500">{grp}</div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {RANGE_OPTS.filter(r => r.group === grp).map(r => (
+                        <button
+                          key={r.key}
+                          onClick={() => { setRangeKey(r.key); setRangeOpen(false) }}
+                          className={`px-1.5 py-1 text-[10px] font-medium rounded transition-colors ${rangeKey === r.key ? 'bg-blue-600/80 text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                          title={r.key === 'MAX' ? 'Max history available' : `${r.label} · ${r.interval} candles`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Custom right slot (grouped actions menu injected by the page) */}

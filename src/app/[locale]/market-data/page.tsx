@@ -189,7 +189,76 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
   { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
   { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
+  // Index futures (CFD-style) — Yahoo continuous front-month contracts.
+  { label: 'Index Futures (CFD)', symbols: ['ES=F', 'NQ=F', 'YM=F', 'RTY=F', 'NKD=F', 'GC=F', 'CL=F', 'NG=F', 'SI=F', 'HG=F', 'ZB=F', 'ZN=F', 'DX-Y.NYB', '6E=F', '6J=F', 'BTC=F'] },
+  // Macro / economic series sourced from FRED (FRED:<series_id>).
+  { label: 'Macro · Inflation', symbols: ['FRED:CPIAUCSL', 'FRED:CPILFESL', 'FRED:PPIACO', 'FRED:PPIFIS', 'FRED:PCEPI', 'FRED:PCEPILFE', 'FRED:T5YIE', 'FRED:T10YIE', 'FRED:MICH'] },
+  { label: 'Macro · Rates & Fed', symbols: ['FRED:DFF', 'FRED:FEDFUNDS', 'FRED:SOFR', 'FRED:DGS2', 'FRED:DGS10', 'FRED:DGS30', 'FRED:T10Y2Y', 'FRED:T10Y3M', 'FRED:MORTGAGE30US', 'FRED:WALCL', 'FRED:RRPONTSYD'] },
+  { label: 'Macro · Economy', symbols: ['FRED:UNRATE', 'FRED:PAYEMS', 'FRED:GDPC1', 'FRED:INDPRO', 'FRED:UMCSENT', 'FRED:HOUST', 'FRED:RSAFS', 'FRED:ICSA', 'FRED:JTSJOL'] },
+  { label: 'Macro · Credit & Money', symbols: ['FRED:REVOLSL', 'FRED:TOTALSL', 'FRED:M2SL', 'FRED:DRCCLACBS', 'FRED:BAMLH0A0HYM2', 'FRED:DRSFRMACBS', 'FRED:DPSACBW027SBOG', 'FRED:CCLACBW027SBOG'] },
 ]
+
+// Friendly display labels for instruments whose ticker isn't self-explanatory
+// (CFD-style index futures and FRED macro series).
+const SYMBOL_LABELS: Record<string, string> = {
+  // Index futures (CFD aliases)
+  'ES=F': 'S&P 500 · US500',
+  'NQ=F': 'Nasdaq 100 · US100',
+  'YM=F': 'Dow 30 · US30',
+  'RTY=F': 'Russell 2000 · US2000',
+  'NKD=F': 'Nikkei 225 · JP225',
+  'ZB=F': 'US T-Bond 30Y',
+  'ZN=F': 'US T-Note 10Y',
+  '6E=F': 'Euro FX',
+  '6J=F': 'Japanese Yen',
+  'BTC=F': 'Bitcoin Futures',
+  'DX-Y.NYB': 'US Dollar Index',
+  // FRED — Inflation
+  'FRED:CPIAUCSL': 'CPI (Consumer Prices)',
+  'FRED:CPILFESL': 'Core CPI',
+  'FRED:PPIACO': 'PPI (All Commodities)',
+  'FRED:PPIFIS': 'PPI Final Demand',
+  'FRED:PCEPI': 'PCE Price Index',
+  'FRED:PCEPILFE': 'Core PCE',
+  'FRED:T5YIE': '5Y Breakeven Inflation',
+  'FRED:T10YIE': '10Y Breakeven Inflation',
+  'FRED:MICH': 'Inflation Expectations (UMich)',
+  // FRED — Rates & Fed
+  'FRED:DFF': 'Fed Funds Rate (daily)',
+  'FRED:FEDFUNDS': 'Fed Funds Rate',
+  'FRED:SOFR': 'SOFR',
+  'FRED:DGS2': '2Y Treasury Yield',
+  'FRED:DGS10': '10Y Treasury Yield',
+  'FRED:DGS30': '30Y Treasury Yield',
+  'FRED:T10Y2Y': '10Y-2Y Spread',
+  'FRED:T10Y3M': '10Y-3M Spread',
+  'FRED:MORTGAGE30US': '30Y Mortgage Rate',
+  'FRED:WALCL': 'Fed Balance Sheet',
+  'FRED:RRPONTSYD': 'Reverse Repo (RRP)',
+  // FRED — Economy
+  'FRED:UNRATE': 'Unemployment Rate',
+  'FRED:PAYEMS': 'Nonfarm Payrolls',
+  'FRED:GDPC1': 'Real GDP',
+  'FRED:INDPRO': 'Industrial Production',
+  'FRED:UMCSENT': 'Consumer Sentiment',
+  'FRED:HOUST': 'Housing Starts',
+  'FRED:RSAFS': 'Retail Sales',
+  'FRED:ICSA': 'Initial Jobless Claims',
+  'FRED:JTSJOL': 'Job Openings (JOLTS)',
+  // FRED — Credit & Money
+  'FRED:REVOLSL': 'Revolving Credit (Cards)',
+  'FRED:TOTALSL': 'Total Consumer Credit',
+  'FRED:M2SL': 'M2 Money Supply',
+  'FRED:DRCCLACBS': 'Credit Card Delinquency',
+  'FRED:BAMLH0A0HYM2': 'High-Yield Spread',
+  'FRED:DRSFRMACBS': 'Mortgage Delinquency',
+  'FRED:DPSACBW027SBOG': 'Bank Deposits',
+  'FRED:CCLACBW027SBOG': 'Consumer Loans (Banks)',
+}
+
+function labelForSymbol(s: string): string {
+  return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^FRED:/i, '')
+}
 
 interface Quote {
   ticker: string
@@ -741,21 +810,25 @@ export default function MarketDataPage() {
                       <div className="p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
                         {(POPULAR_GROUPS.find((g) => g.label === popularOpen)?.symbols || []).map((s) => {
                           const q = quotes[s.toUpperCase()]
+                          const isMacro = /^FRED:/i.test(s)
                           return (
                             <button
                               key={s}
                               onMouseDown={(e) => { e.preventDefault(); submitSearch(s) }}
+                              title={s}
                               className="text-left px-2 py-1.5 rounded hover:bg-white/5 flex items-center justify-between gap-2"
                             >
                               <span className="flex items-center gap-1.5 min-w-0">
-                                <img
-                                  src={`https://assets.parqet.com/logos/symbol/${s}?format=jpg`}
-                                  alt=""
-                                  loading="lazy"
-                                  className="w-4 h-4 rounded-full bg-slate-700 object-cover shrink-0"
-                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-                                />
-                                <span className="text-xs font-semibold truncate">{s}</span>
+                                {!isMacro && (
+                                  <img
+                                    src={`https://assets.parqet.com/logos/symbol/${s}?format=jpg`}
+                                    alt=""
+                                    loading="lazy"
+                                    className="w-4 h-4 rounded-full bg-slate-700 object-cover shrink-0"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                                  />
+                                )}
+                                <span className="text-xs font-semibold truncate">{labelForSymbol(s)}</span>
                               </span>
                               {q && (
                                 <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

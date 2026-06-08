@@ -1072,16 +1072,21 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setLoading(true)
     setError(null)
     try {
+      // Macro / economic series (CPI, PPI, Fed Funds, etc.) are served from FRED.
+      const isFred = /^fred:/i.test(symbol)
       // Fetch a larger range when warm-up is configured so long MAs cover the full window.
       const fetchRange = WARMUP_FETCH[rangeKey] || currentRange.range
       const qs = new URLSearchParams({ symbol, range: fetchRange, interval: currentRange.interval })
-      const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+      const endpoint = isFred
+        ? `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
+        : `/api/yahoo-history?${qs}`
+      const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
       if (!res.ok) throw new Error(`API ${res.status}`)
       const json = await res.json()
       const raw = json?.bars || json?.data?.bars || json?.data || []
       if (!Array.isArray(raw) || raw.length < 2) throw new Error('No data')
       const parsed: Bar[] = raw
-        .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
+        .filter((b: any) => b && Number.isFinite(b.close) && (isFred || b.close > 0))
         .map((b: any) => ({
           time: typeof b.time === 'number' ? (b.time > 1e12 ? Math.floor(b.time / 1000) : b.time) : Math.floor(new Date(b.time).getTime() / 1000),
           open: b.open || b.close,
@@ -1289,8 +1294,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const timeLabels = bars.map(b => formatTime(b.time) as Time)
     const closes = bars.map(b => b.close)
 
+    // Macro / FRED series carry a single value per date — render them as a line
+    // (candles would just show flat crosses).
+    const isFredSeries = /^fred:/i.test(symbol)
+    const effStyle: ChartStyle = isFredSeries && chartStyle === 'candle' ? 'line' : chartStyle
+
     // Main series
-    if (chartStyle === 'candle') {
+    if (effStyle === 'candle') {
       const cs = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
         downColor: '#ef4444',
@@ -1301,7 +1311,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       })
       cs.setData(candleData)
       mainSeriesRef.current = cs
-    } else if (chartStyle === 'line') {
+    } else if (effStyle === 'line') {
       const ls = chart.addSeries(LineSeries, {
         color: '#3b82f6',
         lineWidth: 2,
@@ -1706,7 +1716,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // Fit content — but when warm-up history was fetched, zoom to the requested
     // window so long moving averages span the entire visible chart (not half).
-    const warmupActive = !!WARMUP_FETCH[rangeKey]
+    // Macro/FRED series are sparse (monthly/weekly) so we always fit their full range.
+    const warmupActive = !/^fred:/i.test(symbol) && !!WARMUP_FETCH[rangeKey]
     if (warmupActive && bars.length > 2) {
       const lastSec = bars[bars.length - 1].time
       let startSec: number

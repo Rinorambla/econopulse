@@ -717,6 +717,39 @@ export default function MarketDataPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Mobile: when the search field is focused the on-screen keyboard makes the
+  // browser scroll the whole document to reveal the input, which pushes the
+  // search bar off-screen and leaves the page "out of place" after picking a
+  // result. While the search dropdown is open we lock the page (position:fixed
+  // body) so nothing can move, then restore the exact scroll position on close.
+  useEffect(() => {
+    if (!searchOpen) return
+    if (typeof window === 'undefined') return
+    if (!window.matchMedia('(max-width: 1023px)').matches) return
+    const scrollY = window.scrollY
+    const { body } = document
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    }
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.left = '0'
+    body.style.right = '0'
+    body.style.width = '100%'
+    return () => {
+      body.style.position = prev.position
+      body.style.top = prev.top
+      body.style.left = prev.left
+      body.style.right = prev.right
+      body.style.width = prev.width
+      window.scrollTo(0, scrollY)
+    }
+  }, [searchOpen])
+
   // Deep-link: ?symbol=XYZ overrides the persisted symbol on first load.
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search)

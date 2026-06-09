@@ -707,6 +707,24 @@ export default function MarketDataPage() {
     setDismissedSet((prev) => prev.includes(id) ? prev : [...prev, id])
   }, [setDismissedSet])
 
+  // The market-data terminal is a full-screen app that manages its own internal
+  // scrolling (chart, watchlist, notifications). Lock the document scroll while it
+  // is mounted so the page never drifts/bounces on a phone, then restore on exit.
+  useEffect(() => {
+    const html = document.documentElement
+    const prevHtml = html.style.overflow
+    const prevBody = document.body.style.overflow
+    const prevOverscroll = document.body.style.overscrollBehavior
+    html.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'none'
+    return () => {
+      html.style.overflow = prevHtml
+      document.body.style.overflow = prevBody
+      document.body.style.overscrollBehavior = prevOverscroll
+    }
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

@@ -2262,15 +2262,16 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           }
           break
       }
-      // Selection handles: small squares at each anchor of the selected drawing.
+      // Selection handles: draggable squares at each anchor of the selected drawing.
+      // Sized for finger taps so endpoints are easy to grab and stretch on mobile.
       if (selected && !isPreview) {
         ctx.setLineDash([])
-        ctx.lineWidth = 1
+        ctx.lineWidth = 1.5
         for (const p of pts) {
           ctx.fillStyle = '#0ea5e9'
           ctx.strokeStyle = '#ffffff'
-          ctx.fillRect(p.x - 3.5, p.y - 3.5, 7, 7)
-          ctx.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7)
+          ctx.fillRect(p.x - 5, p.y - 5, 10, 10)
+          ctx.strokeRect(p.x - 5, p.y - 5, 10, 10)
         }
       }
       ctx.restore()
@@ -2414,6 +2415,139 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     return () => window.removeEventListener('keydown', onKey)
   }, [deleteSelected])
 
+  // Pixel → drawing point (inverse of ptToXY); used while dragging an anchor so the
+  // shape follows the pointer in data space (survives pan/zoom afterwards).
+  const xyToPt = useCallback((x: number, y: number): DrawPoint | null => {
+    const chart = chartRef.current, main = mainSeriesRef.current
+    if (!chart || !main) return null
+    const logical = chart.timeScale().coordinateToLogical(x as any)
+    const price = main.coordinateToPrice(y)
+    if (logical == null || price == null) return null
+    return { logical: logical as number, price }
+  }, [])
+
+  // Return which anchor handle of a drawing (if any) sits under the pixel. Larger
+  // tolerance for touch so endpoints are easy to grab with a finger.
+  const grabHandleAt = useCallback((px: number, py: number, tol = 10): { id: number; idx: number } | null => {
+    const list = drawingsRef.current
+    for (let i = list.length - 1; i >= 0; i--) {
+      const d = list[i]
+      const xy = d.pts.map(ptToXY)
+      for (let j = 0; j < xy.length; j++) {
+        const p = xy[j]
+        if (p && Math.hypot(px - p.x, py - p.y) <= tol) return { id: d.id, idx: j }
+      }
+    }
+    return null
+  }, [ptToXY])
+
+  // ===== Drawing drag/resize =====
+  // Drag an endpoint to stretch a trend line, or drag the body to move the whole
+  // shape. Works for every drawing (line, fib, rect, ellipse, triangle, text).
+  const dragRef = useRef<{
+    id: number; idx: number; moved: boolean
+    startX: number; startY: number
+    origPts: DrawPoint[]; origXY: { x: number; y: number }[]
+  } | null>(null)
+
+  useEffect(() => {
+    const el = chartContainerRef.current
+    if (!el) return
+
+    const localXY = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect()
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    }
+
+    const onDown = (e: PointerEvent) => {
+      if (activeToolRef.current !== 'cursor') return
+      if (e.button != null && e.button !== 0) return
+      const { x, y } = localXY(e)
+      const touch = e.pointerType === 'touch'
+      const handle = grabHandleAt(x, y, touch ? 16 : 10)
+      const id = handle ? handle.id : hitTestDrawings(x, y)
+      if (id == null) return // empty space → let the chart pan/zoom normally
+      const d = drawingsRef.current.find(dd => dd.id === id)
+      if (!d) return
+      // Freeze chart pan/zoom + page scroll while we manipulate the drawing.
+      chartRef.current?.applyOptions({ handleScroll: false, handleScale: false })
+      el.style.touchAction = 'none'
+      try { el.setPointerCapture(e.pointerId) } catch { /* ignore */ }
+      dragRef.current = {
+        id, idx: handle ? handle.idx : -1, moved: false,
+        startX: e.clientX, startY: e.clientY,
+        origPts: d.pts.map(p => ({ ...p })),
+        origXY: d.pts.map(ptToXY).map(p => p ?? { x: 0, y: 0 }),
+      }
+      setSelectedDrawingId(id)
+      setDrawMenu(null)
+      e.preventDefault(); e.stopPropagation()
+    }
+
+    const onMove = (e: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      if (!drag.moved && Math.hypot(dx, dy) > 3) drag.moved = true
+      let nextPts: DrawPoint[] | null = null
+      if (drag.idx === -1) {
+        // Move the whole shape: shift every anchor by the pixel delta.
+        const moved = drag.origXY.map(p => xyToPt(p.x + dx, p.y + dy))
+        if (moved.every(Boolean)) nextPts = moved as DrawPoint[]
+      } else {
+        const p = xyToPt(drag.origXY[drag.idx].x + dx, drag.origXY[drag.idx].y + dy)
+        if (p) nextPts = drag.origPts.map((pt, i) => (i === drag.idx ? p : pt))
+      }
+      if (!nextPts) return
+      const ptsFinal = nextPts
+      drawingsRef.current = drawingsRef.current.map(d => (d.id === drag.id ? { ...d, pts: ptsFinal } : d))
+      requestAnimationFrame(redrawOverlay)
+      e.preventDefault()
+    }
+
+    const endDrag = (e: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      dragRef.current = null
+      chartRef.current?.applyOptions({ handleScroll: { vertTouchDrag: false }, handleScale: true })
+      el.style.touchAction = ''
+      try { el.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+      if (drag.moved) {
+        // Commit the new geometry to React state (persists to localStorage).
+        setDrawings(drawingsRef.current.map(d => ({ ...d, pts: d.pts.map(p => ({ ...p })) })))
+      } else {
+        // A tap without movement = open the edit menu, like before.
+        const cw = el.clientWidth, ch = el.clientHeight
+        const { x, y } = localXY(e)
+        setDrawMenu({ x, y, id: drag.id, flipX: x > cw - 210, flipY: y > ch - 130 })
+      }
+    }
+
+    // Cursor feedback so users see anchors/lines are draggable.
+    const onHover = (e: PointerEvent) => {
+      if (dragRef.current) return
+      if (activeToolRef.current !== 'cursor') { el.style.cursor = ''; return }
+      const { x, y } = localXY(e)
+      if (grabHandleAt(x, y)) el.style.cursor = 'pointer'
+      else if (hitTestDrawings(x, y) != null) el.style.cursor = 'move'
+      else el.style.cursor = ''
+    }
+
+    el.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('pointermove', onMove, true)
+    window.addEventListener('pointerup', endDrag, true)
+    window.addEventListener('pointercancel', endDrag, true)
+    el.addEventListener('pointermove', onHover)
+    return () => {
+      el.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerup', endDrag, true)
+      window.removeEventListener('pointercancel', endDrag, true)
+      el.removeEventListener('pointermove', onHover)
+    }
+  }, [grabHandleAt, hitTestDrawings, ptToXY, xyToPt, redrawOverlay, setDrawings])
+
   const pctColor = lastPrice ? (lastPrice.changePct >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'
 
   return (
@@ -2423,8 +2557,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {/* Custom left slot (symbol search bar injected by the page) */}
         {leftSlot}
 
-        {/* Active symbol pill (read-only — search is in page header) */}
-        <div className="flex items-center gap-2 text-sm">
+        {/* Active symbol pill (read-only — search is in page header). Hidden on
+            phones so it never crowds/covers the search bar in the wrapped toolbar. */}
+        <div className="hidden sm:flex items-center gap-2 text-sm">
           <span className="text-white font-bold tracking-wide">{symbol}</span>
           {lastPrice && (
             <>

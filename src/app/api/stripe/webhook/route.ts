@@ -97,6 +97,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, downgraded: true });
   }
 
+  // Confirmation email: checkout.session.completed fires exactly once per
+  // checkout, so it cannot cause duplicate sends.
+  if (event.type === 'checkout.session.completed') {
+    try {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode === 'subscription') {
+        let email: string | null =
+          session.customer_details?.email || session.customer_email || null;
+        if (!email) {
+          try {
+            const db = supabaseAdmin();
+            const { data } = await db
+              .from('users')
+              .select('email')
+              .eq('stripe_customer_id', customerId)
+              .maybeSingle();
+            email = (data?.email as string | undefined) || null;
+          } catch {}
+        }
+        if (email) {
+          let amountEur: number | undefined;
+          let interval: string | null = null;
+          try {
+            const subId = typeof session.subscription === 'string'
+              ? session.subscription
+              : (session.subscription as Stripe.Subscription | null)?.id;
+            if (subId) {
+              const sub = await stripe().subscriptions.retrieve(subId);
+              const price = sub.items.data[0]?.price;
+              if (typeof price?.unit_amount === 'number') amountEur = price.unit_amount / 100;
+              interval = price?.recurring?.interval || null;
+            }
+          } catch {}
+          await EmailService.sendSubscriptionConfirmed(email, { amountEur, interval });
+        } else {
+          console.warn('[webhook] checkout.completed: no email for customer', customerId);
+        }
+      }
+    } catch (e: any) {
+      console.error('[webhook] confirmation email failed:', e?.message);
+      // Don't fail the webhook — still continue to syncStripeData below
+    }
+  }
+
   // Send a reminder email 3 days before the trial ends. Stripe fires this
   // event once per subscription, so it cannot cause duplicate sends.
   if (event.type === 'customer.subscription.trial_will_end') {

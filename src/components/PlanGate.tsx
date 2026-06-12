@@ -121,7 +121,7 @@ export default function PlanGate({
           </div>
 
           <p className="text-xs text-gray-500 mt-4">
-            {isIOSApp ? 'No purchases are processed inside this app.' : '14-day free trial included • Cancel anytime'}
+            {isIOSApp ? 'No purchases are processed inside this app.' : 'Cancel anytime • Full access from day one'}
           </p>
         </div>
       </div>

@@ -164,6 +164,38 @@ export class EmailService {
   }
 
   /**
+   * Subscription confirmation: sent from the Stripe webhook on
+   * `checkout.session.completed` (fires exactly once per checkout).
+   */
+  static async sendSubscriptionConfirmed(
+    email: string,
+    opts: { amountEur?: number; interval?: 'month' | 'year' | string | null }
+  ): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (sub-confirmed) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
+    try {
+      const { data, error } = await client.emails.send({
+        from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
+        to: [email],
+        subject: '🎉 Welcome to EconoPulse Premium — subscription confirmed',
+        html: this.getSubscriptionConfirmedTemplate(email, opts),
+      });
+      if (error) {
+        console.error('❌ Subscription-confirmed email error:', error);
+        return false;
+      }
+      console.log('✅ Subscription-confirmed email sent:', data);
+      return true;
+    } catch (error) {
+      console.error('❌ Subscription-confirmed email failed:', error);
+      return false;
+    }
+  }
+
+  /**
    * Dunning email: sent from the Stripe webhook on `invoice.payment_failed`.
    * The subscription enters `past_due` (grace period) — the user keeps access
    * but must update their card before Stripe gives up retrying.
@@ -469,6 +501,75 @@ export class EmailService {
                 </p>
             </div>
         </div>
+    </body>
+    </html>
+    `;
+  }
+
+  private static getSubscriptionConfirmedTemplate(
+    email: string,
+    opts: { amountEur?: number; interval?: 'month' | 'year' | string | null }
+  ): string {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.econopulse.ai';
+    const priceLine = typeof opts.amountEur === 'number'
+      ? `€${opts.amountEur.toFixed(2)}/${opts.interval === 'year' ? 'year' : 'month'}`
+      : null;
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Subscription confirmed</title>
+    </head>
+    <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f6fb;margin:0;padding:24px;color:#1f2937;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+              <tr>
+                <td style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%);color:#ffffff;padding:32px 28px;text-align:center;">
+                  <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;">EconoPulse</div>
+                  <div style="margin-top:8px;font-size:14px;opacity:0.85;">Premium subscription confirmed</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 28px;">
+                  <h1 style="font-size:22px;margin:0 0 16px;color:#0f172a;">🎉 You're now Premium!</h1>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    Hi <strong>${email}</strong>,
+                  </p>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    Your <strong>EconoPulse Premium</strong> subscription is now active${priceLine ? ` at <strong>${priceLine}</strong>` : ''}.
+                    Every premium feature is unlocked on your account, effective immediately.
+                  </p>
+                  <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin:24px 0;">
+                    <div style="font-size:14px;font-weight:600;color:#1e3a8a;margin-bottom:6px;">What's now unlocked</div>
+                    <ul style="margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.7;color:#334155;">
+                      <li>Unlimited AI market analysis &amp; EconoAI chat</li>
+                      <li>AI Portfolio Builder with risk-adjusted optimization</li>
+                      <li>Options flow, gamma exposure &amp; advanced screeners</li>
+                      <li>Real-time alerts on price, earnings, macro events</li>
+                      <li>Priority support</li>
+                    </ul>
+                  </div>
+                  <div style="text-align:center;margin:28px 0;">
+                    <a href="${siteUrl}/dashboard"
+                      style="display:inline-block;background:#1e40af;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+                      Open your dashboard
+                    </a>
+                  </div>
+                  <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0;">
+                    Manage your plan, payment method and invoices anytime from
+                    <a href="${siteUrl}/dashboard/account" style="color:#1e40af;">your account</a>.
+                    You can cancel whenever you want — you'll keep access until the end of the paid period.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     `;

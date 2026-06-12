@@ -13,7 +13,7 @@
     "title": "EconoPulse",
     "subtitle": "Advanced Financial Analysis Platform",
     "description": "Discover the power of AI-driven financial insights with real-time market analysis, dynamic portfolio generation, and comprehensive economic intelligence.",
-    "cta_primary": "Start Free Trial",
+    "cta_primary": "Get Premium",
     "cta_secondary": "Learn More"
   },
   "features": {
@@ -227,7 +227,7 @@
   "subscription": {
     "subscribe_to": "Subscribe to",
     "whats_included": "What's included:",
-    "start_free_trial": "Start Free Trial",
+    "start_free_trial": "Get Premium",
     "contact_sales": "Contact Sales",
     "active_subscription": "Active Subscription",
     "renews_on": "Renews on",

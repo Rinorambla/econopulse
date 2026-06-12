@@ -189,7 +189,7 @@ export default function HomePage() {
       <section className="relative py-20 border-t border-[var(--color-border)]/50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-4">Ready to start?</h2>
-          <p className="text-white/60 text-base sm:text-lg mb-8 max-w-2xl mx-auto">Access the live dashboard or begin your free trial in seconds.</p>
+          <p className="text-white/60 text-base sm:text-lg mb-8 max-w-2xl mx-auto">Access the live dashboard or unlock Premium in seconds.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <NavigationLink
               href="/dashboard"
@@ -202,7 +202,7 @@ export default function HomePage() {
               href="/pricing"
               className="inline-flex items-center justify-center px-8 py-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5"
             >
-              Start Free Trial
+              Get Premium
             </NavigationLink>
           </div>
         </div>

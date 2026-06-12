@@ -13,7 +13,7 @@
     "title": "EconoPulse",
     "subtitle": "Piattaforma Avanzata di Analisi Finanziaria",
     "description": "Scopri il potere dell'intelligenza artificiale per l'analisi finanziaria con analisi di mercato in tempo reale, generazione dinamica di portafogli e intelligence economica completa.",
-    "cta_primary": "Inizia Prova Gratuita",
+    "cta_primary": "Passa a Premium",
     "cta_secondary": "Scopri di Più"
   },
   "features": {
@@ -201,7 +201,7 @@
   "subscription": {
     "subscribe_to": "Abbonati a",
     "whats_included": "Cosa è incluso:",
-    "start_free_trial": "Inizia Prova Gratuita",
+    "start_free_trial": "Passa a Premium",
     "contact_sales": "Contatta Vendite",
     "active_subscription": "Abbonamento Attivo",
     "renews_on": "Si rinnova il",

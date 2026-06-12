@@ -48,7 +48,7 @@ const PAYWALL_CONFIGS: Record<string, PaywallContentConfig> = {
     ],
     urgency: "Join thousands of successful traders",
     socialProof: "Trusted by 10,000+ investors worldwide",
-    ctaPrimary: "Start 14-day free trial",
+    ctaPrimary: "Upgrade to Premium",
     ctaSecondary: "View pricing plans",
     icon: ChartBarIcon,
     gradient: "from-blue-600 to-purple-600"

@@ -5,7 +5,7 @@
  * Flow:
  *  1. Verify Supabase auth (Bearer token or cookie).
  *  2. Ensure the user has a Stripe customer (create or look up).
- *  3. Create Checkout Session in subscription mode with 14-day trial.
+ *  3. Create Checkout Session in subscription mode (no trial — immediate charge).
  *  4. Return the Checkout URL — client will redirect.
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -89,18 +89,7 @@ export async function POST(request: NextRequest) {
 
     const s = stripe();
 
-    // --- Trial abuse prevention: only grant the 14-day trial to customers who
-    // have NEVER had a subscription before. Cancel + re-subscribe = no new trial.
-    let trialEligible = true;
-    try {
-      const previous = await s.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
-      trialEligible = previous.data.length === 0;
-    } catch (e: any) {
-      console.warn('[checkout] trial eligibility check failed (defaulting to no trial):', e?.message);
-      trialEligible = false;
-    }
-
-    // --- Create session
+    // --- Create session (no free trial: subscription starts and charges immediately)
     const session = await s.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -112,7 +101,6 @@ export async function POST(request: NextRequest) {
       billing_address_collection: 'auto',
       locale,
       subscription_data: {
-        ...(trialEligible ? { trial_period_days: 14 } : {}),
         metadata: { supabaseUserId: userId },
       },
       metadata: { supabaseUserId: userId },

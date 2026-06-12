@@ -350,7 +350,7 @@ export default function PricingPage() {
                   ) : (
                     <>
                       <RocketLaunchIcon className="h-4 w-4" />
-                      Start 14-day free trial
+                      Subscribe to Premium
                     </>
                   )}
                 </span>
@@ -405,8 +405,8 @@ export default function PricingPage() {
               <div className="text-xs text-gray-400 mt-1">Quote latency</div>
             </div>
             <div>
-              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">14 days</div>
-              <div className="text-xs text-gray-400 mt-1">Free trial</div>
+              <div className="text-3xl font-extrabold bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent">17%</div>
+              <div className="text-xs text-gray-400 mt-1">Yearly savings</div>
             </div>
           </div>
         </div>
@@ -427,8 +427,8 @@ export default function PricingPage() {
                 a: 'Everything: unlimited GPT-4 powered analysis, AI Portfolio Builder, advanced screeners, options gamma exposure, real-time alerts, API access and priority support. The full platform — every page, every feature.',
               },
               {
-                q: 'How does the 14-day free trial work?',
-                a: 'You can start the trial right after signup. Full Premium access for 14 days, no charge until the trial ends. Cancel any time inside your account dashboard and you keep Premium until the period ends, then drop back to Free automatically.',
+                q: 'Can I cancel anytime?',
+                a: 'Yes. Cancel any time from your account dashboard via the Stripe billing portal. You keep Premium access until the end of the period you already paid for, then your account drops back to Free automatically — no further charges.',
               },
               {
                 q: 'Can I switch between monthly and yearly?',
@@ -465,7 +465,7 @@ export default function PricingPage() {
               Ready to invest with an edge?
             </h3>
             <p className="text-gray-300 mb-6 max-w-xl mx-auto">
-              Join investors using AI to make sense of every market move. 14 days free, full access, cancel anytime.
+              Join investors using AI to make sense of every market move. Full access, cancel anytime.
             </p>
             <button
               onClick={createCheckoutSession}
@@ -473,10 +473,10 @@ export default function PricingPage() {
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-900/50 hover:shadow-cyan-500/40 hover:scale-105 transition-all disabled:opacity-50"
             >
               <RocketLaunchIcon className="h-5 w-5" />
-              {loading === 'premium' ? 'Loading…' : 'Start free trial'}
+              {loading === 'premium' ? 'Loading…' : 'Get Premium now'}
             </button>
             <p className="text-xs text-gray-500 mt-4">
-              No credit card required for Free · Premium trial cancellable anytime
+              No credit card required for Free · Premium cancellable anytime
             </p>
           </div>
         </div>

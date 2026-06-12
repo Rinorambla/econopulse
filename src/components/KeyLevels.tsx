@@ -346,35 +346,34 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         );
       })()}
 
-      {/* Options Inventory (gexstream.com-style: BOUGHT vs SOLD per strike, nearest expiry) */}
+      {/* Options Inventory — horizontal layout: strikes on X axis, BOUGHT up / SOLD down */}
       {(tab === 'realtime' || tab === 'inventory') && inventoryZoomed && (() => {
         const rows = inventoryZoomed.rows;
         const maxAbs = inventoryZoomed.maxAbs;
         const W = 760;
-        const padTop = 36;
-        const padBottom = 36;
-        const padLeft = 64;
+        const H = 380;
+        const padTop = 28;
+        const padBottom = 46;
+        const padLeft = 56;
         const padRight = 16;
-        const barH = 7;
-        const rowH = 22;
-        const H = padTop + padBottom + rows.length * rowH;
         const chartW = W - padLeft - padRight;
         const chartH = H - padTop - padBottom;
-        const xZero = padLeft + chartW / 2;
-        const halfW = chartW / 2;
-        // Strikes ordered descending top → ascending bottom (matches gexstream)
-        const ordered = [...rows].sort((a, b) => b.strike - a.strike);
-        const strikes = ordered.map(r => r.strike);
-        const minStrike = Math.min(...strikes);
-        const maxStrike = Math.max(...strikes);
-        const yFor = (s: number) => {
-          if (maxStrike === minStrike) return padTop + chartH / 2;
-          return padTop + ((maxStrike - s) / (maxStrike - minStrike)) * chartH;
-        };
-        const priceY = yFor(price);
-        const xFor = (v: number) => xZero + (v / maxAbs) * halfW;
-        // Tick marks on bottom axis: -max, -max/2, 0, +max/2, +max
-        const ticks = [-maxAbs, -maxAbs / 2, 0, maxAbs / 2, maxAbs];
+        const yZero = padTop + chartH / 2;
+        const halfH = chartH / 2;
+        // Strikes ascending left → right
+        const ordered = [...rows].sort((a, b) => a.strike - b.strike);
+        const n = ordered.length;
+        const colW = chartW / Math.max(n, 1);
+        const barW = Math.max(colW * 0.36, 1.5);
+        const xCenter = (i: number) => padLeft + i * colW + colW / 2;
+        const minStrike = ordered[0]?.strike ?? 0;
+        const maxStrike = ordered[n - 1]?.strike ?? 1;
+        const priceX = maxStrike === minStrike
+          ? padLeft + chartW / 2
+          : padLeft + ((price - minStrike) / (maxStrike - minStrike)) * chartW;
+        const hFor = (v: number) => (v / maxAbs) * halfH;
+        const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs];
+        const labelEvery = Math.max(1, Math.ceil(n / 14));
         const fmtNum = (v: number) => {
           const a = Math.abs(v);
           if (a >= 1000) return `${v >= 0 ? '' : '-'}${(a / 1000).toFixed(1)}K`;
@@ -397,94 +396,80 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
             <div className="overflow-x-auto">
               <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} preserveAspectRatio="xMidYMid meet">
                 <defs>
-                  <linearGradient id="invCallGrad" gradientUnits="userSpaceOnUse" x1={padLeft} y1="0" x2={padLeft + chartW} y2="0">
-                    <stop offset="0%" stopColor={SQ_PURPLE} />
-                    <stop offset="50%" stopColor={SQ_YELLOW} />
+                  <linearGradient id="invCallGrad" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop}>
+                    <stop offset="0%" stopColor={SQ_YELLOW} />
                     <stop offset="100%" stopColor={SQ_PURPLE} />
                   </linearGradient>
-                  <linearGradient id="invPutGrad" gradientUnits="userSpaceOnUse" x1={padLeft} y1="0" x2={padLeft + chartW} y2="0">
-                    <stop offset="0%" stopColor={SQ_INDIGO} />
-                    <stop offset="50%" stopColor={SQ_TEAL} />
+                  <linearGradient id="invCallGradDn" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop + chartH}>
+                    <stop offset="0%" stopColor={SQ_YELLOW} />
+                    <stop offset="100%" stopColor={SQ_PURPLE} />
+                  </linearGradient>
+                  <linearGradient id="invPutGrad" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop}>
+                    <stop offset="0%" stopColor={SQ_TEAL} />
+                    <stop offset="100%" stopColor={SQ_INDIGO} />
+                  </linearGradient>
+                  <linearGradient id="invPutGradDn" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop + chartH}>
+                    <stop offset="0%" stopColor={SQ_TEAL} />
                     <stop offset="100%" stopColor={SQ_INDIGO} />
                   </linearGradient>
                 </defs>
                 {/* Background */}
                 <rect x={0} y={0} width={W} height={H} fill={SQ_BG} />
                 {/* Watermark */}
-                <text textAnchor="middle" x={W / 2} y={padTop + chartH / 2 + 20} fontSize={W / 11} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.16)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
-                {/* SOLD / BOUGHT headers */}
-                <text x={xZero - chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#94a3b8" fontWeight={600} letterSpacing={1}>SOLD</text>
-                <text x={xZero + chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#cbd5e1" fontWeight={600} letterSpacing={1}>BOUGHT</text>
-                {/* Center axis */}
-                <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={1} />
-                {/* Tick gridlines */}
+                <text textAnchor="middle" x={padLeft + chartW / 2} y={padTop + chartH / 2 + 14} fontSize={W / 13} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.16)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
+                {/* BOUGHT / SOLD side labels */}
+                <text x={padLeft + 6} y={padTop + 12} fontSize={10} fill="#cbd5e1" fontWeight={600} letterSpacing={1}>BOUGHT ↑</text>
+                <text x={padLeft + 6} y={padTop + chartH - 5} fontSize={10} fill="#94a3b8" fontWeight={600} letterSpacing={1}>SOLD ↓</text>
+                {/* Horizontal tick gridlines */}
                 {ticks.map((t, i) => {
-                  if (t === 0) return null;
-                  const x = xFor(t);
-                  return <line key={i} x1={x} y1={padTop} x2={x} y2={padTop + chartH} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="2 4" />;
+                  const y = yZero - hFor(t);
+                  return (
+                    <g key={i}>
+                      {t !== 0 && <line x1={padLeft} y1={y} x2={padLeft + chartW} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="2 4" />}
+                      <text x={padLeft - 6} y={y + 3} textAnchor="end" fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">{fmtNum(t)}</text>
+                    </g>
+                  );
                 })}
-                {/* Bars per strike: calls on top half of row (green), puts on bottom (red).
-                    BOUGHT goes right (positive x), SOLD goes left (negative x). */}
-                {ordered.map((r) => {
-                  const yMid = yFor(r.strike);
-                  const yCall = yMid - barH - 1;
-                  const yPut  = yMid + 1;
-                  const callBoughtW = (r.callBought / maxAbs) * halfW;
-                  const callSoldW  = (r.callSold  / maxAbs) * halfW;
-                  const putBoughtW  = (r.putBought  / maxAbs) * halfW;
-                  const putSoldW   = (r.putSold   / maxAbs) * halfW;
-                  const isPriceRow = Math.abs(r.strike - price) / Math.max(price, 1) < 0.0008;
+                {/* Zero baseline */}
+                <line x1={padLeft} y1={yZero} x2={padLeft + chartW} y2={yZero} stroke="#475569" strokeWidth={1} />
+                {/* Bars per strike: call column left, put column right. BOUGHT up, SOLD down. */}
+                {ordered.map((r, i) => {
+                  const xc = xCenter(i);
+                  const xCall = xc - barW - 0.5;
+                  const xPut = xc + 0.5;
+                  const cbH = hFor(r.callBought);
+                  const csH = hFor(r.callSold);
+                  const pbH = hFor(r.putBought);
+                  const psH = hFor(r.putSold);
                   return (
                     <g key={r.strike}>
-                      {/* CALLS (gex yellow→purple gradient) */}
-                      {showCalls && callBoughtW > 0.5 && (
-                        <rect x={xZero} y={yCall} width={callBoughtW} height={barH} fill="url(#invCallGrad)" opacity={0.95} rx={1} />
-                      )}
-                      {showCalls && callSoldW > 0.5 && (
-                        <rect x={xZero - callSoldW} y={yCall} width={callSoldW} height={barH} fill="url(#invCallGrad)" opacity={0.95} rx={1} />
-                      )}
-                      {/* PUTS (dix teal→indigo gradient) */}
-                      {showPuts && putBoughtW > 0.5 && (
-                        <rect x={xZero} y={yPut} width={putBoughtW} height={barH} fill="url(#invPutGrad)" opacity={0.95} rx={1} />
-                      )}
-                      {showPuts && putSoldW > 0.5 && (
-                        <rect x={xZero - putSoldW} y={yPut} width={putSoldW} height={barH} fill="url(#invPutGrad)" opacity={0.95} rx={1} />
-                      )}
-                      {/* Strike label */}
-                      <text
-                        x={padLeft - 8}
-                        y={yMid + 4}
-                        textAnchor="end"
-                        fontSize={11}
-                        fill={isPriceRow ? SQ_GREEN : '#94a3b8'}
-                        fontFamily="ui-monospace, monospace"
-                        fontWeight={isPriceRow ? 700 : 400}
-                      >
-                        {r.strike.toFixed(2)}
+                      {showCalls && cbH > 0.5 && <rect x={xCall} y={yZero - cbH} width={barW} height={cbH} fill="url(#invCallGrad)" opacity={0.95} rx={0.5} />}
+                      {showCalls && csH > 0.5 && <rect x={xCall} y={yZero} width={barW} height={csH} fill="url(#invCallGradDn)" opacity={0.95} rx={0.5} />}
+                      {showPuts && pbH > 0.5 && <rect x={xPut} y={yZero - pbH} width={barW} height={pbH} fill="url(#invPutGrad)" opacity={0.95} rx={0.5} />}
+                      {showPuts && psH > 0.5 && <rect x={xPut} y={yZero} width={barW} height={psH} fill="url(#invPutGradDn)" opacity={0.95} rx={0.5} />}
+                    </g>
+                  );
+                })}
+                {/* Strike labels on X axis (every Nth) */}
+                {ordered.map((r, i) => {
+                  if (i % labelEvery !== 0 && i !== n - 1) return null;
+                  const xc = xCenter(i);
+                  return (
+                    <g key={`xl-${r.strike}`}>
+                      <line x1={xc} y1={padTop + chartH} x2={xc} y2={padTop + chartH + 4} stroke="#475569" strokeWidth={1} />
+                      <text x={xc} y={padTop + chartH + 15} textAnchor="middle" fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">
+                        {Number.isInteger(r.strike) ? r.strike.toFixed(0) : r.strike.toFixed(1)}
                       </text>
                     </g>
                   );
                 })}
-                {/* Spot price line (sqzme green) */}
+                {/* Spot price vertical line (sqzme green) */}
                 <g>
-                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke={SQ_GREEN} strokeWidth={1.5} strokeDasharray="6 4" />
-                  <text x={padLeft + chartW - 4} y={priceY - 4} textAnchor="end" fontSize={11} fill={SQ_GREEN} fontWeight={700} fontFamily="ui-monospace, monospace">
+                  <line x1={priceX} y1={padTop} x2={priceX} y2={padTop + chartH} stroke={SQ_GREEN} strokeWidth={1.5} strokeDasharray="6 4" />
+                  <text x={priceX} y={padTop - 6} textAnchor="middle" fontSize={11} fill={SQ_GREEN} fontWeight={700} fontFamily="ui-monospace, monospace">
                     {price.toFixed(2)}
                   </text>
                 </g>
-                {/* Bottom axis ticks */}
-                {ticks.map((t, i) => {
-                  const x = xFor(t);
-                  const y = padTop + chartH + 4;
-                  return (
-                    <g key={`tk-${i}`}>
-                      <line x1={x} y1={padTop + chartH} x2={x} y2={padTop + chartH + 4} stroke="#475569" strokeWidth={1} />
-                      <text x={x} y={y + 11} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="ui-monospace, monospace">
-                        {fmtNum(t)}
-                      </text>
-                    </g>
-                  );
-                })}
                 <text x={padLeft + 4} y={H - 6} fontSize={10} fill="#64748b" fontStyle="italic">
                   contract count (nearest expiry)
                 </text>
@@ -520,41 +505,44 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         const dataMap = new Map<number, { callGex: number; putGex: number }>();
         for (const r of all) dataMap.set(Math.round(r.strike / step) * step, { callGex: r.callGex, putGex: r.putGex });
         const rows: { strike: number; callGex: number; putGex: number }[] = [];
-        for (let s = maxS; s >= minS; s -= step) {
+        for (let s = minS; s <= maxS; s += step) {
           const d = dataMap.get(s) || { callGex: 0, putGex: 0 };
           rows.push({ strike: s, ...d });
         }
         const maxAbs = Math.max(...rows.map(r => Math.max(Math.abs(r.callGex), Math.abs(r.putGex))), 1);
         const W = 760;
-        const rowH = 13;
-        const padTop = 36;
-        const padBottom = 40;
-        const padLeft = 70;
-        const padRight = 90;
-        const chartH = rows.length * rowH;
-        const H = padTop + chartH + padBottom;
+        const H = 420;
+        const padTop = 44;
+        const padBottom = 50;
+        const padLeft = 64;
+        const padRight = 16;
         const chartW = W - padLeft - padRight;
-        const xZero = padLeft + chartW / 2;
-        const halfW = chartW / 2;
-        const barH = rowH - 3;
-        // Find row closest to spot price (will get yellow dashed line) and gamma flip (red label)
+        const chartH = H - padTop - padBottom;
+        const yZero = padTop + chartH / 2;
+        const halfH = chartH / 2;
+        const n = rows.length;
+        const colW = chartW / Math.max(n, 1);
+        const barW = Math.max(colW * 0.72, 1.5);
+        const xCenter = (i: number) => padLeft + i * colW + colW / 2;
+        // Index of strike closest to spot price (green vertical line) and gamma flip (red marker)
         const closestSpotIdx = rows.reduce((best, r, i) => Math.abs(r.strike - price) < Math.abs(rows[best].strike - price) ? i : best, 0);
         const flipStrike = data.gammaFlip;
         const flipIdx = flipStrike != null
           ? rows.reduce((best, r, i) => Math.abs(r.strike - flipStrike) < Math.abs(rows[best].strike - flipStrike) ? i : best, 0)
           : -1;
-        // Find biggest call/put strikes for green/red label highlights (gexstream marks the major walls)
+        // Biggest call/put strikes get highlighted axis labels (major walls)
         const biggestCallIdx = rows.reduce((best, r, i) => r.callGex > rows[best].callGex ? i : best, 0);
         const biggestPutIdx = rows.reduce((best, r, i) => Math.abs(r.putGex) > Math.abs(rows[best].putGex) ? i : best, 0);
-        const yFor = (i: number) => padTop + i * rowH + rowH / 2;
-        const ticks = [-maxAbs, -maxAbs / 2, 0, maxAbs / 2, maxAbs];
+        const hFor = (v: number) => (Math.abs(v) / maxAbs) * halfH;
+        const ticks = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs];
         const fmtAxis = (v: number) => {
           const a = Math.abs(v);
           if (a >= 1e6) return `${v < 0 ? '-' : ''}${(a / 1e6).toFixed(1)}M`;
           if (a >= 1e3) return `${v < 0 ? '-' : ''}${(a / 1e3).toFixed(0)}K`;
           return v.toFixed(0);
         };
-        const priceY = yFor(closestSpotIdx);
+        const labelEvery = Math.max(1, Math.ceil(n / 14));
+        const priceX = xCenter(closestSpotIdx);
         return (
           <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -564,11 +552,11 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
             <div className="overflow-x-auto">
               <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} preserveAspectRatio="xMidYMid meet">
                 <defs>
-                  <linearGradient id="gexCallGrad" gradientUnits="userSpaceOnUse" x1={xZero} y1="0" x2={padLeft + chartW} y2="0">
+                  <linearGradient id="gexCallGrad" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop}>
                     <stop offset="0%" stopColor={SQ_YELLOW} />
                     <stop offset="100%" stopColor={SQ_PURPLE} />
                   </linearGradient>
-                  <linearGradient id="gexPutGrad" gradientUnits="userSpaceOnUse" x1={xZero} y1="0" x2={padLeft} y2="0">
+                  <linearGradient id="gexPutGrad" gradientUnits="userSpaceOnUse" x1="0" y1={yZero} x2="0" y2={padTop + chartH}>
                     <stop offset="0%" stopColor={SQ_TEAL} />
                     <stop offset="100%" stopColor={SQ_INDIGO} />
                   </linearGradient>
@@ -576,64 +564,78 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                 {/* Dark background for chart area */}
                 <rect x={0} y={0} width={W} height={H} fill={SQ_BG} />
                 {/* Watermark */}
-                <text textAnchor="middle" x={W / 2} y={padTop + chartH / 2 + 24} fontSize={W / 10} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.14)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
+                <text textAnchor="middle" x={padLeft + chartW / 2} y={padTop + chartH / 2 + 16} fontSize={W / 12} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.14)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
                 {/* Title — centered "gamma exposure" */}
                 <text x={W / 2} y={20} textAnchor="middle" fontSize={13} fontWeight={700} fill="lightgray" fontFamily="Tahoma, sans-serif">
                   gamma exposure
                 </text>
-                {/* Strike rows — every row gets its label */}
+                {/* Horizontal tick gridlines + Y axis labels */}
+                {ticks.map((t, i) => {
+                  const y = yZero - (t / maxAbs) * halfH;
+                  return (
+                    <g key={`gl-${i}`}>
+                      {t !== 0 && <line x1={padLeft} y1={y} x2={padLeft + chartW} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="2 4" />}
+                      <text x={padLeft - 6} y={y + 3} textAnchor="end" fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">{fmtAxis(t)}</text>
+                    </g>
+                  );
+                })}
+                {/* Bars per strike: call GEX up, put GEX down */}
                 {rows.map((r, i) => {
-                  const y = yFor(i);
-                  const yBar = y - barH / 2;
-                  const callW = (Math.abs(r.callGex) / maxAbs) * halfW;
-                  const putW = (Math.abs(r.putGex) / maxAbs) * halfW;
-                  const isSpotRow = i === closestSpotIdx;
-                  const isFlipRow = i === flipIdx;
-                  const isBiggestCall = i === biggestCallIdx && r.callGex > 0;
-                  const isBiggestPut = i === biggestPutIdx && Math.abs(r.putGex) > 0;
-                  // Label color hierarchy: spot=yellow, flip=red, biggest call=green, biggest put=red, default=light gray
-                  let labelColor = '#cbd5e1';
-                  let labelWeight = 400;
-                  if (isSpotRow) { labelColor = SQ_GREEN; labelWeight = 700; }
-                  else if (isFlipRow) { labelColor = '#ef4444'; labelWeight = 700; }
-                  else if (isBiggestCall) { labelColor = SQ_YELLOW; labelWeight = 700; }
-                  else if (isBiggestPut) { labelColor = SQ_TEAL; labelWeight = 700; }
+                  const xc = xCenter(i);
+                  const x = xc - barW / 2;
+                  const callH = hFor(r.callGex);
+                  const putH = hFor(r.putGex);
                   return (
                     <g key={r.strike}>
-                      <text x={padLeft - 8} y={y + 3.5} textAnchor="end" fontSize={10} fill={labelColor} fontWeight={labelWeight} fontFamily="ui-monospace, monospace">
-                        {r.strike.toFixed(2)}
-                      </text>
-                      {showPuts && putW > 0.5 && (
-                        <rect x={xZero - putW} y={yBar} width={putW} height={barH} fill="url(#gexPutGrad)" opacity={0.95} />
+                      {showCalls && callH > 0.5 && (
+                        <rect x={x} y={yZero - callH} width={barW} height={callH} fill="url(#gexCallGrad)" opacity={0.95} />
                       )}
-                      {showCalls && callW > 0.5 && (
-                        <rect x={xZero} y={yBar} width={callW} height={barH} fill="url(#gexCallGrad)" opacity={0.95} />
+                      {showPuts && putH > 0.5 && (
+                        <rect x={x} y={yZero} width={barW} height={putH} fill="url(#gexPutGrad)" opacity={0.95} />
                       )}
                     </g>
                   );
                 })}
-                {/* Center zero axis (subtle) */}
-                <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={0.6} strokeDasharray="2 2" />
-                {/* Spot price horizontal dashed line (sqzme green) */}
-                <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke={SQ_GREEN} strokeWidth={1.4} strokeDasharray="6 4" />
-                {/* Spot price floating label outside the chart on the right */}
-                <text x={padLeft + chartW + 6} y={priceY + 3.5} fontSize={11} fontWeight={700} fill={SQ_GREEN} fontFamily="ui-monospace, monospace">
-                  {price.toFixed(2)}
-                </text>
-                {/* X-axis tick labels under chart */}
-                {ticks.map((t, i) => {
-                  const x = xZero + (t / maxAbs) * halfW;
+                {/* Zero baseline */}
+                <line x1={padLeft} y1={yZero} x2={padLeft + chartW} y2={yZero} stroke="#475569" strokeWidth={1} />
+                {/* Strike labels on X axis — every Nth, plus highlighted spot/flip/walls */}
+                {rows.map((r, i) => {
+                  const isSpot = i === closestSpotIdx;
+                  const isFlip = i === flipIdx;
+                  const isBigCall = i === biggestCallIdx && r.callGex > 0;
+                  const isBigPut = i === biggestPutIdx && Math.abs(r.putGex) > 0;
+                  const highlighted = isSpot || isFlip || isBigCall || isBigPut;
+                  if (!highlighted && i % labelEvery !== 0 && i !== n - 1) return null;
+                  let labelColor = '#94a3b8';
+                  let labelWeight = 400;
+                  if (isSpot) { labelColor = SQ_GREEN; labelWeight = 700; }
+                  else if (isFlip) { labelColor = '#ef4444'; labelWeight = 700; }
+                  else if (isBigCall) { labelColor = SQ_YELLOW; labelWeight = 700; }
+                  else if (isBigPut) { labelColor = SQ_TEAL; labelWeight = 700; }
+                  const xc = xCenter(i);
                   return (
-                    <text key={`tk-${i}`} x={x} y={padTop + chartH + 16} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="ui-monospace, monospace">
-                      {fmtAxis(t)}
-                    </text>
+                    <g key={`xl-${r.strike}`}>
+                      <line x1={xc} y1={padTop + chartH} x2={xc} y2={padTop + chartH + 4} stroke="#475569" strokeWidth={1} />
+                      <text x={xc} y={padTop + chartH + 15} textAnchor="middle" fontSize={9} fill={labelColor} fontWeight={labelWeight} fontFamily="ui-monospace, monospace">
+                        {r.strike.toFixed(0)}
+                      </text>
+                    </g>
                   );
                 })}
-                {/* X-axis caption bottom-left "shares per $ move" */}
-                <text x={padLeft} y={padTop + chartH + 32} fontSize={10} fill="#64748b" fontFamily="ui-sans-serif, system-ui">
+                {/* Gamma flip vertical marker (red) */}
+                {flipIdx >= 0 && (
+                  <line x1={xCenter(flipIdx)} y1={padTop} x2={xCenter(flipIdx)} y2={padTop + chartH} stroke="#ef4444" strokeWidth={1} strokeDasharray="3 4" opacity={0.8} />
+                )}
+                {/* Spot price vertical dashed line (sqzme green) */}
+                <line x1={priceX} y1={padTop} x2={priceX} y2={padTop + chartH} stroke={SQ_GREEN} strokeWidth={1.4} strokeDasharray="6 4" />
+                <text x={priceX} y={padTop - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill={SQ_GREEN} fontFamily="ui-monospace, monospace">
+                  {price.toFixed(2)}
+                </text>
+                {/* Caption bottom-left "shares per $ move" */}
+                <text x={padLeft} y={H - 8} fontSize={10} fill="#64748b" fontFamily="ui-sans-serif, system-ui">
                   shares per $ move
                 </text>
-                <text x={W - 6} y={padTop + chartH + 32} textAnchor="end" fontSize={9} fill="#6b7280" fontFamily="Tahoma, sans-serif">© EconoPulse</text>
+                <text x={W - 6} y={H - 8} textAnchor="end" fontSize={9} fill="#6b7280" fontFamily="Tahoma, sans-serif">© EconoPulse</text>
               </svg>
             </div>
           </div>

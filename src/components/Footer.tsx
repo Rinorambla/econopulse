@@ -56,10 +56,12 @@ const Footer = () => {
       title: 'Services',
       links: [
         { key: 'dashboard', href: '/dashboard', requiresPlan: 'pro' },
+        { key: 'market_data', href: '/market-data' },
         { key: 'ai_portfolio', href: '/ai-portfolio', requiresPlan: 'premium' },
         { key: 'ai_pulse', href: '/ai-pulse', requiresPlan: 'premium' },
         { key: 'visual_ai', href: '/visual-ai', requiresPlan: 'premium' },
         { key: 'market_dna', href: '/market-dna', requiresPlan: 'premium' },
+        { key: 'top_analysts', href: '/top-analysts' },
         { key: 'econoai', href: '/econoai' }
       ] as FooterLink[]
     },
@@ -144,10 +146,12 @@ const Footer = () => {
                     >
                       <span>{
                         link.key === 'dashboard' ? 'Dashboard' :
+                        link.key === 'market_data' ? 'Market Data' :
                         link.key === 'ai_portfolio' ? 'AI Portfolio' :
                         link.key === 'ai_pulse' ? 'AI Pulse' :
                         link.key === 'visual_ai' ? 'Visual AI' :
                         link.key === 'market_dna' ? 'Market DNA' :
+                        link.key === 'top_analysts' ? 'Top Analysts' :
                         link.key === 'econoai' ? 'UpdateAI' :
                         link.key === 'about' ? 'About' :
                         link.key === 'news' ? 'News' :

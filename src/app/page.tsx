@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 
 import Footer from '@/components/Footer';
 import AIBackground from '@/components/AIBackground';
-import FearGreedIndex from '@/components/FearGreedIndex';
 import { ChartBarIcon, CpuChipIcon, GlobeAltIcon, BoltIcon, ShieldCheckIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
 import SafeBoundary from '@/components/SafeBoundary';
 import { NavigationLink } from '@/components/Navigation';
@@ -10,17 +9,16 @@ import { NavigationLink } from '@/components/Navigation';
 export default function HomePage() {
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      {/* ───── HERO ───── */}
-      <div className="relative overflow-hidden">
+    <div className="relative min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      {/* ───── FULL-PAGE BACKDROP (fixed, spans the whole page while scrolling) ───── */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
         <SafeBoundary>
           <AIBackground intensity="subtle" />
         </SafeBoundary>
 
         {/* Hero photo backdrop (right side, fades into the dark UI) */}
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0"
+          className="absolute inset-0"
           style={{
             backgroundImage: "url('/hero-bg.jpg')",
             backgroundSize: 'cover',
@@ -35,28 +33,24 @@ export default function HomePage() {
         />
         {/* Left-side darkening for text readability — only covers the text column */}
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-[#05070d] via-[#05070d]/70 to-transparent"
+          className="absolute inset-0 bg-gradient-to-r from-[#05070d] via-[#05070d]/70 to-transparent"
           style={{
             maskImage: 'linear-gradient(to right, #000 0%, #000 45%, transparent 70%)',
             WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 45%, transparent 70%)',
           }}
         />
-        {/* Subtle bottom fade into page */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 z-0 bg-gradient-to-b from-transparent to-[#05070d]"
-        />
         {/* Brand color wash, gentler than before */}
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 mix-blend-overlay opacity-30 bg-gradient-to-tr from-blue-600/30 via-transparent to-emerald-500/20"
+          className="absolute inset-0 mix-blend-overlay opacity-30 bg-gradient-to-tr from-blue-600/30 via-transparent to-emerald-500/20"
         />
 
         {/* Decorative gradient orbs */}
-        <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
-        <div className="pointer-events-none absolute -bottom-40 right-0 w-[400px] h-[400px] rounded-full bg-emerald-500/10 blur-[100px]" />
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
+        <div className="absolute -bottom-40 right-0 w-[400px] h-[400px] rounded-full bg-emerald-500/10 blur-[100px]" />
+      </div>
 
+      {/* ───── HERO ───── */}
+      <div className="relative z-10">
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="relative z-10 pb-10 sm:pb-20 md:pb-24 lg:max-w-3xl lg:w-full lg:pb-32 xl:pb-40">
             <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-14 sm:px-6 md:mt-16 lg:mt-24 lg:px-8 xl:mt-28">
@@ -75,21 +69,6 @@ export default function HomePage() {
                   <span className="flex items-center gap-1.5"><BoltIcon className="h-4 w-4 text-yellow-400/70" /> &lt;1.2s AI response</span>
                   <span className="flex items-center gap-1.5"><ArrowTrendingUpIcon className="h-4 w-4 text-blue-400/70" /> 600+ live assets</span>
                 </div>
-
-                {/* Fear & Greed Index — inline under hero text (left column) */}
-                <div className="mt-10 ai-fade-up ai-delay-600">
-                  <div className="inline-flex items-stretch gap-0 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/10 shadow-2xl shadow-black/40 backdrop-blur-md overflow-hidden">
-                    <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] shrink-0">
-                      <SafeBoundary fallback={<div className="flex items-center justify-center h-full w-full text-[10px] text-white/40">Widget unavailable</div>}>
-                        <FearGreedIndex />
-                      </SafeBoundary>
-                    </div>
-                    <div className="hidden sm:flex flex-col justify-center px-5 py-4 max-w-[220px] border-l border-white/5">
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-blue-400 font-semibold mb-1">Live Sentiment</p>
-                      <p className="text-sm text-white/80 leading-snug">EconopulseAi Fear &amp; Greed</p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </main>
           </div>
@@ -97,9 +76,7 @@ export default function HomePage() {
       </div>
 
       {/* ───── FEATURES GRID ───── */}
-      <div className="relative py-20 sm:py-28">
-        {/* Subtle background gradient */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--color-backdrop)] via-[var(--background)] to-[var(--background)]" />
+      <div className="relative z-10 py-20 sm:py-28">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-xs font-semibold tracking-[0.25em] uppercase text-blue-400 mb-3">Platform Pillars</p>
@@ -208,7 +185,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <Footer />
+      <div className="relative z-10 bg-[#05070d]/90 backdrop-blur-sm">
+        <Footer />
+      </div>
     </div>
   );
 }

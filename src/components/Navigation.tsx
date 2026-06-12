@@ -67,27 +67,41 @@ export function Navigation({ className }: NavigationProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen, userMenuOpen, toolsMenuOpen]);
 
-  // Close user menu on outside click
+  // Close user menu on outside click/tap
   useEffect(() => {
     if (!userMenuOpen) return;
-    const onClick = (e: MouseEvent) => {
+    const onPointer = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('[data-user-menu]')) setUserMenuOpen(false);
     };
-    window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
+    window.addEventListener('pointerdown', onPointer);
+    return () => window.removeEventListener('pointerdown', onPointer);
   }, [userMenuOpen]);
 
-  // Close AI tools menu on outside click
+  // Close AI tools menu on outside click/tap
   useEffect(() => {
     if (!toolsMenuOpen) return;
-    const onClick = (e: MouseEvent) => {
+    const onPointer = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('[data-tools-menu]')) setToolsMenuOpen(false);
     };
-    window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
+    window.addEventListener('pointerdown', onPointer);
+    return () => window.removeEventListener('pointerdown', onPointer);
   }, [toolsMenuOpen]);
+
+  // Close mobile menu on outside tap/click (backdrop may not cover the whole
+  // viewport when an ancestor creates a fixed-position containing block)
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#mobile-nav') && !target.closest('[aria-controls="mobile-nav"]')) {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointer);
+    return () => window.removeEventListener('pointerdown', onPointer);
+  }, [mobileOpen]);
   
   return (
   <div className={`relative flex flex-nowrap items-center gap-1 sm:gap-2 ${className||''} w-full min-w-0`}> 
@@ -268,7 +282,12 @@ export function Navigation({ className }: NavigationProps) {
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50 cursor-pointer"
+            aria-hidden="true"
+            onPointerDown={() => setMobileOpen(false)}
+            onClick={() => setMobileOpen(false)}
+          />
           {/* Panel */}
           <div id="mobile-nav" className="absolute top-0 left-0 right-0 bg-slate-950 border-b border-slate-800 shadow-xl">
             <div className="px-4 py-4 space-y-1">

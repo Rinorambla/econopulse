@@ -7,10 +7,11 @@ export default function middleware(req: Request) {
   
   // Redirect legacy locale-prefixed paths to non-locale equivalents
   // e.g., /en/ai-pulse -> /ai-pulse, /it -> /
+  // IMPORTANT: preserve the query string (e.g. ?checkout=success&session_id=...)
   const localeMatch = pathname.match(/^\/(en|it)(?:\/(.*))?$/)
   if (localeMatch) {
     const rest = localeMatch[2] ? `/${localeMatch[2]}` : '/'
-    return NextResponse.redirect(new URL(rest, url.origin), 308)
+    return NextResponse.redirect(new URL(rest + url.search, url.origin), 308)
   }
   
   if (pathname === '/manifest.json' || pathname === '/sw.js' || pathname.startsWith('/icons/')) {

@@ -4,6 +4,7 @@ export const maxDuration = 15
 
 import { NextResponse } from 'next/server'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+import { requirePremium } from '@/lib/plan-guard'
 import { buildLeaderboard, ANALYST_SECTORS } from '@/lib/top-analysts-data'
 import { getYahooQuotes } from '@/lib/yahooFinance'
 import { getRecommendations, getPriceTargets } from '@/lib/finnhub-analysts'
@@ -19,6 +20,10 @@ export async function GET(request: Request) {
       { status: 429, headers: rateLimitHeaders(rl) }
     )
   }
+
+  // Server-side premium gate (page is premium-only; protect the API too)
+  const gate = await requirePremium(request)
+  if (!gate.ok) return gate.response
 
   const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
     Promise.race([p, new Promise<T>((res) => setTimeout(() => res(fallback), ms))])

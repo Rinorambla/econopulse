@@ -163,6 +163,39 @@ export class EmailService {
     }
   }
 
+  /**
+   * Dunning email: sent from the Stripe webhook on `invoice.payment_failed`.
+   * The subscription enters `past_due` (grace period) — the user keeps access
+   * but must update their card before Stripe gives up retrying.
+   */
+  static async sendPaymentFailed(
+    email: string,
+    opts: { amountEur?: number; nextRetryDate?: Date | null }
+  ): Promise<boolean> {
+    const client = getResend();
+    if (!client) {
+      console.warn(`✉️ (payment-failed) Skipping send – Resend not configured for ${email}`);
+      return false;
+    }
+    try {
+      const { data, error } = await client.emails.send({
+        from: `${process.env.NEWSLETTER_FROM_NAME} <${process.env.NEWSLETTER_FROM_EMAIL}>`,
+        to: [email],
+        subject: '⚠️ Payment failed — update your card to keep EconoPulse Premium',
+        html: this.getPaymentFailedTemplate(email, opts),
+      });
+      if (error) {
+        console.error('❌ Payment-failed email error:', error);
+        return false;
+      }
+      console.log('✅ Payment-failed email sent:', data);
+      return true;
+    } catch (error) {
+      console.error('❌ Payment-failed email failed:', error);
+      return false;
+    }
+  }
+
   static async sendBulkNewsletter(
     emails: string[],
     data: WeeklyNewsletterData
@@ -436,6 +469,71 @@ export class EmailService {
                 </p>
             </div>
         </div>
+    </body>
+    </html>
+    `;
+  }
+
+  private static getPaymentFailedTemplate(
+    email: string,
+    opts: { amountEur?: number; nextRetryDate?: Date | null }
+  ): string {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.econopulse.ai';
+    const amount = typeof opts.amountEur === 'number' ? `€${opts.amountEur.toFixed(2)}` : 'your subscription payment';
+    const retryStr = opts.nextRetryDate
+      ? opts.nextRetryDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null;
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Payment failed</title>
+    </head>
+    <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f6fb;margin:0;padding:24px;color:#1f2937;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+              <tr>
+                <td style="background:linear-gradient(135deg,#7f1d1d 0%,#0f172a 100%);color:#ffffff;padding:32px 28px;text-align:center;">
+                  <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;">EconoPulse</div>
+                  <div style="margin-top:8px;font-size:14px;opacity:0.85;">Action required on your subscription</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 28px;">
+                  <h1 style="font-size:22px;margin:0 0 16px;color:#0f172a;">⚠️ We couldn't process your payment</h1>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    Hi <strong>${email}</strong>,
+                  </p>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    We tried to charge <strong>${amount}</strong> for your EconoPulse Premium
+                    subscription, but the payment didn't go through. This usually happens when a
+                    card has expired or has insufficient funds.
+                  </p>
+                  <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">
+                    <strong>Your premium access is still active</strong> for now${retryStr ? ` — we'll retry automatically around <strong>${retryStr}</strong>` : ''}.
+                    To avoid losing access, please update your payment method.
+                  </p>
+                  <div style="text-align:center;margin:28px 0;">
+                    <a href="${siteUrl}/dashboard/account"
+                      style="display:inline-block;background:#b91c1c;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+                      Update payment method
+                    </a>
+                  </div>
+                  <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0;">
+                    If the payment keeps failing, your subscription will be cancelled automatically
+                    and your account will revert to the Free plan. If you've already updated your
+                    card, you can ignore this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     `;

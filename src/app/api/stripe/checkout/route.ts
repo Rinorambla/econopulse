@@ -57,13 +57,24 @@ export async function POST(request: NextRequest) {
     // --- Body
     const body = await request.json().catch(() => ({}));
     const billingCycle: 'monthly' | 'yearly' = body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const locale: 'en' | 'it' = body.locale === 'it' ? 'it' : 'en';
     const origin = request.nextUrl.origin;
-    const successUrl: string = typeof body.successUrl === 'string'
-      ? body.successUrl
-      : `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl: string = typeof body.cancelUrl === 'string'
-      ? body.cancelUrl
-      : `${origin}/pricing?checkout=cancelled`;
+
+    // Only accept same-origin redirect URLs (prevents open-redirect abuse).
+    const sameOrigin = (raw: unknown): string | null => {
+      if (typeof raw !== 'string') return null;
+      try {
+        // {CHECKOUT_SESSION_ID} is a Stripe template token, not valid URL chars — strip for validation only.
+        const candidate = new URL(raw.replace('{CHECKOUT_SESSION_ID}', 'x'), origin);
+        return candidate.origin === origin ? raw : null;
+      } catch {
+        return null;
+      }
+    };
+    const successUrl: string = sameOrigin(body.successUrl)
+      ?? `${origin}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl: string = sameOrigin(body.cancelUrl)
+      ?? `${origin}/pricing?checkout=cancelled`;
 
     const priceId = billingCycle === 'yearly' ? STRIPE_PRICE_IDS.yearly : STRIPE_PRICE_IDS.monthly;
     if (!priceId) {
@@ -76,8 +87,20 @@ export async function POST(request: NextRequest) {
     // --- Customer
     const customerId = await getOrCreateCustomer({ userId, email: userEmail });
 
-    // --- Create session
     const s = stripe();
+
+    // --- Trial abuse prevention: only grant the 14-day trial to customers who
+    // have NEVER had a subscription before. Cancel + re-subscribe = no new trial.
+    let trialEligible = true;
+    try {
+      const previous = await s.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
+      trialEligible = previous.data.length === 0;
+    } catch (e: any) {
+      console.warn('[checkout] trial eligibility check failed (defaulting to no trial):', e?.message);
+      trialEligible = false;
+    }
+
+    // --- Create session
     const session = await s.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -87,9 +110,9 @@ export async function POST(request: NextRequest) {
       cancel_url: cancelUrl,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
-      locale: 'en',
+      locale,
       subscription_data: {
-        trial_period_days: 14,
+        ...(trialEligible ? { trial_period_days: 14 } : {}),
         metadata: { supabaseUserId: userId },
       },
       metadata: { supabaseUserId: userId },

@@ -139,6 +139,38 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Dunning: payment failed → subscription goes past_due (grace period).
+  // Tell the user to update their card. Stripe retries automatically.
+  if (event.type === 'invoice.payment_failed') {
+    try {
+      const invoice = event.data.object as Stripe.Invoice;
+      let email: string | null = invoice.customer_email || null;
+      if (!email) {
+        try {
+          const db = supabaseAdmin();
+          const { data } = await db
+            .from('users')
+            .select('email')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
+          email = (data?.email as string | undefined) || null;
+        } catch {}
+      }
+      if (email) {
+        const nextAttempt = (invoice as any).next_payment_attempt as number | null | undefined;
+        await EmailService.sendPaymentFailed(email, {
+          amountEur: typeof invoice.amount_due === 'number' ? invoice.amount_due / 100 : undefined,
+          nextRetryDate: nextAttempt ? new Date(nextAttempt * 1000) : null,
+        });
+      } else {
+        console.warn('[webhook] payment_failed: no email for customer', customerId);
+      }
+    } catch (e: any) {
+      console.error('[webhook] payment_failed email failed:', e?.message);
+      // Don't fail the webhook — still continue to syncStripeData below
+    }
+  }
+
   try {
     const snapshot = await syncStripeData(customerId);
     console.log('[webhook]', event.type, 'synced', customerId, '->', snapshot.status, snapshot.plan);

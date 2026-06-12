@@ -6,6 +6,7 @@ import { useIsIOSApp } from '@/hooks/useIsIOSApp';
 import Link from 'next/link';
 import { XMarkIcon, SparklesIcon, ArrowTrendingUpIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription-system';
+import { normalizePlan } from '@/lib/plan-access';
 
 interface PaywallProps {
   type: 'soft' | 'hard' | 'metered';
@@ -125,8 +126,9 @@ export function SmartPaywall({
   const IconComponent = config.icon;
 
   useEffect(() => {
-    // Don't show paywall if user has sufficient plan or is a dev user
-    if (isDevUser || plan === 'premium' || plan === 'professional' || plan === 'institutional') {
+    // Don't show paywall if user has sufficient plan or is a dev user.
+    // normalizePlan maps 'trial' and any premium-like value to 'premium'.
+    if (isDevUser || normalizePlan(plan) === 'premium') {
       return;
     }
 

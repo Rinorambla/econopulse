@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+import { requirePremium } from '@/lib/plan-guard'
 import { getYahooQuotes } from '@/lib/yahooFinance'
 
 // Ensure Node.js runtime for OpenAI SDK
@@ -334,6 +335,10 @@ export async function POST(req: NextRequest) {
   let parsedQuestion = ''
   let liveCtxForRetry = ''
   try {
+    // Server-side premium gate — AI calls cost money; UI gating is not enough.
+    const gate = await requirePremium(req)
+    if (!gate.ok) return gate.response
+
     const { question, userId, context } = await req.json()
     parsedQuestion = question || ''
     const usedContextFlag = Boolean(context)

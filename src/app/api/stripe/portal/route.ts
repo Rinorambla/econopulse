@@ -78,14 +78,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const returnUrl: string = typeof body.returnUrl === 'string'
-      ? body.returnUrl
-      : `${request.nextUrl.origin}/dashboard/account`;
+    const origin = request.nextUrl.origin;
+    let returnUrl = `${origin}/dashboard/account`;
+    if (typeof body.returnUrl === 'string') {
+      try {
+        const candidate = new URL(body.returnUrl, origin);
+        if (candidate.origin === origin) returnUrl = body.returnUrl;
+      } catch { /* keep default */ }
+    }
+    const locale: 'en' | 'it' = body.locale === 'it' ? 'it' : 'en';
 
     const session = await stripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
-      locale: 'en',
+      locale,
     });
 
     return NextResponse.json({ url: session.url }, { headers: rateLimitHeaders(rl) });

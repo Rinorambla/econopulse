@@ -21,8 +21,10 @@ import {
   Save,
   Download,
   MoreHorizontal,
+  Palette,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
 
 interface SearchResult {
   symbol: string
@@ -318,9 +320,18 @@ function ChartSkeleton() {
   )
 }
 
+// Theme templates for the whole terminal (page chrome + chart engine).
+const THEME_OPTIONS: { key: ChartThemeKey; label: string; swatch: string }[] = [
+  { key: 'black', label: 'Black', swatch: '#000000' },
+  { key: 'blue',  label: 'Blue',  swatch: '#0b1220' },
+  { key: 'grey',  label: 'Grey',  swatch: '#2a2e35' },
+  { key: 'white', label: 'White', swatch: '#f1f5f9' },
+]
+
 export default function MarketDataPage() {
   // Persisted state
   const [symbol, setSymbol] = useLocalStorage<string>('mkt:symbol', 'AAPL')
+  const [theme, setTheme] = useLocalStorage<ChartThemeKey>('mkt:theme', 'blue')
   const [watchlists, setWatchlists] = useLocalStorage<Record<string, string[]>>('mkt:watchlists', DEFAULT_WATCHLISTS)
   const [activeListName, setActiveListName] = useLocalStorage<string>('mkt:activeList', 'Main')
   const [readSet, setReadSet] = useLocalStorage<number[]>('mkt:notifRead', [])
@@ -951,6 +962,29 @@ export default function MarketDataPage() {
                     <span className="font-semibold">Save / Share chart image</span>
                   </button>
                   <div className="my-1 border-t border-white/10" />
+                  <div className="px-2.5 py-1.5">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5 flex items-center gap-1">
+                      <Palette className="w-3 h-3" /> Theme
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {THEME_OPTIONS.map((t) => (
+                        <button
+                          key={t.key}
+                          onClick={() => setTheme(t.key)}
+                          title={t.label}
+                          className={`flex-1 flex flex-col items-center gap-1 px-1 py-1.5 rounded border text-[9px] ${
+                            theme === t.key
+                              ? 'border-blue-400 bg-blue-500/15 text-white font-bold'
+                              : 'border-white/10 text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full border border-white/20" style={{ background: t.swatch }} />
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="my-1 border-t border-white/10" />
                   <button onClick={() => { fetchQuotes(); setMenuOpen(false) }} disabled={loadingQuotes} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-white/5 text-xs text-gray-300 disabled:opacity-50">
                     <RefreshCw className={`w-4 h-4 shrink-0 ${loadingQuotes ? 'animate-spin' : ''}`} />
                     <span className="font-semibold">Refresh quotes</span>
@@ -1144,8 +1178,9 @@ export default function MarketDataPage() {
   return (
     <div
       ref={containerRef}
+      data-theme={theme}
       style={containerH ? { height: containerH } : undefined}
-      className="bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
+      className="mkt-terminal bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
     >
       {/* MAIN */}
       <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
@@ -1154,6 +1189,7 @@ export default function MarketDataPage() {
             symbol={symbol}
             onSymbolChange={(s) => setSymbol(s)}
             height={chartHeight}
+            theme={theme}
             className="shadow-xl shadow-black/40"
             leftSlot={searchSlot}
             rightSlot={actionsSlot}
@@ -1260,7 +1296,7 @@ export default function MarketDataPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="relative w-6 h-6 rounded-full shrink-0 overflow-hidden">
                       <span
-                        className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white"
+                        className="mkt-keep-white absolute inset-0 flex items-center justify-center text-[10px] font-black text-white"
                         style={{ background: symbolColor(sym) }}
                       >
                         {sym.replace(/[-=^.].*$/, '').slice(0, 2)}

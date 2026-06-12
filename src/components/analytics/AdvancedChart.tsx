@@ -65,6 +65,8 @@ interface Props {
   rightSlot?: React.ReactNode
   /** Receives an imperative API to capture the chart as an image. */
   onChartApi?: (api: { screenshot: () => HTMLCanvasElement | null }) => void
+  /** Color template for the chart engine (axes, grid, crosshair). */
+  theme?: ChartThemeKey
 }
 
 export type DrawingTool =
@@ -73,6 +75,23 @@ export type DrawingTool =
   | 'rect' | 'ellipse' | 'triangle'
   | 'fib-retr' | 'fib-ext'
   | 'text' | 'alert'
+
+// ========== Chart themes (Black / Blue / Grey / White) ==========
+export type ChartThemeKey = 'black' | 'blue' | 'grey' | 'white'
+interface ChartThemeTokens {
+  text: string
+  grid: string
+  axisBorder: string
+  cross: string
+  crossLabel: string
+  plate: string
+}
+const CHART_THEMES: Record<ChartThemeKey, ChartThemeTokens> = {
+  blue:  { text: '#9ca3af', grid: 'rgba(148,163,184,0.08)', axisBorder: 'rgba(148,163,184,0.15)', cross: 'rgba(148,163,184,0.4)',  crossLabel: '#1e293b', plate: '#1e293b' },
+  black: { text: '#a1a1aa', grid: 'rgba(255,255,255,0.06)', axisBorder: 'rgba(255,255,255,0.12)', cross: 'rgba(255,255,255,0.35)', crossLabel: '#27272a', plate: '#18181b' },
+  grey:  { text: '#aeb4bd', grid: 'rgba(255,255,255,0.07)', axisBorder: 'rgba(255,255,255,0.14)', cross: 'rgba(255,255,255,0.35)', crossLabel: '#343941', plate: '#2b2f36' },
+  white: { text: '#475569', grid: 'rgba(15,23,42,0.08)',    axisBorder: 'rgba(15,23,42,0.18)',    cross: 'rgba(15,23,42,0.35)',    crossLabel: '#475569', plate: '#e2e8f0' },
+}
 
 interface DrawPoint { logical: number; price: number }
 interface Drawing {
@@ -1040,7 +1059,8 @@ function computeForceIndex(bars: Bar[], period = 13): (number | null)[] {
 }
 
 // ========== Component ==========
-export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '', activeTool: activeToolProp, onToolChange, leftSlot, rightSlot, onChartApi }: Props) {
+export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChange, height = 520, className = '', activeTool: activeToolProp, onToolChange, leftSlot, rightSlot, onChartApi, theme = 'blue' }: Props) {
+  const themeTokens = CHART_THEMES[theme] || CHART_THEMES.blue
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
@@ -1170,6 +1190,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   // Bars + active indicators exposed to the canvas overlay renderer (volume profiles).
   const barsRef = useRef(bars); useEffect(() => { barsRef.current = bars }, [bars])
   const indicatorsRef = useRef(indicators); useEffect(() => { indicatorsRef.current = indicators }, [indicators])
+  const themeRef = useRef(themeTokens); useEffect(() => { themeRef.current = themeTokens }, [themeTokens])
 
   // Sync prop → state
   useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
@@ -1416,20 +1437,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       height: container.clientHeight || height,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#9ca3af',
+        textColor: themeTokens.text,
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(148,163,184,0.08)' },
-        horzLines: { color: 'rgba(148,163,184,0.08)' },
+        vertLines: { color: themeTokens.grid },
+        horzLines: { color: themeTokens.grid },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: 'rgba(148,163,184,0.4)', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1e293b' },
-        horzLine: { color: 'rgba(148,163,184,0.4)', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1e293b' },
+        vertLine: { color: themeTokens.cross, width: 1, style: LineStyle.Dashed, labelBackgroundColor: themeTokens.crossLabel },
+        horzLine: { color: themeTokens.cross, width: 1, style: LineStyle.Dashed, labelBackgroundColor: themeTokens.crossLabel },
       },
       rightPriceScale: {
-        borderColor: 'rgba(148,163,184,0.15)',
+        borderColor: themeTokens.axisBorder,
         scaleMargins: { top: 0.05, bottom: indicators.has('volume') ? 0.25 : 0.05 },
         // Linear auto-scaling fills the vertical space with the real price range.
         // (A forced logarithmic axis squashed the candles into a thin middle band
@@ -1438,7 +1459,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         autoScale: true,
       },
       timeScale: {
-        borderColor: 'rgba(148,163,184,0.15)',
+        borderColor: themeTokens.axisBorder,
         timeVisible: /m$|h$/.test(currentRange.interval),
         secondsVisible: false,
       },
@@ -2091,7 +2112,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -2256,7 +2277,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           if (a && d.text) {
             ctx.font = '12px ui-sans-serif, system-ui'
             const w = ctx.measureText(d.text).width + 8
-            ctx.globalAlpha = 0.85; ctx.fillStyle = '#1e293b'; ctx.fillRect(a.x, a.y - 14, w, 18); ctx.globalAlpha = 1
+            ctx.globalAlpha = 0.85; ctx.fillStyle = themeRef.current.plate; ctx.fillRect(a.x, a.y - 14, w, 18); ctx.globalAlpha = 1
             ctx.fillStyle = d.color; ctx.fillText(d.text, a.x + 4, a.y)
             ctx.beginPath(); ctx.arc(a.x, a.y, 3, 0, Math.PI * 2); ctx.fill()
           }
@@ -2604,7 +2625,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           {rangeOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={() => setRangeOpen(false)} />
-              <div className="absolute left-0 top-full mt-1 z-30 w-44 p-2 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+              <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 z-30 sm:w-44 p-2 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
                 <div className="grid grid-cols-3 gap-1">
                   {RANGE_OPTS.map(r => (
                     <button
@@ -2650,7 +2671,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           {toolsOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={() => setToolsOpen(false)} />
-              <div className="absolute left-0 top-full mt-1 z-30 min-w-[180px] p-1.5 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
+              <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1 z-30 sm:min-w-[180px] p-1.5 rounded-md border border-white/15 bg-slate-900/95 backdrop-blur shadow-xl">
                 {CHART_TOOLS.map(t => (
                   <button
                     key={t.id}
@@ -2690,7 +2711,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
               className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-24 sm:w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
             />
             {compareSearchOpen && compareResults.length > 0 && (
-              <div className="absolute z-40 mt-1 right-0 w-[min(15rem,calc(100vw-2rem))] max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
+              <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 z-40 sm:w-[min(15rem,calc(100vw-2rem))] max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">
                 {compareResults.map((r) => (
                   <button
                     key={`${r.symbol}-${r.exchange ?? ''}`}

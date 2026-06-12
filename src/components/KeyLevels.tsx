@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 interface StrikeLevel {
   strike: number;
@@ -106,11 +106,33 @@ const fmt$ = (n: number | null | undefined, dec = 2) =>
 const fmtK = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : String(n);
 
+// SqueezeMetrics dark-index style palette
+const SQ_BG = '#1e2131';
+const SQ_YELLOW = 'hsl(45,100%,60%)';
+const SQ_PURPLE = 'hsl(278,70%,50%)';
+const SQ_TEAL = 'hsl(194,64%,65%)';
+const SQ_INDIGO = 'hsl(235,66%,50%)';
+const SQ_GREEN = '#3fb950';
+
+function SqPill({ on, color, onClick, children }: { on: boolean; color: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <span
+      onClick={onClick}
+      className="cursor-pointer select-none rounded-[10px] border-2 px-2.5 text-[11px] font-bold leading-5"
+      style={{ borderColor: color, backgroundColor: on ? color : 'transparent', color: on ? SQ_BG : color, fontFamily: 'Tahoma, sans-serif' }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintPrice?: number }) {
   const [data, setData] = useState<KeyLevels | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'realtime' | 'inventory' | 'regime' | 'levels' | 'tape' | 'strategy' | 'ai' | 'technicals'>('realtime');
+  const [showCalls, setShowCalls] = useState(true);
+  const [showPuts, setShowPuts] = useState(true);
 
   useEffect(() => {
     let cancel = false;
@@ -360,12 +382,12 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           return v.toFixed(0);
         };
         return (
-          <div className="bg-slate-900 rounded-lg p-3 ring-1 ring-white/5">
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-[12px] font-semibold text-white">options inventory</div>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="text-emerald-400 font-semibold">CALLS</span>
-                <span className="text-red-400 font-semibold">PUTS</span>
+          <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[12px] font-bold" style={{ color: 'lightgray', fontFamily: 'Tahoma, sans-serif' }}>options inventory</div>
+              <div className="flex items-center gap-2">
+                <SqPill on={showCalls} color={SQ_YELLOW} onClick={() => setShowCalls(v => !v)}>CALLS</SqPill>
+                <SqPill on={showPuts} color={SQ_TEAL} onClick={() => setShowPuts(v => !v)}>PUTS</SqPill>
               </div>
             </div>
             <div className="text-[10px] text-gray-500 mb-2">
@@ -373,9 +395,23 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
               {' · '}strikes {minStrike.toFixed(2)}–{maxStrike.toFixed(2)}
             </div>
             <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxHeight: 600 }} preserveAspectRatio="xMidYMid meet">
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="invCallGrad" gradientUnits="userSpaceOnUse" x1={padLeft} y1="0" x2={padLeft + chartW} y2="0">
+                    <stop offset="0%" stopColor={SQ_PURPLE} />
+                    <stop offset="50%" stopColor={SQ_YELLOW} />
+                    <stop offset="100%" stopColor={SQ_PURPLE} />
+                  </linearGradient>
+                  <linearGradient id="invPutGrad" gradientUnits="userSpaceOnUse" x1={padLeft} y1="0" x2={padLeft + chartW} y2="0">
+                    <stop offset="0%" stopColor={SQ_INDIGO} />
+                    <stop offset="50%" stopColor={SQ_TEAL} />
+                    <stop offset="100%" stopColor={SQ_INDIGO} />
+                  </linearGradient>
+                </defs>
                 {/* Background */}
-                <rect x={padLeft} y={padTop} width={chartW} height={chartH} fill="#0b1220" rx={3} />
+                <rect x={0} y={0} width={W} height={H} fill={SQ_BG} />
+                {/* Watermark */}
+                <text textAnchor="middle" x={W / 2} y={padTop + chartH / 2 + 20} fontSize={W / 11} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.16)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
                 {/* SOLD / BOUGHT headers */}
                 <text x={xZero - chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#94a3b8" fontWeight={600} letterSpacing={1}>SOLD</text>
                 <text x={xZero + chartW / 4} y={padTop - 12} textAnchor="middle" fontSize={11} fill="#cbd5e1" fontWeight={600} letterSpacing={1}>BOUGHT</text>
@@ -385,7 +421,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                 {ticks.map((t, i) => {
                   if (t === 0) return null;
                   const x = xFor(t);
-                  return <line key={i} x1={x} y1={padTop} x2={x} y2={padTop + chartH} stroke="#1e293b" strokeWidth={1} strokeDasharray="2 4" />;
+                  return <line key={i} x1={x} y1={padTop} x2={x} y2={padTop + chartH} stroke="rgba(255,255,255,0.07)" strokeWidth={1} strokeDasharray="2 4" />;
                 })}
                 {/* Bars per strike: calls on top half of row (green), puts on bottom (red).
                     BOUGHT goes right (positive x), SOLD goes left (negative x). */}
@@ -400,19 +436,19 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                   const isPriceRow = Math.abs(r.strike - price) / Math.max(price, 1) < 0.0008;
                   return (
                     <g key={r.strike}>
-                      {/* CALLS (green) */}
-                      {callBoughtW > 0.5 && (
-                        <rect x={xZero} y={yCall} width={callBoughtW} height={barH} fill="#22c55e" opacity={0.95} rx={1} />
+                      {/* CALLS (gex yellow→purple gradient) */}
+                      {showCalls && callBoughtW > 0.5 && (
+                        <rect x={xZero} y={yCall} width={callBoughtW} height={barH} fill="url(#invCallGrad)" opacity={0.95} rx={1} />
                       )}
-                      {callSoldW > 0.5 && (
-                        <rect x={xZero - callSoldW} y={yCall} width={callSoldW} height={barH} fill="#22c55e" opacity={0.95} rx={1} />
+                      {showCalls && callSoldW > 0.5 && (
+                        <rect x={xZero - callSoldW} y={yCall} width={callSoldW} height={barH} fill="url(#invCallGrad)" opacity={0.95} rx={1} />
                       )}
-                      {/* PUTS (red) */}
-                      {putBoughtW > 0.5 && (
-                        <rect x={xZero} y={yPut} width={putBoughtW} height={barH} fill="#ef4444" opacity={0.95} rx={1} />
+                      {/* PUTS (dix teal→indigo gradient) */}
+                      {showPuts && putBoughtW > 0.5 && (
+                        <rect x={xZero} y={yPut} width={putBoughtW} height={barH} fill="url(#invPutGrad)" opacity={0.95} rx={1} />
                       )}
-                      {putSoldW > 0.5 && (
-                        <rect x={xZero - putSoldW} y={yPut} width={putSoldW} height={barH} fill="#ef4444" opacity={0.95} rx={1} />
+                      {showPuts && putSoldW > 0.5 && (
+                        <rect x={xZero - putSoldW} y={yPut} width={putSoldW} height={barH} fill="url(#invPutGrad)" opacity={0.95} rx={1} />
                       )}
                       {/* Strike label */}
                       <text
@@ -420,7 +456,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                         y={yMid + 4}
                         textAnchor="end"
                         fontSize={11}
-                        fill={isPriceRow ? '#fbbf24' : '#94a3b8'}
+                        fill={isPriceRow ? SQ_GREEN : '#94a3b8'}
                         fontFamily="ui-monospace, monospace"
                         fontWeight={isPriceRow ? 700 : 400}
                       >
@@ -429,10 +465,10 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                     </g>
                   );
                 })}
-                {/* Spot price line */}
+                {/* Spot price line (sqzme green) */}
                 <g>
-                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="6 4" />
-                  <text x={padLeft + chartW - 4} y={priceY - 4} textAnchor="end" fontSize={11} fill="#fbbf24" fontWeight={700} fontFamily="ui-monospace, monospace">
+                  <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke={SQ_GREEN} strokeWidth={1.5} strokeDasharray="6 4" />
+                  <text x={padLeft + chartW - 4} y={priceY - 4} textAnchor="end" fontSize={11} fill={SQ_GREEN} fontWeight={700} fontFamily="ui-monospace, monospace">
                     {price.toFixed(2)}
                   </text>
                 </g>
@@ -452,6 +488,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                 <text x={padLeft + 4} y={H - 6} fontSize={10} fill="#64748b" fontStyle="italic">
                   contract count (nearest expiry)
                 </text>
+                <text x={W - 6} y={H - 6} textAnchor="end" fontSize={9} fill="#6b7280" fontFamily="Tahoma, sans-serif">© EconoPulse</text>
               </svg>
             </div>
           </div>
@@ -519,13 +556,29 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         };
         const priceY = yFor(closestSpotIdx);
         return (
-          <div className="rounded-lg p-3 ring-1 ring-white/5" style={{ backgroundColor: '#1a1f2e' }}>
+          <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <SqPill on={showCalls} color={SQ_YELLOW} onClick={() => setShowCalls(v => !v)}>CALL GEX</SqPill>
+              <SqPill on={showPuts} color={SQ_TEAL} onClick={() => setShowPuts(v => !v)}>PUT GEX</SqPill>
+            </div>
             <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxHeight: 820 }} preserveAspectRatio="xMidYMid meet">
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="gexCallGrad" gradientUnits="userSpaceOnUse" x1={xZero} y1="0" x2={padLeft + chartW} y2="0">
+                    <stop offset="0%" stopColor={SQ_YELLOW} />
+                    <stop offset="100%" stopColor={SQ_PURPLE} />
+                  </linearGradient>
+                  <linearGradient id="gexPutGrad" gradientUnits="userSpaceOnUse" x1={xZero} y1="0" x2={padLeft} y2="0">
+                    <stop offset="0%" stopColor={SQ_TEAL} />
+                    <stop offset="100%" stopColor={SQ_INDIGO} />
+                  </linearGradient>
+                </defs>
                 {/* Dark background for chart area */}
-                <rect x={0} y={0} width={W} height={H} fill="#1a1f2e" />
+                <rect x={0} y={0} width={W} height={H} fill={SQ_BG} />
+                {/* Watermark */}
+                <text textAnchor="middle" x={W / 2} y={padTop + chartH / 2 + 24} fontSize={W / 10} fontFamily="Tahoma, sans-serif" fill="rgba(96,109,130,0.14)" style={{ pointerEvents: 'none', cursor: 'default' }}>econopulse.ai</text>
                 {/* Title — centered "gamma exposure" */}
-                <text x={W / 2} y={20} textAnchor="middle" fontSize={13} fontWeight={700} fill="#e2e8f0" fontFamily="ui-sans-serif, system-ui">
+                <text x={W / 2} y={20} textAnchor="middle" fontSize={13} fontWeight={700} fill="lightgray" fontFamily="Tahoma, sans-serif">
                   gamma exposure
                 </text>
                 {/* Strike rows — every row gets its label */}
@@ -541,30 +594,30 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                   // Label color hierarchy: spot=yellow, flip=red, biggest call=green, biggest put=red, default=light gray
                   let labelColor = '#cbd5e1';
                   let labelWeight = 400;
-                  if (isSpotRow) { labelColor = '#fde047'; labelWeight = 700; }
+                  if (isSpotRow) { labelColor = SQ_GREEN; labelWeight = 700; }
                   else if (isFlipRow) { labelColor = '#ef4444'; labelWeight = 700; }
-                  else if (isBiggestCall) { labelColor = '#22c55e'; labelWeight = 700; }
-                  else if (isBiggestPut) { labelColor = '#ef4444'; labelWeight = 700; }
+                  else if (isBiggestCall) { labelColor = SQ_YELLOW; labelWeight = 700; }
+                  else if (isBiggestPut) { labelColor = SQ_TEAL; labelWeight = 700; }
                   return (
                     <g key={r.strike}>
                       <text x={padLeft - 8} y={y + 3.5} textAnchor="end" fontSize={10} fill={labelColor} fontWeight={labelWeight} fontFamily="ui-monospace, monospace">
                         {r.strike.toFixed(2)}
                       </text>
-                      {putW > 0.5 && (
-                        <rect x={xZero - putW} y={yBar} width={putW} height={barH} fill="#ef4444" opacity={0.95} />
+                      {showPuts && putW > 0.5 && (
+                        <rect x={xZero - putW} y={yBar} width={putW} height={barH} fill="url(#gexPutGrad)" opacity={0.95} />
                       )}
-                      {callW > 0.5 && (
-                        <rect x={xZero} y={yBar} width={callW} height={barH} fill="#22c55e" opacity={0.95} />
+                      {showCalls && callW > 0.5 && (
+                        <rect x={xZero} y={yBar} width={callW} height={barH} fill="url(#gexCallGrad)" opacity={0.95} />
                       )}
                     </g>
                   );
                 })}
                 {/* Center zero axis (subtle) */}
                 <line x1={xZero} y1={padTop} x2={xZero} y2={padTop + chartH} stroke="#475569" strokeWidth={0.6} strokeDasharray="2 2" />
-                {/* Spot price horizontal yellow dashed line */}
-                <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke="#fde047" strokeWidth={1.4} strokeDasharray="6 4" />
+                {/* Spot price horizontal dashed line (sqzme green) */}
+                <line x1={padLeft} y1={priceY} x2={padLeft + chartW} y2={priceY} stroke={SQ_GREEN} strokeWidth={1.4} strokeDasharray="6 4" />
                 {/* Spot price floating label outside the chart on the right */}
-                <text x={padLeft + chartW + 6} y={priceY + 3.5} fontSize={11} fontWeight={700} fill="#fde047" fontFamily="ui-monospace, monospace">
+                <text x={padLeft + chartW + 6} y={priceY + 3.5} fontSize={11} fontWeight={700} fill={SQ_GREEN} fontFamily="ui-monospace, monospace">
                   {price.toFixed(2)}
                 </text>
                 {/* X-axis tick labels under chart */}
@@ -580,6 +633,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                 <text x={padLeft} y={padTop + chartH + 32} fontSize={10} fill="#64748b" fontFamily="ui-sans-serif, system-ui">
                   shares per $ move
                 </text>
+                <text x={W - 6} y={padTop + chartH + 32} textAnchor="end" fontSize={9} fill="#6b7280" fontFamily="Tahoma, sans-serif">© EconoPulse</text>
               </svg>
             </div>
           </div>

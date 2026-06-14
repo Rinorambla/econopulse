@@ -136,6 +136,8 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showCalls, setShowCalls] = useState(true);
   const [showPuts, setShowPuts] = useState(true);
+  const [invChartMode, setInvChartMode] = useState<'bars' | 'line'>('bars');
+  const [gexChartMode, setGexChartMode] = useState<'bars' | 'line'>('bars');
 
   useEffect(() => {
     let cancel = false;
@@ -495,6 +497,10 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
             <div className="flex items-center justify-between mb-2">
               <div className="text-[12px] font-bold" style={{ color: 'lightgray', fontFamily: 'Tahoma, sans-serif' }}>options inventory</div>
               <div className="flex items-center gap-2">
+                <div className="flex rounded-md overflow-hidden ring-1 ring-white/15">
+                  <button onClick={() => setInvChartMode('bars')} className={`px-2 py-0.5 text-[10px] font-bold ${invChartMode === 'bars' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>BARS</button>
+                  <button onClick={() => setInvChartMode('line')} className={`px-2 py-0.5 text-[10px] font-bold ${invChartMode === 'line' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>LINE</button>
+                </div>
                 <SqPill on={showCalls} color={SQ_YELLOW} onClick={() => setShowCalls(v => !v)}>CALLS</SqPill>
                 <SqPill on={showPuts} color={SQ_TEAL} onClick={() => setShowPuts(v => !v)}>PUTS</SqPill>
               </div>
@@ -543,7 +549,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                 {/* Zero baseline */}
                 <line x1={padLeft} y1={yZero} x2={padLeft + chartW} y2={yZero} stroke="#475569" strokeWidth={1} />
                 {/* Bars per strike: call column left, put column right. BOUGHT up, SOLD down. */}
-                {ordered.map((r, i) => {
+                {invChartMode === 'bars' && ordered.map((r, i) => {
                   const xc = xCenter(i);
                   const xCall = xc - barW - 0.5;
                   const xPut = xc + 0.5;
@@ -560,6 +566,19 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                     </g>
                   );
                 })}
+                {/* Line mode: net inventory per strike (bought − sold) as smooth lines */}
+                {invChartMode === 'line' && (() => {
+                  const callPts = ordered.map((r, i) => `${xCenter(i).toFixed(1)},${(yZero - hFor(r.callBought - r.callSold)).toFixed(1)}`).join(' ');
+                  const putPts = ordered.map((r, i) => `${xCenter(i).toFixed(1)},${(yZero - hFor(r.putBought - r.putSold)).toFixed(1)}`).join(' ');
+                  return (
+                    <g>
+                      {showCalls && <polyline points={callPts} fill="none" stroke={SQ_YELLOW} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+                      {showPuts && <polyline points={putPts} fill="none" stroke={SQ_TEAL} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+                      {showCalls && ordered.map((r, i) => <circle key={`ic-${r.strike}`} cx={xCenter(i)} cy={yZero - hFor(r.callBought - r.callSold)} r={1.6} fill={SQ_YELLOW} />)}
+                      {showPuts && ordered.map((r, i) => <circle key={`ip-${r.strike}`} cx={xCenter(i)} cy={yZero - hFor(r.putBought - r.putSold)} r={1.6} fill={SQ_TEAL} />)}
+                    </g>
+                  );
+                })()}
                 {/* Strike labels on X axis (every Nth) */}
                 {ordered.map((r, i) => {
                   if (i % labelEvery !== 0 && i !== n - 1) return null;
@@ -661,6 +680,10 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         return (
           <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
             <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="flex rounded-md overflow-hidden ring-1 ring-white/15">
+                <button onClick={() => setGexChartMode('bars')} className={`px-2 py-0.5 text-[10px] font-bold ${gexChartMode === 'bars' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>BARS</button>
+                <button onClick={() => setGexChartMode('line')} className={`px-2 py-0.5 text-[10px] font-bold ${gexChartMode === 'line' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>LINE</button>
+              </div>
               <SqPill on={showCalls} color={SQ_YELLOW} onClick={() => setShowCalls(v => !v)}>CALL GEX</SqPill>
               <SqPill on={showPuts} color={SQ_TEAL} onClick={() => setShowPuts(v => !v)}>PUT GEX</SqPill>
             </div>
@@ -695,7 +718,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                   );
                 })}
                 {/* Bars per strike: call GEX up, put GEX down */}
-                {rows.map((r, i) => {
+                {gexChartMode === 'bars' && rows.map((r, i) => {
                   const xc = xCenter(i);
                   const x = xc - barW / 2;
                   const callH = hFor(r.callGex);
@@ -711,6 +734,17 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
                     </g>
                   );
                 })}
+                {/* Line mode: call GEX (up) and put GEX (down) as continuous lines */}
+                {gexChartMode === 'line' && (() => {
+                  const callPts = rows.map((r, i) => `${xCenter(i).toFixed(1)},${(yZero - hFor(r.callGex)).toFixed(1)}`).join(' ');
+                  const putPts = rows.map((r, i) => `${xCenter(i).toFixed(1)},${(yZero + hFor(r.putGex)).toFixed(1)}`).join(' ');
+                  return (
+                    <g>
+                      {showCalls && <polyline points={callPts} fill="none" stroke={SQ_YELLOW} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+                      {showPuts && <polyline points={putPts} fill="none" stroke={SQ_TEAL} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+                    </g>
+                  );
+                })()}
                 {/* Zero baseline */}
                 <line x1={padLeft} y1={yZero} x2={padLeft + chartW} y2={yZero} stroke="#475569" strokeWidth={1} />
                 {/* Strike labels on X axis — every Nth, plus highlighted spot/flip/walls */}

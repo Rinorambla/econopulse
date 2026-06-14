@@ -68,7 +68,7 @@ export default function UserAccountDashboard() {
     setCancelError(null);
     try {
       const token = session?.access_token;
-      const res = await fetch('/api/stripe/portal', {
+      const res = await fetch('/api/billing/portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export default function UserAccountDashboard() {
     setBillingLoading(true);
     try {
       const token = session?.access_token;
-      const response = await fetch('/api/stripe/portal', {
+      const response = await fetch('/api/billing/portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

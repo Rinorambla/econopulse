@@ -131,6 +131,9 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'realtime' | 'inventory' | 'regime' | 'levels' | 'tape' | 'strategy' | 'ai' | 'technicals'>('realtime');
+  const [horizon, setHorizon] = useState<'1D' | '1W' | '1M' | '3M' | '1Y'>('1W');
+  const [historyBars, setHistoryBars] = useState<Array<{ time: number; close: number }>>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showCalls, setShowCalls] = useState(true);
   const [showPuts, setShowPuts] = useState(true);
 
@@ -160,6 +163,38 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
   }, [symbol, hintPrice]);
+
+  useEffect(() => {
+    let cancel = false;
+    const cfg: Record<'1D' | '1W' | '1M' | '3M' | '1Y', { range: string; interval: string }> = {
+      '1D': { range: '1d', interval: '5m' },
+      '1W': { range: '5d', interval: '30m' },
+      '1M': { range: '1mo', interval: '1d' },
+      '3M': { range: '3mo', interval: '1d' },
+      '1Y': { range: '1y', interval: '1d' },
+    };
+    const { range, interval } = cfg[horizon];
+    const run = async () => {
+      setHistoryLoading(true);
+      try {
+        const qs = new URLSearchParams({ symbol, range, interval });
+        const res = await fetch(`/api/yahoo-history?${qs.toString()}`, { cache: 'no-store' });
+        const js = await res.json();
+        if (cancel) return;
+        const bars = Array.isArray(js?.data?.bars) ? js.data.bars : [];
+        const cleaned = bars
+          .filter((b: { time?: number; close?: number }) => typeof b?.time === 'number' && typeof b?.close === 'number')
+          .map((b: { time: number; close: number }) => ({ time: b.time, close: b.close }));
+        setHistoryBars(cleaned);
+      } catch {
+        if (!cancel) setHistoryBars([]);
+      } finally {
+        if (!cancel) setHistoryLoading(false);
+      }
+    };
+    run();
+    return () => { cancel = true; };
+  }, [symbol, horizon]);
 
   // Build a unified ladder of strikes around current price for visual chart
   const ladder = useMemo(() => {
@@ -217,6 +252,53 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
 
   const price = data.underlyingPrice;
   const biasColor = data.bias === 'Bullish' ? 'text-emerald-400' : data.bias === 'Bearish' ? 'text-red-400' : 'text-gray-300';
+  const firstClose = historyBars[0]?.close ?? null;
+  const lastClose = historyBars[historyBars.length - 1]?.close ?? null;
+  const histDelta = firstClose != null && lastClose != null && firstClose !== 0
+    ? ((lastClose - firstClose) / firstClose) * 100
+    : null;
+  const histDeltaClass = histDelta == null ? 'text-gray-300' : histDelta > 0 ? 'text-emerald-400' : histDelta < 0 ? 'text-red-400' : 'text-gray-300';
+
+  const PriceLineChart = () => {
+    if (historyBars.length < 2) {
+      return (
+        <div className="h-36 rounded bg-slate-900/40 ring-1 ring-white/5 flex items-center justify-center text-[11px] text-gray-500">
+          No price series available for {horizon}
+        </div>
+      );
+    }
+    const W = 760;
+    const H = 180;
+    const padL = 10;
+    const padR = 10;
+    const padT = 12;
+    const padB = 18;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+    const min = Math.min(...historyBars.map(b => b.close));
+    const max = Math.max(...historyBars.map(b => b.close));
+    const span = Math.max(max - min, 0.0001);
+    const x = (i: number) => padL + (i / Math.max(historyBars.length - 1, 1)) * chartW;
+    const y = (v: number) => padT + (1 - (v - min) / span) * chartH;
+    const path = historyBars.map((b, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(2)} ${y(b.close).toFixed(2)}`).join(' ');
+    const yLast = y(historyBars[historyBars.length - 1].close);
+    const yFirst = y(historyBars[0].close);
+    const lineColor = (lastClose ?? 0) >= (firstClose ?? 0) ? '#22c55e' : '#ef4444';
+    return (
+      <div className="rounded bg-slate-900/40 ring-1 ring-white/5 p-1">
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: 'auto', display: 'block' }} preserveAspectRatio="xMidYMid meet">
+          <line x1={padL} y1={yFirst} x2={W - padR} y2={yFirst} stroke="rgba(148,163,184,0.22)" strokeDasharray="3 4" />
+          <path d={path} fill="none" stroke={lineColor} strokeWidth={2.2} />
+          <circle cx={W - padR} cy={yLast} r={2.5} fill={lineColor} />
+          <text x={W - padR} y={yLast - 6} textAnchor="end" fontSize={9} fill={lineColor} fontFamily="ui-monospace, monospace">
+            {lastClose?.toFixed(2)}
+          </text>
+          <text x={padL} y={H - 4} fontSize={9} fill="#64748b">{horizon}</text>
+          <text x={W - padR} y={H - 4} textAnchor="end" fontSize={9} fill="#64748b">{historyBars.length} pts</text>
+        </svg>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -263,6 +345,29 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
             <span className="mr-1">{t.icon}</span>{t.label}
           </button>
         ))}
+      </div>
+
+      {/* Time horizon selector + line chart */}
+      <div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold text-gray-300">Price Horizon</div>
+          <div className="flex flex-wrap gap-1">
+            {(['1D', '1W', '1M', '3M', '1Y'] as const).map(h => (
+              <button
+                key={h}
+                onClick={() => setHorizon(h)}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${horizon === h ? 'bg-blue-600/30 text-blue-200 border-blue-500/40' : 'bg-slate-900/50 text-gray-300 border-slate-700 hover:text-white'}`}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-gray-500">{historyLoading ? 'Updating price curve…' : `Symbol ${symbol.toUpperCase()}`}</span>
+          <span className={`font-semibold tabular-nums ${histDeltaClass}`}>{histDelta == null ? '—' : `${histDelta > 0 ? '+' : ''}${histDelta.toFixed(2)}%`}</span>
+        </div>
+        <PriceLineChart />
       </div>
 
       {/* Market Regime Panel — AI 2.0 classifier */}
@@ -345,6 +450,11 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           </div>
         );
       })()}
+      {tab === 'regime' && !data.regime && (
+        <div className="bg-slate-800/40 rounded-lg p-4 ring-1 ring-white/5 text-[11px] text-gray-400 text-center">
+          Regime data temporarily unavailable for this symbol.
+        </div>
+      )}
 
       {/* Options Inventory — horizontal layout: strikes on X axis, BOUGHT up / SOLD down */}
       {(tab === 'realtime' || tab === 'inventory') && inventoryZoomed && (() => {
@@ -479,6 +589,11 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
           </div>
         );
       })()}
+      {tab === 'inventory' && !inventoryZoomed && (
+        <div className="bg-slate-800/40 rounded-lg p-4 ring-1 ring-white/5 text-[11px] text-gray-400 text-center">
+          Inventory panel unavailable (no nearby strikes or chain data missing).
+        </div>
+      )}
 
       {/* Empty-state hint when chart can't render */}
       {(tab === 'realtime' || tab === 'inventory' || tab === 'levels') && !ladder && (
@@ -727,6 +842,11 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      {tab === 'tape' && !(data.callVolToday.length > 0 || data.putVolToday.length > 0) && (
+        <div className="bg-slate-800/40 rounded-lg p-4 ring-1 ring-white/5 text-[11px] text-gray-400 text-center">
+          No fresh tape flow detected today.
         </div>
       )}
 

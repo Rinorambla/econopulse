@@ -372,11 +372,32 @@ export default function DashboardPage() {
 	return (
 		<RequirePlan min="premium">
 			<div className="min-h-screen bg-[var(--background)] text-white">
-				<div className="bg-slate-800 border-b border-slate-700"><div className="max-w-7xl mx-auto px-3 py-1 flex items-center space-x-2"><NavigationLink href="/" className="text-blue-400 hover:text-blue-300"><ArrowLeftIcon className="h-4 w-4" /></NavigationLink><h1 className="text-sm font-bold">Market Dashboard</h1><span className="ml-3 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-400 hover:underline">Market DNA</NavigationLink></span><div className="ml-auto" /><button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-0.5 text-gray-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Column guide"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg><span className="text-[10px]">Guide</span></button></div></div>
+				<div className="border-b border-slate-700/80 bg-gradient-to-b from-slate-900/95 to-slate-900/65 backdrop-blur-sm">
+					<div className="max-w-7xl mx-auto px-3 py-3">
+						<div className="flex flex-wrap items-center gap-2">
+							<NavigationLink href="/" className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-700 bg-slate-800/70 text-blue-300 hover:text-blue-200 hover:border-blue-500/40 transition-colors">
+								<ArrowLeftIcon className="h-4 w-4" />
+							</NavigationLink>
+							<div className="min-w-0">
+								<h1 className="text-base sm:text-lg font-extrabold tracking-tight">Market Dashboard Pro</h1>
+								<p className="text-[11px] text-gray-400">Live options, flow and directional pressure analytics for execution</p>
+							</div>
+							<div className="ml-auto flex items-center gap-2">
+								<span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">LIVE</span>
+								<span className="hidden sm:inline text-[10px] text-gray-400">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'}</span>
+								<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-300 hover:text-white hover:bg-slate-700 rounded border border-slate-700 transition-colors" title="Column guide">
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
+									<span className="text-[10px]">Guide</span>
+								</button>
+							</div>
+						</div>
+						<div className="mt-2 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-300 hover:underline">Market DNA</NavigationLink></div>
+					</div>
+				</div>
 
 				{/* Market Sentiment & Risk block moved to /market-dna */}
 				{summary && (
-					<div className="max-w-7xl mx-auto px-3 pt-1 grid grid-cols-5 gap-1">
+					<div className="max-w-7xl mx-auto px-3 pt-2 grid grid-cols-2 lg:grid-cols-5 gap-2">
 						{(() => {
 							const parseNum = (s: string) => {
 								const cleaned = s.replace(/[%+,\s]/g, '')
@@ -385,17 +406,17 @@ export default function DashboardPage() {
 							}
 							const avgPerfNum = parseNum(summary.avgPerformance)
 							const avgPerfColor = avgPerfNum > 0 ? 'text-green-500' : avgPerfNum < 0 ? 'text-red-500' : 'text-white'
-							const items: Array<[string, string, string]> = [
-								['Avg Performance', summary.avgPerformance, avgPerfColor],
-								['Volume', summary.totalVolume, 'text-white'],
-								['Bull/Bear', `${summary.bullishCount}/${summary.bearishCount}`, 'text-white'],
-								['Sentiment', summary.marketSentiment, summary.marketSentiment === 'Bullish' ? 'text-green-500' : summary.marketSentiment === 'Bearish' ? 'text-red-500' : 'text-yellow-500'],
-								['Status','LIVE','text-green-500']
+							const items: Array<[string, string, string, string]> = [
+								['Avg Performance', summary.avgPerformance, avgPerfColor, '📈'],
+								['Volume', summary.totalVolume, 'text-white', '📦'],
+								['Bull/Bear', `${summary.bullishCount}/${summary.bearishCount}`, 'text-white', '⚖️'],
+								['Sentiment', summary.marketSentiment, summary.marketSentiment === 'Bullish' ? 'text-green-500' : summary.marketSentiment === 'Bearish' ? 'text-red-500' : 'text-yellow-500', '🧭'],
+								['Status','LIVE','text-green-500', '⚡']
 							]
-							return items.map(([l,v,c],i)=> (
-								<div key={i} className="bg-slate-800 rounded p-1">
-									<div className="text-xs text-gray-400">{l}</div>
-									<div className={`text-xs font-bold ${c}`}>{v}</div>
+							return items.map(([l,v,c,icon],i)=> (
+								<div key={i} className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-lg p-2 ring-1 ring-white/10 border border-slate-700/70">
+									<div className="text-[10px] text-gray-400 flex items-center gap-1"><span>{icon}</span>{l}</div>
+									<div className={`text-sm font-bold ${c}`}>{v}</div>
 								</div>
 							))
 						})()}
@@ -412,7 +433,7 @@ export default function DashboardPage() {
 			{/* Advanced Filters */}
 								<div className="max-w-7xl mx-auto px-3 pt-2 pb-3">
 												{/* Sector diagnostics removed */}
-									<div className="bg-slate-800 rounded p-2 mb-2 grid gap-2 md:grid-cols-6 lg:grid-cols-8 text-[11px]">
+									<div className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-lg p-2.5 mb-2 grid gap-2 md:grid-cols-6 lg:grid-cols-8 text-[11px] ring-1 ring-white/10 border border-slate-700/70">
 										<input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search Ticker / Name" className="px-2 py-1 bg-slate-700 border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
 										<select value={selectedSector} onChange={e=>setSelectedSector(e.target.value)} className="px-2 py-1 bg-slate-700 border border-slate-600 rounded"><option value="All">Sector: All</option>{getUniqueSectors().map(s=> <option key={s}>{s}</option>)}</select>
 										{/* Market and Category filters removed per request */}

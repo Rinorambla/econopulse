@@ -1445,6 +1445,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const barsRef = useRef(bars); useEffect(() => { barsRef.current = bars }, [bars])
   const indicatorsRef = useRef(indicators); useEffect(() => { indicatorsRef.current = indicators }, [indicators])
   const themeRef = useRef(themeTokens); useEffect(() => { themeRef.current = themeTokens }, [themeTokens])
+  const chartStyleRef = useRef(chartStyle); useEffect(() => { chartStyleRef.current = chartStyle }, [chartStyle])
 
   // Sync prop → state
   useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
@@ -1568,6 +1569,107 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [symbol, currentRange, rangeKey])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ========== Live updates ==========
+  // The historical fetch above runs only on symbol/range change, so candles stay
+  // frozen. This effect polls the latest bar and pushes it into the chart via
+  // series.update() — which updates the forming candle (or appends a new one)
+  // WITHOUT resetting the user's zoom/pan or reloading the whole dataset.
+  useEffect(() => {
+    // Macro (FRED) and relative-strength ratio charts have no intraday ticks.
+    const isFred = /^fred:/i.test(symbol)
+    const isRatio = !isFred && /^[^/]+\/[^/]+$/.test(symbol.trim())
+    if (isFred || isRatio) return
+    // Only ranges whose right-most bar is "today/now" benefit from live ticks.
+    // Skip weekly/monthly intervals (5Y/MAX) where a live tick is meaningless.
+    const iv = currentRange.interval
+    const isIntraday = /m$|h$/.test(iv)
+    const isDaily = iv === '1d'
+    if (!isIntraday && !isDaily) return
+
+    const pollMs = isIntraday ? 15000 : 30000
+    // Fetch the freshest window only: a tiny slice keeps the request light.
+    const liveRange = isIntraday ? '1d' : '5d'
+
+    const isSane = (t: number) => isSaneEpoch(t)
+    const toSec = (t: any): number =>
+      typeof t === 'number' ? (t > 1e12 ? Math.floor(t / 1000) : t) : Math.floor(new Date(t).getTime() / 1000)
+    const formatTime = (t: number): Time => {
+      if (isIntraday) return t as Time
+      const d = new Date(t * 1000)
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` as Time
+    }
+
+    let stopped = false
+    const tick = async () => {
+      if (stopped) return
+      // Don't poll while the tab is hidden — saves rate limit + battery.
+      if (typeof document !== 'undefined' && document.hidden) return
+      const main = mainSeriesRef.current
+      const cur = barsRef.current
+      if (!main || cur.length < 2) return
+      try {
+        const q = new URLSearchParams({ symbol, range: liveRange, interval: iv })
+        const r = await fetch(`/api/yahoo-history?${q}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        if (!r.ok || stopped) return
+        const j = await r.json()
+        const rw = j?.bars || j?.data?.bars || j?.data || []
+        if (!Array.isArray(rw) || rw.length === 0) return
+        const live: Bar[] = rw
+          .filter((b: any) => b && Number.isFinite(b.close) && b.close > 0)
+          .map((b: any) => ({
+            time: toSec(b.time),
+            open: b.open || b.close, high: b.high || b.close, low: b.low || b.close, close: b.close, volume: b.volume || 0,
+          }))
+          .filter((b: Bar) => isSane(b.time))
+          .sort((a: Bar, b: Bar) => a.time - b.time)
+        if (live.length === 0 || stopped) return
+
+        const lb = live[live.length - 1]
+        const lastKnown = cur[cur.length - 1]
+        // Only forward in time: update() throws if the time goes backwards.
+        if (lb.time < lastKnown.time) return
+
+        const t = formatTime(lb.time)
+        const style = chartStyleRef.current
+        if (style === 'candle') {
+          main.update({ time: t, open: lb.open, high: lb.high, low: lb.low, close: lb.close } as CandlestickData)
+        } else {
+          main.update({ time: t, value: lb.close } as LineData)
+        }
+        // Volume bar (if shown) for the same slot.
+        const vs = volumeSeriesRef.current
+        if (vs) {
+          const up = lb.close >= lb.open
+          vs.update({ time: t, value: lb.volume, color: up ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)' } as HistogramData)
+        }
+
+        // Keep barsRef in sync so the volume-profile overlay and headers match.
+        const next = cur.slice()
+        if (lb.time === lastKnown.time) next[next.length - 1] = lb
+        else next.push(lb)
+        barsRef.current = next
+
+        // Refresh the price header against the prior bar's close.
+        const prevClose = (lb.time === lastKnown.time ? cur[cur.length - 2] : lastKnown)?.close
+        if (prevClose) {
+          setLastPrice({ price: lb.close, change: lb.close - prevClose, changePct: (lb.close - prevClose) / prevClose * 100 })
+        }
+      } catch { /* transient network error — try again next tick */ }
+    }
+
+    const id = window.setInterval(tick, pollMs)
+    // Kick once shortly after mount so the first tick isn't a full interval away.
+    const warm = window.setTimeout(tick, 4000)
+    const onVis = () => { if (!document.hidden) tick() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      stopped = true
+      window.clearInterval(id)
+      window.clearTimeout(warm)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [symbol, currentRange])
 
   // Fetch compare symbols bars (normalized performance overlays)
   useEffect(() => {

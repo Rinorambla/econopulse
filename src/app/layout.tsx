@@ -45,15 +45,22 @@ export const metadata: Metadata = {
     images: ['https://econopulse.ai/icons/icon-512x512.png'],
   },
   icons: {
-    // Explicit favicon for Google SERP favicon discovery
+    // Explicit favicons for search-engine (Google SERP) discovery. Google
+    // prefers a square icon that is a multiple of 48px, so we expose 48x48
+    // alongside the classic .ico and an SVG for crisp rendering everywhere.
     icon: [
       { url: '/favicon.ico', rel: 'icon', sizes: '32x32' },
+      { url: '/icons/icon-48x48.png', type: 'image/png', sizes: '48x48' },
+      { url: '/icons/icon-96x96.png', type: 'image/png', sizes: '96x96' },
       { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icons/icon-512x512.png', type: 'image/png', sizes: '512x512' },
       { url: '/icon.svg', type: 'image/svg+xml' },
     ],
     shortcut: '/favicon.ico',
+    // Apple touch icons (used by iOS/iPadOS and macOS desktop installs).
     apple: [
       { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icons/icon-180x180.png', sizes: '180x180', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
     ],
   },

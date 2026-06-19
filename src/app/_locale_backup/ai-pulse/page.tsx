@@ -637,7 +637,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : minDim > 15 ? 7 : 5;
                       const pctSize = minDim > 60 ? 11 : minDim > 40 ? 9 : 7;
                       return (
-                        <g key={cell.symbol} className="cursor-pointer" onClick={() => goToChart(cell.symbol)}>
+                        <g key={cell.symbol} className="cursor-pointer" onClick={() => setSelectedSymbol(cell.symbol)}>
                           <rect x={cell.x + 0.5} y={cell.y + 0.5} width={Math.max(0, cell.w - 1)} height={Math.max(0, cell.h - 1)}
                             fill={colorForPct(cell.pct)} rx="1" stroke="#0b1120" strokeWidth="0.5"
                             className="hover:brightness-125 transition-all"
@@ -645,7 +645,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           {showSymbol && (
                             <text x={cell.x + cell.w / 2} y={cell.y + cell.h / 2 - (showPct ? pctSize * 0.4 : 0)}
                               textAnchor="middle" dominantBaseline="central"
-                              fontSize={symbolSize} fill="white" fontWeight="700">
+                              fontSize={symbolSize} fill="white" fontWeight="700"
+                              className="hover:underline"
+                              onClick={(e) => { e.stopPropagation(); goToChart(cell.symbol); }}>
                               {cell.symbol}
                             </text>
                           )}
@@ -701,8 +703,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         {screenerData.slice(0, 20).map(m => (
                           <tr key={m.symbol}
                             className={`hover:bg-white/[0.03] cursor-pointer transition-colors ${selectedSymbol === m.symbol ? 'bg-blue-500/10' : ''}`}
-                            title={`Open ${m.symbol} chart`}
-                            onClick={() => goToChart(m.symbol)}>
+                            title={`${m.symbol} — click row for company info, click ticker for chart`}
+                            onClick={() => setSelectedSymbol(m.symbol)}>
                             <td className="py-1 px-2 font-semibold text-white">
                               <span className="flex items-center gap-1.5">
                                 <img
@@ -712,7 +714,10 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                                   className="w-4 h-4 rounded-full bg-slate-700 object-cover shrink-0"
                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
                                 />
-                                {m.symbol}
+                                <span className="hover:underline cursor-pointer" title={`Open ${m.symbol} chart`}
+                                  onClick={(e) => { e.stopPropagation(); goToChart(m.symbol); }}>
+                                  {m.symbol}
+                                </span>
                               </span>
                             </td>
                             <td className="py-1 px-2 text-right font-mono tabular-nums text-gray-300">${fmt(m.price)}</td>
@@ -737,9 +742,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           const barW = Math.abs(m.changePercent) / maxAbs * 100;
                           return (
                             <div key={m.symbol} className="flex items-center gap-1 h-4 cursor-pointer hover:bg-white/[0.03] rounded"
-                              title={`Open ${m.symbol} chart`}
-                              onClick={() => goToChart(m.symbol)}>
-                              <span className="text-[9px] font-semibold text-gray-300 w-10 text-right shrink-0">{m.symbol}</span>
+                              title={`${m.symbol} — click for company info, click ticker for chart`}
+                              onClick={() => setSelectedSymbol(m.symbol)}>
+                              <span className="text-[9px] font-semibold text-gray-300 w-10 text-right shrink-0 hover:underline"
+                                title={`Open ${m.symbol} chart`}
+                                onClick={(e) => { e.stopPropagation(); goToChart(m.symbol); }}>{m.symbol}</span>
                               <div className="flex-1 h-3 relative">
                                 <div className={`h-full rounded-sm ${m.changePercent >= 0 ? 'bg-emerald-500/60' : 'bg-red-500/60'}`}
                                   style={{ width: `${Math.max(2, barW)}%` }} />

@@ -30,16 +30,19 @@ type IndicatorKey =
   | 'sma20' | 'sma50' | 'sma100' | 'sma200'
   | 'ema9' | 'ema20' | 'ema50' | 'ema200'
   | 'wma20' | 'wma50' | 'hma' | 'dema' | 'tema' | 'vwma'
+  | 'alma' | 'kama'
   | 'psar' | 'supertrend'
   | 'ichimoku'
   // Volatility
   | 'bb' | 'keltner' | 'atr' | 'donchian' | 'envelopes' | 'stddev'
+  | 'bbwidth' | 'bbpercent' | 'choppiness' | 'histvol'
   // Volume
   | 'volume' | 'vwap' | 'obv' | 'volprofile' | 'vpvr' | 'vpfr'
-  | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex'
+  | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex' | 'eom'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
   | 'adx' | 'stochrsi' | 'roc' | 'trix' | 'uo' | 'ao' | 'ppo' | 'aroon' | 'vortex'
+  | 'cmo' | 'dpo' | 'coppock' | 'kst' | 'elderray' | 'rvi' | 'fisher' | 'bop'
   // Support/Resistance
   | 'pivots'
 
@@ -71,10 +74,10 @@ interface Props {
 
 export type DrawingTool =
   | 'cursor' | 'crosshair'
-  | 'trendline' | 'horizontal' | 'vertical'
-  | 'rect' | 'ellipse' | 'triangle'
+  | 'trendline' | 'ray' | 'arrow' | 'horizontal' | 'vertical'
+  | 'rect' | 'ellipse' | 'triangle' | 'parallel'
   | 'fib-retr' | 'fib-ext'
-  | 'text' | 'alert'
+  | 'measure' | 'text' | 'alert'
 
 // ========== Chart themes (Black / Blue / Grey / White) ==========
 export type ChartThemeKey = 'black' | 'blue' | 'grey' | 'white'
@@ -121,10 +124,10 @@ const DRAW_WIDTHS = [1, 2, 3]
 
 const TOOL_STEPS: Record<DrawingTool, number> = {
   cursor: 0, crosshair: 0,
-  trendline: 2, horizontal: 1, vertical: 1,
-  rect: 2, ellipse: 2, triangle: 3,
+  trendline: 2, ray: 2, arrow: 2, horizontal: 1, vertical: 1,
+  rect: 2, ellipse: 2, triangle: 3, parallel: 3,
   'fib-retr': 2, 'fib-ext': 2,
-  text: 1, alert: 1,
+  measure: 2, text: 1, alert: 1,
 }
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
@@ -170,13 +173,17 @@ const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
   { id: 'cursor', label: 'Cursor' },
   { id: 'crosshair', label: 'Crosshair' },
   { id: 'trendline', label: 'Trend Line' },
+  { id: 'ray', label: 'Ray' },
+  { id: 'arrow', label: 'Arrow' },
   { id: 'horizontal', label: 'Horizontal Line' },
   { id: 'vertical', label: 'Vertical Line' },
   { id: 'rect', label: 'Rectangle' },
   { id: 'ellipse', label: 'Ellipse' },
   { id: 'triangle', label: 'Triangle' },
+  { id: 'parallel', label: 'Parallel Channel' },
   { id: 'fib-retr', label: 'Fib Retracement' },
   { id: 'fib-ext', label: 'Fib Extension' },
+  { id: 'measure', label: '📏 Measure' },
   { id: 'text', label: 'Text / Note' },
   { id: 'alert', label: '⏰ Price Alert' },
 ]
@@ -202,6 +209,8 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'dema', label: 'DEMA 20' },
       { key: 'tema', label: 'TEMA 20' },
       { key: 'vwma', label: 'VWMA 20' },
+      { key: 'alma', label: 'ALMA (9)' },
+      { key: 'kama', label: 'Kaufman AMA' },
       { key: 'psar', label: 'Parabolic SAR' },
       { key: 'supertrend', label: 'SuperTrend' },
       { key: 'ichimoku', label: 'Ichimoku' },
@@ -216,6 +225,10 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'envelopes', label: 'MA Envelopes' },
       { key: 'atr', label: 'ATR (14)' },
       { key: 'stddev', label: 'Std Dev (20)' },
+      { key: 'bbwidth', label: 'Bollinger Bandwidth' },
+      { key: 'bbpercent', label: 'Bollinger %B' },
+      { key: 'choppiness', label: 'Choppiness Index' },
+      { key: 'histvol', label: 'Historical Volatility' },
     ],
   },
   {
@@ -232,6 +245,7 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'adl', label: 'Accum/Dist' },
       { key: 'chaikinosc', label: 'Chaikin Osc.' },
       { key: 'forceindex', label: 'Force Index' },
+      { key: 'eom', label: 'Ease of Movement' },
     ],
   },
   {
@@ -252,6 +266,14 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'trix', label: 'TRIX' },
       { key: 'uo', label: 'Ultimate Osc.' },
       { key: 'vortex', label: 'Vortex' },
+      { key: 'cmo', label: 'Chande Momentum' },
+      { key: 'dpo', label: 'Detrended Price Osc.' },
+      { key: 'coppock', label: 'Coppock Curve' },
+      { key: 'kst', label: 'Know Sure Thing' },
+      { key: 'elderray', label: 'Elder Ray' },
+      { key: 'rvi', label: 'Relative Vigor (RVI)' },
+      { key: 'fisher', label: 'Fisher Transform' },
+      { key: 'bop', label: 'Balance of Power' },
     ],
   },
   {
@@ -297,6 +319,8 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   dema: { visible: true, color: '#c084fc', period: 20, width: 1, style: LineStyle.Solid },
   tema: { visible: true, color: '#fb7185', period: 20, width: 1, style: LineStyle.Solid },
   vwma: { visible: true, color: '#38bdf8', period: 20, width: 1, style: LineStyle.Solid },
+  alma: { visible: true, color: '#f59e0b', period: 9, width: 1, style: LineStyle.Solid },
+  kama: { visible: true, color: '#a3e635', period: 10, width: 1, style: LineStyle.Solid },
   psar: { visible: true, color: '#e879f9', width: 2, style: LineStyle.Dotted },
   supertrend: { visible: true, color: '#22c55e', color2: '#ef4444', period: 10, mult: 3, width: 2, style: LineStyle.Solid },
   ichimoku: { visible: true, color: '#2563eb', color2: '#dc2626', period: 9, period2: 26, period3: 52, width: 1, style: LineStyle.Solid },
@@ -307,6 +331,10 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   envelopes: { visible: true, color: '#60a5fa', period: 20, mult: 2.5, width: 1, style: LineStyle.Solid },
   atr: { visible: true, color: '#fb923c', period: 14, width: 1, style: LineStyle.Solid },
   stddev: { visible: true, color: '#94a3b8', period: 20, width: 1, style: LineStyle.Solid },
+  bbwidth: { visible: true, color: '#a855f7', period: 20, mult: 2, width: 1, style: LineStyle.Solid },
+  bbpercent: { visible: true, color: '#60a5fa', period: 20, mult: 2, ob: 1, os: 0, width: 1, style: LineStyle.Solid },
+  choppiness: { visible: true, color: '#eab308', period: 14, ob: 61.8, os: 38.2, width: 1, style: LineStyle.Solid },
+  histvol: { visible: true, color: '#f87171', period: 20, width: 1, style: LineStyle.Solid },
   // ── Volume ──
   volume: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
   vwap: { visible: true, color: '#ec4899', width: 1, style: LineStyle.Dotted },
@@ -316,6 +344,7 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   adl: { visible: true, color: '#60a5fa', width: 1, style: LineStyle.Solid },
   chaikinosc: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
   forceindex: { visible: true, color: '#22c55e', color2: '#ef4444', period: 13, width: 1, style: LineStyle.Solid },
+  eom: { visible: true, color: '#38bdf8', period: 14, width: 1, style: LineStyle.Solid },
   // ── Momentum ──
   rsi: { visible: true, color: '#8b5cf6', period: 14, ob: 70, os: 30, width: 1, style: LineStyle.Solid },
   macd: { visible: true, color: '#3b82f6', color2: '#f97316', period: 12, period2: 26, period3: 9, width: 1, style: LineStyle.Solid },
@@ -332,6 +361,14 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   trix: { visible: true, color: '#f472b6', period: 15, width: 1, style: LineStyle.Solid },
   uo: { visible: true, color: '#14b8a6', period: 7, period2: 14, period3: 28, width: 1, style: LineStyle.Solid },
   vortex: { visible: true, color: '#22c55e', color2: '#ef4444', period: 14, width: 1, style: LineStyle.Solid },
+  cmo: { visible: true, color: '#c084fc', period: 14, ob: 50, os: -50, width: 1, style: LineStyle.Solid },
+  dpo: { visible: true, color: '#f472b6', period: 20, width: 1, style: LineStyle.Solid },
+  coppock: { visible: true, color: '#14b8a6', period: 14, period2: 11, period3: 10, width: 1, style: LineStyle.Solid },
+  kst: { visible: true, color: '#3b82f6', color2: '#f97316', width: 1, style: LineStyle.Solid },
+  elderray: { visible: true, color: '#22c55e', color2: '#ef4444', period: 13, width: 1, style: LineStyle.Solid },
+  rvi: { visible: true, color: '#06b6d4', color2: '#f97316', period: 10, width: 1, style: LineStyle.Solid },
+  fisher: { visible: true, color: '#a78bfa', color2: '#f97316', period: 9, width: 1, style: LineStyle.Solid },
+  bop: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
 }
 
 // Friendly labels for the numeric "length" fields, per indicator (falls back to generic).
@@ -814,6 +851,210 @@ function computeStdDev(closes: number[], period = 20): (number | null)[] {
   return out
 }
 
+// ===== Additional indicator helpers (extended pack) =====
+// Arnaud Legoux Moving Average — Gaussian-weighted MA that reduces lag/noise.
+function computeALMA(closes: number[], period = 9, offset = 0.85, sigma = 6): (number | null)[] {
+  const out: (number | null)[] = []
+  const m = offset * (period - 1)
+  const s = period / sigma
+  const w: number[] = []
+  let norm = 0
+  for (let i = 0; i < period; i++) { const v = Math.exp(-((i - m) ** 2) / (2 * s * s)); w.push(v); norm += v }
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { out.push(null); continue }
+    let sum = 0
+    for (let j = 0; j < period; j++) sum += closes[i - period + 1 + j] * w[j]
+    out.push(sum / norm)
+  }
+  return out
+}
+
+// Kaufman Adaptive Moving Average — speeds up in trends, slows down in noise.
+function computeKAMA(closes: number[], period = 10, fast = 2, slow = 30): (number | null)[] {
+  const out: (number | null)[] = []
+  const fastSC = 2 / (fast + 1)
+  const slowSC = 2 / (slow + 1)
+  let prev: number | null = null
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { out.push(null); continue }
+    const change = Math.abs(closes[i] - closes[i - period])
+    let vol = 0
+    for (let j = i - period + 1; j <= i; j++) vol += Math.abs(closes[j] - closes[j - 1])
+    const er = vol === 0 ? 0 : change / vol
+    const sc = (er * (fastSC - slowSC) + slowSC) ** 2
+    if (prev === null) prev = closes[i - 1]
+    prev = prev + sc * (closes[i] - prev)
+    out.push(prev)
+  }
+  return out
+}
+
+// Chande Momentum Oscillator (-100..100).
+function computeCMO(closes: number[], period = 14): (number | null)[] {
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { out.push(null); continue }
+    let up = 0, dn = 0
+    for (let j = i - period + 1; j <= i; j++) {
+      const d = closes[j] - closes[j - 1]
+      if (d > 0) up += d; else dn -= d
+    }
+    const sum = up + dn
+    out.push(sum === 0 ? 0 : ((up - dn) / sum) * 100)
+  }
+  return out
+}
+
+// Detrended Price Oscillator — removes trend to highlight cycles.
+function computeDPO(closes: number[], period = 20): (number | null)[] {
+  const sma = computeSMA(closes, period)
+  const shift = Math.floor(period / 2) + 1
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    const s = sma[i - shift]
+    out.push(i - shift >= 0 && s != null ? closes[i] - s : null)
+  }
+  return out
+}
+
+// Coppock Curve — WMA(10) of (ROC14 + ROC11). Long-term momentum.
+function computeCoppock(closes: number[], roc1 = 14, roc2 = 11, wma = 10): (number | null)[] {
+  const roc = (p: number) => closes.map((c, i) => i >= p ? ((c - closes[i - p]) / closes[i - p]) * 100 : null)
+  const r1 = roc(roc1), r2 = roc(roc2)
+  const sum: number[] = closes.map((_, i) => (r1[i] ?? 0) + (r2[i] ?? 0))
+  const valid = closes.map((_, i) => r1[i] != null && r2[i] != null)
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < wma - 1 || !valid[i]) { out.push(null); continue }
+    let num = 0, den = 0, ok = true
+    for (let j = 0; j < wma; j++) { if (!valid[i - j]) { ok = false; break } num += sum[i - j] * (wma - j); den += (wma - j) }
+    out.push(ok ? num / den : null)
+  }
+  return out
+}
+
+// Know Sure Thing (KST) momentum + signal line.
+function computeKST(closes: number[]): { kst: (number | null)[]; signal: (number | null)[] } {
+  const rocSMA = (rocP: number, smaP: number) => {
+    const roc = closes.map((c, i) => i >= rocP ? ((c - closes[i - rocP]) / closes[i - rocP]) * 100 : 0)
+    return computeSMA(roc, smaP)
+  }
+  const r1 = rocSMA(10, 10), r2 = rocSMA(15, 10), r3 = rocSMA(20, 10), r4 = rocSMA(30, 15)
+  const kst: (number | null)[] = closes.map((_, i) =>
+    r1[i] != null && r2[i] != null && r3[i] != null && r4[i] != null
+      ? (r1[i]! * 1 + r2[i]! * 2 + r3[i]! * 3 + r4[i]! * 4) : null)
+  const signal = computeSMA(kst.map(v => v ?? 0), 9).map((v, i) => kst[i] == null ? null : v)
+  return { kst, signal }
+}
+
+// Elder Ray — Bull Power (high - EMA) and Bear Power (low - EMA).
+function computeElderRay(bars: Bar[], period = 13): { bull: (number | null)[]; bear: (number | null)[] } {
+  const ema = computeEMA(bars.map(b => b.close), period)
+  const bull = bars.map((b, i) => ema[i] != null ? b.high - ema[i]! : null)
+  const bear = bars.map((b, i) => ema[i] != null ? b.low - ema[i]! : null)
+  return { bull, bear }
+}
+
+// Balance of Power (-1..1).
+function computeBOP(bars: Bar[]): (number | null)[] {
+  return bars.map(b => { const r = b.high - b.low; return r === 0 ? 0 : (b.close - b.open) / r })
+}
+
+// Ease of Movement (smoothed).
+function computeEOM(bars: Bar[], period = 14): (number | null)[] {
+  const raw = bars.map((b, i) => {
+    if (i === 0) return 0
+    const dm = (b.high + b.low) / 2 - (bars[i - 1].high + bars[i - 1].low) / 2
+    const boxRatio = (b.volume / 1e8) / Math.max(b.high - b.low, 1e-9)
+    return boxRatio === 0 ? 0 : dm / boxRatio
+  })
+  return computeSMA(raw, period)
+}
+
+// Relative Vigor Index + signal.
+function computeRVI(bars: Bar[], period = 10): { rvi: (number | null)[]; signal: (number | null)[] } {
+  const num: number[] = [], den: number[] = []
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i]
+    num.push(b.close - b.open)
+    den.push(b.high - b.low)
+  }
+  const swma = (arr: number[], i: number) => i >= 3 ? (arr[i] + 2 * arr[i - 1] + 2 * arr[i - 2] + arr[i - 3]) / 6 : null
+  const n = bars.map((_, i) => swma(num, i))
+  const d = bars.map((_, i) => swma(den, i))
+  const rvi: (number | null)[] = bars.map((_, i) => {
+    if (i < period + 3) return null
+    let sn = 0, sd = 0, ok = true
+    for (let j = 0; j < period; j++) { const a = n[i - j], c = d[i - j]; if (a == null || c == null) { ok = false; break } sn += a; sd += c }
+    return ok && sd !== 0 ? sn / sd : null
+  })
+  const signal = rvi.map((_, i) => i >= 3 && rvi[i] != null && rvi[i - 1] != null && rvi[i - 2] != null && rvi[i - 3] != null
+    ? (rvi[i]! + 2 * rvi[i - 1]! + 2 * rvi[i - 2]! + rvi[i - 3]!) / 6 : null)
+  return { rvi, signal }
+}
+
+// Fisher Transform + trigger.
+function computeFisher(bars: Bar[], period = 9): { fisher: (number | null)[]; trigger: (number | null)[] } {
+  const out: (number | null)[] = []
+  const trig: (number | null)[] = []
+  let value = 0, fish = 0, prevFish = 0
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period - 1) { out.push(null); trig.push(null); continue }
+    let hh = -Infinity, ll = Infinity
+    for (let j = i - period + 1; j <= i; j++) { const mp = (bars[j].high + bars[j].low) / 2; if (mp > hh) hh = mp; if (mp < ll) ll = mp }
+    const mid = (bars[i].high + bars[i].low) / 2
+    const range = hh - ll || 1e-9
+    value = 0.66 * ((mid - ll) / range - 0.5) * 2 + 0.67 * value
+    value = Math.max(-0.999, Math.min(0.999, value))
+    prevFish = fish
+    fish = 0.5 * Math.log((1 + value) / (1 - value)) + 0.5 * fish
+    out.push(fish)
+    trig.push(prevFish)
+  }
+  return { fisher: out, trigger: trig }
+}
+
+// Bollinger Bandwidth and %B.
+function computeBBWidth(closes: number[], period = 20, mult = 2): (number | null)[] {
+  const bb = computeBB(closes, period, mult)
+  return closes.map((_, i) => bb.basis[i] != null && bb.upper[i] != null && bb.lower[i] != null && bb.basis[i] !== 0
+    ? ((bb.upper[i]! - bb.lower[i]!) / bb.basis[i]!) * 100 : null)
+}
+function computeBBPercentB(closes: number[], period = 20, mult = 2): (number | null)[] {
+  const bb = computeBB(closes, period, mult)
+  return closes.map((c, i) => bb.upper[i] != null && bb.lower[i] != null && bb.upper[i] !== bb.lower[i]
+    ? (c - bb.lower[i]!) / (bb.upper[i]! - bb.lower[i]!) : null)
+}
+
+// Choppiness Index (0-100): high = choppy/range, low = trending.
+function computeChoppiness(bars: Bar[], period = 14): (number | null)[] {
+  const atr1 = computeATR(bars, 1)
+  const out: (number | null)[] = []
+  for (let i = 0; i < bars.length; i++) {
+    if (i < period) { out.push(null); continue }
+    let sumTR = 0, hh = -Infinity, ll = Infinity
+    for (let j = i - period + 1; j <= i; j++) { sumTR += atr1[j] ?? 0; if (bars[j].high > hh) hh = bars[j].high; if (bars[j].low < ll) ll = bars[j].low }
+    const range = hh - ll
+    out.push(range > 0 ? 100 * Math.log10(sumTR / range) / Math.log10(period) : null)
+  }
+  return out
+}
+
+// Historical Volatility (annualized %, from log returns).
+function computeHistVol(closes: number[], period = 20): (number | null)[] {
+  const rets = closes.map((c, i) => i > 0 && closes[i - 1] > 0 ? Math.log(c / closes[i - 1]) : 0)
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { out.push(null); continue }
+    const slice = rets.slice(i - period + 1, i + 1)
+    const mean = slice.reduce((s, v) => s + v, 0) / period
+    const variance = slice.reduce((s, v) => s + (v - mean) ** 2, 0) / period
+    out.push(Math.sqrt(variance) * Math.sqrt(252) * 100)
+  }
+  return out
+}
+
+
 // ADX with directional indicators (+DI / -DI).
 function computeADX(bars: Bar[], period = 14): { adx: (number | null)[]; plusDI: (number | null)[]; minusDI: (number | null)[] } {
   const n = bars.length
@@ -1131,7 +1372,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setSelectedDrawingId(null)
     setDrawMenu(null)
   }
-  const [drawings, setDrawings] = useLocalStorage<Drawing[]>('mkt:drawings', [])
+  // Drawings are scoped PER SYMBOL so analysis drawn on AAPL never shows up on
+  // AMZN. We persist a { SYMBOL: Drawing[] } map and expose the current symbol's
+  // slice as `drawings` plus a `setDrawings` that only mutates that slice, so all
+  // downstream code keeps working unchanged.
+  const [drawingsMap, setDrawingsMap] = useLocalStorage<Record<string, Drawing[]>>('mkt:drawingsMap', {})
+  const drawingsSymKey = symbol.toUpperCase()
+  const drawings = useMemo(() => drawingsMap[drawingsSymKey] || [], [drawingsMap, drawingsSymKey])
+  const setDrawings = useCallback((updater: Drawing[] | ((prev: Drawing[]) => Drawing[])) => {
+    setDrawingsMap(prev => {
+      const cur = prev[drawingsSymKey] || []
+      const next = typeof updater === 'function' ? (updater as (p: Drawing[]) => Drawing[])(cur) : updater
+      return { ...prev, [drawingsSymKey]: next }
+    })
+  }, [setDrawingsMap, drawingsSymKey])
   const [pendingPts, setPendingPts] = useState<DrawPoint[]>([])
   const [hoverPt, setHoverPt] = useState<DrawPoint | null>(null)
   // Selected drawing + floating edit menu (click a drawing with the cursor tool)
@@ -1602,6 +1856,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     if (on('dema')) { const c = cfg('dema'); addOverlay(computeDEMA(closes, c.period!), c.color, c.style, c.width) }
     if (on('tema')) { const c = cfg('tema'); addOverlay(computeTEMA(closes, c.period!), c.color, c.style, c.width) }
     if (on('vwma')) { const c = cfg('vwma'); addOverlay(computeVWMA(bars, c.period!), c.color, c.style, c.width) }
+    if (on('alma')) { const c = cfg('alma'); addOverlay(computeALMA(closes, c.period!), c.color, c.style, c.width) }
+    if (on('kama')) { const c = cfg('kama'); addOverlay(computeKAMA(closes, c.period!), c.color, c.style, c.width) }
 
     // Parabolic SAR (plotted as a thin dotted line tracing the stops)
     if (on('psar')) { const c = cfg('psar'); addOverlay(computePSAR(bars), c.color, c.style, c.width) }
@@ -1904,6 +2160,116 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const sid = 'vortex-panel'
       addSubLine(v.plus, sid, c.color, c.style, c.width)
       addSubLine(v.minus, sid, c.color2 || '#ef4444', c.style, c.width)
+    }
+
+    // Chande Momentum Oscillator (-100..100) with OB/OS guides
+    if (on('cmo')) {
+      const c = cfg('cmo')
+      const sid = 'cmo-panel'
+      addSubLine(computeCMO(closes, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 50, 'rgba(239,68,68,0.3)')
+      addGuide(sid, c.os ?? -50, 'rgba(34,197,94,0.3)')
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Detrended Price Oscillator
+    if (on('dpo')) {
+      const c = cfg('dpo')
+      const sid = 'dpo-panel'
+      addSubLine(computeDPO(closes, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Coppock Curve
+    if (on('coppock')) {
+      const c = cfg('coppock')
+      const sid = 'coppock-panel'
+      addSubLine(computeCoppock(closes, c.period!, c.period2!, c.period3!), sid, c.color, c.style, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Know Sure Thing (KST) + signal
+    if (on('kst')) {
+      const c = cfg('kst')
+      const k = computeKST(closes)
+      const sid = 'kst-panel'
+      addSubLine(k.kst, sid, c.color, c.style, c.width)
+      addSubLine(k.signal, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Elder Ray (Bull/Bear Power)
+    if (on('elderray')) {
+      const c = cfg('elderray')
+      const e = computeElderRay(bars, c.period!)
+      const sid = 'elderray-panel'
+      addSubHistogram(e.bull, sid, c.color, c.color2 || '#ef4444')
+      addSubLine(e.bear, sid, c.color2 || '#ef4444', LineStyle.Solid, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Relative Vigor Index + signal
+    if (on('rvi')) {
+      const c = cfg('rvi')
+      const r = computeRVI(bars, c.period!)
+      const sid = 'rvi-panel'
+      addSubLine(r.rvi, sid, c.color, c.style, c.width)
+      addSubLine(r.signal, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Fisher Transform + trigger
+    if (on('fisher')) {
+      const c = cfg('fisher')
+      const f = computeFisher(bars, c.period!)
+      const sid = 'fisher-panel'
+      addSubLine(f.fisher, sid, c.color, c.style, c.width)
+      addSubLine(f.trigger, sid, c.color2 || '#f97316', LineStyle.Dashed, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Balance of Power (histogram around 0)
+    if (on('bop')) {
+      const c = cfg('bop')
+      addSubHistogram(computeBOP(bars), 'bop-panel', c.color, c.color2 || '#ef4444')
+    }
+
+    // Ease of Movement
+    if (on('eom')) {
+      const c = cfg('eom')
+      const sid = 'eom-panel'
+      addSubLine(computeEOM(bars, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Bollinger Bandwidth
+    if (on('bbwidth')) {
+      const c = cfg('bbwidth')
+      addSubLine(computeBBWidth(closes, c.period!, c.mult!), 'bbwidth-panel', c.color, c.style, c.width)
+    }
+
+    // Bollinger %B (0..1 band, OB/OS guides)
+    if (on('bbpercent')) {
+      const c = cfg('bbpercent')
+      const sid = 'bbpercent-panel'
+      addSubLine(computeBBPercentB(closes, c.period!, c.mult!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 1, 'rgba(239,68,68,0.3)')
+      addGuide(sid, c.os ?? 0, 'rgba(34,197,94,0.3)')
+    }
+
+    // Choppiness Index (0-100)
+    if (on('choppiness')) {
+      const c = cfg('choppiness')
+      const sid = 'choppiness-panel'
+      addSubLine(computeChoppiness(bars, c.period!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 61.8, 'rgba(239,68,68,0.3)')
+      addGuide(sid, c.os ?? 38.2, 'rgba(34,197,94,0.3)')
+    }
+
+    // Historical Volatility (annualized %)
+    if (on('histvol')) {
+      const c = cfg('histvol')
+      addSubLine(computeHistVol(closes, c.period!), 'histvol-panel', c.color, c.style, c.width)
     }
 
     // ===== COMPARE OVERLAY (normalized % performance lines on their own scale) =====
@@ -2227,6 +2593,62 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         case 'trendline':
           if (a && b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke() }
           break
+        case 'ray':
+          if (a && b) {
+            const dx = b.x - a.x, dy = b.y - a.y
+            const len = Math.hypot(dx, dy) || 1
+            const far = { x: a.x + (dx / len) * (W + H) * 2, y: a.y + (dy / len) * (W + H) * 2 }
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(far.x, far.y); ctx.stroke()
+          }
+          break
+        case 'arrow':
+          if (a && b) {
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+            const ang = Math.atan2(b.y - a.y, b.x - a.x)
+            const head = 10
+            ctx.beginPath()
+            ctx.moveTo(b.x, b.y)
+            ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 6), b.y - head * Math.sin(ang - Math.PI / 6))
+            ctx.moveTo(b.x, b.y)
+            ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 6), b.y - head * Math.sin(ang + Math.PI / 6))
+            ctx.stroke()
+          }
+          break
+        case 'parallel':
+          if (a && b && c) {
+            // Base line a-b, parallel copy offset so it passes through c.
+            const off = { x: c.x - b.x, y: c.y - b.y }
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(a.x + off.x, a.y + off.y); ctx.lineTo(b.x + off.x, b.y + off.y); ctx.stroke()
+            ctx.globalAlpha = 0.08
+            ctx.beginPath()
+            ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y)
+            ctx.lineTo(b.x + off.x, b.y + off.y); ctx.lineTo(a.x + off.x, a.y + off.y); ctx.closePath()
+            ctx.fill(); ctx.globalAlpha = 1
+          }
+          break
+        case 'measure':
+          if (a && b) {
+            const p0 = d.pts[0]?.price ?? 0
+            const p1 = d.pts[1]?.price ?? 0
+            const diff = p1 - p0
+            const pct = p0 ? (diff / p0) * 100 : 0
+            const up = diff >= 0
+            ctx.strokeStyle = up ? '#22c55e' : '#ef4444'
+            ctx.fillStyle = up ? '#22c55e' : '#ef4444'
+            const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y)
+            const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y)
+            ctx.globalAlpha = 0.12; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1
+            ctx.strokeRect(x, y, w, h)
+            const label = `${up ? '+' : ''}${diff.toFixed(2)} (${up ? '+' : ''}${pct.toFixed(2)}%)`
+            ctx.font = '11px ui-sans-serif, system-ui'
+            const tw = ctx.measureText(label).width + 8
+            ctx.globalAlpha = 0.9; ctx.fillStyle = themeRef.current.plate
+            ctx.fillRect(b.x + 6, b.y - 9, tw, 16); ctx.globalAlpha = 1
+            ctx.fillStyle = up ? '#22c55e' : '#ef4444'
+            ctx.fillText(label, b.x + 10, b.y + 3)
+          }
+          break
         case 'horizontal':
           if (a) { ctx.beginPath(); ctx.moveTo(0, a.y); ctx.lineTo(W, a.y); ctx.stroke() }
           break
@@ -2347,6 +2769,26 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       switch (d.tool) {
         case 'trendline':
           if (a && b) hit = distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL
+          break
+        case 'ray':
+        case 'arrow':
+          if (a && b) hit = distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL
+          break
+        case 'parallel':
+          if (a && b && c) {
+            const ox = c.x - b.x, oy = c.y - b.y
+            hit = (
+              distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL ||
+              distToSegment(px, py, a.x + ox, a.y + oy, b.x + ox, b.y + oy) <= TOL
+            )
+          }
+          break
+        case 'measure':
+          if (a && b) {
+            const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x)
+            const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y)
+            hit = px >= x0 - TOL && px <= x1 + TOL && py >= y0 - TOL && py <= y1 + TOL
+          }
           break
         case 'horizontal':
           if (a) hit = Math.abs(py - a.y) <= TOL

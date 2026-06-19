@@ -5,6 +5,7 @@ import LocalErrorBoundary from '@/components/LocalErrorBoundary';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { RefreshCw, ArrowLeft, Clock, Zap, TrendingUp, TrendingDown, BarChart3, Activity, AlertTriangle, Target, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -186,6 +187,15 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [bottomMovers, setBottomMovers] = useState<Mover[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [stockDetail, setStockDetail] = useState<StockQuote | null>(null);
+  const router = useRouter();
+  // Open any ticker straight on the full chart (market-data terminal). Used by
+  // the heatmap cells, screener rows and movers lists — one click = chart.
+  const goToChart = useCallback((sym: string) => {
+    const s = (sym || '').trim().toUpperCase();
+    if (!s) return;
+    setSelectedSymbol(s);
+    router.push(`/market-data?symbol=${encodeURIComponent(s)}`);
+  }, [router]);
   const [aiAnalysis, setAiAnalysis] = useState<AIEconomicAnalysis | null>(null);
   const [sentimentData, setSentimentData] = useState<SentimentData | null>(null);
   const [regimeData, setRegimeData] = useState<RegimeData | null>(null);
@@ -627,7 +637,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : minDim > 15 ? 7 : 5;
                       const pctSize = minDim > 60 ? 11 : minDim > 40 ? 9 : 7;
                       return (
-                        <g key={cell.symbol} className="cursor-pointer" onClick={() => setSelectedSymbol(cell.symbol)}>
+                        <g key={cell.symbol} className="cursor-pointer" onClick={() => goToChart(cell.symbol)}>
                           <rect x={cell.x + 0.5} y={cell.y + 0.5} width={Math.max(0, cell.w - 1)} height={Math.max(0, cell.h - 1)}
                             fill={colorForPct(cell.pct)} rx="1" stroke="#0b1120" strokeWidth="0.5"
                             className="hover:brightness-125 transition-all"
@@ -691,7 +701,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         {screenerData.slice(0, 20).map(m => (
                           <tr key={m.symbol}
                             className={`hover:bg-white/[0.03] cursor-pointer transition-colors ${selectedSymbol === m.symbol ? 'bg-blue-500/10' : ''}`}
-                            onClick={() => setSelectedSymbol(m.symbol)}>
+                            title={`Open ${m.symbol} chart`}
+                            onClick={() => goToChart(m.symbol)}>
                             <td className="py-1 px-2 font-semibold text-white">
                               <span className="flex items-center gap-1.5">
                                 <img
@@ -726,7 +737,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           const barW = Math.abs(m.changePercent) / maxAbs * 100;
                           return (
                             <div key={m.symbol} className="flex items-center gap-1 h-4 cursor-pointer hover:bg-white/[0.03] rounded"
-                              onClick={() => setSelectedSymbol(m.symbol)}>
+                              title={`Open ${m.symbol} chart`}
+                              onClick={() => goToChart(m.symbol)}>
                               <span className="text-[9px] font-semibold text-gray-300 w-10 text-right shrink-0">{m.symbol}</span>
                               <div className="flex-1 h-3 relative">
                                 <div className={`h-full rounded-sm ${m.changePercent >= 0 ? 'bg-emerald-500/60' : 'bg-red-500/60'}`}

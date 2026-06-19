@@ -495,7 +495,10 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         return (
           <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[12px] font-bold" style={{ color: 'lightgray', fontFamily: 'Tahoma, sans-serif' }}>options inventory</div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-blue-600/30 ring-1 ring-blue-400/30 text-[12px] font-extrabold text-blue-100 tracking-wide" style={{ fontFamily: 'Tahoma, sans-serif' }}>{data.symbol}</span>
+                <div className="text-[12px] font-bold" style={{ color: 'lightgray', fontFamily: 'Tahoma, sans-serif' }}>options inventory</div>
+              </div>
               <div className="flex items-center gap-2">
                 <div className="flex rounded-md overflow-hidden ring-1 ring-white/15">
                   <button onClick={() => setInvChartMode('bars')} className={`px-2 py-0.5 text-[10px] font-bold ${invChartMode === 'bars' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>BARS</button>
@@ -619,7 +622,7 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         <div className="bg-slate-900/50 rounded-lg p-4 ring-1 ring-white/5 text-center">
           <div className="text-[11px] text-amber-300 mb-1">Gamma Exposure unavailable</div>
           <div className="text-[10px] text-gray-500">
-            Options chain not returned for {data.symbol}. Source: <span className="font-mono">{data.source}</span>.
+            Options chain not returned for {data.symbol}.
             {data.source === 'technical-only' && ' Try a more liquid ticker (SPY, QQQ, AAPL, NVDA, TSLA).'}
           </div>
         </div>
@@ -677,8 +680,49 @@ export default function KeyLevels({ symbol, hintPrice }: { symbol: string; hintP
         };
         const labelEvery = Math.max(1, Math.ceil(n / 14));
         const priceX = xCenter(closestSpotIdx);
+        // ── Dealer gamma positioning → plain-language direction read ──
+        // Net GEX > 0 ⇒ dealers are LONG gamma: they sell rallies / buy dips, so
+        // moves are dampened (range / mean-reversion). Net GEX < 0 ⇒ dealers SHORT
+        // gamma: they buy rallies / sell dips, so moves are amplified (trending).
+        const netGexTotal = (data.gammaProfile || []).reduce((s, g) => s + (g.netGex || 0), 0);
+        const flip = data.gammaFlip;
+        const aboveFlip = flip != null ? price >= flip : null;
+        const dealerLong = netGexTotal >= 0;
+        const regimeLabel = dealerLong ? 'Positive Gamma' : 'Negative Gamma';
+        const dealerLabel = dealerLong ? 'Dealers LONG γ' : 'Dealers SHORT γ';
+        const behavior = dealerLong
+          ? 'Volatility suppressed — price mean-reverts toward strikes (range)'
+          : 'Volatility amplified — moves accelerate away from the flip (trend)';
+        // Combine the volatility regime with model bias → a clear LONG/SHORT/NEUTRAL call.
+        const biasUp = data.bias === 'Bullish';
+        const biasDn = data.bias === 'Bearish';
+        const leanLabel = biasUp ? 'LONG' : biasDn ? 'SHORT' : 'NEUTRAL';
+        const leanColor = biasUp ? '#22c55e' : biasDn ? '#ef4444' : '#94a3b8';
+        const leanWhy = dealerLong
+          ? (biasUp ? 'buy dips toward put walls, fade spikes into call walls'
+             : biasDn ? 'sell rallies into call walls, cover near put walls'
+             : 'range-trade between put-wall support and call-wall resistance')
+          : (biasUp ? 'ride upside breakouts — squeezes extend in short-gamma'
+             : biasDn ? 'ride breakdowns — sell-offs accelerate in short-gamma'
+             : 'expect a fast directional move once price leaves the flip zone');
         return (
           <div className="rounded-lg p-3 ring-1 ring-white/10" style={{ backgroundColor: SQ_BG }}>
+            {/* Direction read — tells non-experts whether dealers are long/short
+                gamma and what that implies for the underlying (long / short / range). */}
+            <div className="mb-2 rounded-md ring-1 ring-white/10 p-2" style={{ backgroundColor: 'rgba(15,23,42,0.55)' }}>
+              <div className="flex items-center flex-wrap gap-1.5">
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold" style={{ background: dealerLong ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)', color: dealerLong ? '#86efac' : '#fca5a5' }}>{regimeLabel}</span>
+                <span className="px-2 py-0.5 rounded bg-white/5 text-[10px] font-bold text-gray-200">{dealerLabel}</span>
+                {flip != null && (
+                  <span className="px-2 py-0.5 rounded bg-white/5 text-[10px] font-mono text-gray-300">flip {fmt$(flip)} · spot {aboveFlip ? 'above ✅' : 'below ⚠'}</span>
+                )}
+                <span className="ml-auto text-[10px] text-gray-400">Underlying lean</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-extrabold" style={{ background: 'rgba(255,255,255,0.06)', color: leanColor }}>{leanLabel}</span>
+              </div>
+              <div className="mt-1 text-[10px] text-gray-400 leading-snug">
+                {behavior}. <span className="text-gray-300">How to play:</span> {leanWhy}.
+              </div>
+            </div>
             <div className="flex items-center justify-center gap-2 mb-1">
               <div className="flex rounded-md overflow-hidden ring-1 ring-white/15">
                 <button onClick={() => setGexChartMode('bars')} className={`px-2 py-0.5 text-[10px] font-bold ${gexChartMode === 'bars' ? 'bg-blue-600/40 text-blue-100' : 'text-gray-400 hover:text-gray-200'}`}>BARS</button>

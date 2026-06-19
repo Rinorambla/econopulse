@@ -20,6 +20,8 @@ import {
   Check,
   Save,
   Download,
+  Copy,
+  ExternalLink,
   MoreHorizontal,
   Palette,
 } from 'lucide-react'
@@ -176,7 +178,7 @@ function detectSector(sym: string): string {
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX'] },
-  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', 'FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE'] },
+  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', 'FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE', '^SSMI', '^OMX', '^BSESN', '^NSEI', '^KS11', '^TWII', '^AXJO', '^STI', '^JKSE', '^KLSE', '^TA125.TA'] },
   { label: 'Index ETFs', symbols: ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'IVV', 'EFA', 'EEM', 'VEA', 'VWO', 'ACWI'] },
   { label: 'Sector ETFs', symbols: ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'SMH', 'SOXX', 'KRE', 'XBI', 'ITA'] },
   { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK-B', 'LLY', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'COST'] },
@@ -187,6 +189,9 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Consumer', symbols: ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TGT', 'DIS', 'KO', 'PEP', 'PG', 'WMT', 'COST'] },
   { label: 'EU Stocks', symbols: ['ASML', 'SAP', 'NVO', 'MC.PA', 'OR.PA', 'AIR.PA', 'SAN.PA', 'NESN.SW', 'NOVN.SW', 'ROG.SW', 'SHEL.L', 'ULVR.L', 'AZN.L', 'HSBA.L', 'BP.L', 'RIO.L', 'ISP.MI', 'UCG.MI', 'ENI.MI', 'STLAM.MI'] },
   { label: 'Asia Stocks', symbols: ['7203.T', '6758.T', '9984.T', '6861.T', '0700.HK', '9988.HK', '3690.HK', 'TSM', 'BABA', 'BIDU', 'JD', 'PDD', 'NIO'] },
+  { label: 'EM ADRs', symbols: ['BABA', 'PDD', 'JD', 'NIO', 'BIDU', 'TCEHY', 'TSM', 'INFY', 'WIT', 'HDB', 'IBN', 'VALE', 'PBR', 'ITUB', 'BBD', 'NU', 'MELI', 'SE', 'GRAB', 'SHOP'] },
+  { label: 'India', symbols: ['INFY', 'WIT', 'HDB', 'IBN', 'RDY', 'TTM', 'SIFY', 'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 'TATAMOTORS.NS', 'SBIN.NS'] },
+  { label: 'LatAm & Canada', symbols: ['VALE', 'PBR', 'ITUB', 'BBD', 'NU', 'MELI', 'AMX', 'BAP', 'SHOP', 'RY', 'TD', 'BNS', 'ENB', 'CNQ', 'SU'] },
   { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'XLM-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD'] },
   { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
   { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
@@ -361,6 +366,30 @@ export default function MarketDataPage() {
   const mainRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartApiRef = useRef<{ screenshot: () => HTMLCanvasElement | null } | null>(null)
+
+  // Deep-link support: ?symbol=AAPL (used by AI Pulse, heatmaps, etc. to open a
+  // ticker straight on the chart). Read once on mount and whenever the URL's
+  // symbol changes, then strip the param so a manual symbol change isn't undone
+  // by a back/refresh. We read from window.location to avoid a Suspense boundary
+  // that useSearchParams would require for this client page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const apply = () => {
+      const sp = new URLSearchParams(window.location.search)
+      const q = (sp.get('symbol') || sp.get('ticker') || '').trim().toUpperCase()
+      if (q) {
+        setSymbol(q)
+        // Remove the param so it doesn't override later in-app symbol changes.
+        sp.delete('symbol')
+        sp.delete('ticker')
+        const qs = sp.toString()
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+      }
+    }
+    apply()
+    window.addEventListener('popstate', apply)
+    return () => window.removeEventListener('popstate', apply)
+  }, [setSymbol])
 
   // Responsive chart height — adapts the terminal to phones, tablets and desktops.
   // We measure the REAL distance from the top of the viewport to the terminal
@@ -586,6 +615,63 @@ export default function MarketDataPage() {
       showToast('Unable to share')
     }
   }, [symbol, showToast])
+
+  // Build a watermarked PNG blob of the current chart (shared by the explicit
+  // Download / Copy image / Open-in-new-tab actions below).
+  const buildChartBlob = useCallback(async (): Promise<{ blob: Blob; fileName: string } | null> => {
+    const v = symbol.trim().toUpperCase()
+    const baseCanvas = chartApiRef.current?.screenshot?.() || null
+    const canvas = baseCanvas ? await addWatermark(baseCanvas, v) : null
+    if (!canvas) return null
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))
+    if (!blob) return null
+    return { blob, fileName: `${v}-econopulse-${new Date().toISOString().slice(0, 10)}.png` }
+  }, [symbol])
+
+  // Download the chart image straight to disk (desktop) / Files (mobile).
+  const downloadChart = useCallback(async () => {
+    const res = await buildChartBlob()
+    if (!res) { showToast('Chart not ready'); return }
+    const url = URL.createObjectURL(res.blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    showToast('Chart downloaded')
+  }, [buildChartBlob, showToast])
+
+  // Copy the chart image to the clipboard (paste into chat, docs, etc.).
+  const copyChartImage = useCallback(async () => {
+    const res = await buildChartBlob()
+    if (!res) { showToast('Chart not ready'); return }
+    try {
+      const ClipItem = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem
+      if (ClipItem && navigator.clipboard && 'write' in navigator.clipboard) {
+        await navigator.clipboard.write([new ClipItem({ 'image/png': res.blob })])
+        showToast('Chart image copied')
+        return
+      }
+      throw new Error('clipboard image unsupported')
+    } catch {
+      // Some browsers block image clipboard — fall back to opening the image.
+      const url = URL.createObjectURL(res.blob)
+      window.open(url, '_blank', 'noopener,noreferrer')
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+      showToast('Copy not supported — opened image instead')
+    }
+  }, [buildChartBlob, showToast])
+
+  // Open the chart image in a new browser tab (view full-size / right-click save).
+  const openChartInNewTab = useCallback(async () => {
+    const res = await buildChartBlob()
+    if (!res) { showToast('Chart not ready'); return }
+    const url = URL.createObjectURL(res.blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  }, [buildChartBlob, showToast])
 
   const addNewList = useCallback(() => {
     const name = newListName.trim()
@@ -960,6 +1046,18 @@ export default function MarketDataPage() {
                   <button onClick={() => { shareCurrent(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-blue-500/15 text-xs text-blue-200">
                     <Download className="w-4 h-4 shrink-0" />
                     <span className="font-semibold">Save / Share chart image</span>
+                  </button>
+                  <button onClick={() => { downloadChart(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-blue-500/15 text-xs text-blue-200">
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Download image (PNG)</span>
+                  </button>
+                  <button onClick={() => { copyChartImage(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-blue-500/15 text-xs text-blue-200">
+                    <Copy className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Copy image</span>
+                  </button>
+                  <button onClick={() => { openChartInNewTab(); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-2.5 py-2 rounded hover:bg-blue-500/15 text-xs text-blue-200">
+                    <ExternalLink className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Open image in new tab</span>
                   </button>
                   <div className="my-1 border-t border-white/10" />
                   <div className="px-2.5 py-1.5">

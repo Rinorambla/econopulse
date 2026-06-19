@@ -1364,7 +1364,7 @@ export default function AIPortfolioPage() {
         {/* Holdings */}
         <div className="space-y-3">
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Holdings (ETFs)</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Holdings (ETFs) <span className="text-emerald-400/70 normal-case font-medium">· best performers first</span></h4>
             <div className="flex gap-1.5">
               {portfolioData.underlyingStocks?.length > 0 && (
                 <button
@@ -1385,7 +1385,10 @@ export default function AIPortfolioPage() {
               )}
             </div>
           </div>
-          {portfolioData.holdings?.slice(0, expandedHoldings.has(portfolioKey) ? portfolioData.holdings.length : 5).map((stock: any, index: number) => (
+          {[...(portfolioData.holdings || [])]
+            .sort((a: any, b: any) => parsePct(b.change || b.performance?.daily) - parsePct(a.change || a.performance?.daily))
+            .slice(0, expandedHoldings.has(portfolioKey) ? portfolioData.holdings.length : 5)
+            .map((stock: any, index: number) => (
             <div key={index} className="flex items-center justify-between p-3 bg-white/[0.03] border border-white/[0.04] rounded-xl gap-3 overflow-hidden hover:bg-white/[0.05] transition-colors">
               <div className="min-w-0 flex-1 flex items-center gap-2.5">
                 <img
@@ -1396,7 +1399,12 @@ export default function AIPortfolioPage() {
                   loading="lazy"
                 />
                 <div className="min-w-0">
-                  <div className="font-bold text-sm text-white">{stock.ticker}</div>
+                  <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                    {stock.ticker}
+                    {index === 0 && parsePct(stock.change || stock.performance?.daily) > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-bold uppercase tracking-wide">🔥 Top</span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-gray-500 truncate">{stock.name}</div>
                 </div>
                 <span className="ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">{stock.weight}%</span>

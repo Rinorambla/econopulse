@@ -2859,6 +2859,16 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                                     <span>{ind.label}</span>
                                     {isActive && <span className="text-blue-400">✓</span>}
                                   </button>
+                                  {isActive && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); updateIndSetting(ind.key, { visible: cfgFor(ind.key).visible === false }) }}
+                                      className="px-1.5 py-1 text-[12px] leading-none hover:text-white"
+                                      title={cfgFor(ind.key).visible === false ? 'Show on chart' : 'Hide on chart'}
+                                      style={{ opacity: cfgFor(ind.key).visible === false ? 0.4 : 1 }}
+                                    >
+                                      {cfgFor(ind.key).visible === false ? '🙈' : '👁'}
+                                    </button>
+                                  )}
                                   {isActive && hasSettings && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setSettingsKey(k => k === ind.key ? null : ind.key) }}

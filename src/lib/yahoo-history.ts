@@ -8,9 +8,9 @@ interface ChartResultMeta {
   currency?: string
 }
 
-export async function fetchYahooHistory(symbol: string, range: string = '5d', interval: string = '1d'): Promise<YahooHistory | null> {
+export async function fetchYahooHistory(symbol: string, range: string = '5d', interval: string = '1d', prePost: boolean = false): Promise<YahooHistory | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=${interval}`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=${interval}${prePost ? '&includePrePost=true' : ''}`
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
     if (!res.ok) return null
     const json = await res.json()

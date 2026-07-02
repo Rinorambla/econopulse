@@ -24,6 +24,8 @@ import {
   ExternalLink,
   MoreHorizontal,
   Palette,
+  LayoutGrid,
+  Square,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
@@ -269,6 +271,98 @@ function labelForSymbol(s: string): string {
   return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^FRED:/i, '')
 }
 
+// Full catalog of FRED macro series so they are discoverable directly from the
+// autocomplete search (Yahoo search never returns FRED series). Built from the
+// popular macro groups + friendly labels above.
+const FRED_CATALOG: { symbol: string; name: string }[] = Array.from(
+  new Set(
+    POPULAR_GROUPS.filter((g) => /^Macro/i.test(g.label))
+      .flatMap((g) => g.symbols)
+      .filter((s) => /^FRED:/i.test(s))
+  )
+).map((symbol) => ({ symbol, name: SYMBOL_LABELS[symbol] || symbol.replace(/^FRED:/i, '') }))
+
+// Return FRED series matching a free-text query (matches series id or label).
+function searchFred(query: string): SearchResult[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return FRED_CATALOG.filter((f) => {
+    const id = f.symbol.replace(/^FRED:/i, '').toLowerCase()
+    return id.includes(q) || f.name.toLowerCase().includes(q) || `fred:${id}`.includes(q)
+  }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
+}
+
+// Compact per-cell symbol search used inside each chart of the 2×2 grid. Renders
+// the current symbol as an editable pill with a live autocomplete dropdown
+// (Yahoo instruments + FRED macro series), submitting the chosen symbol back up.
+function GridSymbolBox({ value, onSubmit }: { value: string; onSubmit: (s: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [val, setVal] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+
+  useEffect(() => {
+    if (!open) { setResults([]); return }
+    const q = val.trim()
+    if (q.length < 1) { setResults([]); return }
+    let aborted = false
+    const fred = searchFred(q).slice(0, 4)
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        const json = await res.json()
+        const yahoo = Array.isArray(json?.data) ? json.data : []
+        if (!aborted) setResults([...fred, ...yahoo].slice(0, 8))
+      } catch {
+        if (!aborted) setResults(fred)
+      }
+    }, 220)
+    return () => { aborted = true; clearTimeout(t) }
+  }, [val, open])
+
+  const submit = (s?: string) => {
+    const v = (s ?? val).trim().toUpperCase()
+    if (v) onSubmit(v)
+    setOpen(false); setVal('')
+  }
+
+  return (
+    <div className="relative w-32 sm:w-40">
+      <div className="flex items-center bg-white/5 border border-white/10 rounded px-2 py-1 focus-within:border-blue-500">
+        <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <input
+          value={open ? val : value}
+          onFocus={() => { setOpen(true); setVal('') }}
+          onChange={(e) => { setOpen(true); setVal(e.target.value.toUpperCase()) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+            if (e.key === 'Escape') { setOpen(false); setVal('') }
+          }}
+          placeholder="Symbol…"
+          className="bg-transparent text-xs font-bold flex-1 ml-1.5 outline-none placeholder-gray-500 min-w-0"
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-56 max-h-60 overflow-y-auto bg-slate-900 border border-white/15 rounded-lg shadow-xl">
+          {results.map((r) => (
+            <button
+              key={`${r.symbol}-${r.exchange}`}
+              onMouseDown={(e) => { e.preventDefault(); submit(r.symbol) }}
+              className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 border-b border-white/5 last:border-0"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-white">{r.symbol}</span>
+                {r.type && <span className="text-[9px] uppercase text-gray-500">{r.type}</span>}
+              </div>
+              {r.name && <div className="text-[10px] text-gray-400 truncate">{r.name}{r.exchange ? ` · ${r.exchange}` : ''}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface Quote {
   ticker: string
   price: number
@@ -337,6 +431,9 @@ export default function MarketDataPage() {
   // Persisted state
   const [symbol, setSymbol] = useLocalStorage<string>('mkt:symbol', 'AAPL')
   const [theme, setTheme] = useLocalStorage<ChartThemeKey>('mkt:theme', 'blue')
+  // Layout: single chart or a 2×2 grid of 4 independent charts (multi-screen).
+  const [layoutMode, setLayoutMode] = useLocalStorage<'single' | 'grid'>('mkt:layout', 'single')
+  const [gridSymbols, setGridSymbols] = useLocalStorage<string[]>('mkt:gridSymbols', ['AAPL', 'QQQ', 'BTC-USD', 'GC=F'])
   const [watchlists, setWatchlists] = useLocalStorage<Record<string, string[]>>('mkt:watchlists', DEFAULT_WATCHLISTS)
   const [activeListName, setActiveListName] = useLocalStorage<string>('mkt:activeList', 'Main')
   const [readSet, setReadSet] = useLocalStorage<number[]>('mkt:notifRead', [])
@@ -347,6 +444,10 @@ export default function MarketDataPage() {
   const [searchVal, setSearchVal] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  // Anchor the search dropdown to the input's real screen position so the
+  // ticker list never overlaps/covers the search bar on any breakpoint.
+  const searchWrapRef = useRef<HTMLDivElement>(null)
+  const [searchMenuStyle, setSearchMenuStyle] = useState<React.CSSProperties>({})
   const [popularOpen, setPopularOpen] = useState<string>('US Indices')
   const [menuOpen, setMenuOpen] = useState(false)
   const [watchlistMenuOpen, setWatchlistMenuOpen] = useState(false)
@@ -492,13 +593,15 @@ export default function MarketDataPage() {
     if (!searchOpen || q.length < 1) { setSearchResults([]); setSearchLoading(false); return }
     let aborted = false
     setSearchLoading(true)
+    const fredMatches = searchFred(q)
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
         const json = await res.json()
-        if (!aborted) setSearchResults(Array.isArray(json?.data) ? json.data : [])
+        const yahoo = Array.isArray(json?.data) ? json.data : []
+        if (!aborted) setSearchResults([...fredMatches, ...yahoo])
       } catch {
-        if (!aborted) setSearchResults([])
+        if (!aborted) setSearchResults(fredMatches)
       } finally {
         if (!aborted) setSearchLoading(false)
       }
@@ -542,13 +645,15 @@ export default function MarketDataPage() {
     const q = panelInput.trim()
     if (q.length < 1) { setPanelResults([]); return }
     let aborted = false
+    const fredMatches = searchFred(q).slice(0, 4)
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
         const json = await res.json()
-        if (!aborted) setPanelResults(Array.isArray(json?.data) ? json.data.slice(0, 8) : [])
+        const yahoo = Array.isArray(json?.data) ? json.data : []
+        if (!aborted) setPanelResults([...fredMatches, ...yahoo].slice(0, 8))
       } catch {
-        if (!aborted) setPanelResults([])
+        if (!aborted) setPanelResults(fredMatches)
       }
     }, 220)
     return () => { aborted = true; clearTimeout(t) }
@@ -865,6 +970,35 @@ export default function MarketDataPage() {
     }
   }, [searchOpen])
 
+  // Position the search dropdown directly under the input, clamped to the
+  // viewport, so ticker results never cover the search bar.
+  useEffect(() => {
+    if (!searchOpen) return
+    const compute = () => {
+      const el = searchWrapRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const margin = 8
+      const width = Math.min(Math.max(r.width, 340), window.innerWidth - margin * 2)
+      let left = r.left
+      if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
+      if (left < margin) left = margin
+      setSearchMenuStyle({
+        position: 'fixed',
+        top: Math.round(r.bottom + 6),
+        left: Math.round(left),
+        width: Math.round(width),
+      })
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', compute, true)
+    return () => {
+      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', compute, true)
+    }
+  }, [searchOpen])
+
   // Deep-link: ?symbol=XYZ overrides the persisted symbol on first load.
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search)
@@ -874,7 +1008,7 @@ export default function MarketDataPage() {
   }, [])
 
   const searchSlot = (
-          <div className="relative w-40 sm:w-52 md:w-64 shrink-0">
+          <div ref={searchWrapRef} className="relative w-40 sm:w-52 md:w-64 shrink-0">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
               <input
@@ -901,7 +1035,7 @@ export default function MarketDataPage() {
             {searchOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)} />
-                <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-1 sm:w-96 max-w-[calc(100vw-1rem)] bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
+                <div style={searchMenuStyle} className="bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
                       {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && (
@@ -1281,19 +1415,46 @@ export default function MarketDataPage() {
       className="mkt-terminal bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
     >
       {/* MAIN */}
-      <div ref={mainRef} className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
-        <div className="flex-1 min-w-0 min-h-0">
-          <AdvancedChart
-            symbol={symbol}
-            onSymbolChange={(s) => setSymbol(s)}
-            height={chartHeight}
-            theme={theme}
-            className="shadow-xl shadow-black/40"
-            leftSlot={searchSlot}
-            rightSlot={actionsSlot}
-            onChartApi={(api) => { chartApiRef.current = api }}
-          />
-        </div>
+      <div ref={mainRef} className="relative flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">
+        {layoutMode === 'single' ? (
+          <div className="flex-1 min-w-0 min-h-0">
+            <AdvancedChart
+              symbol={symbol}
+              onSymbolChange={(s) => setSymbol(s)}
+              height={chartHeight}
+              theme={theme}
+              className="shadow-xl shadow-black/40"
+              leftSlot={searchSlot}
+              rightSlot={actionsSlot}
+              onChartApi={(api) => { chartApiRef.current = api }}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 min-w-0 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto sm:overflow-hidden auto-rows-fr">
+            {gridSymbols.map((gs, i) => (
+              <div key={i} className="min-w-0 min-h-0">
+                <AdvancedChart
+                  symbol={gs}
+                  onSymbolChange={(s) => setGridSymbols((prev) => prev.map((x, j) => (j === i ? s : x)))}
+                  height={Math.max(200, Math.round((chartHeight - 140) / 2))}
+                  theme={theme}
+                  className="shadow-lg shadow-black/40 h-full"
+                  leftSlot={<GridSymbolBox value={gs} onSubmit={(s) => setGridSymbols((prev) => prev.map((x, j) => (j === i ? s : x)))} />}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Layout toggle: single ⇄ 2×2 grid (multi-screen) */}
+        <button
+          onClick={() => setLayoutMode((m) => (m === 'single' ? 'grid' : 'single'))}
+          className="absolute left-3 bottom-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/85 hover:bg-white/10 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur"
+          title={layoutMode === 'single' ? 'Switch to 2×2 grid' : 'Switch to single chart'}
+        >
+          {layoutMode === 'single' ? <LayoutGrid className="w-4 h-4 text-blue-300" /> : <Square className="w-4 h-4 text-blue-300" />}
+          <span className="hidden sm:inline">{layoutMode === 'single' ? 'Grid 2×2' : 'Single'}</span>
+        </button>
 
         {/* Watchlist side panel (TradingView-style) */}
         {panelOpen ? (
@@ -1434,11 +1595,11 @@ export default function MarketDataPage() {
         ) : (
           <button
             onClick={() => setPanelOpen(true)}
-            className="lg:self-start flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-white/10 text-xs font-semibold text-gray-200"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 px-1.5 py-3 rounded-l-lg border border-r-0 border-white/10 bg-slate-900/85 hover:bg-white/10 text-[10px] font-semibold text-gray-200 shadow-lg backdrop-blur"
             title="Show watchlist"
           >
             <List className="w-4 h-4 text-blue-300" />
-            <span>Watchlist ({watchlist.length})</span>
+            <span className="[writing-mode:vertical-rl] rotate-180 tracking-wide">Watchlist ({watchlist.length})</span>
           </button>
         )}
       </div>

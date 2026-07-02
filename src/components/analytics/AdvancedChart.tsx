@@ -148,8 +148,11 @@ const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: strin
 // instead of only the right half, we fetch extra "warm-up" history before the
 // requested window, compute indicators over the full set, then zoom the view back
 // to the requested window. Maps a range key → the larger range to actually fetch.
-// (Intraday 1D/5D and full-history MAX need no warm-up.)
+// Intraday 1D/5D fetch several extra days of intraday bars so a SMA200 (which
+// needs 200 prior bars) still spans the entire visible session. MAX needs none.
 const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
+  '1D': '5d',
+  '5D': '1mo',
   '1M': '1y',
   '3M': '2y',
   '6M': '2y',
@@ -160,6 +163,8 @@ const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
 
 // Approx seconds covered by the requested window, used to zoom back after warm-up.
 const WINDOW_SECONDS: Partial<Record<RangeKey, number>> = {
+  '1D': 1 * 86400,
+  '5D': 5 * 86400,
   '1M': 31 * 86400,
   '3M': 93 * 86400,
   '6M': 186 * 86400,
@@ -1520,6 +1525,10 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
 
       const qs = new URLSearchParams({ symbol, range: fetchRange, interval: currentRange.interval })
+      // Include pre-market / after-hours bars on intraday intervals so the
+      // chart shows extended-hours trading (premarket).
+      const isIntraday = /m$/i.test(currentRange.interval)
+      if (isIntraday) qs.set('prepost', '1')
       const endpoint = isFred
         ? `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
         : `/api/yahoo-history?${qs}`
@@ -1610,6 +1619,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       if (!main || cur.length < 2) return
       try {
         const q = new URLSearchParams({ symbol, range: liveRange, interval: iv })
+        if (isIntraday) q.set('prepost', '1')
         const r = await fetch(`/api/yahoo-history?${q}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
         if (!r.ok || stopped) return
         const j = await r.json()

@@ -17,8 +17,8 @@ const TF_TO_RANGE: Record<TF, { range: string; interval: string }> = {
   '1W': { range: '1mo', interval: '1d' },
   '1M': { range: '3mo', interval: '1d' },
   '3M': { range: '6mo', interval: '1d' },
-  'YTD': { range: '1y', interval: '1d' },
-  '1Y': { range: '1y', interval: '1d' },
+  'YTD': { range: '2y', interval: '1d' },
+  '1Y': { range: '2y', interval: '1d' },
 };
 
 interface IndexMeta {
@@ -138,8 +138,16 @@ function RegionCard({ region, quotes, perf, tf }: {
           if (tf === '1D') {
             cp = q && isFinite(q.changePercent) ? q.changePercent : null;
           } else {
-            const usedSym = q?.symbol?.toUpperCase() || meta.symbol.toUpperCase();
-            const v = perf[usedSym];
+            // Look up the historical % under any symbol form we might have used
+            // (the resolved quote symbol, the primary, or the fallback) so a
+            // primary/fallback mismatch never blanks a real value.
+            const keys = [
+              q?.symbol?.toUpperCase(),
+              meta.symbol.toUpperCase(),
+              meta.fallback?.toUpperCase(),
+            ].filter(Boolean) as string[];
+            let v: number | null | undefined;
+            for (const k of keys) { if (perf[k] != null) { v = perf[k]; break; } }
             cp = typeof v === 'number' && isFinite(v) ? v : null;
           }
           const positive = cp != null && cp >= 0;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LocalErrorBoundary from '@/components/LocalErrorBoundary';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
@@ -213,6 +213,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [heatmapQuotes, setHeatmapQuotes] = useState<Mover[]>([]);
   const [heatmapPeriod, setHeatmapPeriod] = useState<'daily' | 'weekly' | 'monthly' | '3month' | '6month' | 'ytd' | 'yearly'>('daily');
   const [heatmapLoading, setHeatmapLoading] = useState(false);
+  // In-memory cache of already-fetched heatmap periods so switching between
+  // timeframes (1D↔1W↔1M…) is instant and never shows an empty screen.
+  const heatmapCacheRef = useRef<Record<string, Mover[]>>({});
+  const heatmapPeriodRef = useRef(heatmapPeriod);
+  useEffect(() => { heatmapPeriodRef.current = heatmapPeriod; }, [heatmapPeriod]);
 
   // ─── Fetchers ──────────────────────────────────────────────────
   const fetchSectorData = useCallback(async () => {
@@ -320,15 +325,29 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   }, [fetchT]);
 
   const fetchHeatmapQuotes = useCallback(async (period = 'daily') => {
+    // Show cached data for this period immediately (instant timeframe switch,
+    // never an empty screen). Keep the previous period's data on screen while
+    // the new one loads if we have nothing cached yet.
+    const cached = heatmapCacheRef.current[period];
+    if (cached && cached.length) {
+      setHeatmapQuotes(cached);
+      setDataHealth(h => ({ ...h, heatmap: true }));
+    }
     try {
-      setHeatmapLoading(true);
+      // Only surface the spinner when we have nothing to show for this period.
+      if (!cached || !cached.length) setHeatmapLoading(true);
       // Allow browser/CDN to short-circuit repeated period switches; server has its own 3-60min cache
       const r = await fetchT(`/api/heatmap-quotes?period=${period}`, 55000);
       if (!r.ok) return;
       const j = await r.json();
-      if (j.ok && j.data) {
-        setHeatmapQuotes(j.data);
-        setDataHealth(h => ({ ...h, heatmap: j.data.length > 0 }));
+      if (j.ok && j.data && j.data.length) {
+        heatmapCacheRef.current[period] = j.data;
+        // Only apply if the user is still viewing this period (avoids a late
+        // response for an old period overwriting the current one).
+        if (heatmapPeriodRef.current === period) {
+          setHeatmapQuotes(j.data);
+          setDataHealth(h => ({ ...h, heatmap: j.data.length > 0 }));
+        }
       }
     } catch (e) { console.error(e); }
     finally { setHeatmapLoading(false); }

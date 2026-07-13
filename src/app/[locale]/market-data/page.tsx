@@ -362,6 +362,22 @@ function MarketSessionBadge() {
 // ── Symbol news (Yahoo headlines for the chart's active symbol) ───────────────
 interface NewsItem { title: string; publisher: string; link: string; publishedAt: string; thumbnail?: string }
 
+// ── Quant analysis (deterministic, real price data via /api/symbol-analysis) ──
+interface SymbolAnalysis {
+  symbol: string
+  price: number
+  composite: number
+  verdict: string
+  trend: { d5: number | null; m1: number | null; m3: number | null; m6: number | null; y1: number | null }
+  technicals: {
+    rsi14: number | null; macdHist: number | null
+    sma20: number | null; sma50: number | null; sma200: number | null
+    goldenCross: boolean | null; atrPct: number | null; volumeVsAvg: number | null
+    from52High: number | null; from52Low: number | null
+  }
+  levels: { support: number[]; resistance: number[] }
+}
+
 // Compact per-cell symbol search used inside each chart of the 2×2 grid. Renders
 // the current symbol as an editable pill with a live autocomplete dropdown
 // (Yahoo instruments + FRED macro series), submitting the chosen symbol back up.
@@ -530,9 +546,11 @@ export default function MarketDataPage() {
   const [chartHeight, setChartHeight] = useState(620)
   const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
-  const [panelTab, setPanelTab] = useState<'watchlist' | 'news'>('watchlist')
+  const [panelTab, setPanelTab] = useState<'watchlist' | 'news' | 'analysis'>('watchlist')
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [newsLoading, setNewsLoading] = useState(false)
+  const [analysis, setAnalysis] = useState<SymbolAnalysis | null>(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
   const [panelInput, setPanelInput] = useState('')
   // Watchlist add-symbol autocomplete (live Yahoo search dropdown)
   const [panelResults, setPanelResults] = useState<SearchResult[]>([])
@@ -711,6 +729,28 @@ export default function MarketDataPage() {
     }
     load()
     const id = setInterval(load, 120_000)
+    return () => { aborted = true; clearInterval(id) }
+  }, [symbol, panelOpen, panelTab])
+
+  // Deterministic quant analysis for the active symbol (refreshed with symbol
+  // changes and every 3 min while the Analysis tab is visible).
+  useEffect(() => {
+    if (!panelOpen || panelTab !== 'analysis') return
+    let aborted = false
+    const load = async () => {
+      try {
+        setAnalysisLoading(true)
+        const r = await fetch(`/api/symbol-analysis?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+        const j = await r.json()
+        if (!aborted) setAnalysis(j?.ok ? j : null)
+      } catch {
+        if (!aborted) setAnalysis(null)
+      } finally {
+        if (!aborted) setAnalysisLoading(false)
+      }
+    }
+    load()
+    const id = setInterval(load, 180_000)
     return () => { aborted = true; clearInterval(id) }
   }, [symbol, panelOpen, panelTab])
 
@@ -1582,22 +1622,138 @@ export default function MarketDataPage() {
             </div>
           </div>
 
-          {/* Panel tabs: Watchlist | News */}
+          {/* Panel tabs: Watchlist | News | Analysis */}
           <div className="flex items-center border-b border-white/10">
-            {(['watchlist', 'news'] as const).map((t) => (
+            {(['watchlist', 'news', 'analysis'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setPanelTab(t)}
-                className={`flex-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide ${
+                className={`flex-1 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide ${
                   panelTab === t ? 'text-blue-300 border-b-2 border-blue-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
-                {t === 'watchlist' ? 'Watchlist' : `News · ${symbol}`}
+                {t === 'watchlist' ? 'Watchlist' : t === 'news' ? 'News' : 'Analysis'}
               </button>
             ))}
           </div>
 
-          {panelTab === 'news' ? (
+          {panelTab === 'analysis' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto p-3">
+              {analysisLoading && !analysis ? (
+                <div className="flex items-center justify-center h-32 text-xs text-gray-500 gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Analyzing {symbol}…
+                </div>
+              ) : !analysis ? (
+                <div className="flex items-center justify-center h-32 text-xs text-gray-500 px-4 text-center">
+                  Analysis unavailable for {symbol}
+                </div>
+              ) : (
+                <>
+                  {/* Composite gauge */}
+                  <div className="mb-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] uppercase tracking-wider text-gray-500">Technical Rating · {analysis.symbol}</span>
+                      <span className={`text-xs font-black ${
+                        analysis.composite >= 58 ? 'text-emerald-400' : analysis.composite >= 42 ? 'text-gray-300' : 'text-red-400'
+                      }`}>{analysis.verdict}</span>
+                    </div>
+                    <div className="relative h-2 rounded-full bg-gradient-to-r from-red-500 via-gray-500 to-emerald-500">
+                      <span
+                        className="absolute -top-1 w-1 h-4 rounded bg-white shadow"
+                        style={{ left: `calc(${Math.max(2, Math.min(98, analysis.composite))}% - 2px)` }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1 text-[8px] uppercase tracking-wide text-gray-600">
+                      <span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span>
+                    </div>
+                  </div>
+
+                  {/* Trend matrix */}
+                  <div className="mb-3">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Trend Matrix</div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {([['5D', analysis.trend.d5], ['1M', analysis.trend.m1], ['3M', analysis.trend.m3], ['6M', analysis.trend.m6], ['1Y', analysis.trend.y1]] as const).map(([lbl, v]) => (
+                        <div key={lbl} className={`rounded px-1 py-1.5 text-center border ${
+                          v == null ? 'border-white/5 text-gray-600' : v >= 0 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-red-500/25 bg-red-500/10 text-red-300'
+                        }`}>
+                          <div className="text-[8px] uppercase text-gray-500">{lbl}</div>
+                          <div className="text-[10px] font-bold tabular-nums">{v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Key technicals */}
+                  <div className="mb-3">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Key Technicals</div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">RSI 14</span>
+                        <span className={`font-bold tabular-nums ${analysis.technicals.rsi14 == null ? 'text-gray-500' : analysis.technicals.rsi14 >= 70 ? 'text-amber-400' : analysis.technicals.rsi14 <= 30 ? 'text-sky-400' : 'text-gray-200'}`}>
+                          {analysis.technicals.rsi14 ?? '—'}
+                        </span>
+                      </div>
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">MACD</span>
+                        <span className={`font-bold ${analysis.technicals.macdHist == null ? 'text-gray-500' : analysis.technicals.macdHist > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {analysis.technicals.macdHist == null ? '—' : analysis.technicals.macdHist > 0 ? 'Bullish' : 'Bearish'}
+                        </span>
+                      </div>
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">SMA 50/200</span>
+                        <span className={`font-bold ${analysis.technicals.goldenCross == null ? 'text-gray-500' : analysis.technicals.goldenCross ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {analysis.technicals.goldenCross == null ? '—' : analysis.technicals.goldenCross ? 'Golden ✚' : 'Death ✚'}
+                        </span>
+                      </div>
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">ATR Vol</span>
+                        <span className="font-bold tabular-nums text-gray-200">{analysis.technicals.atrPct != null ? `${analysis.technicals.atrPct}%` : '—'}</span>
+                      </div>
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">52W High</span>
+                        <span className="font-bold tabular-nums text-gray-200">{analysis.technicals.from52High != null ? `${analysis.technicals.from52High > 0 ? '+' : ''}${analysis.technicals.from52High}%` : '—'}</span>
+                      </div>
+                      <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-gray-500">Vol vs 20d</span>
+                        <span className={`font-bold tabular-nums ${analysis.technicals.volumeVsAvg == null ? 'text-gray-500' : analysis.technicals.volumeVsAvg > 25 ? 'text-amber-300' : 'text-gray-200'}`}>
+                          {analysis.technicals.volumeVsAvg != null ? `${analysis.technicals.volumeVsAvg > 0 ? '+' : ''}${analysis.technicals.volumeVsAvg}%` : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Support / Resistance */}
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Auto Support / Resistance</div>
+                    <div className="space-y-1">
+                      {[...analysis.levels.resistance].reverse().map((r, i) => (
+                        <div key={`r-${i}`} className="flex items-center justify-between rounded border border-red-500/20 bg-red-500/5 px-2 py-1 text-[11px]">
+                          <span className="text-red-300/80">Resistance</span>
+                          <span className="font-bold tabular-nums text-red-300">{fmtPrice(r)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between rounded border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-[11px]">
+                        <span className="text-blue-300/90">Last price</span>
+                        <span className="font-black tabular-nums text-white">{fmtPrice(analysis.price)}</span>
+                      </div>
+                      {analysis.levels.support.map((s, i) => (
+                        <div key={`s-${i}`} className="flex items-center justify-between rounded border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-[11px]">
+                          <span className="text-emerald-300/80">Support</span>
+                          <span className="font-bold tabular-nums text-emerald-300">{fmtPrice(s)}</span>
+                        </div>
+                      ))}
+                      {analysis.levels.support.length === 0 && analysis.levels.resistance.length === 0 && (
+                        <div className="text-[11px] text-gray-500">No clear pivot levels in the last 6 months.</div>
+                      )}
+                    </div>
+                    <div className="mt-2 text-[9px] text-gray-600 leading-snug">
+                      Computed from 1Y of real daily prices: RSI, MACD, SMA posture, swing-point pivots. Not financial advice.
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : panelTab === 'news' ? (
             <div className="flex-1 min-h-0 overflow-y-auto">
               {newsLoading && newsItems.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-xs text-gray-500 gap-2">

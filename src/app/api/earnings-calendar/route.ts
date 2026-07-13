@@ -163,7 +163,6 @@ export async function GET(request: NextRequest) {
   // PRIMARY: Nasdaq.com public calendar — precise dates, BMO/AMC times, EPS
   // forecasts and full-market coverage, no API key required.
   let earningsEvents: EarningsData[] = []
-  let source = 'nasdaq'
   try {
     const nas = await getNasdaqEarningsCalendar(days)
     earningsEvents = nas as unknown as EarningsData[]
@@ -175,7 +174,6 @@ export async function GET(request: NextRequest) {
   // Fallback: FMP (requires FMP_API_KEY)
   if (!earningsEvents.length) {
     earningsEvents = await fetchRealEarningsCalendar()
-    if (earningsEvents.length) source = 'fmp'
   }
 
   // Fallback Yahoo Finance se Nasdaq e FMP sono vuoti
@@ -192,7 +190,6 @@ export async function GET(request: NextRequest) {
       ]
       const yh = await getYahooEarningsCalendar(TOP, days)
       earningsEvents = yh as unknown as EarningsData[]
-      if (earningsEvents.length) source = 'yahoo'
       console.log(`✅ Yahoo returned ${earningsEvents.length} earnings`)
     } catch (e) {
       console.warn('Yahoo earnings fallback error:', e)
@@ -211,7 +208,6 @@ export async function GET(request: NextRequest) {
         lowSignificance: earningsEvents.filter((e: EarningsData) => e.significance === 'Low').length,
         nextMajorEarning: earningsEvents.find((e: EarningsData) => e.significance === 'High'),
       },
-      source,
   lastUpdated: new Date().toISOString()
     };
     

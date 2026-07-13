@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getYahooEarningsCalendar } from '@/lib/yahoo-earnings';
+import { getNasdaqEarningsCalendar } from '@/lib/nasdaq-earnings';
 
 export const maxDuration = 30;
 
@@ -158,13 +159,29 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const daysParam = url.searchParams.get('days')
   const days = Math.max(1, Math.min(60, Number(daysParam) || 30))
-  // Per ora, FMP ritorna prossimi 30 giorni; se days differisce, verrà gestito internamente in FMP o lato UI
-  let earningsEvents: EarningsData[] = await fetchRealEarningsCalendar()
 
-  // Fallback Yahoo Finance se FMP è vuoto o key mancante
+  // PRIMARY: Nasdaq.com public calendar — precise dates, BMO/AMC times, EPS
+  // forecasts and full-market coverage, no API key required.
+  let earningsEvents: EarningsData[] = []
+  let source = 'nasdaq'
+  try {
+    const nas = await getNasdaqEarningsCalendar(days)
+    earningsEvents = nas as unknown as EarningsData[]
+    if (earningsEvents.length) console.log(`✅ Nasdaq returned ${earningsEvents.length} earnings`)
+  } catch (e) {
+    console.warn('Nasdaq earnings fetch error:', e)
+  }
+
+  // Fallback: FMP (requires FMP_API_KEY)
+  if (!earningsEvents.length) {
+    earningsEvents = await fetchRealEarningsCalendar()
+    if (earningsEvents.length) source = 'fmp'
+  }
+
+  // Fallback Yahoo Finance se Nasdaq e FMP sono vuoti
   if (!earningsEvents.length) {
     try {
-      console.log('📊 FMP empty, trying Yahoo Finance earnings...')
+      console.log('📊 Nasdaq/FMP empty, trying Yahoo Finance earnings...')
       // Curated mega-cap list to keep latency low on serverless
       const TOP = [
         'AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','BRK-B','LLY','AVGO',
@@ -175,6 +192,7 @@ export async function GET(request: NextRequest) {
       ]
       const yh = await getYahooEarningsCalendar(TOP, days)
       earningsEvents = yh as unknown as EarningsData[]
+      if (earningsEvents.length) source = 'yahoo'
       console.log(`✅ Yahoo returned ${earningsEvents.length} earnings`)
     } catch (e) {
       console.warn('Yahoo earnings fallback error:', e)
@@ -193,6 +211,7 @@ export async function GET(request: NextRequest) {
         lowSignificance: earningsEvents.filter((e: EarningsData) => e.significance === 'Low').length,
         nextMajorEarning: earningsEvents.find((e: EarningsData) => e.significance === 'High'),
       },
+      source,
   lastUpdated: new Date().toISOString()
     };
     

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import { fetchYahooChartQuotes } from '@/lib/yahoo-chart-quotes';
 
 /**
  * World Economic Cycle classifier — HIGH-ACCURACY VERSION
@@ -10,6 +11,9 @@ import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
  *        - PCPIPCH    Average CPI inflation (annual %)
  *   2. World Bank                (annual actuals, fallback for countries IMF misses)
  *        - NY.GDP.MKTP.KD.ZG   /   FP.CPI.TOTL.ZG
+ *   3. Country-ETF market momentum (Yahoo, real-time daily)
+ *        - 3-month total return of each country's flagship equity ETF, used as a
+ *          live market-based confirmation of the macro regime + confidence score.
  *
  * Each country gets the most-recent IMF value (which can be a "current year" estimate
  * incorporating monthly indicators, much fresher than the World Bank annual actuals)
@@ -41,6 +45,12 @@ interface CountryCycle {
   cycle: Cycle;
   asOf: string | null;
   source: 'IMF' | 'WorldBank' | 'Mixed' | null;
+  /** 3-month total return of the country's flagship equity ETF (real-time, %). */
+  marketMomentum: number | null;
+  /** Ticker used for the market-momentum signal. */
+  etf: string | null;
+  /** 0-100: data freshness + macro/market agreement. */
+  confidence: number;
 }
 
 interface ApiResponse {
@@ -121,9 +131,25 @@ const COUNTRIES: Array<{ iso3: string; iso2: string; name: string; region: strin
   { iso3: 'NZL', iso2: 'NZ', name: 'New Zealand', region: 'Oceania' },
 ];
 
+// Flagship country equity ETF (US-listed, deep liquidity) per ISO3 — used for the
+// real-time market-momentum confirmation layer. Not every country has one.
+const COUNTRY_ETF: Record<string, string> = {
+  USA: 'SPY', CAN: 'EWC', MEX: 'EWW',
+  BRA: 'EWZ', ARG: 'ARGT', CHL: 'ECH', COL: 'GXG', PER: 'EPU',
+  GBR: 'EWU', DEU: 'EWG', FRA: 'EWQ', ITA: 'EWI', ESP: 'EWP', NLD: 'EWN',
+  BEL: 'EWK', SWE: 'EWD', NOR: 'NORW', DNK: 'EDEN', FIN: 'EFNL', CHE: 'EWL',
+  AUT: 'EWO', IRL: 'EIRL', PRT: 'PGAL', GRC: 'GREK', POL: 'EPOL', TUR: 'TUR',
+  SAU: 'KSA', ARE: 'UAE', ISR: 'EIS', QAT: 'QAT', EGY: 'EGPT',
+  ZAF: 'EZA', NGA: 'NGE',
+  CHN: 'MCHI', JPN: 'EWJ', KOR: 'EWY', IND: 'INDA', IDN: 'EIDO', THA: 'THD',
+  MYS: 'EWM', PHL: 'EPHE', VNM: 'VNM', SGP: 'EWS', TWN: 'EWT', HKG: 'EWH',
+  PAK: 'PAK',
+  AUS: 'EWA', NZL: 'ENZL',
+};
+
 // Simple in-memory cache
 let _cache: { ts: number; data: ApiResponse } | null = null;
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — macro data updates slowly
+const CACHE_TTL = 60 * 60 * 1000; // 1h — macro is slow but the market-momentum layer is live
 
 /**
  * Fetch from IMF DataMapper WEO API.
@@ -170,8 +196,10 @@ function extractImfSeries(
     const y = Number(yStr);
     const num = Number(v);
     if (!isFinite(y) || !isFinite(num)) continue;
-    // Keep recent years only (up to current year + 1 to allow forecast)
-    if (y < currentYear - 5 || y > currentYear + 1) continue;
+    // Keep recent years only, capped at the CURRENT year: the current-year value
+    // is the IMF nowcast (freshest estimate of where we are NOW), while future
+    // years are pure forecasts and would mis-date the present cycle.
+    if (y < currentYear - 5 || y > currentYear) continue;
     out.push({ year: y, value: num });
   }
   return out.sort((a, b) => b.year - a.year);
@@ -261,10 +289,13 @@ function classify(
 }
 
 async function buildData(): Promise<ApiResponse> {
-  // 1. Single global fetch per IMF indicator (returns all countries at once)
-  const [imfGdpAll, imfCpiAll] = await Promise.all([
+  // 1. Single global fetch per IMF indicator (returns all countries at once),
+  //    plus real-time 3-month market momentum for every country ETF (Yahoo).
+  const etfSymbols = Array.from(new Set(Object.values(COUNTRY_ETF)));
+  const [imfGdpAll, imfCpiAll, momentumQuotes] = await Promise.all([
     imfAll('NGDP_RPCH'),
     imfAll('PCPIPCH'),
+    fetchYahooChartQuotes(etfSymbols, '3mo', 6, 100).catch(() => ({} as Record<string, { changePercent: number }>)),
   ]);
 
   // 2. Per-country: extract from IMF; fall back to World Bank only when IMF lacks data.
@@ -306,6 +337,32 @@ async function buildData(): Promise<ApiResponse> {
         const source: 'IMF' | 'WorldBank' | 'Mixed' | null =
           gdpLatest == null && cpiLatest == null ? null : gdpSrc === cpiSrc ? gdpSrc : 'Mixed';
 
+        // Real-time market confirmation: 3-month return of the country's flagship ETF.
+        const etf = COUNTRY_ETF[c.iso3] || null;
+        const mom = etf ? (momentumQuotes as any)[etf]?.changePercent : undefined;
+        const marketMomentum = typeof mom === 'number' && isFinite(mom) ? +mom.toFixed(2) : null;
+
+        // Confidence 0-100: data availability + freshness + macro/market agreement.
+        let confidence = 0;
+        if (gdpLatest != null && cpiLatest != null) confidence += 40;      // both macro pillars present
+        if (growthDelta != null && inflationDelta != null) confidence += 15; // direction available
+        const currentYear = new Date().getUTCFullYear();
+        if (asOf && Number(asOf) >= currentYear) confidence += 20;         // nowcast-fresh
+        else if (asOf && Number(asOf) >= currentYear - 1) confidence += 10;
+        if (marketMomentum != null) {
+          // Market agrees when equities rise in pro-growth regimes and fall in contraction regimes.
+          const marketUp = marketMomentum > 1.5;
+          const marketDown = marketMomentum < -1.5;
+          const agrees =
+            ((cycle === 'Reflation' || cycle === 'Inflation') && marketUp) ||
+            ((cycle === 'Recession' || cycle === 'Stagflation') && marketDown);
+          const disagrees =
+            ((cycle === 'Reflation' || cycle === 'Inflation') && marketDown) ||
+            ((cycle === 'Recession' || cycle === 'Stagflation') && marketUp);
+          confidence += agrees ? 25 : disagrees ? 5 : 15; // neutral market = partial credit
+        }
+        confidence = Math.max(0, Math.min(100, confidence));
+
         return {
           iso3: c.iso3,
           iso2: c.iso2,
@@ -320,6 +377,9 @@ async function buildData(): Promise<ApiResponse> {
           cycle,
           asOf,
           source,
+          marketMomentum,
+          etf,
+          confidence,
         } as CountryCycle;
       })
     );
@@ -339,7 +399,7 @@ async function buildData(): Promise<ApiResponse> {
     generatedAt: new Date().toISOString(),
     countries: results,
     summary,
-    source: 'IMF DataMapper WEO (primary) + World Bank WDI (fallback)',
+    source: 'IMF DataMapper WEO (primary) + World Bank WDI (fallback) + live country-ETF momentum (Yahoo)',
   };
 }
 
@@ -358,7 +418,7 @@ export async function GET(req: NextRequest) {
         headers: {
           ...rateLimitHeaders(rl),
           'x-cache': 'HIT',
-          'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=43200',
+          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=21600',
         },
       });
     }
@@ -369,7 +429,7 @@ export async function GET(req: NextRequest) {
       headers: {
         ...rateLimitHeaders(rl),
         'x-cache': 'MISS',
-        'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=43200',
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=21600',
       },
     });
   } catch (e) {

@@ -292,6 +292,76 @@ function searchFred(query: string): SearchResult[] {
   }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
 }
 
+// ── US market session clock (NYSE hours in America/New_York) ─────────────────
+// Computes the live session phase + countdown so the terminal always shows
+// whether we're pre-market, in regular hours, after-hours or closed.
+type SessionPhase = 'pre' | 'open' | 'after' | 'closed'
+
+function getUsMarketSession(): { phase: SessionPhase; label: string; countdown: string } {
+  const now = new Date()
+  // Current time in New York
+  const nyStr = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })
+  const ny = new Date(nyStr)
+  const day = ny.getDay()
+  const mins = ny.getHours() * 60 + ny.getMinutes()
+  const PRE = 4 * 60        // 04:00 pre-market start
+  const OPEN = 9 * 60 + 30  // 09:30 regular open
+  const CLOSE = 16 * 60     // 16:00 regular close
+  const AFTER_END = 20 * 60 // 20:00 after-hours end
+  const isWeekday = day >= 1 && day <= 5
+
+  const fmt = (m: number) => {
+    const h = Math.floor(m / 60), mm = m % 60
+    return h > 0 ? `${h}h ${mm}m` : `${mm}m`
+  }
+
+  if (isWeekday && mins >= OPEN && mins < CLOSE) {
+    return { phase: 'open', label: 'Market Open', countdown: `closes in ${fmt(CLOSE - mins)}` }
+  }
+  if (isWeekday && mins >= PRE && mins < OPEN) {
+    return { phase: 'pre', label: 'Pre-Market', countdown: `opens in ${fmt(OPEN - mins)}` }
+  }
+  if (isWeekday && mins >= CLOSE && mins < AFTER_END) {
+    return { phase: 'after', label: 'After-Hours', countdown: `ends in ${fmt(AFTER_END - mins)}` }
+  }
+  // Closed: minutes until the next pre-market session (04:00 NY, next weekday)
+  let minsUntilPre: number
+  if (isWeekday && mins < PRE) {
+    minsUntilPre = PRE - mins // later this morning
+  } else {
+    // Evening or weekend: find days ahead of the next weekday
+    const daysAhead = day === 5 ? 3 : day === 6 ? 2 : 1 // Fri→Mon, Sat→Mon, else tomorrow
+    minsUntilPre = (24 * 60 - mins) + PRE + (daysAhead - 1) * 24 * 60
+  }
+  return { phase: 'closed', label: 'Market Closed', countdown: `pre-market in ${fmt(minsUntilPre)}` }
+}
+
+const SESSION_STYLE: Record<SessionPhase, { dot: string; text: string }> = {
+  open: { dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-300' },
+  pre: { dot: 'bg-sky-400 animate-pulse', text: 'text-sky-300' },
+  after: { dot: 'bg-amber-400 animate-pulse', text: 'text-amber-300' },
+  closed: { dot: 'bg-gray-500', text: 'text-gray-400' },
+}
+
+function MarketSessionBadge() {
+  const [session, setSession] = useState(() => getUsMarketSession())
+  useEffect(() => {
+    const id = setInterval(() => setSession(getUsMarketSession()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const s = SESSION_STYLE[session.phase]
+  return (
+    <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded border border-white/10 bg-white/5 shrink-0" title={`US equities session (NYSE) — ${session.countdown}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      <span className={`text-[10px] font-semibold ${s.text}`}>{session.label}</span>
+      <span className="text-[9px] text-gray-500">{session.countdown}</span>
+    </div>
+  )
+}
+
+// ── Symbol news (Yahoo headlines for the chart's active symbol) ───────────────
+interface NewsItem { title: string; publisher: string; link: string; publishedAt: string; thumbnail?: string }
+
 // Compact per-cell symbol search used inside each chart of the 2×2 grid. Renders
 // the current symbol as an editable pill with a live autocomplete dropdown
 // (Yahoo instruments + FRED macro series), submitting the chosen symbol back up.
@@ -460,6 +530,9 @@ export default function MarketDataPage() {
   const [chartHeight, setChartHeight] = useState(620)
   const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [panelTab, setPanelTab] = useState<'watchlist' | 'news'>('watchlist')
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
+  const [newsLoading, setNewsLoading] = useState(false)
   const [panelInput, setPanelInput] = useState('')
   // Watchlist add-symbol autocomplete (live Yahoo search dropdown)
   const [panelResults, setPanelResults] = useState<SearchResult[]>([])
@@ -618,6 +691,28 @@ export default function MarketDataPage() {
     setSearchOpen(false)
     setSearchVal('')
   }, [searchVal, setSymbol])
+
+  // Live headlines for the active chart symbol (Yahoo, refreshed every 2 min
+  // while the News tab is visible).
+  useEffect(() => {
+    if (!panelOpen || panelTab !== 'news') return
+    let aborted = false
+    const load = async () => {
+      try {
+        setNewsLoading(true)
+        const r = await fetch(`/api/symbol-news?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+        const j = await r.json()
+        if (!aborted) setNewsItems(Array.isArray(j?.data) ? j.data : [])
+      } catch {
+        if (!aborted) setNewsItems([])
+      } finally {
+        if (!aborted) setNewsLoading(false)
+      }
+    }
+    load()
+    const id = setInterval(load, 120_000)
+    return () => { aborted = true; clearInterval(id) }
+  }, [symbol, panelOpen, panelTab])
 
   // Remove a symbol from the currently active watchlist.
   const removeFromWatchlist = useCallback((sym: string) => {
@@ -1144,7 +1239,8 @@ export default function MarketDataPage() {
   )
 
   const actionsSlot = (
-          <div className="relative">
+          <div className="relative flex items-center gap-1.5">
+            <MarketSessionBadge />
             <button
               onClick={() => { setMenuOpen((o) => !o); setWatchlistMenuOpen(false); setNotifMenuOpen(false) }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
@@ -1486,6 +1582,56 @@ export default function MarketDataPage() {
             </div>
           </div>
 
+          {/* Panel tabs: Watchlist | News */}
+          <div className="flex items-center border-b border-white/10">
+            {(['watchlist', 'news'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setPanelTab(t)}
+                className={`flex-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide ${
+                  panelTab === t ? 'text-blue-300 border-b-2 border-blue-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t === 'watchlist' ? 'Watchlist' : `News · ${symbol}`}
+              </button>
+            ))}
+          </div>
+
+          {panelTab === 'news' ? (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {newsLoading && newsItems.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-xs text-gray-500 gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading news…
+                </div>
+              ) : newsItems.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-xs text-gray-500 px-4 text-center">
+                  No recent headlines for {symbol}
+                </div>
+              ) : (
+                newsItems.map((n, i) => (
+                  <a
+                    key={`${n.link}-${i}`}
+                    href={n.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex gap-2.5 px-3 py-2.5 border-b border-white/5 hover:bg-white/5 group"
+                  >
+                    {n.thumbnail && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={n.thumbnail} alt="" loading="lazy" className="w-14 h-14 rounded object-cover shrink-0 bg-slate-800" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-gray-200 group-hover:text-white leading-snug line-clamp-3">{n.title}</div>
+                      <div className="mt-1 text-[9px] text-gray-500">
+                        {n.publisher} · {timeAgo(new Date(n.publishedAt))} ago
+                      </div>
+                    </div>
+                  </a>
+                ))
+              )}
+            </div>
+          ) : (
+          <>
           {/* Add-symbol input */}
           <div className="relative flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
             <div className="flex items-center flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 focus-within:border-blue-500">
@@ -1590,6 +1736,8 @@ export default function MarketDataPage() {
               )
             })}
           </div>
+          </>
+          )}
         </aside>
         </>
         ) : (

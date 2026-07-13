@@ -21,6 +21,9 @@ interface CountryCycle {
   cycle: Cycle;
   asOf: string | null;
   source?: 'IMF' | 'WorldBank' | 'Mixed' | null;
+  marketMomentum?: number | null;
+  etf?: string | null;
+  confidence?: number;
 }
 
 interface ApiResponse {
@@ -109,7 +112,11 @@ export default function WorldEconomicCycleMap() {
       const gd = c.growthDelta != null ? `${c.growthDelta > 0 ? '+' : ''}${c.growthDelta.toFixed(1)}` : 'n/a';
       const id = c.inflationDelta != null ? `${c.inflationDelta > 0 ? '+' : ''}${c.inflationDelta.toFixed(1)}` : 'n/a';
       const src = c.source ? ` • ${c.source}` : '';
-      return `<b>${c.name}</b><br>Cycle: <b>${c.cycle}</b><br>GDP: ${gdp} (Δ ${gd})<br>CPI: ${cpi} (Δ ${id})<br>As of: ${c.asOf || 'n/a'}${src}<extra></extra>`;
+      const mom = c.marketMomentum != null
+        ? `<br>Market 3M: <b>${c.marketMomentum > 0 ? '+' : ''}${c.marketMomentum.toFixed(1)}%</b>${c.etf ? ` (${c.etf})` : ''}`
+        : '';
+      const conf = typeof c.confidence === 'number' ? `<br>Confidence: <b>${c.confidence}%</b>` : '';
+      return `<b>${c.name}</b><br>Cycle: <b>${c.cycle}</b><br>GDP: ${gdp} (Δ ${gd})<br>CPI: ${cpi} (Δ ${id})${mom}${conf}<br>As of: ${c.asOf || 'n/a'}${src}<extra></extra>`;
     });
     // Discrete colorscale: 5 bands
     const colorscale: any = [
@@ -226,7 +233,10 @@ export default function WorldEconomicCycleMap() {
       </div>
       <div className="mt-2 text-[10px] text-gray-500">
         Source: <span className="text-gray-300">IMF WEO DataMapper</span> (primary, includes current-year nowcast) +
-        <span className="text-gray-300"> World Bank WDI</span> (fallback). Cycle classified by weighted score combining GDP growth level &amp; YoY direction with CPI inflation level &amp; YoY direction.
+        <span className="text-gray-300"> World Bank WDI</span> (fallback) +
+        <span className="text-gray-300"> live country-ETF momentum</span> (Yahoo, 3-month return).
+        Cycle classified by weighted score combining GDP growth level &amp; YoY direction with CPI inflation level &amp; YoY direction;
+        confidence blends data freshness with macro/market agreement.
         {data?.generatedAt && <> Updated {new Date(data.generatedAt).toLocaleString()}.</>}
       </div>
     </div>

@@ -49,6 +49,11 @@ interface FlameData {
   level: number; intensity: string; description: string;
   components: Record<string, number>;
 }
+interface EarningsEvent {
+  date: string; time: string; symbol: string; company: string;
+  epsEstimate?: string; estimate?: string; actual?: string;
+  period?: string; significance?: 'High' | 'Medium' | 'Low'; sector?: string;
+}
 
 // ─── S&P 500 Sector → Stocks (from centralized config) ──────────────
 const SECTOR_STOCKS = SP500_SECTORS;
@@ -213,6 +218,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [heatmapQuotes, setHeatmapQuotes] = useState<Mover[]>([]);
   const [heatmapPeriod, setHeatmapPeriod] = useState<'daily' | 'weekly' | 'monthly' | '3month' | '6month' | 'ytd' | 'yearly'>('daily');
   const [heatmapLoading, setHeatmapLoading] = useState(false);
+  const [earningsData, setEarningsData] = useState<EarningsEvent[]>([]);
+  const [earningsLoading, setEarningsLoading] = useState(true);
   // In-memory cache of already-fetched heatmap periods so switching between
   // timeframes (1D↔1W↔1M…) is instant and never shows an empty screen.
   const heatmapCacheRef = useRef<Record<string, Mover[]>>({});
@@ -353,11 +360,32 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     finally { setHeatmapLoading(false); }
   }, [fetchT]);
 
+  // Upcoming earnings calendar (next 14 days) — FMP with Yahoo/snapshot fallback server-side.
+  const fetchEarnings = useCallback(async () => {
+    try {
+      setEarningsLoading(true);
+      const r = await fetchT('/api/earnings-calendar?days=14', 20000, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      const list: EarningsEvent[] = Array.isArray(j?.data) ? j.data : Array.isArray(j?.earningsCalendar) ? j.earningsCalendar : [];
+      // Keep only today-onwards, sorted by date then significance.
+      const today = new Date().toISOString().slice(0, 10);
+      const rank = { High: 0, Medium: 1, Low: 2 } as Record<string, number>;
+      setEarningsData(
+        list
+          .filter((e) => e?.symbol && e?.date && e.date >= today)
+          .sort((a, b) => a.date.localeCompare(b.date) || (rank[a.significance || 'Low'] - rank[b.significance || 'Low']))
+          .slice(0, 60)
+      );
+    } catch (e) { console.error(e); }
+    finally { setEarningsLoading(false); }
+  }, [fetchT]);
+
   // ─── Effects ───────────────────────────────────────────────────
   // Initial mount: kick off non-heatmap fetches. The heatmap fetch is handled by the
   // period-change effect below (which runs on mount with the initial 'daily' value),
   // avoiding a duplicate /api/heatmap-quotes call on first render.
-  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis]);
+  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchEarnings(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchEarnings]);
 
   // Re-fetch heatmap when period changes (also runs once on mount)
   useEffect(() => { fetchHeatmapQuotes(heatmapPeriod); }, [heatmapPeriod, fetchHeatmapQuotes]);
@@ -1124,11 +1152,60 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 3.5: Economic Calendar ─── */}
+            {/* ─── ROW 3.5: Economic Calendar + Earnings Calendar ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-12 min-h-[440px]">
+              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-7 min-h-[440px]">
                 <div className="p-2">
                   <TradaysCalendarWidget height={400} mode="2" theme={1} />
+                </div>
+              </Panel>
+              <Panel title="Earnings Calendar" badge="14 DAYS" className="lg:col-span-5 min-h-[440px]"
+                actions={
+                  <button onClick={fetchEarnings} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Refresh earnings">
+                    <RefreshCw className={`w-3 h-3 ${earningsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                }>
+                <div className="p-2 max-h-[420px] overflow-y-auto">
+                  {earningsLoading && earningsData.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500 gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading earnings…
+                    </div>
+                  ) : earningsData.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500">
+                      No earnings scheduled in the next 14 days
+                    </div>
+                  ) : (
+                    (() => {
+                      const byDate: Record<string, EarningsEvent[]> = {};
+                      for (const ev of earningsData) (byDate[ev.date] ||= []).push(ev);
+                      const todayStr = new Date().toISOString().slice(0, 10);
+                      return Object.entries(byDate).map(([date, evs]) => (
+                        <div key={date} className="mb-2">
+                          <div className={`text-[9px] uppercase tracking-wider px-1 py-1 sticky top-0 bg-[#0b1120] ${date === todayStr ? 'text-amber-300' : 'text-gray-500'}`}>
+                            {date === todayStr ? 'Today · ' : ''}{new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </div>
+                          {evs.map((ev, i) => (
+                            <div
+                              key={`${ev.symbol}-${i}`}
+                              className="flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-white/5 cursor-pointer"
+                              onClick={() => goToChart(ev.symbol)}
+                              title={`Open ${ev.symbol} chart`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.significance === 'High' ? 'bg-amber-400' : ev.significance === 'Medium' ? 'bg-blue-400' : 'bg-gray-600'}`} />
+                                <span className="text-[11px] font-bold text-blue-300 hover:underline shrink-0">{ev.symbol}</span>
+                                <span className="text-[10px] text-gray-400 truncate">{ev.company}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 text-right">
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-white/5 text-gray-400">{ev.time === 'AMC' ? 'After close' : ev.time === 'BMO' ? 'Pre-market' : ev.time || '—'}</span>
+                                <span className="text-[10px] text-gray-300 w-16 truncate">{ev.actual || ev.epsEstimate || ev.estimate || '—'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ));
+                    })()
+                  )}
                 </div>
               </Panel>
             </div>

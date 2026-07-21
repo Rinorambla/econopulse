@@ -419,13 +419,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
   useEffect(() => {
     const heavy = setInterval(() => {
-      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); }
+      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); fetchEarnings(); fetchEarningsResults(); }
     }, 600000);
     const movers = setInterval(() => {
       if (document.visibilityState === 'visible') fetchTopMovers();
     }, 180000);
     return () => { clearInterval(heavy); clearInterval(movers); };
-  }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, heatmapPeriod]);
+  }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, heatmapPeriod, fetchEarnings, fetchEarningsResults]);
 
   useEffect(() => { if (selectedSymbol) fetchStockDetail(selectedSymbol); }, [selectedSymbol, fetchStockDetail]);
 

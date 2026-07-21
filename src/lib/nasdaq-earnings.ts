@@ -117,3 +117,28 @@ export async function getNasdaqEarningsCalendar(days = 14, perDayLimit = 25): Pr
   }
   return out;
 }
+
+/**
+ * Fetch the Nasdaq earnings calendar for the PAST `days` days (weekdays only,
+ * excluding today). Used to find companies that have just REPORTED, so their
+ * actual EPS can be compared with the estimate (beats & misses).
+ */
+export async function getNasdaqPastEarnings(days = 7, perDayLimit = 30): Promise<NasdaqEarningEvent[]> {
+  const dates: string[] = [];
+  const d = new Date();
+  for (let i = 1; i <= days + 3 && dates.length < days; i++) {
+    const day = new Date(d.getTime() - i * 86400000);
+    const dow = day.getDay();
+    if (dow === 0 || dow === 6) continue; // skip weekends
+    dates.push(day.toISOString().slice(0, 10));
+  }
+
+  const out: NasdaqEarningEvent[] = [];
+  const CONCURRENCY = 4;
+  for (let i = 0; i < dates.length; i += CONCURRENCY) {
+    const chunk = dates.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(chunk.map((dt) => fetchDay(dt)));
+    for (const dayEvents of results) out.push(...dayEvents.slice(0, perDayLimit));
+  }
+  return out;
+}

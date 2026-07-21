@@ -54,6 +54,15 @@ interface EarningsEvent {
   epsEstimate?: string; estimate?: string; actual?: string;
   period?: string; significance?: 'High' | 'Medium' | 'Low'; sector?: string;
 }
+interface EarningsResult {
+  symbol: string; company: string; sector: string; date: string;
+  epsActual: number; epsEstimate: number | null; surprisePct: number | null;
+  outcome: 'beat' | 'miss' | 'inline';
+}
+interface EarningsSectorStat {
+  sector: string; total: number; beats: number; misses: number; inline: number;
+  beatRate: number; avgSurprise: number | null;
+}
 
 // ─── S&P 500 Sector → Stocks (from centralized config) ──────────────
 const SECTOR_STOCKS = SP500_SECTORS;
@@ -220,6 +229,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [earningsData, setEarningsData] = useState<EarningsEvent[]>([]);
   const [earningsLoading, setEarningsLoading] = useState(true);
+  const [earningsResults, setEarningsResults] = useState<EarningsResult[]>([]);
+  const [earningsSectors, setEarningsSectors] = useState<EarningsSectorStat[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(true);
   // In-memory cache of already-fetched heatmap periods so switching between
   // timeframes (1D↔1W↔1M…) is instant and never shows an empty screen.
   const heatmapCacheRef = useRef<Record<string, Mover[]>>({});
@@ -381,11 +393,26 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
     finally { setEarningsLoading(false); }
   }, [fetchT]);
 
+  // Recent earnings RESULTS: who beat/missed estimates in the past week + sector stats.
+  const fetchEarningsResults = useCallback(async () => {
+    try {
+      setResultsLoading(true);
+      const r = await fetchT('/api/earnings-results?days=7', 45000, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j?.ok) {
+        setEarningsResults(Array.isArray(j.results) ? j.results : []);
+        setEarningsSectors(Array.isArray(j.sectors) ? j.sectors : []);
+      }
+    } catch (e) { console.error(e); }
+    finally { setResultsLoading(false); }
+  }, [fetchT]);
+
   // ─── Effects ───────────────────────────────────────────────────
   // Initial mount: kick off non-heatmap fetches. The heatmap fetch is handled by the
   // period-change effect below (which runs on mount with the initial 'daily' value),
   // avoiding a duplicate /api/heatmap-quotes call on first render.
-  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchEarnings(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchEarnings]);
+  useEffect(() => { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchEarnings(); fetchEarningsResults(); }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, fetchEarnings, fetchEarningsResults]);
 
   // Re-fetch heatmap when period changes (also runs once on mount)
   useEffect(() => { fetchHeatmapQuotes(heatmapPeriod); }, [heatmapPeriod, fetchHeatmapQuotes]);
@@ -1205,6 +1232,111 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         </div>
                       ));
                     })()
+                  )}
+                </div>
+              </Panel>
+            </div>
+
+            {/* ─── ROW 3.6: Earnings Results — beats & misses + sector comparison ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Earnings Results · Last 7 Days" badge={`${earningsResults.length} REPORTED`} className="lg:col-span-7 min-h-[300px]"
+                actions={
+                  <button onClick={fetchEarningsResults} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Refresh results">
+                    <RefreshCw className={`w-3 h-3 ${resultsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                }>
+                <div className="p-2">
+                  {resultsLoading && earningsResults.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500 gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading recent results…
+                    </div>
+                  ) : earningsResults.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500">No recent earnings results</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {/* Beats */}
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-emerald-300 px-1 py-1 flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" /> Beat estimates ({earningsResults.filter(r => r.outcome === 'beat').length})
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {earningsResults.filter(r => r.outcome === 'beat').slice(0, 15).map((r) => (
+                            <div key={`b-${r.symbol}`} onClick={() => goToChart(r.symbol)}
+                              className="flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-white/5 cursor-pointer" title={`Open ${r.symbol} chart`}>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[11px] font-bold text-emerald-300 hover:underline shrink-0">{r.symbol}</span>
+                                <span className="text-[9px] text-gray-500 truncate">{r.sector}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 text-right tabular-nums">
+                                <span className="text-[10px] text-gray-400">${r.epsActual.toFixed(2)}{r.epsEstimate != null ? ` vs $${r.epsEstimate.toFixed(2)}` : ''}</span>
+                                <span className="text-[10px] font-bold text-emerald-400 w-14">{r.surprisePct != null ? `+${r.surprisePct.toFixed(1)}%` : '—'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Misses */}
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-red-300 px-1 py-1 flex items-center gap-1">
+                          <TrendingDown className="w-3 h-3" /> Missed estimates ({earningsResults.filter(r => r.outcome === 'miss').length})
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {earningsResults.filter(r => r.outcome === 'miss').sort((a, b) => (a.surprisePct ?? 0) - (b.surprisePct ?? 0)).slice(0, 15).map((r) => (
+                            <div key={`m-${r.symbol}`} onClick={() => goToChart(r.symbol)}
+                              className="flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-white/5 cursor-pointer" title={`Open ${r.symbol} chart`}>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[11px] font-bold text-red-300 hover:underline shrink-0">{r.symbol}</span>
+                                <span className="text-[9px] text-gray-500 truncate">{r.sector}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 text-right tabular-nums">
+                                <span className="text-[10px] text-gray-400">${r.epsActual.toFixed(2)}{r.epsEstimate != null ? ` vs $${r.epsEstimate.toFixed(2)}` : ''}</span>
+                                <span className="text-[10px] font-bold text-red-400 w-14">{r.surprisePct != null ? `${r.surprisePct.toFixed(1)}%` : '—'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+
+              <Panel title="Earnings by Sector" badge="BEAT RATE" className="lg:col-span-5 min-h-[300px]">
+                <div className="p-2">
+                  {resultsLoading && earningsSectors.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500 gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading sector stats…
+                    </div>
+                  ) : earningsSectors.length === 0 ? (
+                    <div className="flex items-center justify-center h-40 text-xs text-gray-500">No sector data</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {earningsSectors.slice(0, 10).map((s) => (
+                        <div key={s.sector}>
+                          <div className="flex items-center justify-between text-[10px] mb-0.5">
+                            <span className="font-semibold text-gray-300 truncate">{s.sector}</span>
+                            <span className="text-gray-500 tabular-nums shrink-0">
+                              {s.beats}✓ {s.misses}✗ · {s.total} rep.
+                              {s.avgSurprise != null && (
+                                <span className={`ml-1.5 font-bold ${s.avgSurprise >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {s.avgSurprise > 0 ? '+' : ''}{s.avgSurprise}% avg
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="relative h-2 rounded-full bg-red-500/20 overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 bg-emerald-500/70 rounded-full" style={{ width: `${s.beatRate}%` }} />
+                          </div>
+                          <div className="flex justify-between text-[8px] text-gray-600 mt-0.5">
+                            <span>{s.beatRate}% beat</span>
+                            <span>{100 - s.beatRate}% miss/inline</span>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="text-[9px] text-gray-600 pt-1 border-t border-white/5">
+                        EPS actual vs consensus estimate · Nasdaq report dates + Yahoo results · auto-refresh on page load
+                      </div>
+                    </div>
                   )}
                 </div>
               </Panel>

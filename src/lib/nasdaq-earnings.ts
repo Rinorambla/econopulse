@@ -56,8 +56,8 @@ async function fetchDay(date: string): Promise<NasdaqEarningEvent[]> {
     const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${date}`, {
       headers: NASDAQ_HEADERS,
       signal: AbortSignal.timeout(9000),
-      // Server-side cache: each day's calendar barely changes intra-day.
-      next: { revalidate: 1800 },
+      // Server-side cache: refreshed every 10 minutes so new reports show up fast.
+      next: { revalidate: 600 },
     });
     if (!res.ok) return [];
     const json = await res.json();

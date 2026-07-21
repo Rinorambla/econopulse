@@ -419,12 +419,16 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
   useEffect(() => {
     const heavy = setInterval(() => {
-      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); fetchEarnings(); fetchEarningsResults(); }
+      if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); }
     }, 600000);
     const movers = setInterval(() => {
       if (document.visibilityState === 'visible') fetchTopMovers();
     }, 180000);
-    return () => { clearInterval(heavy); clearInterval(movers); };
+    // Earnings: fast self-updating cycle (3 min) — new reports appear on their own.
+    const earn = setInterval(() => {
+      if (document.visibilityState === 'visible') { fetchEarnings(); fetchEarningsResults(); }
+    }, 180000);
+    return () => { clearInterval(heavy); clearInterval(movers); clearInterval(earn); };
   }, [fetchSectorData, fetchTopMovers, fetchAIAnalysis, heatmapPeriod, fetchEarnings, fetchEarningsResults]);
 
   useEffect(() => { if (selectedSymbol) fetchStockDetail(selectedSymbol); }, [selectedSymbol, fetchStockDetail]);
@@ -1186,12 +1190,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   <TradaysCalendarWidget height={400} mode="2" theme={1} />
                 </div>
               </Panel>
-              <Panel title="Earnings Calendar" badge="14 DAYS" className="lg:col-span-5 min-h-[440px]"
-                actions={
-                  <button onClick={fetchEarnings} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Refresh earnings">
-                    <RefreshCw className={`w-3 h-3 ${earningsLoading ? 'animate-spin' : ''}`} />
-                  </button>
-                }>
+              <Panel title="Earnings Calendar" badge="14 DAYS" className="lg:col-span-5 min-h-[440px]">
                 <div className="p-2 max-h-[420px] overflow-y-auto">
                   {earningsLoading && earningsData.length === 0 ? (
                     <div className="flex items-center justify-center h-40 text-xs text-gray-500 gap-2">
@@ -1239,12 +1238,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.6: Earnings Results — beats & misses + sector comparison ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Earnings Results · Last 7 Days" badge={`${earningsResults.length} REPORTED`} className="lg:col-span-7 min-h-[300px]"
-                actions={
-                  <button onClick={fetchEarningsResults} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Refresh results">
-                    <RefreshCw className={`w-3 h-3 ${resultsLoading ? 'animate-spin' : ''}`} />
-                  </button>
-                }>
+              <Panel title="Earnings Results · Last 7 Days" badge={`${earningsResults.length} REPORTED`} className="lg:col-span-7 min-h-[300px]">
                 <div className="p-2">
                   {resultsLoading && earningsResults.length === 0 ? (
                     <div className="flex items-center justify-center h-40 text-xs text-gray-500 gap-2">
@@ -1333,9 +1327,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           </div>
                         </div>
                       ))}
-                      <div className="text-[9px] text-gray-600 pt-1 border-t border-white/5">
-                        EPS actual vs consensus estimate · Nasdaq report dates + Yahoo results · auto-refresh on page load
-                      </div>
                     </div>
                   )}
                 </div>

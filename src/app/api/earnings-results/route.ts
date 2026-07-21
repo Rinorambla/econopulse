@@ -58,7 +58,7 @@ const NASDAQ_HEADERS: Record<string, string> = {
 };
 
 let _cache: { ts: number; days: number; payload: any } | null = null;
-const CACHE_TTL = 30 * 60 * 1000; // 30 min
+const CACHE_TTL = 5 * 60 * 1000; // 5 min — fresh results appear quickly during earnings season
 
 function toNum(v: unknown): number | null {
   if (v == null) return null;
@@ -79,7 +79,7 @@ async function fetchSurprise(symbol: string, sinceMs: number): Promise<{ epsActu
     const res = await fetch(`https://api.nasdaq.com/api/company/${encodeURIComponent(symbol)}/earnings-surprise`, {
       headers: NASDAQ_HEADERS,
       signal: AbortSignal.timeout(8000),
-      next: { revalidate: 1800 },
+      next: { revalidate: 300 },
     });
     if (!res.ok) return null;
     const json = await res.json();

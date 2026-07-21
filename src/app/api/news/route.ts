@@ -21,7 +21,11 @@ const EXCLUDED_KEYWORDS = [
   'celebrity', 'entertainment', 'movie', 'music', 'concert', 'album', 'actor',
   'kardashian', 'taylor swift', 'beyonce', 'sports', 'game score', 'touchdown',
   'goal scored', 'match result', 'playoff', 'championship game', 'super bowl',
-  'world cup', 'olympics', 'athlete', 'coach', 'roster', 'draft pick'
+  'world cup', 'olympics', 'athlete', 'coach', 'roster', 'draft pick',
+  // crime / general news that sometimes leaks into finance feeds
+  'knife attack', 'stabbing', 'shooting', 'murder', 'homicide', 'assault',
+  'church service', 'seriously injured', 'police said', 'arrested', 'kidnap',
+  'earthquake', 'hurricane', 'wildfire', 'storm damage', 'car crash', 'plane crash',
 ];
 
 function isFinancialNews(article: any): boolean {
@@ -32,7 +36,9 @@ function isFinancialNews(article: any): boolean {
     if (text.includes(keyword)) return false;
   }
   
-  // Include if has stock tickers
+  // Include if has stock tickers AND at least looks market-related; a bare
+  // ticker list from an aggregator is not enough for crime/general stories,
+  // which are already excluded above.
   if (article.tickers && article.tickers.length > 0) return true;
   
   // Include if contains financial keywords
@@ -55,46 +61,127 @@ function truncate(text: string | undefined, max = 150): string {
   return text.slice(0, max).replace(/\s+\S*$/, '') + '…'; // avoid cutting mid-word
 }
 
-export async function GET() {
-  try {
-    if (!TIINGO_API_KEY) {
-      throw new Error('TIINGO_API_KEY not configured');
-    }
+// ── Yahoo live headlines (same engine as the market-data terminal) ───────────
+// A handful of market-wide queries gives broad, always-fresh coverage with no
+// API key. Results are deduped by link and merged with Tiingo.
+const YAHOO_QUERIES = ['stock market', 'federal reserve', 'earnings', 'nasdaq', 'bitcoin crypto', 'oil prices'];
 
-    // Request more articles to have enough after filtering
-    // Add tickers parameter to focus on financial news
+interface RawArticle {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  source: string;
+  publishedDate: string;
+  tickers: string[];
+  tags: string[];
+  thumbnail?: string;
+}
+
+async function fetchYahooNews(query: string): Promise<RawArticle[]> {
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+  for (const host of hosts) {
+    try {
+      const url = `https://${host}/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=0&newsCount=10&listsCount=0`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: AbortSignal.timeout(8000),
+        next: { revalidate: 300 },
+      });
+      if (!res.ok) continue;
+      const json: any = await res.json();
+      const news: any[] = Array.isArray(json?.news) ? json.news : [];
+      return news
+        .filter((n) => n?.title && n?.link)
+        .map((n) => ({
+          id: String(n.uuid || n.link),
+          title: String(n.title),
+          description: '',
+          url: String(n.link),
+          source: String(n.publisher || 'Yahoo Finance'),
+          publishedDate: n.providerPublishTime
+            ? new Date(Number(n.providerPublishTime) * 1000).toISOString()
+            : new Date().toISOString(),
+          tickers: Array.isArray(n.relatedTickers) ? n.relatedTickers.slice(0, 6) : [],
+          // No forced tags: the finance-only filter (tickers OR keywords)
+          // decides, keeping non-financial stories out of the feed.
+          tags: [],
+          thumbnail: n?.thumbnail?.resolutions?.[n.thumbnail.resolutions.length - 1]?.url || undefined,
+        }));
+    } catch {
+      /* try next host */
+    }
+  }
+  return [];
+}
+
+async function fetchAllYahooNews(): Promise<RawArticle[]> {
+  const results = await Promise.all(YAHOO_QUERIES.map((q) => fetchYahooNews(q)));
+  const seen = new Set<string>();
+  const out: RawArticle[] = [];
+  for (const list of results) {
+    for (const a of list) {
+      const key = a.url || a.title;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(a);
+    }
+  }
+  return out;
+}
+
+async function fetchTiingoNews(): Promise<RawArticle[]> {
+  if (!TIINGO_API_KEY) return [];
+  try {
     const majorTickers = 'SPY,QQQ,AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA,META,JPM,GS,XOM';
     const url = `https://api.tiingo.com/tiingo/news?token=${TIINGO_API_KEY}&limit=50&tickers=${majorTickers}&sortBy=publishedDate`;
-
     const response = await fetch(url, {
       headers: { 'User-Agent': 'EconoPulse/1.0' },
-      next: { revalidate: 1800 }
+      signal: AbortSignal.timeout(9000),
+      next: { revalidate: 600 },
     });
+    if (!response.ok) return [];
+    const newsData = await response.json();
+    return (Array.isArray(newsData) ? newsData : []).map((article: any) => ({
+      id: String(article.id ?? article.url),
+      title: article.title,
+      description: truncate(article.description),
+      url: article.url,
+      source: article.source || 'Tiingo',
+      publishedDate: article.publishedDate,
+      tickers: article.tickers || [],
+      tags: article.tags || [],
+    }));
+  } catch {
+    return [];
+  }
+}
 
-    if (!response.ok) {
-      throw new Error(`Tiingo API error: ${response.status}`);
+export async function GET() {
+  try {
+    // Fetch both sources in parallel: Yahoo (live, no key) + Tiingo (if key).
+    const [yahoo, tiingo] = await Promise.all([fetchAllYahooNews(), fetchTiingoNews()]);
+
+    // Merge, dedupe by URL/title, filter to finance-only, newest first.
+    const seen = new Set<string>();
+    const merged: RawArticle[] = [];
+    for (const a of [...yahoo, ...tiingo]) {
+      const key = (a.url || a.title).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(a);
     }
 
-    const newsData = await response.json();
-
-    // Filter and format financial news only
-    const formattedNews = (Array.isArray(newsData) ? newsData : [])
+    const formattedNews = merged
       .filter(isFinancialNews)
-      .slice(0, 15) // Return top 15 financial articles
-      .map((article: any) => ({
-        id: article.id,
-        title: article.title,
-        description: truncate(article.description),
-        url: article.url,
-        source: article.source || 'Tiingo',
-        publishedDate: article.publishedDate,
-        tickers: article.tickers || [],
-        tags: article.tags || []
-      }));
+      .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+      .slice(0, 30);
+
+    if (formattedNews.length === 0) throw new Error('no news from any provider');
 
     return NextResponse.json({
       success: true,
-      provider: 'tiingo',
+      provider: tiingo.length && yahoo.length ? 'yahoo+tiingo' : yahoo.length ? 'yahoo' : 'tiingo',
       count: formattedNews.length,
       data: formattedNews,
       lastUpdated: new Date().toISOString()

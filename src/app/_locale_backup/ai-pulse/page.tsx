@@ -1347,7 +1347,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   </div>
                 }>
                 <div className="p-3">
-                  <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '320px' }} preserveAspectRatio="xMidYMid meet">
+                  <svg viewBox="0 0 900 600" className="w-full" style={{ maxHeight: '420px' }} preserveAspectRatio="xMidYMid meet">
                     {/* Quadrant backgrounds */}
                     <rect x="450" y="0" width="450" height="300" fill="#10b981" fillOpacity="0.16" />
                     <rect x="0" y="0" width="450" height="300" fill="#f59e0b" fillOpacity="0.16" />
@@ -1362,37 +1362,62 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                     <line x1="0" y1="150" x2="900" y2="150" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
                     <line x1="0" y1="450" x2="900" y2="450" stroke="#1e293b" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.4" />
                     {/* Quadrant labels */}
-                    <text x="675" y="30" textAnchor="middle" fontSize="16" fill="#34d399" fontWeight="700">Leading</text>
-                    <text x="225" y="30" textAnchor="middle" fontSize="16" fill="#f59e0b" fontWeight="700">Weakening</text>
-                    <text x="225" y="590" textAnchor="middle" fontSize="16" fill="#ef4444" fontWeight="700">Lagging</text>
-                    <text x="675" y="590" textAnchor="middle" fontSize="16" fill="#3b82f6" fontWeight="700">Improving</text>
+                    <text x="675" y="32" textAnchor="middle" fontSize="18" fill="#34d399" fontWeight="700" opacity="0.9">Leading</text>
+                    <text x="225" y="32" textAnchor="middle" fontSize="18" fill="#f59e0b" fontWeight="700" opacity="0.9">Weakening</text>
+                    <text x="225" y="588" textAnchor="middle" fontSize="18" fill="#ef4444" fontWeight="700" opacity="0.9">Lagging</text>
+                    <text x="675" y="588" textAnchor="middle" fontSize="18" fill="#3b82f6" fontWeight="700" opacity="0.9">Improving</text>
                     {/* Axis labels */}
-                    <text x="450" y="22" textAnchor="middle" fontSize="11" fill="#475569">100</text>
-                    <text x="900" y="315" textAnchor="end" fontSize="11" fill="#475569">100</text>
-                    <text x="10" y="315" fontSize="11" fill="#475569">0</text>
-                    <text x="450" y="598" textAnchor="middle" fontSize="12" fill="#64748b" fontWeight="500">RS Rating →</text>
-                    <text x="12" y="300" fontSize="12" fill="#64748b" fontWeight="500" transform="rotate(-90,12,300)">Momentum →</text>
-                    {rrg.map(pt => {
-                      const x = (pt.rs / 100) * 900;
-                      const y = 600 - (pt.mom / 100) * 600;
-                      const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
-                      const short = pt.sector
-                        .replace('Technology', 'Tech')
-                        .replace('Consumer Discretionary', 'Cons.Disc')
-                        .replace('Consumer Staples', 'Cons.Stap')
-                        .replace('Communication', 'Comm')
-                        .replace('Healthcare', 'Health')
-                        .replace('Real Estate', 'RE')
-                        .replace('Financial', 'Fin');
-                      return (
-                        <g key={pt.sector}>
-                          <circle cx={x} cy={y} r="10" fill={color} fillOpacity="0.75" stroke={color} strokeWidth="2" />
-                          <text x={x} y={y - 14} textAnchor="middle" fontSize="13" fill="#e2e8f0" fontWeight="700">{short}</text>
-                          <text x={x} y={y + 22} textAnchor="middle" fontSize="10" fill="#94a3b8">{fmtPct(pt.chg)}%</text>
-                          <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, ${rrgPeriod === 'daily' ? '1D' : rrgPeriod === 'weekly' ? '1W' : rrgPeriod === 'monthly' ? '1M' : rrgPeriod === 'quarterly' ? '3M' : rrgPeriod === 'ytd' ? 'YTD' : '1Y'} ${fmtPct(pt.chg)}%`}</title>
-                        </g>
-                      );
-                    })}
+                    <text x="450" y="598" textAnchor="middle" fontSize="13" fill="#64748b" fontWeight="500">RS Rating →</text>
+                    <text x="14" y="300" fontSize="13" fill="#64748b" fontWeight="500" transform="rotate(-90,14,300)">Momentum →</text>
+                    {(() => {
+                      // Padded plot area so dots & labels are never clipped at the edges.
+                      const X0 = 70, X1 = 830, Y0 = 55, Y1 = 545;
+                      const placed: Array<{ x: number; y: number }> = [];
+                      const pts = rrg.map((pt) => ({
+                        pt,
+                        x: X0 + (Math.max(0, Math.min(100, pt.rs)) / 100) * (X1 - X0),
+                        y: Y1 - (Math.max(0, Math.min(100, pt.mom)) / 100) * (Y1 - Y0),
+                      }));
+                      return pts.map(({ pt, x, y }) => {
+                        const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
+                        const short = pt.sector
+                          .replace('Technology', 'Tech')
+                          .replace('Consumer Discretionary', 'Cons.Disc')
+                          .replace('Consumer Staples', 'Cons.Stap')
+                          .replace('Communication Services', 'Comm')
+                          .replace('Communication', 'Comm')
+                          .replace('Healthcare', 'Health')
+                          .replace('Real Estate', 'RE')
+                          .replace('Financial Services', 'Fin')
+                          .replace('Financial', 'Fin')
+                          .replace('Industrials', 'Indust')
+                          .replace('Utilities', 'Util')
+                          .replace('Materials', 'Matls');
+                        // Simple collision avoidance: try label slots around the dot
+                        // until one doesn't overlap an already-placed label.
+                        const slots: Array<[number, number]> = [[0, -22], [0, 38], [50, -4], [-50, -4], [0, -44], [0, 60], [70, -22], [-70, -22]];
+                        let lx = x, ly = y - 22;
+                        for (const [dx, dy] of slots) {
+                          const cx = x + dx, cy = y + dy;
+                          const clash = placed.some((p) => Math.abs(p.x - cx) < 92 && Math.abs(p.y - cy) < 30);
+                          if (!clash) { lx = cx; ly = cy; break; }
+                        }
+                        placed.push({ x: lx, y: ly });
+                        return (
+                          <g key={pt.sector}>
+                            <circle cx={x} cy={y} r="11" fill={color} fillOpacity="0.8" stroke="#0b1120" strokeWidth="2.5" />
+                            <circle cx={x} cy={y} r="11" fill="none" stroke={color} strokeWidth="2" />
+                            {/* Connector when the label had to move away from the dot */}
+                            {(Math.abs(lx - x) > 30 || Math.abs(ly - y) > 42) && (
+                              <line x1={x} y1={y} x2={lx} y2={ly + 5} stroke={color} strokeWidth="1" opacity="0.5" />
+                            )}
+                            <text x={lx} y={ly} textAnchor="middle" fontSize="16" fill="#f1f5f9" fontWeight="700" stroke="#0b1120" strokeWidth="4" paintOrder="stroke">{short}</text>
+                            <text x={lx} y={ly + 16} textAnchor="middle" fontSize="12" fill={pt.chg >= 0 ? '#6ee7b7' : '#fca5a5'} fontWeight="600" stroke="#0b1120" strokeWidth="3" paintOrder="stroke">{fmtPct(pt.chg)}%</text>
+                            <title>{`${pt.sector}: RS ${pt.rs.toFixed(0)}, Mom ${pt.mom.toFixed(0)}, ${rrgPeriod === 'daily' ? '1D' : rrgPeriod === 'weekly' ? '1W' : rrgPeriod === 'monthly' ? '1M' : rrgPeriod === 'quarterly' ? '3M' : rrgPeriod === 'ytd' ? 'YTD' : '1Y'} ${fmtPct(pt.chg)}%`}</title>
+                          </g>
+                        );
+                      });
+                    })()}
                   </svg>
                   <div className="flex items-center justify-center gap-6 mt-2">
                     {[['Leading', '#34d399'], ['Weakening', '#f59e0b'], ['Lagging', '#ef4444'], ['Improving', '#3b82f6']].map(([label, color]) => (
@@ -1401,6 +1426,20 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                         <span className="text-[10px] text-gray-400 font-medium">{label}</span>
                       </div>
                     ))}
+                  </div>
+                  {/* Readable sector table: quadrant, RS, momentum, period change */}
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5">
+                    {[...rrg].sort((a, b) => b.rs - a.rs).map((pt) => {
+                      const color = pt.quadrant === 'Leading' ? '#34d399' : pt.quadrant === 'Weakening' ? '#f59e0b' : pt.quadrant === 'Lagging' ? '#ef4444' : '#3b82f6';
+                      return (
+                        <div key={`row-${pt.sector}`} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-[11px] font-semibold text-gray-200 truncate flex-1">{pt.sector}</span>
+                          <span className="text-[9px] text-gray-500 tabular-nums shrink-0">RS {pt.rs.toFixed(0)} · M {pt.mom.toFixed(0)}</span>
+                          <span className={`text-[11px] font-bold tabular-nums w-14 text-right shrink-0 ${pt.chg >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtPct(pt.chg)}%</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </Panel>

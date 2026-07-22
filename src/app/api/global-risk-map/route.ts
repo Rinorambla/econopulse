@@ -86,18 +86,19 @@ const CHOKEPOINTS: Chokepoint[] = [
   { id: 'danish', name: 'Danish Straits', lat: 55.7, lon: 12.6, tradeShare: '~3% of global oil', status: 'elevated', note: 'Russian "shadow fleet" oil exports; NATO monitoring after infrastructure sabotage.' },
 ];
 
-// Central banks — rate values are indicative and overridden LIVE from FRED when possible.
+// Central banks — rate values are indicative latest policy levels and are
+// overridden LIVE from FRED where a series is available (Fed, ECB).
 const CENTRAL_BANKS: CentralBank[] = [
-  { id: 'fed', name: 'Federal Reserve', country: 'United States', lat: 38.89, lon: -77.04, rate: null, rateName: 'Fed Funds (effective)', stance: 'on-hold', note: 'Balancing sticky services inflation vs labor cooling.', live: false },
-  { id: 'ecb', name: 'European Central Bank', country: 'Eurozone', lat: 50.11, lon: 8.67, rate: null, rateName: 'Deposit Facility', stance: 'easing', note: 'Growth-supportive bias as inflation normalizes.', live: false },
-  { id: 'boe', name: 'Bank of England', country: 'United Kingdom', lat: 51.51, lon: -0.09, rate: null, rateName: 'Bank Rate', stance: 'easing', note: 'Gradual cuts; wage growth still watched.', live: false },
-  { id: 'boj', name: 'Bank of Japan', country: 'Japan', lat: 35.69, lon: 139.77, rate: null, rateName: 'Policy Rate', stance: 'tightening', note: 'Slow normalization away from ultra-loose policy; yen in focus.', live: false },
-  { id: 'pboc', name: 'People\'s Bank of China', country: 'China', lat: 39.91, lon: 116.40, rate: null, rateName: '7d Reverse Repo', stance: 'easing', note: 'Supporting property deleveraging and domestic demand.', live: false },
-  { id: 'snb', name: 'Swiss National Bank', country: 'Switzerland', lat: 46.95, lon: 7.45, rate: null, rateName: 'Policy Rate', stance: 'easing', note: 'CHF strength keeps inflation lowest in G10.', live: false },
-  { id: 'boc', name: 'Bank of Canada', country: 'Canada', lat: 45.42, lon: -75.70, rate: null, rateName: 'Overnight Rate', stance: 'easing', note: 'Housing-sensitive economy responding to cuts.', live: false },
-  { id: 'rba', name: 'Reserve Bank of Australia', country: 'Australia', lat: -33.87, lon: 151.21, rate: null, rateName: 'Cash Rate', stance: 'on-hold', note: 'Commodity income cushions; inflation in band.', live: false },
-  { id: 'cbrt', name: 'Central Bank of Türkiye', country: 'Türkiye', lat: 39.93, lon: 32.86, rate: null, rateName: '1w Repo', stance: 'easing', note: 'Disinflation path from extreme levels; lira watched.', live: false },
-  { id: 'bcb', name: 'Banco Central do Brasil', country: 'Brazil', lat: -15.79, lon: -47.88, rate: null, rateName: 'Selic', stance: 'on-hold', note: 'High real rates; fiscal credibility premium.', live: false },
+  { id: 'fed', name: 'Federal Reserve', country: 'United States', lat: 38.89, lon: -77.04, rate: 3.75, rateName: 'Fed Funds (effective)', stance: 'on-hold', note: 'Balancing sticky services inflation vs labor cooling.', live: false },
+  { id: 'ecb', name: 'European Central Bank', country: 'Eurozone', lat: 50.11, lon: 8.67, rate: 2.25, rateName: 'Deposit Facility', stance: 'easing', note: 'Growth-supportive bias as inflation normalizes.', live: false },
+  { id: 'boe', name: 'Bank of England', country: 'United Kingdom', lat: 51.51, lon: -0.09, rate: 3.75, rateName: 'Bank Rate', stance: 'easing', note: 'Gradual cuts; wage growth still watched.', live: false },
+  { id: 'boj', name: 'Bank of Japan', country: 'Japan', lat: 35.69, lon: 139.77, rate: 1.0, rateName: 'Policy Rate', stance: 'tightening', note: 'Slow normalization away from ultra-loose policy; yen in focus.', live: false },
+  { id: 'pboc', name: 'People\'s Bank of China', country: 'China', lat: 39.91, lon: 116.40, rate: 1.4, rateName: '7d Reverse Repo', stance: 'easing', note: 'Supporting property deleveraging and domestic demand.', live: false },
+  { id: 'snb', name: 'Swiss National Bank', country: 'Switzerland', lat: 46.95, lon: 7.45, rate: 0.0, rateName: 'Policy Rate', stance: 'easing', note: 'CHF strength keeps inflation lowest in G10.', live: false },
+  { id: 'boc', name: 'Bank of Canada', country: 'Canada', lat: 45.42, lon: -75.70, rate: 2.25, rateName: 'Overnight Rate', stance: 'easing', note: 'Housing-sensitive economy responding to cuts.', live: false },
+  { id: 'rba', name: 'Reserve Bank of Australia', country: 'Australia', lat: -33.87, lon: 151.21, rate: 3.35, rateName: 'Cash Rate', stance: 'on-hold', note: 'Commodity income cushions; inflation in band.', live: false },
+  { id: 'cbrt', name: 'Central Bank of Türkiye', country: 'Türkiye', lat: 39.93, lon: 32.86, rate: 31.0, rateName: '1w Repo', stance: 'easing', note: 'Disinflation path from extreme levels; lira watched.', live: false },
+  { id: 'bcb', name: 'Banco Central do Brasil', country: 'Brazil', lat: -15.79, lon: -47.88, rate: 13.75, rateName: 'Selic', stance: 'on-hold', note: 'High real rates; fiscal credibility premium.', live: false },
 ];
 
 // FRED series for live policy rates (best-effort).

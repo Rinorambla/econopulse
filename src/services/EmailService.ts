@@ -712,7 +712,7 @@ export class EmailService {
                   <div style="margin-bottom:6px;">EconoPulse — global market intelligence</div>
                   <a href="${siteUrl}" style="color:#1e40af;text-decoration:none;">${siteUrl}</a>
                   &nbsp;·&nbsp;
-                  <a href="mailto:support@econopulse.ai" style="color:#64748b;text-decoration:none;">support@econopulse.ai</a>
+                  <a href="mailto:econopulse.info@econopulse.ai" style="color:#64748b;text-decoration:none;">econopulse.info@econopulse.ai</a>
                 </td>
               </tr>
             </table>

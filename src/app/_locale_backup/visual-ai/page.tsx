@@ -42,6 +42,7 @@ const ProbabilitySparkline = dynamic(() => import('@/components/charts/Probabili
 const PopulationGrowthBarChart = dynamic(() => import('@/components/charts/PopulationGrowthBarChart'), { ssr: false });
 const DebtToGDPBarChart = dynamic(() => import('@/components/charts/DebtToGDPBarChart'), { ssr: false });
 const SPXChart = dynamic(() => import('@/components/SPXChart'), { ssr: false });
+const GlobalRiskMap = dynamic(() => import('@/components/GlobalRiskMap'), { ssr: false });
 
 // Lightweight fetch with timeout to avoid long stalls on slow endpoints
 const fetchWithTimeout = (url: string, timeoutMs = 5000): Promise<Response | null> => {
@@ -2523,6 +2524,21 @@ function VisualAIPageLegacy() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* ── GLOBAL RISK MAP — wars, geopolitics, shipping, central banks ── */}
+          <div className="mb-10 relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-800/50 to-slate-900/80 backdrop-blur-xl shadow-2xl shadow-black/20 p-5 md:p-7">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-400/50 to-transparent"></div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-amber-500/20 border border-red-500/30">
+                <Globe className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-white">Global Risk Map</h2>
+                <p className="text-xs text-gray-400">Active wars · geopolitical hotspots · naval chokepoints · central banks · live market-stress gauge</p>
+              </div>
+            </div>
+            <GlobalRiskMap />
           </div>
 
           {/* Widgets Grid */}

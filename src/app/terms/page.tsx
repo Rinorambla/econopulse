@@ -115,7 +115,7 @@ export default function TermsOfService() {
 						<p className="text-gray-700 mb-4">For questions about these Terms of Service, please contact us:</p>
 						<div className="bg-gray-50 p-4 rounded-lg">
 							<p className="text-gray-700">
-								Email: info@econopulse.ai
+								Email: econopulse.info@econopulse.ai
 								<br />EconoPulse
 								<br />Via Tassoni 1
 								<br />41049 Sassuolo (MO), Italy

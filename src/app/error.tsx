@@ -83,7 +83,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
             <p className="text-gray-400 text-sm">
               Need help?{' '}
               <a 
-                href="mailto:support@econopulse.ai" 
+                href="mailto:econopulse.info@econopulse.ai" 
                 className="text-blue-400 hover:text-blue-300"
               >
                 Contact Support

@@ -23,7 +23,7 @@ export default function PrivacyPolicy() {
 							<li><strong>Payment information</strong>: processed exclusively by Stripe (web) or Apple StoreKit (iOS in-app); we never store card numbers</li>
 							<li><strong>Usage data</strong>: product interactions (features used, watchlist items) to operate the service</li>
 							<li><strong>Diagnostics</strong>: anonymous crash and performance reports</li>
-							<li><strong>Communications</strong>: messages you send to support@econopulse.ai</li>
+							<li><strong>Communications</strong>: messages you send to econopulse.info@econopulse.ai</li>
 						</ul>
 						<p className="text-gray-700 mb-4">
 							We do <strong>not</strong> collect: precise location, contacts, photos, health data, browsing history, or
@@ -91,7 +91,7 @@ export default function PrivacyPolicy() {
 						<p className="text-gray-700 mb-4">Under GDPR and similar laws, you have the right to:</p>
 						<ul className="list-disc pl-6 text-gray-700 mb-4">
 							<li>Access and update your personal information</li>
-							<li><strong>Delete your account and all associated data</strong> directly from your account settings (Account &rarr; Delete Account) or by emailing <a href="mailto:support@econopulse.ai" className="text-blue-600 underline">support@econopulse.ai</a></li>
+							<li><strong>Delete your account and all associated data</strong> directly from your account settings (Account &rarr; Delete Account) or by emailing <a href="mailto:econopulse.info@econopulse.ai" className="text-blue-600 underline">econopulse.info@econopulse.ai</a></li>
 							<li>Opt out of marketing communications</li>
 							<li>Request a copy of your data (data portability)</li>
 							<li>Object to or restrict processing of your data</li>
@@ -130,7 +130,7 @@ export default function PrivacyPolicy() {
 						<p className="text-gray-700 mb-4">If you have any questions about this Privacy Policy, please contact us at:</p>
 						<div className="bg-gray-50 p-4 rounded-lg">
 							<p className="text-gray-700">
-								Email: <a href="mailto:support@econopulse.ai" className="text-blue-600 underline">support@econopulse.ai</a>
+								Email: <a href="mailto:econopulse.info@econopulse.ai" className="text-blue-600 underline">econopulse.info@econopulse.ai</a>
 								<br />EconoPulse
 								<br />Via Tassoni 1
 								<br />41049 Sassuolo (MO), Italy

@@ -133,7 +133,7 @@ export default function UserAccountDashboard() {
       if (!res.ok) throw new Error(data?.error || 'Failed to delete account');
       window.location.href = '/?accountDeleted=1';
     } catch (e: any) {
-      setDeleteError(e?.message || 'Unexpected error. Please contact support@econopulse.ai.');
+      setDeleteError(e?.message || 'Unexpected error. Please contact econopulse.info@econopulse.ai.');
       setDeleting(false);
     }
   };

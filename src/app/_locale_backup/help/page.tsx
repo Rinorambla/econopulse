@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Footer from '@/components/Footer';
 
 export default function HelpPage() {
-  const email = 'support@econopulse.ai';
+  const email = 'econopulse.info@econopulse.ai';
 
   const [query, setQuery] = useState('');
   const faqs = useMemo(

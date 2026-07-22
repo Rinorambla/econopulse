@@ -73,8 +73,8 @@ export default function DocumentationPage() {
                 <h3 className="text-xl font-semibold text-blue-400 mb-4">Support</h3>
                 <p className="text-gray-300">
                   Need help? Contact our support team at{' '}
-                  <a href="mailto:support@econopulse.ai" className="text-blue-400 hover:text-blue-300">
-                    support@econopulse.ai
+                  <a href="mailto:econopulse.info@econopulse.ai" className="text-blue-400 hover:text-blue-300">
+                    econopulse.info@econopulse.ai
                   </a>
                 </p>
               </div>

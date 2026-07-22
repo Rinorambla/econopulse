@@ -11,7 +11,7 @@ export default function HelpPage() {
   redirect('/help');
 
   const t = useTranslations();
-  const email = 'support@econopulse.ai';
+  const email = 'econopulse.info@econopulse.ai';
 
   const [query, setQuery] = useState('');
   const faqs = useMemo(

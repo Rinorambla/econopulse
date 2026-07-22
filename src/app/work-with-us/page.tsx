@@ -16,8 +16,8 @@ export default function WorkWithUsPage() {
 				<p className="mt-6 text-white/90">Location: Modena, Italy</p>
 				<p className="mt-4 text-white/90">
 					Send your CV and a short intro to{" "}
-					<a href="mailto:info@econopulse.ai" className="underline hover:text-white">
-						info@econopulse.ai
+					<a href="mailto:econopulse.info@econopulse.ai" className="underline hover:text-white">
+						econopulse.info@econopulse.ai
 					</a>
 					.
 				</p>

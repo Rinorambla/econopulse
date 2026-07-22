@@ -2433,69 +2433,27 @@ function VisualAIPageLegacy() {
         </div>
         
         <div className="relative container mx-auto px-4 py-8">
-          {/* Hero Header */}
-          <div className="mb-10">
-            <div className="mb-4">
-              <Link
-                href="/"
-                className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-all duration-300 group"
-              >
-                <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-                <span>Back to dashboard</span>
-              </Link>
-            </div>
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-800/50 to-slate-900/80 backdrop-blur-xl shadow-2xl shadow-black/20">
-              {/* Subtle grid pattern */}
-              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
-              {/* Gradient accent line */}
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"></div>
-              
-              <div className="relative p-8 md:p-10">
-                <div className="flex items-start justify-between gap-8">
-                  <div className="max-w-2xl">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30">
-                        <Brain className="w-6 h-6 text-cyan-400" />
-                      </div>
-                      <div>
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-300 text-transparent bg-clip-text">Visual AI</h1>
-                        <p className="text-sm text-cyan-400 font-medium">Intelligence Dashboard</p>
-                      </div>
-                    </div>
-                    <p className="text-gray-300 text-lg leading-relaxed">Real-time macro & markets intelligence powered by AI. One world map — wars, shipping, central banks, country macro layers — plus curated AI widgets, all in one place.</p>
-                  </div>
-                  <div className="hidden lg:flex items-center gap-6">
-                    <div className="flex flex-col items-center px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Database className="w-5 h-5 text-cyan-400 mb-1" />
-                      <div className="text-2xl font-bold text-white">{widgets.length}</div>
-                      <div className="text-xs text-gray-400">Widgets</div>
-                    </div>
-                    <div className="flex flex-col items-center px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Cpu className="w-5 h-5 text-emerald-400 mb-1" />
-                      <div className="text-2xl font-bold text-white">82%</div>
-                      <div className="text-xs text-gray-400">AI Confidence</div>
-                    </div>
-                    <div className="flex flex-col items-center px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
-                      <Activity className="w-5 h-5 text-sky-400 mb-1" />
-                      <div className="text-2xl font-bold text-white">{new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</div>
-                      <div className="text-xs text-gray-400">Last Update</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Back link */}
+          <div className="mb-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-all duration-300 group"
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+              <span>Back to dashboard</span>
+            </Link>
           </div>
 
-          {/* ── GLOBAL RISK MAP — wars, geopolitics, shipping, central banks ── */}
+          {/* ── VISUAL AI — one hub: world map + intelligence widgets ── */}
           <div className="mb-10 relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-800/50 to-slate-900/80 backdrop-blur-xl shadow-2xl shadow-black/20 p-5 md:p-7">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-400/50 to-transparent"></div>
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"></div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-amber-500/20 border border-red-500/30">
-                <Globe className="w-5 h-5 text-red-400" />
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30">
+                <Brain className="w-6 h-6 text-cyan-400" />
               </div>
               <div>
-                <h2 className="text-xl md:text-2xl font-bold text-white">Global Risk Map</h2>
-                <p className="text-xs text-gray-400">Active wars · geopolitical hotspots · naval chokepoints · central banks · live market-stress gauge</p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-300 text-transparent bg-clip-text">Visual AI</h1>
+                <p className="text-xs text-gray-400">Wars · geopolitics · shipping · central banks · country macro layers · AI intelligence widgets — all in one map</p>
               </div>
             </div>
             <GlobalRiskMap />

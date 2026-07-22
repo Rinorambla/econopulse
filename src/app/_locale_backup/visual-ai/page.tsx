@@ -2462,7 +2462,7 @@ function VisualAIPageLegacy() {
                         <p className="text-sm text-cyan-400 font-medium">Intelligence Dashboard</p>
                       </div>
                     </div>
-                    <p className="text-gray-300 text-lg leading-relaxed">Real-time macro & markets intelligence powered by AI. Explore curated widgets with interactive visualizations and actionable insights.</p>
+                    <p className="text-gray-300 text-lg leading-relaxed">Real-time macro & markets intelligence powered by AI. One world map — wars, shipping, central banks, country macro layers — plus curated AI widgets, all in one place.</p>
                   </div>
                   <div className="hidden lg:flex items-center gap-6">
                     <div className="flex flex-col items-center px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
@@ -2482,46 +2482,6 @@ function VisualAIPageLegacy() {
                     </div>
                   </div>
                 </div>
-                
-                <div className="mt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  {/* Tabs */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {([
-                      {key:'macro',label:'Macro'},
-                      {key:'markets',label:'Markets'},
-                      {key:'commodities',label:'Commodities'},
-                      {key:'policy',label:'Policy & Risk'},
-                      {key:'all',label:'All'}
-                    ] as {key: 'macro'|'markets'|'commodities'|'policy'|'all'; label: string;}[]).map(t => (
-                      <button
-                        key={t.key}
-                        onClick={() => setActiveTab(t.key)}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-300 ${activeTab===t.key ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/50 text-white shadow-lg shadow-cyan-500/10' : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white hover:bg-white/5'}`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Search + Refresh */}
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        value={searchTerm}
-                        onChange={(e)=>setSearchTerm(e.target.value)}
-                        placeholder="Search widgets..."
-                        className="pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400/50 focus:bg-white/10 transition-all w-48 md:w-64"
-                      />
-                    </div>
-                    <button
-                      onClick={()=>setRefreshTick(t=>t+1)}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white text-sm font-medium shadow-lg shadow-cyan-500/20 transition-all duration-300 hover:scale-105"
-                      title="Refresh data"
-                    >
-                      <Activity className="w-4 h-4" /> Refresh
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -2539,7 +2499,48 @@ function VisualAIPageLegacy() {
               </div>
             </div>
             <GlobalRiskMap />
-          </div>
+
+            {/* ── Intelligence widgets INSIDE the map hub: tabs + search + grid ── */}
+            <div className="mt-8 pt-6 border-t border-white/10">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                {/* Tabs */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    {key:'macro',label:'Macro'},
+                    {key:'markets',label:'Markets'},
+                    {key:'commodities',label:'Commodities'},
+                    {key:'policy',label:'Policy & Risk'},
+                    {key:'all',label:'All'}
+                  ] as {key: 'macro'|'markets'|'commodities'|'policy'|'all'; label: string;}[]).map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => setActiveTab(t.key)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-300 ${activeTab===t.key ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/50 text-white shadow-lg shadow-cyan-500/10' : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white hover:bg-white/5'}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Search + Refresh */}
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      value={searchTerm}
+                      onChange={(e)=>setSearchTerm(e.target.value)}
+                      placeholder="Search widgets..."
+                      className="pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400/50 focus:bg-white/10 transition-all w-48 md:w-64"
+                    />
+                  </div>
+                  <button
+                    onClick={()=>setRefreshTick(t=>t+1)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white text-sm font-medium shadow-lg shadow-cyan-500/20 transition-all duration-300 hover:scale-105"
+                    title="Refresh data"
+                  >
+                    <Activity className="w-4 h-4" /> Refresh
+                  </button>
+                </div>
+              </div>
 
           {/* Widgets Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
@@ -3393,6 +3394,8 @@ function VisualAIPageLegacy() {
                 </div>
               </div>
             ))}
+          </div>
+            </div>
           </div>
         </div>
 

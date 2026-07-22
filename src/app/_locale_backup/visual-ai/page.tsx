@@ -2544,6 +2544,9 @@ function VisualAIPageLegacy() {
           {/* Widgets Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
             {widgets
+              // Country-level heatmap widgets (population/debt/GDP/PMI) are now
+              // layers of the Global Risk Map above — hide the standalone cards.
+              .filter(w => !['population', 'debt', 'gdp', 'pmi', 'population_fallback', 'debt_fallback', 'pmi_fallback'].includes(w.id))
               .filter(w => (activeTab==='all' || TAB_GROUPS[activeTab].includes(w.id)) && (searchTerm.trim()==='' || w.title.toLowerCase().includes(searchTerm.toLowerCase())))
               .map((widget) => (
               <div 

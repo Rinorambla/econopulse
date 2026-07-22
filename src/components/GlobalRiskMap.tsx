@@ -32,10 +32,32 @@ interface ApiResponse {
   hotspots: Hotspot[];
   chokepoints: Chokepoint[];
   centralBanks: CentralBank[];
-  sources: string;
+  macro: {
+    gdp: Record<string, number>;
+    debt: Record<string, number>;
+    inflation: Record<string, number>;
+    populationGrowth: Record<string, number>;
+    liquidity: Record<string, number>;
+    pmi: Record<string, number>;
+    aiCapex: Record<string, number>;
+    epsGrowth: Record<string, number>;
+  };
 }
 
 type LayerKey = 'conflicts' | 'hotspots' | 'chokepoints' | 'centralBanks';
+
+type MacroKey = 'none' | 'gdp' | 'debt' | 'inflation' | 'liquidity' | 'populationGrowth' | 'pmi' | 'aiCapex' | 'epsGrowth';
+
+const MACRO_META: Record<Exclude<MacroKey, 'none'>, { label: string; unit: string; scale: any; reverse?: boolean; zmin?: number; zmax?: number }> = {
+  gdp: { label: 'GDP Growth', unit: '%', scale: 'RdYlGn', zmin: -4, zmax: 8 },
+  debt: { label: 'Debt %GDP', unit: '%', scale: 'RdYlGn', reverse: true, zmin: 0, zmax: 160 },
+  inflation: { label: 'Inflation', unit: '%', scale: 'RdYlGn', reverse: true, zmin: 0, zmax: 12 },
+  liquidity: { label: 'Liquidity (M2 gr.)', unit: '%', scale: 'RdYlGn', zmin: -5, zmax: 20 },
+  populationGrowth: { label: 'Population Gr.', unit: '%', scale: 'RdYlGn', zmin: -1, zmax: 3 },
+  pmi: { label: 'PMI', unit: '', scale: 'RdYlGn', zmin: 42, zmax: 58 },
+  aiCapex: { label: 'AI Capex', unit: '$B', scale: 'Blues', zmin: 0, zmax: 50 },
+  epsGrowth: { label: 'EPS Growth', unit: '%', scale: 'RdYlGn', zmin: 0, zmax: 22 },
+};
 
 const LAYER_META: Record<LayerKey, { label: string; color: string; icon: string }> = {
   conflicts: { label: 'Wars & Conflicts', color: '#ef4444', icon: '⚔' },
@@ -63,6 +85,7 @@ export default function GlobalRiskMap() {
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     conflicts: true, hotspots: true, chokepoints: true, centralBanks: true,
   });
+  const [macroKey, setMacroKey] = useState<MacroKey>('gdp');
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +113,33 @@ export default function GlobalRiskMap() {
   const plotData = useMemo(() => {
     if (!data) return [] as any[];
     const traces: any[] = [];
+
+    // Country macro choropleth (bottom layer)
+    if (macroKey !== 'none' && data.macro?.[macroKey]) {
+      const meta = MACRO_META[macroKey];
+      const entries = Object.entries(data.macro[macroKey]);
+      if (entries.length) {
+        traces.push({
+          type: 'choropleth',
+          locationmode: 'ISO-3',
+          locations: entries.map(([iso3]) => iso3),
+          z: entries.map(([, v]) => v),
+          zmin: meta.zmin,
+          zmax: meta.zmax,
+          colorscale: meta.scale,
+          reversescale: !!meta.reverse,
+          marker: { line: { color: '#0f172a', width: 0.3 } },
+          colorbar: {
+            title: { text: `${meta.label}${meta.unit ? ` (${meta.unit})` : ''}`, font: { color: '#94a3b8', size: 10 } },
+            tickfont: { color: '#94a3b8', size: 9 },
+            thickness: 10, len: 0.7, x: 0.99, outlinewidth: 0,
+            bgcolor: 'rgba(0,0,0,0)',
+          },
+          hovertemplate: `%{location}: <b>%{z}${meta.unit}</b> · ${meta.label}<extra></extra>`,
+          name: meta.label,
+        });
+      }
+    }
 
     if (layers.conflicts) {
       traces.push({
@@ -164,7 +214,7 @@ export default function GlobalRiskMap() {
       });
     }
     return traces;
-  }, [data, layers]);
+  }, [data, layers, macroKey]);
 
   const layout: any = {
     autosize: true,
@@ -232,6 +282,22 @@ export default function GlobalRiskMap() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Country macro layer selector */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        <span className="text-[9px] uppercase tracking-wider text-gray-500 mr-1">Country layer:</span>
+        {([['none', 'None'], ['gdp', 'GDP'], ['debt', 'Debt'], ['inflation', 'Inflation'], ['liquidity', 'Liquidity'], ['populationGrowth', 'Population'], ['pmi', 'PMI'], ['aiCapex', 'AI Capex'], ['epsGrowth', 'EPS']] as [MacroKey, string][]).map(([k, lbl]) => (
+          <button
+            key={k}
+            onClick={() => setMacroKey(k)}
+            className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+              macroKey === k ? 'border-cyan-400/60 bg-cyan-500/15 text-cyan-200 font-semibold' : 'border-white/10 text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {lbl}
+          </button>
+        ))}
       </div>
 
       {/* Map */}
@@ -320,12 +386,6 @@ export default function GlobalRiskMap() {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {data && (
-        <div className="mt-2 text-[10px] text-gray-500">
-          {data.sources}. Updated {new Date(data.generatedAt).toLocaleString()}.
         </div>
       )}
     </div>

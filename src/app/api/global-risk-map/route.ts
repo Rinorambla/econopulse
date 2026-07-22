@@ -106,6 +106,103 @@ const FRED_RATE_SERIES: Record<string, string> = {
   ecb: 'ECBDFR',     // ECB deposit facility rate, daily
 };
 
+// ── Country macro layers (choropleth) ──────────────────────────────────
+// GDP growth, government debt, inflation, population growth: LIVE from IMF
+// DataMapper (all countries in one call). Liquidity (broad money growth):
+// LIVE from World Bank. PMI, AI capex and EPS growth: curated (no free API).
+const IMF_INDICATORS = {
+  gdp: 'NGDP_RPCH',        // Real GDP growth %
+  debt: 'GGXWDG_NGDP',     // Gov gross debt % of GDP
+  inflation: 'PCPIPCH',    // CPI inflation %
+  population: 'LP',        // Population, millions (growth computed YoY)
+} as const;
+
+async function imfAll(indicator: string): Promise<Record<string, Record<string, number>>> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://www.imf.org/external/datamapper/api/v1/${indicator}`, {
+        signal: AbortSignal.timeout(20000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; EconoPulse/1.0; +https://www.econopulse.ai)',
+          Accept: 'application/json,*/*;q=0.8',
+        },
+        next: { revalidate: 21600 },
+      });
+      if (!res.ok) continue;
+      const json: any = await res.json();
+      const values = json?.values?.[indicator];
+      if (values && typeof values === 'object') return values;
+    } catch { /* retry */ }
+  }
+  return {};
+}
+
+/** Latest value per ISO3 capped at the current year (nowcast, not forecast). */
+function imfLatest(all: Record<string, Record<string, number>>, opts?: { growth?: boolean }): Record<string, number> {
+  const currentYear = new Date().getUTCFullYear();
+  const out: Record<string, number> = {};
+  for (const [iso3, series] of Object.entries(all)) {
+    if (!/^[A-Z]{3}$/.test(iso3)) continue; // skip aggregates
+    const years = Object.keys(series).map(Number).filter((y) => isFinite(y) && y <= currentYear).sort((a, b) => b - a);
+    if (!years.length) continue;
+    const latest = Number(series[String(years[0])]);
+    if (!isFinite(latest)) continue;
+    if (opts?.growth) {
+      const prior = Number(series[String(years[0] - 1)]);
+      if (!isFinite(prior) || prior === 0) continue;
+      out[iso3] = +(((latest - prior) / prior) * 100).toFixed(2);
+    } else {
+      out[iso3] = +latest.toFixed(2);
+    }
+  }
+  return out;
+}
+
+/** World Bank broad money growth (FM.LBL.BMNY.ZG) — latest value per country. */
+async function wbLiquidity(): Promise<Record<string, number>> {
+  try {
+    const url = 'https://api.worldbank.org/v2/country/all/indicator/FM.LBL.BMNY.ZG?format=json&per_page=2000&date=2020:2026';
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000), next: { revalidate: 86400 } });
+    if (!res.ok) return {};
+    const json: any = await res.json();
+    const rows: any[] = Array.isArray(json) ? json[1] || [] : [];
+    const out: Record<string, { year: number; value: number }> = {};
+    for (const r of rows) {
+      const iso3 = r?.countryiso3code;
+      const v = Number(r?.value);
+      const y = Number(r?.date);
+      if (!iso3 || !/^[A-Z]{3}$/.test(iso3) || !isFinite(v) || !isFinite(y)) continue;
+      if (!out[iso3] || y > out[iso3].year) out[iso3] = { year: y, value: v };
+    }
+    return Object.fromEntries(Object.entries(out).map(([k, o]) => [k, +o.value.toFixed(2)]));
+  } catch {
+    return {};
+  }
+}
+
+// Manufacturing PMI — curated from latest S&P Global / national releases (no free API).
+const PMI_DATA: Record<string, number> = {
+  USA: 52.0, CHN: 50.4, DEU: 45.8, JPN: 50.1, GBR: 48.3, FRA: 45.1, ITA: 47.4,
+  ESP: 51.4, IND: 58.4, BRA: 52.1, KOR: 49.8, TWN: 50.9, MEX: 51.2, CAN: 49.6,
+  AUS: 49.9, RUS: 50.6, TUR: 47.9, IDN: 52.7, VNM: 53.2, THA: 51.6, MYS: 49.5,
+  PHL: 51.9, POL: 48.7, CZE: 46.9, SWE: 52.3, CHE: 46.2, NLD: 49.1, SAU: 55.0,
+  ARE: 54.2, ZAF: 48.9, EGY: 48.2, NGA: 51.0, GRC: 53.1, IRL: 50.7, SGP: 51.3,
+};
+
+// Private AI investment / capex, $B (curated from Stanford AI Index + national programs).
+const AI_CAPEX: Record<string, number> = {
+  USA: 109.1, CHN: 47.5, GBR: 4.5, DEU: 3.8, FRA: 3.4, IND: 3.2, KOR: 3.0,
+  JPN: 2.8, CAN: 2.6, ISR: 2.5, SGP: 2.1, ARE: 1.9, SAU: 1.8, AUS: 1.3,
+  NLD: 1.1, SWE: 1.0, CHE: 0.9, ESP: 0.7, ITA: 0.6, BRA: 0.5, TWN: 0.5,
+};
+
+// Forward EPS growth consensus for the main equity markets, % (curated).
+const EPS_GROWTH: Record<string, number> = {
+  USA: 13.5, CHN: 10.2, JPN: 8.8, DEU: 9.5, GBR: 6.8, FRA: 7.9, ITA: 6.2,
+  ESP: 7.1, IND: 16.4, BRA: 11.8, KOR: 21.5, TWN: 19.2, MEX: 8.4, CAN: 9.1,
+  AUS: 5.6, IDN: 9.8, ZAF: 10.5, SAU: 7.4, NLD: 10.8, CHE: 8.2, SWE: 9.4,
+};
+
 async function fredLatest(series: string, apiKey: string): Promise<number | null> {
   try {
     const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
@@ -136,11 +233,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // ── LIVE market stress signals (Yahoo) ─────────────────────────────────
-    // 1-month momentum for havens/energy/defense + VIX level.
-    const [monthQ, dayQ] = await Promise.all([
+    // ── LIVE market stress signals (Yahoo) + macro layers (IMF/WB) ────────
+    const [monthQ, dayQ, imfGdp, imfDebt, imfCpi, imfPop, liquidity] = await Promise.all([
       fetchYahooChartQuotes(['GC=F', 'BZ=F', 'ITA', 'DX-Y.NYB'], '1mo', 4, 100).catch(() => ({} as any)),
       fetchYahooChartQuotes(['^VIX'], '2d', 1, 0).catch(() => ({} as any)),
+      imfAll(IMF_INDICATORS.gdp),
+      imfAll(IMF_INDICATORS.debt),
+      imfAll(IMF_INDICATORS.inflation),
+      imfAll(IMF_INDICATORS.population),
+      wbLiquidity(),
     ]);
 
     const vix = dayQ['^VIX']?.price ?? null;
@@ -190,7 +291,17 @@ export async function GET(req: NextRequest) {
       hotspots: HOTSPOTS,
       chokepoints: CHOKEPOINTS,
       centralBanks: banks,
-      sources: 'Curated geopolitical dataset (reviewed) · live market stress via Yahoo (VIX, gold, Brent, defense, DXY) · central-bank rates via FRED where available',
+      // Country-level choropleth layers (Record<ISO3, value>)
+      macro: {
+        gdp: imfLatest(imfGdp),
+        debt: imfLatest(imfDebt),
+        inflation: imfLatest(imfCpi),
+        populationGrowth: imfLatest(imfPop, { growth: true }),
+        liquidity,
+        pmi: PMI_DATA,
+        aiCapex: AI_CAPEX,
+        epsGrowth: EPS_GROWTH,
+      },
     };
     _cache = { ts: Date.now(), payload };
     return NextResponse.json(payload, { headers: { ...rateLimitHeaders(rl), 'x-cache': 'MISS' } });

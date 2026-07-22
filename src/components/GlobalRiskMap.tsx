@@ -38,6 +38,8 @@ interface ApiResponse {
     inflation: Record<string, number>;
     populationGrowth: Record<string, number>;
     liquidity: Record<string, number>;
+    tradeBalance: Record<string, number>;
+    bond10y: Record<string, number>;
     pmi: Record<string, number>;
     aiCapex: Record<string, number>;
     epsGrowth: Record<string, number>;
@@ -46,7 +48,7 @@ interface ApiResponse {
 
 type LayerKey = 'conflicts' | 'hotspots' | 'chokepoints' | 'centralBanks';
 
-type MacroKey = 'none' | 'gdp' | 'debt' | 'inflation' | 'liquidity' | 'populationGrowth' | 'pmi' | 'aiCapex' | 'epsGrowth';
+type MacroKey = 'none' | 'gdp' | 'debt' | 'inflation' | 'liquidity' | 'populationGrowth' | 'bond10y' | 'tradeBalance' | 'pmi' | 'aiCapex' | 'epsGrowth';
 
 const MACRO_META: Record<Exclude<MacroKey, 'none'>, { label: string; unit: string; scale: any; reverse?: boolean; zmin?: number; zmax?: number }> = {
   gdp: { label: 'GDP Growth', unit: '%', scale: 'RdYlGn', zmin: -4, zmax: 8 },
@@ -54,6 +56,8 @@ const MACRO_META: Record<Exclude<MacroKey, 'none'>, { label: string; unit: strin
   inflation: { label: 'Inflation', unit: '%', scale: 'RdYlGn', reverse: true, zmin: 0, zmax: 12 },
   liquidity: { label: 'Liquidity (M2 gr.)', unit: '%', scale: 'RdYlGn', zmin: -5, zmax: 20 },
   populationGrowth: { label: 'Population Gr.', unit: '%', scale: 'RdYlGn', zmin: -1, zmax: 3 },
+  bond10y: { label: '10Y Yield', unit: '%', scale: 'RdYlGn', reverse: true, zmin: 0, zmax: 12 },
+  tradeBalance: { label: 'Trade Balance %GDP', unit: '%', scale: 'RdYlGn', zmin: -15, zmax: 15 },
   pmi: { label: 'PMI', unit: '', scale: 'RdYlGn', zmin: 42, zmax: 58 },
   aiCapex: { label: 'AI Capex', unit: '$B', scale: 'Blues', zmin: 0, zmax: 50 },
   epsGrowth: { label: 'EPS Growth', unit: '%', scale: 'RdYlGn', zmin: 0, zmax: 22 },
@@ -287,7 +291,7 @@ export default function GlobalRiskMap() {
       {/* Country macro layer selector */}
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
         <span className="text-[9px] uppercase tracking-wider text-gray-500 mr-1">Country layer:</span>
-        {([['none', 'None'], ['gdp', 'GDP'], ['debt', 'Debt'], ['inflation', 'Inflation'], ['liquidity', 'Liquidity'], ['populationGrowth', 'Population'], ['pmi', 'PMI'], ['aiCapex', 'AI Capex'], ['epsGrowth', 'EPS']] as [MacroKey, string][]).map(([k, lbl]) => (
+        {([['none', 'None'], ['gdp', 'GDP'], ['debt', 'Debt'], ['inflation', 'Inflation'], ['liquidity', 'Liquidity'], ['populationGrowth', 'Population'], ['bond10y', '10Y Yield'], ['tradeBalance', 'Trade'], ['pmi', 'PMI'], ['aiCapex', 'AI Capex'], ['epsGrowth', 'EPS']] as [MacroKey, string][]).map(([k, lbl]) => (
           <button
             key={k}
             onClick={() => setMacroKey(k)}

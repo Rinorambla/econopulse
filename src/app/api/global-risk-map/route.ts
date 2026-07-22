@@ -160,8 +160,17 @@ function imfLatest(all: Record<string, Record<string, number>>, opts?: { growth?
 
 /** World Bank broad money growth (FM.LBL.BMNY.ZG) — latest value per country. */
 async function wbLiquidity(): Promise<Record<string, number>> {
+  return wbIndicator('FM.LBL.BMNY.ZG');
+}
+
+/** World Bank external balance of goods & services, % of GDP — trade balance layer. */
+async function wbTradeBalance(): Promise<Record<string, number>> {
+  return wbIndicator('NE.RSB.GNFS.ZS');
+}
+
+async function wbIndicator(indicator: string): Promise<Record<string, number>> {
   try {
-    const url = 'https://api.worldbank.org/v2/country/all/indicator/FM.LBL.BMNY.ZG?format=json&per_page=2000&date=2020:2026';
+    const url = `https://api.worldbank.org/v2/country/all/indicator/${indicator}?format=json&per_page=2000&date=2020:2026`;
     const res = await fetch(url, { signal: AbortSignal.timeout(15000), next: { revalidate: 86400 } });
     if (!res.ok) return {};
     const json: any = await res.json();
@@ -203,6 +212,18 @@ const EPS_GROWTH: Record<string, number> = {
   AUS: 5.6, IDN: 9.8, ZAF: 10.5, SAU: 7.4, NLD: 10.8, CHE: 8.2, SWE: 9.4,
 };
 
+// 10-year government bond yields, % (curated from latest market levels).
+const BOND_10Y: Record<string, number> = {
+  USA: 4.32, DEU: 2.55, ITA: 3.62, FRA: 3.12, ESP: 3.18, GBR: 4.15, CHE: 0.58,
+  NLD: 2.78, SWE: 2.35, NOR: 3.65, DNK: 2.42, AUT: 2.95, PRT: 3.05, GRC: 3.35,
+  POL: 5.45, CZE: 4.15, HUN: 6.85, ROU: 6.95, TUR: 26.5, RUS: 14.8, UKR: 22.0,
+  JPN: 1.08, CHN: 2.18, KOR: 3.05, IND: 6.88, IDN: 6.72, THA: 2.55, MYS: 3.82,
+  PHL: 6.15, VNM: 2.85, SGP: 2.95, TWN: 1.55, HKG: 3.45, PAK: 12.5, BGD: 11.8,
+  AUS: 4.25, NZL: 4.45, CAN: 3.42, MEX: 9.45, BRA: 11.85, ARG: 15.5, CHL: 5.65,
+  COL: 9.85, PER: 6.45, ZAF: 10.35, NGA: 18.5, EGY: 24.0, KEN: 15.2, MAR: 3.85,
+  SAU: 4.95, ARE: 4.55, ISR: 4.42, QAT: 4.35,
+};
+
 async function fredLatest(series: string, apiKey: string): Promise<number | null> {
   try {
     const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
@@ -234,7 +255,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // ── LIVE market stress signals (Yahoo) + macro layers (IMF/WB) ────────
-    const [monthQ, dayQ, imfGdp, imfDebt, imfCpi, imfPop, liquidity] = await Promise.all([
+    const [monthQ, dayQ, imfGdp, imfDebt, imfCpi, imfPop, liquidity, tradeBalance] = await Promise.all([
       fetchYahooChartQuotes(['GC=F', 'BZ=F', 'ITA', 'DX-Y.NYB'], '1mo', 4, 100).catch(() => ({} as any)),
       fetchYahooChartQuotes(['^VIX'], '2d', 1, 0).catch(() => ({} as any)),
       imfAll(IMF_INDICATORS.gdp),
@@ -242,6 +263,7 @@ export async function GET(req: NextRequest) {
       imfAll(IMF_INDICATORS.inflation),
       imfAll(IMF_INDICATORS.population),
       wbLiquidity(),
+      wbTradeBalance(),
     ]);
 
     const vix = dayQ['^VIX']?.price ?? null;
@@ -298,6 +320,8 @@ export async function GET(req: NextRequest) {
         inflation: imfLatest(imfCpi),
         populationGrowth: imfLatest(imfPop, { growth: true }),
         liquidity,
+        tradeBalance,
+        bond10y: BOND_10Y,
         pmi: PMI_DATA,
         aiCapex: AI_CAPEX,
         epsGrowth: EPS_GROWTH,

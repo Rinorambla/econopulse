@@ -1354,6 +1354,34 @@ export default function MarketDataPage() {
                   <div className="my-1 border-t border-white/10" />
                   <div className="px-2.5 py-1.5">
                     <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5 flex items-center gap-1">
+                      <LayoutGrid className="w-3 h-3" /> Screens
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 4].map((n) => {
+                        const active = n === 1 ? layoutMode === 'single' : layoutMode === 'grid' && (gridCount === 2 ? 2 : 4) === n
+                        return (
+                          <button
+                            key={n}
+                            onClick={() => {
+                              if (n === 1) { setLayoutMode('single') } else { setGridCount(n); setLayoutMode('grid') }
+                              setMenuOpen(false)
+                            }}
+                            title={n === 1 ? 'Single chart' : n === 2 ? '2 charts side by side' : '2×2 grid (4 charts)'}
+                            className={`flex-1 px-2 py-1.5 rounded border text-xs font-bold ${
+                              active
+                                ? 'border-blue-400 bg-blue-500/15 text-white'
+                                : 'border-white/10 text-gray-400 hover:bg-white/5'
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="my-1 border-t border-white/10" />
+                  <div className="px-2.5 py-1.5">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5 flex items-center gap-1">
                       <Palette className="w-3 h-3" /> Theme
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1598,37 +1626,17 @@ export default function MarketDataPage() {
                   theme={theme}
                   className="shadow-lg shadow-black/40 h-full"
                   leftSlot={<GridSymbolBox value={gs} onSubmit={(s) => setGridSymbols((prev) => prev.map((x, j) => (j === i ? s : x)))} />}
+                  rightSlot={i === 0 ? actionsSlot : undefined}
                 />
               </div>
             ))}
           </div>
         )}
 
-        {/* Layout selector: user picks 1, 2 or 4 screens */}
-        <div className="absolute left-3 bottom-3 z-30 flex items-center gap-1 px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900/85 shadow-lg backdrop-blur">
-          <LayoutGrid className="w-4 h-4 text-blue-300" />
-          <span className="hidden sm:inline text-[10px] uppercase tracking-wider text-gray-400 mr-0.5">Screens</span>
-          {[1, 2, 4].map((n) => {
-            const active = n === 1 ? layoutMode === 'single' : layoutMode === 'grid' && (gridCount === 2 ? 2 : 4) === n
-            return (
-              <button
-                key={n}
-                onClick={() => {
-                  if (n === 1) { setLayoutMode('single') } else { setGridCount(n); setLayoutMode('grid') }
-                }}
-                className={`px-2 py-1 rounded text-xs font-bold ${active ? 'bg-blue-500/25 text-blue-200 border border-blue-400/50' : 'text-gray-300 border border-transparent hover:bg-white/10'}`}
-                title={n === 1 ? 'Single chart' : n === 2 ? '2 charts side by side' : '2×2 grid (4 charts)'}
-              >
-                {n}
-              </button>
-            )
-          })}
-        </div>
-
         {/* Fullscreen toggle: expand the whole terminal to the entire screen */}
         <button
           onClick={toggleFullscreen}
-          className="absolute left-3 bottom-14 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/85 hover:bg-white/10 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur"
+          className="absolute left-3 bottom-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/85 hover:bg-white/10 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur"
           title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen chart'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4 text-blue-300" /> : <Maximize2 className="w-4 h-4 text-blue-300" />}

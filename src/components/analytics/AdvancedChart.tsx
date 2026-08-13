@@ -1396,6 +1396,23 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   // Selected drawing + floating edit menu (click a drawing with the cursor tool)
   const [selectedDrawingId, setSelectedDrawingId] = useState<number | null>(null)
   const [drawMenu, setDrawMenu] = useState<{ x: number; y: number; id: number; flipX: boolean; flipY: boolean } | null>(null)
+  // Inline text-note editor: rendered directly on the chart at the clicked point
+  // (replaces window.prompt — works properly on iPhone/tablet keyboards too).
+  const [textDraft, setTextDraft] = useState<{ x: number; y: number; pt: DrawPoint; editId?: number } | null>(null)
+  const [textDraftVal, setTextDraftVal] = useState('')
+  const commitTextDraft = useCallback(() => {
+    if (!textDraft) return
+    const txt = textDraftVal.trim()
+    if (txt) {
+      if (textDraft.editId != null) {
+        setDrawings(ds => ds.map(d => (d.id === textDraft.editId ? { ...d, text: txt } : d)))
+      } else {
+        setDrawings(ds => [...ds, { id: Date.now(), tool: 'text' as DrawingTool, pts: [textDraft.pt], color: '#fbbf24', text: txt }])
+      }
+    }
+    setTextDraft(null)
+    setTextDraftVal('')
+  }, [textDraft, textDraftVal, setDrawings])
 
   // ===== Price alerts (TradingView-style) =====
   type PriceAlert = { id: number; price: number }
@@ -2529,10 +2546,12 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
 
       if (tool === 'text') {
-        const txt = window.prompt('Note text:')
-        if (txt && txt.trim()) {
-          setDrawings(d => [...d, { id: Date.now(), tool, pts: [pt], color: '#fbbf24', text: txt.trim() }])
-        }
+        // Open the inline note editor anchored at the clicked point (clamped so
+        // the input never overflows the chart on small screens).
+        const cw = chartContainerRef.current?.clientWidth ?? 0
+        const chH = chartContainerRef.current?.clientHeight ?? 0
+        setTextDraftVal('')
+        setTextDraft({ x: Math.max(4, Math.min(param.point.x, cw - 220)), y: Math.max(4, Math.min(param.point.y, chH - 40)), pt })
         // Apply the tool once, then return to the cursor.
         setActiveTool('cursor')
         return
@@ -3643,6 +3662,42 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
 
+        {/* Inline text-note editor — type directly on the chart where you clicked */}
+        {textDraft && (
+          <div
+            className="absolute z-30 flex items-center gap-1 p-1 rounded-lg bg-slate-900/95 border border-amber-400/50 shadow-xl backdrop-blur"
+            style={{ left: textDraft.x, top: textDraft.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              autoFocus
+              value={textDraftVal}
+              onChange={(e) => setTextDraftVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitTextDraft() }
+                else if (e.key === 'Escape') { setTextDraft(null); setTextDraftVal('') }
+              }}
+              placeholder="Scrivi nota…"
+              maxLength={120}
+              className="w-40 sm:w-52 px-2 py-1.5 text-xs rounded bg-white/5 text-white placeholder-gray-500 outline-none border border-white/10 focus:border-amber-400/60"
+            />
+            <button
+              onClick={commitTextDraft}
+              className="px-2 py-1.5 rounded text-xs font-bold bg-amber-500/20 border border-amber-400/50 text-amber-200 hover:bg-amber-500/30"
+              title="Save note (Enter)"
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => { setTextDraft(null); setTextDraftVal('') }}
+              className="px-2 py-1.5 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10"
+              title="Cancel (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Selected-drawing edit menu (TradingView-style): color, thickness, delete */}
         {drawMenu && (() => {
           const sel = drawings.find(d => d.id === drawMenu.id)
@@ -3672,6 +3727,27 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                   />
                 ))}
               </div>
+              {sel.tool === 'text' && (
+                <button
+                  onClick={() => {
+                    const xy = ptToXY(sel.pts[0])
+                    const cw = chartContainerRef.current?.clientWidth ?? 0
+                    const chH = chartContainerRef.current?.clientHeight ?? 0
+                    setTextDraftVal(sel.text || '')
+                    setTextDraft({
+                      x: Math.max(4, Math.min(xy?.x ?? drawMenu.x, cw - 220)),
+                      y: Math.max(4, Math.min(xy?.y ?? drawMenu.y, chH - 40)),
+                      pt: sel.pts[0],
+                      editId: sel.id,
+                    })
+                    setDrawMenu(null)
+                    setSelectedDrawingId(null)
+                  }}
+                  className="w-full mb-2 px-2 py-1 rounded text-[10px] bg-amber-500/15 border border-amber-400/40 text-amber-200 hover:bg-amber-500/25 text-left"
+                >
+                  ✏ Edit text
+                </button>
+              )}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
                   {DRAW_WIDTHS.map(w => (

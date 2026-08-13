@@ -25,7 +25,8 @@ import {
   MoreHorizontal,
   Palette,
   LayoutGrid,
-  Square,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
@@ -517,8 +518,10 @@ export default function MarketDataPage() {
   // Persisted state
   const [symbol, setSymbol] = useLocalStorage<string>('mkt:symbol', 'AAPL')
   const [theme, setTheme] = useLocalStorage<ChartThemeKey>('mkt:theme', 'blue')
-  // Layout: single chart or a 2×2 grid of 4 independent charts (multi-screen).
+  // Layout: single chart or a grid of independent charts (multi-screen).
+  // The user picks how many screens: 1 (single), 2 (side by side) or 4 (2×2).
   const [layoutMode, setLayoutMode] = useLocalStorage<'single' | 'grid'>('mkt:layout', 'single')
+  const [gridCount, setGridCount] = useLocalStorage<number>('mkt:gridCount', 4)
   const [gridSymbols, setGridSymbols] = useLocalStorage<string[]>('mkt:gridSymbols', ['AAPL', 'QQQ', 'BTC-USD', 'GC=F'])
   const [watchlists, setWatchlists] = useLocalStorage<Record<string, string[]>>('mkt:watchlists', DEFAULT_WATCHLISTS)
   const [activeListName, setActiveListName] = useLocalStorage<string>('mkt:activeList', 'Main')
@@ -546,6 +549,7 @@ export default function MarketDataPage() {
   const [chartHeight, setChartHeight] = useState(620)
   const [containerH, setContainerH] = useState<number | undefined>(undefined)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [panelTab, setPanelTab] = useState<'watchlist' | 'news' | 'analysis'>('watchlist')
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [newsLoading, setNewsLoading] = useState(false)
@@ -608,7 +612,9 @@ export default function MarketDataPage() {
       // bar around the chart canvas; subtract that chrome plus a small buffer so the
       // whole terminal always fits the viewport without any vertical scroll.
       const chartChrome = 132
-      const nextChart = Math.max(280, Math.min(820, Math.round(vh - top - pad - chartChrome)))
+      // In fullscreen the terminal owns the whole screen, so lift the height cap.
+      const maxChart = document.fullscreenElement ? 1600 : 820
+      const nextChart = Math.max(280, Math.min(maxChart, Math.round(vh - top - pad - chartChrome)))
       if (Math.abs(nextChart - lastChartH) >= 24) {
         lastChartH = nextChart
         setChartHeight(nextChart)
@@ -619,6 +625,7 @@ export default function MarketDataPage() {
     const schedule = () => { if (t) clearTimeout(t); t = setTimeout(compute, 120) }
     window.addEventListener('resize', schedule)
     window.addEventListener('orientationchange', schedule)
+    document.addEventListener('fullscreenchange', schedule)
     // Recompute when the header height changes (price badge, toolbar wrapping),
     // observing the container itself so we never feed the chart's own size back in.
     let ro: ResizeObserver | undefined
@@ -626,8 +633,23 @@ export default function MarketDataPage() {
       ro = new ResizeObserver(schedule)
       ro.observe(containerRef.current)
     }
-    return () => { cancelAnimationFrame(raf); if (t) clearTimeout(t); window.removeEventListener('resize', schedule); window.removeEventListener('orientationchange', schedule); ro?.disconnect() }
+    return () => { cancelAnimationFrame(raf); if (t) clearTimeout(t); window.removeEventListener('resize', schedule); window.removeEventListener('orientationchange', schedule); document.removeEventListener('fullscreenchange', schedule); ro?.disconnect() }
   }, [panelOpen])
+
+  // Fullscreen mode: put the whole terminal (chart + panels) on the entire screen.
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void containerRef.current?.requestFullscreen().catch(() => {})
+    }
+  }, [])
 
   // On phones/tablets the watchlist would push the chart off-screen, so collapse
   // it by default there; it stays open on desktop where there is room beside the chart.
@@ -1566,13 +1588,13 @@ export default function MarketDataPage() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-w-0 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto sm:overflow-hidden auto-rows-fr">
-            {gridSymbols.map((gs, i) => (
+          <div className={`flex-1 min-w-0 min-h-0 grid grid-cols-1 gap-2 overflow-y-auto sm:overflow-hidden ${gridCount === 2 ? 'lg:grid-cols-2' : 'sm:grid-cols-2'} auto-rows-fr`}>
+            {gridSymbols.slice(0, gridCount === 2 ? 2 : 4).map((gs, i) => (
               <div key={i} className="min-w-0 min-h-0">
                 <AdvancedChart
                   symbol={gs}
                   onSymbolChange={(s) => setGridSymbols((prev) => prev.map((x, j) => (j === i ? s : x)))}
-                  height={Math.max(200, Math.round((chartHeight - 140) / 2))}
+                  height={gridCount === 2 ? Math.max(240, chartHeight) : Math.max(200, Math.round((chartHeight - 140) / 2))}
                   theme={theme}
                   className="shadow-lg shadow-black/40 h-full"
                   leftSlot={<GridSymbolBox value={gs} onSubmit={(s) => setGridSymbols((prev) => prev.map((x, j) => (j === i ? s : x)))} />}
@@ -1582,14 +1604,35 @@ export default function MarketDataPage() {
           </div>
         )}
 
-        {/* Layout toggle: single ⇄ 2×2 grid (multi-screen) */}
+        {/* Layout selector: user picks 1, 2 or 4 screens */}
+        <div className="absolute left-3 bottom-3 z-30 flex items-center gap-1 px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900/85 shadow-lg backdrop-blur">
+          <LayoutGrid className="w-4 h-4 text-blue-300" />
+          <span className="hidden sm:inline text-[10px] uppercase tracking-wider text-gray-400 mr-0.5">Screens</span>
+          {[1, 2, 4].map((n) => {
+            const active = n === 1 ? layoutMode === 'single' : layoutMode === 'grid' && (gridCount === 2 ? 2 : 4) === n
+            return (
+              <button
+                key={n}
+                onClick={() => {
+                  if (n === 1) { setLayoutMode('single') } else { setGridCount(n); setLayoutMode('grid') }
+                }}
+                className={`px-2 py-1 rounded text-xs font-bold ${active ? 'bg-blue-500/25 text-blue-200 border border-blue-400/50' : 'text-gray-300 border border-transparent hover:bg-white/10'}`}
+                title={n === 1 ? 'Single chart' : n === 2 ? '2 charts side by side' : '2×2 grid (4 charts)'}
+              >
+                {n}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Fullscreen toggle: expand the whole terminal to the entire screen */}
         <button
-          onClick={() => setLayoutMode((m) => (m === 'single' ? 'grid' : 'single'))}
-          className="absolute left-3 bottom-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/85 hover:bg-white/10 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur"
-          title={layoutMode === 'single' ? 'Switch to 2×2 grid' : 'Switch to single chart'}
+          onClick={toggleFullscreen}
+          className="absolute left-3 bottom-14 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-slate-900/85 hover:bg-white/10 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur"
+          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen chart'}
         >
-          {layoutMode === 'single' ? <LayoutGrid className="w-4 h-4 text-blue-300" /> : <Square className="w-4 h-4 text-blue-300" />}
-          <span className="hidden sm:inline">{layoutMode === 'single' ? 'Grid 2×2' : 'Single'}</span>
+          {isFullscreen ? <Minimize2 className="w-4 h-4 text-blue-300" /> : <Maximize2 className="w-4 h-4 text-blue-300" />}
+          <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
         </button>
 
         {/* Watchlist side panel (TradingView-style) */}

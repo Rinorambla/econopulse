@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { getPolygonClient } from '@/lib/polygonFinance';
 import { getYahooQuotes } from '@/lib/yahooFinance';
@@ -27,7 +27,7 @@ interface MarketFeatures {
 // page load recomputes everything and feels slow. Serve a cached payload for a few
 // minutes to make repeat loads near-instant.
 let DNA_CACHE: { at: number; payload: any } | null = null;
-const DNA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const DNA_CACHE_TTL = 15 * 60 * 1000; // 15 minutes (matches CDN s-maxage)
 
 // Historical market events with detailed features for pattern matching
 const HISTORICAL_EVENTS = [
@@ -254,11 +254,17 @@ async function fetchTwelveDataMetrics() {
   if (!TWELVE_DATA_API_KEY) return null;
 
   try {
-    // Fetch VIX data
-    const vixResponse = await fetch(
-      `https://api.twelvedata.com/quote?symbol=VIX&apikey=${TWELVE_DATA_API_KEY}`,
-      { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
-    );
+    // Fetch VIX and Dollar Index in parallel (they are independent)
+    const [vixResponse, dxyResponse] = await Promise.all([
+      fetch(
+        `https://api.twelvedata.com/quote?symbol=VIX&apikey=${TWELVE_DATA_API_KEY}`,
+        { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
+      ),
+      fetch(
+        `https://api.twelvedata.com/quote?symbol=DXY&apikey=${TWELVE_DATA_API_KEY}`,
+        { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
+      ),
+    ]);
 
     let vixLevel = 19.2;
     if (vixResponse.ok) {
@@ -267,12 +273,6 @@ async function fetchTwelveDataMetrics() {
         vixLevel = parseFloat(vixData.close);
       }
     }
-
-    // Fetch Dollar Index
-    const dxyResponse = await fetch(
-      `https://api.twelvedata.com/quote?symbol=DXY&apikey=${TWELVE_DATA_API_KEY}`,
-      { next: { revalidate: 300 }, signal: AbortSignal.timeout(6000) }
-    );
 
     let dollarIndex = 103.5;
     if (dxyResponse.ok) {
@@ -419,7 +419,7 @@ async function generateAIInsight(topMatch: any, currentFeatures: MarketFeatures,
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(3500),
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
@@ -526,27 +526,31 @@ function analyzeSectorVulnerabilities(currentFeatures: MarketFeatures) {
   }).sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const ip = getClientIp(request as unknown as Request);
-    const rl = rateLimit(`market-dna:${ip}`, 60, 60_000);
-    if (!rl.ok) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
-    }
+// Deduped background refresh so concurrent stale hits trigger only one recompute.
+let DNA_REFRESHING: Promise<void> | null = null;
 
-    // Serve a recent cached payload instantly when available.
-    if (DNA_CACHE && Date.now() - DNA_CACHE.at < DNA_CACHE_TTL) {
-      return NextResponse.json(DNA_CACHE.payload, {
-        headers: {
-          ...rateLimitHeaders(rl),
-          'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
-          'X-Cache': 'HIT',
-        },
-      });
-    }
+function refreshDnaInBackground(): Promise<void> {
+  if (DNA_REFRESHING) return DNA_REFRESHING;
+  DNA_REFRESHING = computeMarketDNA()
+    .then(() => undefined, (e) => { console.error('Market DNA background refresh failed:', e); })
+    .finally(() => { DNA_REFRESHING = null; });
+  return DNA_REFRESHING;
+}
 
+// Full (slow) Market DNA computation — hits Yahoo/FRED/TwelveData/Polygon/OpenAI.
+// Stores the result in DNA_CACHE and returns the payload.
+async function computeMarketDNA(): Promise<any> {
     console.log('🧠 Starting Market DNA analysis with REAL DATA...');
-    
+
+    // Kick off the risk-ratio quotes fetch NOW so it runs in parallel with the
+    // market-features aggregation below (it does not depend on it). This shaves
+    // several seconds off cold requests.
+    const ratioSymbols = ['^VVIX','^VIX','SPHB','SPLV','XLY','XLP','IWD','IWF','HYG','IEF','HG=F','GC=F','^MOVE','^SKEW'];
+    const ratioQuotesPromise: Promise<any[]> = getYahooQuotes(ratioSymbols).catch((e) => {
+      console.warn('Ratio quotes fetch error', e);
+      return [] as any[];
+    });
+
     // Get current market features from multiple data sources
     const currentFeatures = await getCurrentMarketFeatures();
     
@@ -631,14 +635,8 @@ export async function GET(request: NextRequest) {
     ];
     
     // Compute requested cross-asset ratios and indices (real-time where possible via Yahoo)
-    const { getYahooQuotes } = await import('@/lib/yahooFinance')
-    const symbols = ['^VVIX','^VIX','SPHB','SPLV','XLY','XLP','IWD','IWF','HYG','IEF','HG=F','GC=F','^MOVE','^SKEW']
-    let quotes: any[] = []
-    try {
-      quotes = await getYahooQuotes(symbols)
-    } catch (e) {
-      console.warn('Ratio quotes fetch error', e)
-    }
+    // Quotes were fetched in parallel with the features aggregation above.
+    const quotes: any[] = await ratioQuotesPromise;
     const qmap: Record<string, number> = {}
     quotes.forEach(q=>{ if (q && typeof q.price === 'number') qmap[q.ticker] = q.price })
     function ratio(a: string, b: string) {
@@ -823,13 +821,39 @@ export async function GET(request: NextRequest) {
     };
     
   DNA_CACHE = { at: Date.now(), payload: response };
-  return NextResponse.json(response, {
-    headers: {
-      ...rateLimitHeaders(rl),
-      'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
-    },
-  });
-    
+  return response;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const ip = getClientIp(request as unknown as Request);
+    const rl = rateLimit(`market-dna:${ip}`, 60, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(rl) });
+    }
+
+    // Serve any cached payload instantly. If it's past TTL, return it anyway
+    // (stale) and recompute in the background so the NEXT request is fresh —
+    // users never wait on the multi-second upstream pipeline.
+    if (DNA_CACHE) {
+      const fresh = Date.now() - DNA_CACHE.at < DNA_CACHE_TTL;
+      if (!fresh) after(() => refreshDnaInBackground());
+      return NextResponse.json(DNA_CACHE.payload, {
+        headers: {
+          ...rateLimitHeaders(rl),
+          'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+          'X-Cache': fresh ? 'HIT' : 'STALE',
+        },
+      });
+    }
+
+    const payload = await computeMarketDNA();
+    return NextResponse.json(payload, {
+      headers: {
+        ...rateLimitHeaders(rl),
+        'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+      },
+    });
   } catch (error) {
     console.error('Market DNA API Error:', error);
     return NextResponse.json(

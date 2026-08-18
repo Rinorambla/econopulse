@@ -38,11 +38,12 @@ type IndicatorKey =
   | 'bbwidth' | 'bbpercent' | 'choppiness' | 'histvol'
   // Volume
   | 'volume' | 'vwap' | 'obv' | 'volprofile' | 'vpvr' | 'vpfr'
-  | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex' | 'eom'
+  | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex' | 'eom' | 'volcandles'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
   | 'adx' | 'stochrsi' | 'roc' | 'trix' | 'uo' | 'ao' | 'ppo' | 'aroon' | 'vortex'
   | 'cmo' | 'dpo' | 'coppock' | 'kst' | 'elderray' | 'rvi' | 'fisher' | 'bop'
+  | 'cta'
   // Support/Resistance
   | 'pivots'
 
@@ -219,6 +220,7 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'psar', label: 'Parabolic SAR' },
       { key: 'supertrend', label: 'SuperTrend' },
       { key: 'ichimoku', label: 'Ichimoku' },
+      { key: 'cta', label: 'CTA Trend Index' },
     ],
   },
   {
@@ -251,6 +253,7 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'chaikinosc', label: 'Chaikin Osc.' },
       { key: 'forceindex', label: 'Force Index' },
       { key: 'eom', label: 'Ease of Movement' },
+      { key: 'volcandles', label: 'Volume Candles' },
     ],
   },
   {
@@ -374,6 +377,8 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   rvi: { visible: true, color: '#06b6d4', color2: '#f97316', period: 10, width: 1, style: LineStyle.Solid },
   fisher: { visible: true, color: '#a78bfa', color2: '#f97316', period: 9, width: 1, style: LineStyle.Solid },
   bop: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
+  cta: { visible: true, color: '#38bdf8', period: 10, period2: 50, ob: 60, os: -60, width: 2, style: LineStyle.Solid },
+  volcandles: { visible: true, color: '#22c55e', color2: '#ef4444', period: 20, width: 1, style: LineStyle.Solid },
 }
 
 // Friendly labels for the numeric "length" fields, per indicator (falls back to generic).
@@ -387,6 +392,8 @@ const IND_FIELD_LABELS: Partial<Record<IndicatorKey, { period?: string; period2?
   stochastic: { period: '%K Length', period2: '%D Smooth' },
   ppo: { period: 'Fast', period2: 'Slow' },
   uo: { period: 'Fast', period2: 'Mid', period3: 'Slow' },
+  cta: { period: 'Fast EMA', period2: 'Slow EMA' },
+  volcandles: { period: 'Volume avg length' },
 }
 
 const DEFAULT_IND_CONFIG: IndicatorConfig = { visible: true, color: '#8b5cf6', width: 1, style: LineStyle.Solid }
@@ -908,6 +915,24 @@ function computeCMO(closes: number[], period = 14): (number | null)[] {
     out.push(sum === 0 ? 0 : ((up - dn) / sum) * 100)
   }
   return out
+}
+
+// CTA Trend Index (-100..+100): replicates managed-futures trend positioning.
+// Averages three EMA-crossover signals at increasing horizons (f/s, 2f/2s, 4f/4s);
+// each signal is the fast-slow spread scaled so a ±5% spread = full position.
+function computeCTA(closes: number[], fast = 10, slow = 50): (number | null)[] {
+  const pairs: [number, number][] = [[fast, slow], [fast * 2, slow * 2], [fast * 4, slow * 4]]
+  const emas = pairs.map(([f, s]) => [computeEMA(closes, f), computeEMA(closes, s)] as const)
+  return closes.map((_, i) => {
+    let sum = 0, cnt = 0
+    for (const [ef, es] of emas) {
+      const f = ef[i], s = es[i]
+      if (f == null || s == null || !s) continue
+      const sig = Math.max(-1, Math.min(1, ((f - s) / s) / 0.05))
+      sum += sig; cnt++
+    }
+    return cnt ? (sum / cnt) * 100 : null
+  })
 }
 
 // Detrended Price Oscillator — removes trend to highlight cycles.
@@ -1906,7 +1931,36 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         wickUpColor: '#22c55e',
         wickDownColor: '#ef4444',
       })
-      cs.setData(candleData)
+      // Volume Candles: repaint each candle by relative volume (vs its N-bar
+      // average) — heavy-volume bars glow, quiet bars fade.
+      const vcCfg = cfgFor('volcandles')
+      if (indicators.has('volcandles') && vcCfg.visible !== false) {
+        const per = Math.max(2, vcCfg.period || 20)
+        const tint = (hex: string, a: number): string => {
+          const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+          if (!m) return hex
+          const n = parseInt(m[1], 16)
+          return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+        }
+        const upC = vcCfg.color || '#22c55e'
+        const dnC = vcCfg.color2 || '#ef4444'
+        let volSum = 0
+        const colored = candleData.map((cd, i) => {
+          const v = bars[i]?.volume || 0
+          volSum += v
+          if (i >= per) volSum -= bars[i - per]?.volume || 0
+          const avg = volSum / Math.min(i + 1, per)
+          const rel = avg > 0 ? v / avg : 1
+          // Opacity 0.25 (dead volume) → 1 (≥2× average volume)
+          const a = Math.max(0.25, Math.min(1, 0.25 + (rel / 2) * 0.75))
+          const base = cd.close >= cd.open ? upC : dnC
+          const col = tint(base, a)
+          return { ...cd, color: col, borderColor: col, wickColor: col }
+        })
+        cs.setData(colored)
+      } else {
+        cs.setData(candleData)
+      }
       mainSeriesRef.current = cs
     } else if (effStyle === 'line') {
       const ls = chart.addSeries(LineSeries, {
@@ -1967,7 +2021,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     }
 
     // Check how many sub-panels we need (for proper margin allocation)
-    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex']
+    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex', 'cta']
     const activeSubPanels = subPanelKeys.filter(k => indicators.has(k))
     const hasVolume = indicators.has('volume')
 
@@ -2316,6 +2370,16 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       addSubLine(computeCMO(closes, c.period!), sid, c.color, c.style, c.width)
       addGuide(sid, c.ob ?? 50, 'rgba(239,68,68,0.3)')
       addGuide(sid, c.os ?? -50, 'rgba(34,197,94,0.3)')
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // CTA Trend Index (-100..+100): managed-futures style trend positioning
+    if (on('cta')) {
+      const c = cfg('cta')
+      const sid = 'cta-panel'
+      addSubLine(computeCTA(closes, c.period!, c.period2!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 60, 'rgba(34,197,94,0.35)')
+      addGuide(sid, c.os ?? -60, 'rgba(239,68,68,0.35)')
       addGuide(sid, 0, 'rgba(148,163,184,0.25)')
     }
 

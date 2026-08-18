@@ -1321,7 +1321,25 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   useEffect(() => {
     onChartApiRef.current?.({
       screenshot: () => {
-        try { return chartRef.current?.takeScreenshot() ?? null } catch { return null }
+        try {
+          const base = chartRef.current?.takeScreenshot() ?? null
+          if (!base) return null
+          // Composite the drawings/indicator overlay canvas on top so saved
+          // images match exactly what is on screen.
+          const overlay = overlayCanvasRef.current
+          if (overlay && overlay.width > 0 && overlay.height > 0) {
+            const out = document.createElement('canvas')
+            out.width = base.width
+            out.height = base.height
+            const ctx = out.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(base, 0, 0)
+              ctx.drawImage(overlay, 0, 0, overlay.width, overlay.height, 0, 0, base.width, base.height)
+              return out
+            }
+          }
+          return base
+        } catch { return null }
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1931,7 +1949,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // ===== Helper to add overlay line =====
     const addOverlay = (vals: (number | null)[], color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
-      const ls = chart.addSeries(LineSeries, { color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style, crosshairMarkerVisible: false })
+      const ls = chart.addSeries(LineSeries, { color, lineWidth: width as 1 | 2 | 3 | 4, lineStyle: style, crosshairMarkerVisible: false, priceLineVisible: false, lastValueVisible: false })
       ls.setData(vals.map((v, i) => v !== null ? { time: timeLabels[i], value: v } as LineData : null).filter(Boolean) as LineData[])
       overlaySeriesRef.current.push(ls)
     }
@@ -3105,7 +3123,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       if (!drag) return
       dragRef.current = null
       chartRef.current?.applyOptions({ handleScroll: { vertTouchDrag: false }, handleScale: true })
-      el.style.touchAction = ''
+      el.style.touchAction = 'none'
       try { el.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
       if (drag.moved) {
         // Commit the new geometry to React state (persists to localStorage).
@@ -3628,7 +3646,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             </div>
           </div>
         )}
-        <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%' }} />
+        <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%', touchAction: 'none', overscrollBehavior: 'contain' }} />
         <canvas
           ref={overlayCanvasRef}
           className="absolute inset-0"

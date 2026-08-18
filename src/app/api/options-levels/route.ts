@@ -116,22 +116,48 @@ const TTL_MS = 15 * 60 * 1000;
 
 function cacheKey(sym: string) { return `levels:${sym.toUpperCase()}`; }
 
-function calcMaxPain(contracts: any[]): number | null {
-  // Group by strike across all expirations within nearest 60 days
-  const strikes = Array.from(new Set(contracts.map(c => c.strike))).sort((a, b) => a - b);
+function calcMaxPain(contracts: any[], spot?: number): number | null {
+  // Standard definition: max pain is computed per-expiration. Yahoo's chain
+  // often reports OI≈0, so fall back to today's volume as the weight — the
+  // pin estimate stays near the strikes where positioning is concentrated.
+  const totalOi = contracts.reduce((s, c) => s + (c.openInterest || 0), 0);
+  const usingOi = totalOi >= 500;
+  const w = (c: any) => (usingOi ? (c.openInterest || 0) : (c.volume || 0));
+  const wByExp = new Map<string, number>();
+  for (const c of contracts) {
+    if (!c.expiration) continue;
+    wByExp.set(c.expiration, (wByExp.get(c.expiration) || 0) + w(c));
+  }
+  let bestExp: string | null = null;
+  let bestW = 0;
+  for (const [exp, wSum] of wByExp) if (wSum > bestW) { bestW = wSum; bestExp = exp; }
+  let pool = bestExp ? contracts.filter(c => c.expiration === bestExp) : contracts;
+  // Need real two-sided weight, otherwise the minimum degenerates to a boundary strike.
+  const callW = pool.reduce((s, c) => s + (c.contractType === 'call' ? w(c) : 0), 0);
+  const putW = pool.reduce((s, c) => s + (c.contractType === 'put' ? w(c) : 0), 0);
+  if (callW < 100 || putW < 100) return null;
+  // Restrict to strikes near spot: far-OTM tail weight would otherwise drag
+  // the "pain" minimum to absurd strikes (e.g. 360 on a $770 stock).
+  if (spot && spot > 0) {
+    const near = pool.filter(c => Math.abs(c.strike - spot) / spot <= 0.12);
+    if (near.length >= 6) pool = near;
+  }
+  const strikes = Array.from(new Set(pool.map(c => c.strike))).sort((a, b) => a - b);
   if (strikes.length < 3) return null;
   let bestStrike = strikes[0];
   let minPain = Infinity;
   for (const S of strikes) {
     let pain = 0;
-    for (const c of contracts) {
-      const oi = c.openInterest || 0;
-      if (!oi) continue;
-      if (c.contractType === 'call' && S > c.strike) pain += oi * (S - c.strike);
-      if (c.contractType === 'put' && S < c.strike) pain += oi * (c.strike - S);
+    for (const c of pool) {
+      const wt = w(c);
+      if (!wt) continue;
+      if (c.contractType === 'call' && S > c.strike) pain += wt * (S - c.strike);
+      if (c.contractType === 'put' && S < c.strike) pain += wt * (c.strike - S);
     }
     if (pain < minPain) { minPain = pain; bestStrike = S; }
   }
+  // A minimum sitting on the pool boundary means the weight is one-sided — no real pain point.
+  if (bestStrike === strikes[0] || bestStrike === strikes[strikes.length - 1]) return null;
   return bestStrike;
 }
 
@@ -469,11 +495,14 @@ function computeGammaProfile(contracts: any[], spot: number): { profile: GammaSt
   const map = new Map<number, GammaStrike>();
   for (const c of contracts) {
     const oi = c.openInterest || 0;
-    if (!oi) continue;
+    // Fresh daily expiries often report OI=0 intraday — fall back to today's
+    // volume so the GEX ladder still renders instead of collapsing to 1 bar.
+    const weight = oi > 0 ? oi : (c.volume || 0);
+    if (!weight) continue;
     const gamma = typeof c.gamma === 'number' && isFinite(c.gamma) ? c.gamma : null;
     // Notional gamma exposure: gamma * OI * 100 * spot^2 * 0.01 (per 1% move).
     // If gamma is missing, fall back to OI proxy so the chart still renders.
-    const gex = gamma != null ? gamma * oi * 100 * spot * spot * 0.01 : oi * 100;
+    const gex = gamma != null ? gamma * weight * 100 * spot * spot * 0.01 : weight * 100;
     const cur = map.get(c.strike) || { strike: c.strike, callOi: 0, putOi: 0, callGex: 0, putGex: 0, netGex: 0 };
     if (c.contractType === 'call') {
       cur.callOi += oi;
@@ -750,8 +779,8 @@ function buildStrategies(args: {
     }
   }
 
-  // 4. Iron Condor — RANGE (high IV preferred)
-  if (regime.type === 'RANGE' || regime.probabilityMeanRev > 60) {
+  // 4. Iron Condor — RANGE / CONSOLIDATION (mean-reversion regimes)
+  if (regime.type === 'RANGE' || regime.type === 'CONSOLIDATION' || regime.probabilityMeanRev > 60) {
     const callShort = pick(price * 1.03, 'call');
     const callLong = pick(price * 1.06, 'call');
     const putShort = pick(price * 0.97, 'put');
@@ -801,6 +830,57 @@ function buildStrategies(args: {
         rationale: `Cheaper vol play vs straddle — wider breakevens but lower cost.`,
         score: Math.max(50, regime.probabilityBreakout - 5),
       });
+    }
+  }
+
+  // Fallback: never leave the Strategies tab empty when a chain exists —
+  // offer a wall-targeted vertical spread in the direction of the drift.
+  if (!ideas.length) {
+    const bullish = regime.type !== 'TREND_BEAR';
+    if (bullish) {
+      const target = callWalls[0]?.strike ?? price * 1.05;
+      const longCall = pick(price, 'call');
+      const shortCall = pick(target, 'call');
+      if (longCall && shortCall && longCall.strike < shortCall.strike) {
+        const debit = prem(longCall) - prem(shortCall);
+        const width = shortCall.strike - longCall.strike;
+        ideas.push({
+          name: 'Bull Call Spread',
+          category: 'directional-bull',
+          legs: [
+            { side: 'long', type: 'call', strike: longCall.strike, expiration: exp, qty: 1 },
+            { side: 'short', type: 'call', strike: shortCall.strike, expiration: exp, qty: 1 },
+          ],
+          maxProfit: width - debit,
+          maxLoss: debit,
+          breakevens: [longCall.strike + debit],
+          netDebit: debit,
+          rationale: `Defined-risk upside toward the call wall at $${shortCall.strike.toFixed(2)} while the regime resolves.`,
+          score: 55,
+        });
+      }
+    } else {
+      const target = putWalls[0]?.strike ?? price * 0.95;
+      const longPut = pick(price, 'put');
+      const shortPut = pick(target, 'put');
+      if (longPut && shortPut && longPut.strike > shortPut.strike) {
+        const debit = prem(longPut) - prem(shortPut);
+        const width = longPut.strike - shortPut.strike;
+        ideas.push({
+          name: 'Bear Put Spread',
+          category: 'directional-bear',
+          legs: [
+            { side: 'long', type: 'put', strike: longPut.strike, expiration: exp, qty: 1 },
+            { side: 'short', type: 'put', strike: shortPut.strike, expiration: exp, qty: 1 },
+          ],
+          maxProfit: width - debit,
+          maxLoss: debit,
+          breakevens: [longPut.strike - debit],
+          netDebit: debit,
+          rationale: `Defined-risk downside toward the put wall at $${shortPut.strike.toFixed(2)} while the regime resolves.`,
+          score: 55,
+        });
+      }
     }
   }
 
@@ -892,18 +972,30 @@ export async function GET(req: NextRequest) {
             const p = firstChain?.quote?.regularMarketPrice ?? firstChain?.quote?.postMarketPrice;
             if (p && isFinite(p)) underlyingPrice = p;
           }
-          // Get next 3 expirations
-          const expDates: number[] = (firstChain.expirationDates || [])
+          // Sample near + weekly + monthly expirations. Consecutive daily
+          // expiries (SPY/QQQ) carry almost no OI, which blanked walls/GEX.
+          const allExp: number[] = (firstChain.expirationDates || [])
             .map((t: any) => Number(t))
             .filter((t: number) => isFinite(t) && t > Math.floor(Date.now() / 1000))
-            .sort((a: number, b: number) => a - b)
-            .slice(0, 3);
+            .sort((a: number, b: number) => a - b);
+          const nowSec = Math.floor(Date.now() / 1000);
+          const after = (minDays: number) => allExp.find(t => t >= nowSec + minDays * 86400);
+          // Next monthly (3rd Friday) — carries the bulk of real OI for max pain / walls.
+          const monthly = allExp.find(t => {
+            const d = new Date(t * 1000);
+            return d.getUTCDay() === 5 && d.getUTCDate() >= 15 && d.getUTCDate() <= 21;
+          });
+          const expDates: number[] = Array.from(new Set(
+            [allExp[0], after(4), monthly ?? after(15)].filter((t): t is number => t != null)
+          )).slice(0, 3);
           const allChains: any[] = [];
-          if (firstChain.options?.[0]) allChains.push(firstChain.options[0]);
-          // Fetch the other 2 expirations in parallel
+          if (expDates.length && expDates[0] === Number(firstChain.options?.[0]?.expirationDate) && firstChain.options?.[0]) {
+            allChains.push(firstChain.options[0]);
+          }
+          const toFetch = expDates.filter(t => !allChains.some(ch => Number(ch?.expirationDate) === t));
           const extra = await withTimeout(
             Promise.all(
-              expDates.slice(1).map(t => fetchYahooOptionsDirect(symbol, t).then(r => r?.options?.[0]).catch(() => null))
+              toFetch.map(t => fetchYahooOptionsDirect(symbol, t).then(r => r?.options?.[0]).catch(() => null))
             ),
             10000,
             [] as any[]
@@ -984,9 +1076,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const maxPain = activeContracts.length ? calcMaxPain(activeContracts) : null;
-    const callWalls = topByKey(activeContracts, 'call', 'openInterest', underlyingPrice, 3);
-    const putWalls  = topByKey(activeContracts, 'put',  'openInterest', underlyingPrice, 3);
+    const maxPain = activeContracts.length ? calcMaxPain(activeContracts, underlyingPrice) : null;
+    // Yahoo often reports OI≈0 — rank walls by today's volume in that case so
+    // the Walls tab still shows meaningful strikes near spot.
+    const totalActiveOi = activeContracts.reduce((s, c) => s + (c.openInterest || 0), 0);
+    const wallKey: 'openInterest' | 'volume' = totalActiveOi >= 500 ? 'openInterest' : 'volume';
+    const callWalls = topByKey(activeContracts, 'call', wallKey, underlyingPrice, 3);
+    const putWalls  = topByKey(activeContracts, 'put',  wallKey, underlyingPrice, 3);
     const callVolToday = topByKey(activeContracts, 'call', 'volume', underlyingPrice, 3);
     const putVolToday  = topByKey(activeContracts, 'put',  'volume', underlyingPrice, 3);
 

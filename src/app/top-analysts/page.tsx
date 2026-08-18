@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import Footer from '@/components/Footer'
 import RequirePlan from '@/components/RequirePlan'
 import {
-  ArrowPathIcon,
   StarIcon,
   TrophyIcon,
   MagnifyingGlassIcon,
@@ -234,8 +233,8 @@ export default function TopAnalystsPage() {
 
   return (
     <RequirePlan min="premium">
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-12 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-3">
             <div>
@@ -248,27 +247,14 @@ export default function TopAnalystsPage() {
                 A list of Wall Street analysts, ranked by their performance.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {(data?.provider === 'live' || data?.provider === 'fmp') && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Live data
-                </span>
-              )}
+            <div className="flex items-center gap-2 flex-wrap">
               {data?.asOf && (
                 <span className="text-[11px] text-gray-500">
                   Updated{' '}
                   {new Date(data.asOf).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  {' · auto-refresh'}
                 </span>
               )}
-              <button
-                onClick={load}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 px-3 py-1.5 text-sm font-semibold text-blue-200 transition disabled:opacity-50"
-              >
-                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
             </div>
           </div>
 

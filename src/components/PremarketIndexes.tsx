@@ -37,7 +37,7 @@ function pickDisplay(q?: ExtQ): { price?: number | null; pct?: number | null; st
     return { price: q.preMarketPrice!, pct: q.preMarketChangePercent ?? null, stateLabel: 'Premarket' };
   }
   if (isRegular) {
-    return { price: q.regularMarketPrice ?? null, pct: q.regularMarketChangePercent ?? null, stateLabel: 'Live' };
+    return { price: q.regularMarketPrice ?? null, pct: q.regularMarketChangePercent ?? null, stateLabel: 'Open' };
   }
   if (isPost && (q.postMarketPrice ?? null) !== null) {
     return { price: q.postMarketPrice!, pct: q.postMarketChangePercent ?? null, stateLabel: 'After hours' };

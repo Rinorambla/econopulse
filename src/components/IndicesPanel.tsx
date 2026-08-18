@@ -125,7 +125,7 @@ function RegionCard({ region, quotes, perf, tf }: {
           <span className="text-base">{region.icon}</span>
           <h4 className="text-xs font-bold text-white">{region.label}</h4>
         </div>
-        <span className="text-[9px] text-emerald-400">LIVE</span>
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
       <div className="space-y-1">
         {region.items.map(meta => {

@@ -4,7 +4,7 @@
 // Black masthead + live market tape, dense typographic headline lists,
 // amber category kickers, mono timestamps, sticky "Latest" timeline sidebar.
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeftIcon, ArrowPathIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import RequirePlan from '@/components/RequirePlan';
@@ -170,7 +170,6 @@ function TickerChips({ article, max = 3 }: { article: NewsArticle; max?: number 
 export default function NewsPage() {
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [activeCat, setActiveCat] = useState<string>('all');
   const [nowStr, setNowStr] = useState('');
@@ -178,7 +177,7 @@ export default function NewsPage() {
 
   const fetchNews = async (silent = false) => {
     try {
-      if (silent) setRefreshing(true); else setLoading(true);
+      if (!silent) setLoading(true);
       const response = await fetch('/api/news', { signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
@@ -189,7 +188,7 @@ export default function NewsPage() {
       console.error('Error fetching news:', error);
       if (!silent && mountedRef.current) setNews([]);
     } finally {
-      if (mountedRef.current) { setLoading(false); setRefreshing(false); }
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -248,7 +247,7 @@ export default function NewsPage() {
 
   return (
     <RequirePlan min="premium">
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-black text-white overflow-x-hidden">
         {/* ===== MASTHEAD ===== */}
         <div className="sticky top-0 z-20 bg-black/95 backdrop-blur border-b border-white/10">
           {/* Row 1: brand + clock + refresh */}
@@ -260,25 +259,13 @@ export default function NewsPage() {
               >
                 <ArrowLeftIcon className="h-4 w-4" />
               </NavigationLink>
-              <h1 className="text-lg sm:text-xl font-black tracking-tight uppercase whitespace-nowrap">
+              <h1 className="text-base sm:text-xl font-black tracking-tight uppercase whitespace-nowrap">
                 EconoPulse<span className="text-amber-400"> News</span>
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-rose-400 border border-rose-500/30 rounded px-1.5 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> Live
-              </span>
               <span className="hidden lg:block text-[11px] text-gray-500 truncate">{todayStr}</span>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <span className="hidden md:block text-[12px] font-mono text-amber-300 tabular-nums" title="New York time">{nowStr} ET</span>
-              <button
-                onClick={() => fetchNews(true)}
-                disabled={refreshing || loading}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/15 hover:bg-white/10 disabled:opacity-50 text-gray-300 text-xs font-semibold transition-colors"
-                title="Refresh headlines"
-              >
-                <ArrowPathIcon className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </button>
+              <span className="text-[12px] font-mono text-amber-300 tabular-nums" title="New York time">{nowStr} ET</span>
             </div>
           </div>
 
@@ -328,7 +315,7 @@ export default function NewsPage() {
                 {lead && (
                   <a href={lead.article.url} target="_blank" rel="noopener noreferrer" className="group block">
                     <div className={`text-[10px] font-bold uppercase tracking-[0.2em] mb-2 ${lead.cat.accent}`}>{lead.cat.label}</div>
-                    <h2 className="text-2xl sm:text-4xl font-black leading-[1.08] tracking-tight group-hover:text-amber-200 transition-colors">
+                    <h2 className="text-2xl sm:text-4xl font-black leading-[1.08] tracking-tight group-hover:text-amber-200 transition-colors break-words">
                       {lead.article.title}
                     </h2>
                     {lead.article.description && (

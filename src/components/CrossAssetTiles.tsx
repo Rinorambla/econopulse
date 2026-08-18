@@ -125,7 +125,7 @@ function CategoryTile({ category, label, icon, tf }: { category: string; label: 
         ) : err ? (
           <span className="text-[9px] text-red-400">err</span>
         ) : (
-          <span className="text-[9px] text-emerald-400">LIVE</span>
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
         )}
       </div>
       {err && !data.length ? (

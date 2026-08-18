@@ -383,7 +383,6 @@ export default function DashboardPage() {
 								<p className="text-[11px] text-gray-400">Live options, flow and directional pressure analytics for execution</p>
 							</div>
 							<div className="ml-auto flex items-center gap-2">
-								<span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">LIVE</span>
 								<span className="hidden sm:inline text-[10px] text-gray-400">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'}</span>
 								<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-300 hover:text-white hover:bg-slate-700 rounded border border-slate-700 transition-colors" title="Column guide">
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
@@ -447,7 +446,7 @@ export default function DashboardPage() {
 									</div>
 									{/* Data Table */}
 									<div className="bg-slate-800 rounded border border-slate-700 overflow-hidden">
-										<div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 220px)', minHeight: '300px' }}>
+										<div className="overflow-auto" style={{ minHeight: '300px' }}>
 											<table className="w-full text-[11px] leading-tight">
 												<thead className="bg-slate-700 sticky top-0 z-10 shadow">
 													<tr>
@@ -551,7 +550,7 @@ export default function DashboardPage() {
 																			<td className="px-2 py-1 text-gray-300">
 																				<span className="relative group inline-flex items-center gap-1">
 																					{opt?.optionsSentiment || item.optionsSentiment}
-																			{opt && (opt.dataSource === 'polygon' || opt.dataSource === 'tradier') && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/30">LIVE</span>}
+
 																			{opt && opt.dataSource === 'estimated' && <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-600/20 text-yellow-300 border border-yellow-500/20">EST</span>}
 																			{opt && (
 																				<div className="absolute z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 -bottom-1 left-1/2 -translate-x-1/2 translate-y-full">

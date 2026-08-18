@@ -841,7 +841,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               {/* 3+4. COMPANY DETAIL + INDUSTRY RANKS */}
               <div className="lg:col-span-6 flex flex-col gap-2">
                 {/* Company Detail */}
-                <Panel title={selectedSymbol ? `Company: ${selectedSymbol}` : 'Company Info'} badge={stockDetail ? 'LIVE' : undefined} className="flex-1 min-h-[160px]">
+                <Panel title={selectedSymbol ? `Company: ${selectedSymbol}` : 'Company Info'} className="flex-1 min-h-[160px]">
                   {detailLoading ? (
                     <div className="p-4 text-center text-gray-500 text-xs">
                       <RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-40" />
@@ -991,7 +991,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </div>
 
               {/* 6. AI INSIGHT PANEL — Composite: Sentiment + Regime + Flame + OpenAI fallback */}
-              <Panel title="AI Market Intelligence" badge={(sentimentData || regimeData || flameData) ? 'LIVE' : aiAnalysis ? 'AI LIVE' : 'WAITING'} className="lg:col-span-8 min-h-[280px]">
+              <Panel title="AI Market Intelligence" className="lg:col-span-8 min-h-[280px]">
                 {(sentimentData || regimeData || flameData) ? (
                   <div className="p-4 space-y-4">
                     {/* Top row: Fear & Greed + Regime + Flame */}
@@ -1167,7 +1167,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 2.5: Global Indices (US + International) with logos ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Global Indices" badge="LIVE" className="lg:col-span-12 min-h-[260px]">
+              <Panel title="Global Indices" className="lg:col-span-12 min-h-[260px]">
                 <IndicesPanel />
               </Panel>
             </div>
@@ -1176,7 +1176,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
               {/* CROSS-ASSET TILES — commodities, bonds, crypto, forex (with timeframe selector) */}
-              <Panel title="Cross-Asset Markets" badge="LIVE" className="lg:col-span-12 min-h-[280px]">
+              <Panel title="Cross-Asset Markets" className="lg:col-span-12 min-h-[280px]">
                 <div className="p-3">
                   <CrossAssetTiles />
                 </div>
@@ -1185,7 +1185,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
             {/* ─── ROW 3.5: Economic Calendar + Earnings Calendar ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Economic Calendar" badge="LIVE" className="lg:col-span-7 min-h-[440px]">
+              <Panel title="Economic Calendar" className="lg:col-span-7 min-h-[440px]">
                 <div className="p-2">
                   <TradaysCalendarWidget height={400} mode="2" theme={1} />
                 </div>

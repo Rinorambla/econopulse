@@ -510,7 +510,6 @@ export default function MarketDNAPage() {
                     </div>
                     <span className="text-sm font-semibold text-white">Market DNA Score</span>
                   </div>
-                  <span className="text-[10px] font-medium uppercase tracking-widest text-gray-500 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">Live</span>
                 </div>
 
                 {/* Central gauge */}

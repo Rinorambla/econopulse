@@ -212,7 +212,7 @@ export default function GlobalRiskMap() {
           opacity: 0.9, line: { color: '#312e81', width: 1.2 },
         },
         hovertemplate: data.centralBanks.map((b) =>
-          `<b>🏦 ${b.name}</b> (${b.country})<br>${b.rateName}: <b>${b.rate != null ? b.rate + '%' : 'n/a'}</b>${b.live ? ' · LIVE' : ''}<br>Stance: ${STANCE_ARROW[b.stance]}<br><i>${b.note}</i><extra></extra>`
+          `<b>🏦 ${b.name}</b> (${b.country})<br>${b.rateName}: <b>${b.rate != null ? b.rate + '%' : 'n/a'}</b><br>Stance: ${STANCE_ARROW[b.stance]}<br><i>${b.note}</i><extra></extra>`
         ),
         name: 'Central Banks',
       });

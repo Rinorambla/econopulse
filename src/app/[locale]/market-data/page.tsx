@@ -199,6 +199,10 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
   { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
   { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
+  // Government bonds — full US Treasury curve (FRED daily), world 10Y yields (FRED/OECD monthly), sovereign ETFs.
+  { label: 'Govt Bonds · US Treasuries', symbols: ['FRED:DGS1MO', 'FRED:DGS3MO', 'FRED:DGS6MO', 'FRED:DGS1', 'FRED:DGS2', 'FRED:DGS3', 'FRED:DGS5', 'FRED:DGS7', 'FRED:DGS10', 'FRED:DGS20', 'FRED:DGS30'] },
+  { label: 'Govt Bonds · World 10Y', symbols: ['FRED:IRLTLT01USM156N', 'FRED:IRLTLT01DEM156N', 'FRED:IRLTLT01FRM156N', 'FRED:IRLTLT01ITM156N', 'FRED:IRLTLT01ESM156N', 'FRED:IRLTLT01PTM156N', 'FRED:IRLTLT01GRM156N', 'FRED:IRLTLT01IEM156N', 'FRED:IRLTLT01NLM156N', 'FRED:IRLTLT01BEM156N', 'FRED:IRLTLT01ATM156N', 'FRED:IRLTLT01CHM156N', 'FRED:IRLTLT01GBM156N', 'FRED:IRLTLT01JPM156N', 'FRED:IRLTLT01CAM156N', 'FRED:IRLTLT01AUM156N', 'FRED:IRLTLT01NZM156N', 'FRED:IRLTLT01SEM156N', 'FRED:IRLTLT01NOM156N', 'FRED:IRLTLT01DKM156N', 'FRED:IRLTLT01FIM156N', 'FRED:IRLTLT01PLM156N', 'FRED:IRLTLT01KRM156N', 'FRED:IRLTLT01MXM156N'] },
+  { label: 'Govt Bond ETFs', symbols: ['TLT', 'IEF', 'SHY', 'GOVT', 'VGSH', 'VGIT', 'VGLT', 'EDV', 'ZROZ', 'SPTL', 'BIL', 'BWX', 'IGOV', 'EMB', 'EMLC', 'VWOB'] },
   // Index futures (CFD-style) — Yahoo continuous front-month contracts.
   { label: 'Index Futures (CFD)', symbols: ['ES=F', 'NQ=F', 'YM=F', 'RTY=F', 'NKD=F', 'GC=F', 'CL=F', 'NG=F', 'SI=F', 'HG=F', 'ZB=F', 'ZN=F', 'DX-Y.NYB', '6E=F', '6J=F', 'BTC=F'] },
   // Macro / economic series sourced from FRED (FRED:<series_id>).
@@ -266,6 +270,54 @@ const SYMBOL_LABELS: Record<string, string> = {
   'FRED:DRSFRMACBS': 'Mortgage Delinquency',
   'FRED:DPSACBW027SBOG': 'Bank Deposits',
   'FRED:CCLACBW027SBOG': 'Consumer Loans (Banks)',
+  // FRED — US Treasury curve (daily)
+  'FRED:DGS1MO': 'US Treasury 1M Yield',
+  'FRED:DGS3MO': 'US Treasury 3M Yield',
+  'FRED:DGS6MO': 'US Treasury 6M Yield',
+  'FRED:DGS1': 'US Treasury 1Y Yield',
+  'FRED:DGS3': 'US Treasury 3Y Yield',
+  'FRED:DGS5': 'US Treasury 5Y Yield',
+  'FRED:DGS7': 'US Treasury 7Y Yield',
+  'FRED:DGS20': 'US Treasury 20Y Yield',
+  // FRED — World 10Y government bond yields (OECD, monthly)
+  'FRED:IRLTLT01USM156N': 'USA 10Y Govt Bond',
+  'FRED:IRLTLT01DEM156N': 'Germany 10Y Govt Bond (Bund)',
+  'FRED:IRLTLT01FRM156N': 'France 10Y Govt Bond (OAT)',
+  'FRED:IRLTLT01ITM156N': 'Italy 10Y Govt Bond (BTP)',
+  'FRED:IRLTLT01ESM156N': 'Spain 10Y Govt Bond (Bono)',
+  'FRED:IRLTLT01PTM156N': 'Portugal 10Y Govt Bond',
+  'FRED:IRLTLT01GRM156N': 'Greece 10Y Govt Bond',
+  'FRED:IRLTLT01IEM156N': 'Ireland 10Y Govt Bond',
+  'FRED:IRLTLT01NLM156N': 'Netherlands 10Y Govt Bond',
+  'FRED:IRLTLT01BEM156N': 'Belgium 10Y Govt Bond',
+  'FRED:IRLTLT01ATM156N': 'Austria 10Y Govt Bond',
+  'FRED:IRLTLT01CHM156N': 'Switzerland 10Y Govt Bond',
+  'FRED:IRLTLT01GBM156N': 'UK 10Y Govt Bond (Gilt)',
+  'FRED:IRLTLT01JPM156N': 'Japan 10Y Govt Bond (JGB)',
+  'FRED:IRLTLT01CAM156N': 'Canada 10Y Govt Bond',
+  'FRED:IRLTLT01AUM156N': 'Australia 10Y Govt Bond',
+  'FRED:IRLTLT01NZM156N': 'New Zealand 10Y Govt Bond',
+  'FRED:IRLTLT01SEM156N': 'Sweden 10Y Govt Bond',
+  'FRED:IRLTLT01NOM156N': 'Norway 10Y Govt Bond',
+  'FRED:IRLTLT01DKM156N': 'Denmark 10Y Govt Bond',
+  'FRED:IRLTLT01FIM156N': 'Finland 10Y Govt Bond',
+  'FRED:IRLTLT01PLM156N': 'Poland 10Y Govt Bond',
+  'FRED:IRLTLT01KRM156N': 'South Korea 10Y Govt Bond',
+  'FRED:IRLTLT01MXM156N': 'Mexico 10Y Govt Bond',
+  // Government bond ETFs
+  'GOVT': 'US Treasury Total Market ETF',
+  'VGSH': 'Short-Term Treasury ETF',
+  'VGIT': 'Interm-Term Treasury ETF',
+  'VGLT': 'Long-Term Treasury ETF',
+  'EDV': 'Extended Duration Treasury ETF',
+  'ZROZ': '25+Y Zero Coupon Treasury ETF',
+  'SPTL': 'SPDR Long-Term Treasury ETF',
+  'BIL': '1-3M T-Bill ETF',
+  'BWX': 'Intl Treasury Bond ETF (ex-US)',
+  'IGOV': 'Intl Treasury Bond ETF',
+  'EMB': 'EM Sovereign Bond ETF (USD)',
+  'EMLC': 'EM Local Currency Govt Bond ETF',
+  'VWOB': 'EM Government Bond ETF',
 }
 
 function labelForSymbol(s: string): string {
@@ -277,8 +329,7 @@ function labelForSymbol(s: string): string {
 // popular macro groups + friendly labels above.
 const FRED_CATALOG: { symbol: string; name: string }[] = Array.from(
   new Set(
-    POPULAR_GROUPS.filter((g) => /^Macro/i.test(g.label))
-      .flatMap((g) => g.symbols)
+    POPULAR_GROUPS.flatMap((g) => g.symbols)
       .filter((s) => /^FRED:/i.test(s))
   )
 ).map((symbol) => ({ symbol, name: SYMBOL_LABELS[symbol] || symbol.replace(/^FRED:/i, '') }))

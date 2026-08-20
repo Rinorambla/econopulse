@@ -344,73 +344,6 @@ function searchFred(query: string): SearchResult[] {
   }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
 }
 
-// ── US market session clock (NYSE hours in America/New_York) ─────────────────
-// Computes the live session phase + countdown so the terminal always shows
-// whether we're pre-market, in regular hours, after-hours or closed.
-type SessionPhase = 'pre' | 'open' | 'after' | 'closed'
-
-function getUsMarketSession(): { phase: SessionPhase; label: string; countdown: string } {
-  const now = new Date()
-  // Current time in New York
-  const nyStr = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })
-  const ny = new Date(nyStr)
-  const day = ny.getDay()
-  const mins = ny.getHours() * 60 + ny.getMinutes()
-  const PRE = 4 * 60        // 04:00 pre-market start
-  const OPEN = 9 * 60 + 30  // 09:30 regular open
-  const CLOSE = 16 * 60     // 16:00 regular close
-  const AFTER_END = 20 * 60 // 20:00 after-hours end
-  const isWeekday = day >= 1 && day <= 5
-
-  const fmt = (m: number) => {
-    const h = Math.floor(m / 60), mm = m % 60
-    return h > 0 ? `${h}h ${mm}m` : `${mm}m`
-  }
-
-  if (isWeekday && mins >= OPEN && mins < CLOSE) {
-    return { phase: 'open', label: 'Market Open', countdown: `closes in ${fmt(CLOSE - mins)}` }
-  }
-  if (isWeekday && mins >= PRE && mins < OPEN) {
-    return { phase: 'pre', label: 'Pre-Market', countdown: `opens in ${fmt(OPEN - mins)}` }
-  }
-  if (isWeekday && mins >= CLOSE && mins < AFTER_END) {
-    return { phase: 'after', label: 'After-Hours', countdown: `ends in ${fmt(AFTER_END - mins)}` }
-  }
-  // Closed: minutes until the next pre-market session (04:00 NY, next weekday)
-  let minsUntilPre: number
-  if (isWeekday && mins < PRE) {
-    minsUntilPre = PRE - mins // later this morning
-  } else {
-    // Evening or weekend: find days ahead of the next weekday
-    const daysAhead = day === 5 ? 3 : day === 6 ? 2 : 1 // Fri→Mon, Sat→Mon, else tomorrow
-    minsUntilPre = (24 * 60 - mins) + PRE + (daysAhead - 1) * 24 * 60
-  }
-  return { phase: 'closed', label: 'Market Closed', countdown: `pre-market in ${fmt(minsUntilPre)}` }
-}
-
-const SESSION_STYLE: Record<SessionPhase, { dot: string; text: string }> = {
-  open: { dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-300' },
-  pre: { dot: 'bg-sky-400 animate-pulse', text: 'text-sky-300' },
-  after: { dot: 'bg-amber-400 animate-pulse', text: 'text-amber-300' },
-  closed: { dot: 'bg-gray-500', text: 'text-gray-400' },
-}
-
-function MarketSessionBadge() {
-  const [session, setSession] = useState(() => getUsMarketSession())
-  useEffect(() => {
-    const id = setInterval(() => setSession(getUsMarketSession()), 30_000)
-    return () => clearInterval(id)
-  }, [])
-  const s = SESSION_STYLE[session.phase]
-  return (
-    <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded border border-white/10 bg-white/5 shrink-0" title={`US equities session (NYSE) — ${session.countdown}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      <span className={`text-[10px] font-semibold ${s.text}`}>{session.label}</span>
-      <span className="text-[9px] text-gray-500">{session.countdown}</span>
-    </div>
-  )
-}
-
 // ── Symbol news (Yahoo headlines for the chart's active symbol) ───────────────
 interface NewsItem { title: string; publisher: string; link: string; publishedAt: string; thumbnail?: string }
 
@@ -1353,7 +1286,14 @@ export default function MarketDataPage() {
 
   const actionsSlot = (
           <div className="relative flex items-center gap-1.5">
-            <MarketSessionBadge />
+            <button
+              onClick={() => downloadChart()}
+              className="flex items-center gap-1 px-2 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
+              title="Download chart image (PNG)"
+            >
+              <Download className="w-4 h-4 text-blue-300" />
+              <span className="font-semibold hidden lg:inline">Save</span>
+            </button>
             <button
               onClick={() => { setMenuOpen((o) => !o); setWatchlistMenuOpen(false); setNotifMenuOpen(false) }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
@@ -1934,10 +1874,11 @@ export default function MarketDataPage() {
           </div>
 
           {/* Column header */}
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-white/5">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-white/5">
             <span>Symbol</span>
-            <span className="text-right w-20">Last</span>
-            <span className="text-right w-16">Chg%</span>
+            <span className="text-right w-16">Last</span>
+            <span className="text-right w-14">Chg</span>
+            <span className="text-right w-14">Chg%</span>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1954,7 +1895,7 @@ export default function MarketDataPage() {
                 <div
                   key={sym}
                   onClick={() => setSymbol(sym.toUpperCase())}
-                  className={`group grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 border-b border-white/5 cursor-pointer ${active ? 'bg-blue-600/15' : 'hover:bg-white/5'}`}
+                  className={`group relative grid grid-cols-[1fr_auto_auto_auto] gap-1.5 items-center px-3 py-2 border-b border-white/5 cursor-pointer ${active ? 'bg-blue-600/15' : 'hover:bg-white/5'}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="relative w-6 h-6 rounded-full shrink-0 overflow-hidden">
@@ -1977,14 +1918,17 @@ export default function MarketDataPage() {
                       {q?.name && <span className="block text-[10px] text-gray-500 truncate">{q.name}</span>}
                     </span>
                   </div>
-                  <span className="text-right w-20 text-xs font-semibold tabular-nums">{q ? fmtPrice(q.price) : '—'}</span>
-                  <span className="text-right w-16 flex items-center justify-end gap-1">
+                  <span className="text-right w-16 text-xs font-semibold tabular-nums">{q ? fmtPrice(q.price) : '—'}</span>
+                  <span className={`text-right w-14 text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {q && Number.isFinite(q.change) ? `${q.change >= 0 ? '+' : ''}${fmtPrice(Math.abs(q.change) < 1 ? q.change : Number(q.change.toFixed(2)))}` : '—'}
+                  </span>
+                  <span className="text-right w-14 flex items-center justify-end">
                     <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-400' : 'text-red-400'}`}>
                       {q ? fmtPct(q.changePercent) : '—'}
                     </span>
                     <button
                       onClick={(e) => { e.stopPropagation(); removeFromWatchlist(sym) }}
-                      className="opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
+                      className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100 transition text-gray-500 hover:text-rose-400"
                       title="Remove"
                     >
                       <X className="w-3 h-3" />

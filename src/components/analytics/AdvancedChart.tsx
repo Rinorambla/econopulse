@@ -1408,6 +1408,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastPrice, setLastPrice] = useState<{ price: number; change: number; changePct: number } | null>(null)
+  // Pre/after-hours quote for the TradingView-style legend badge inside the chart.
+  const [extSession, setExtSession] = useState<{ label: 'Pre' | 'After'; price: number; pct: number | null } | null>(null)
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null)
 
   // Drawing state
@@ -1499,6 +1501,33 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     }
   }, [lastPrice, currentAlerts, removeAlert, symKey])
+
+  // Pre/after-hours quote poll (60s) for the legend badge — skips FRED/ratio symbols.
+  useEffect(() => {
+    const v = symbol.trim()
+    if (!v || /^fred:/i.test(v) || /^[^/]+\/[^/]+$/.test(v)) { setExtSession(null); return }
+    let cancel = false
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/yahoo-extended-quotes?symbols=${encodeURIComponent(v.toUpperCase())}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
+        if (!res.ok) return
+        const j = await res.json()
+        const q = (j?.data || [])[0]
+        if (cancel || !q) return
+        const st = String(q.marketState || '').toUpperCase()
+        if (st.includes('PRE') && q.preMarketPrice != null) {
+          setExtSession({ label: 'Pre', price: q.preMarketPrice, pct: q.preMarketChangePercent ?? null })
+        } else if (st.includes('POST') && q.postMarketPrice != null) {
+          setExtSession({ label: 'After', price: q.postMarketPrice, pct: q.postMarketChangePercent ?? null })
+        } else {
+          setExtSession(null)
+        }
+      } catch { /* keep previous */ }
+    }
+    load()
+    const id = setInterval(() => { if (!document.hidden) load() }, 60_000)
+    return () => { cancel = true; clearInterval(id) }
+  }, [symbol])
 
   // Refs for handlers (avoid stale closures)
   const activeToolRef = useRef(activeTool); useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
@@ -3233,18 +3262,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {/* Custom left slot (symbol search bar injected by the page) */}
         {leftSlot}
 
-        {/* Active symbol pill (read-only — search is in page header). Hidden on
-            phones so it never crowds/covers the search bar in the wrapped toolbar. */}
+        {/* Active symbol pill (read-only — price now lives in the in-chart legend). */}
         <div className="hidden sm:flex items-center gap-2 text-sm">
           <span className="text-white font-bold tracking-wide">{symbol}</span>
-          {lastPrice && (
-            <>
-              <span className="text-white font-bold">${lastPrice.price.toFixed(2)}</span>
-              <span className={pctColor}>
-                {lastPrice.change >= 0 ? '+' : ''}{lastPrice.change.toFixed(2)} ({lastPrice.changePct >= 0 ? '+' : ''}{lastPrice.changePct.toFixed(2)}%)
-              </span>
-            </>
-          )}
         </div>
 
         {/* Separator */}
@@ -3711,6 +3731,31 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
         <div ref={chartContainerRef} className="[&>a]:!hidden [&_a[target='_blank']]:!hidden" style={{ width: '100%', height: '100%', touchAction: 'none', overscrollBehavior: 'contain' }} />
+        {/* TradingView-style legend inside the chart: symbol · range + last price/change (+ pre/after badge) */}
+        {!loading && !error && (
+          <div className="absolute top-1.5 left-2 z-10 pointer-events-none select-none">
+            <div className="flex items-center gap-1.5 text-[11px] sm:text-xs leading-tight">
+              <span className="font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{symbol}</span>
+              <span className="text-gray-400 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">· {rangeKey}</span>
+            </div>
+            {lastPrice && (
+              <div className="flex items-center gap-1.5 leading-tight">
+                <span className="text-sm sm:text-base font-bold text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">${lastPrice.price.toFixed(2)}</span>
+                <span className={`text-[11px] sm:text-xs font-semibold tabular-nums ${pctColor} [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]`}>
+                  {lastPrice.change >= 0 ? '+' : ''}{lastPrice.change.toFixed(2)} ({lastPrice.changePct >= 0 ? '+' : ''}{lastPrice.changePct.toFixed(2)}%)
+                </span>
+              </div>
+            )}
+            {extSession && (
+              <div className="mt-0.5 inline-flex items-center gap-1">
+                <span className={`px-1.5 py-px rounded text-[10px] font-bold ${extSession.label === 'Pre' ? 'bg-amber-500 text-black' : 'bg-purple-500 text-white'}`}>{extSession.label}</span>
+                <span className="text-[11px] font-semibold text-amber-200 tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+                  ${extSession.price.toFixed(2)}{extSession.pct != null ? ` (${extSession.pct >= 0 ? '+' : ''}${extSession.pct.toFixed(2)}%)` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
         <canvas
           ref={overlayCanvasRef}
           className="absolute inset-0"
@@ -3724,14 +3769,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           </div>
         )}
         {activeTool === 'alert' && (
-          <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-amber-500/50 text-[10px] text-amber-200">
+          <div className="absolute top-14 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-amber-500/50 text-[10px] text-amber-200">
             <span className="font-semibold uppercase tracking-wider">Alert</span>
             <span className="text-gray-400">click on the chart at the target price</span>
             <button onClick={() => setActiveTool('cursor')} className="text-gray-400 hover:text-white">✕</button>
           </div>
         )}
         {activeTool !== 'cursor' && activeTool !== 'crosshair' && activeTool !== 'alert' && (
-          <div className="absolute top-2 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-blue-500/40 text-[10px] text-blue-200">
+          <div className="absolute top-14 left-2 z-10 flex items-center gap-2 px-2 py-1 rounded bg-slate-900/90 border border-blue-500/40 text-[10px] text-blue-200">
             <span className="font-semibold uppercase tracking-wider">{activeTool}</span>
             <span className="text-gray-400">click {TOOL_STEPS[activeTool] - pendingPts.length} more</span>
             <button onClick={() => { setPendingPts([]); setActiveTool('cursor') }} className="text-gray-400 hover:text-white">✕</button>

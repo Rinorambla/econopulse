@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import {
   createChart,
-  createSeriesMarkers,
   CandlestickSeries,
   LineSeries,
   AreaSeries,
@@ -1409,8 +1408,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastPrice, setLastPrice] = useState<{ price: number; change: number; changePct: number } | null>(null)
-  // Past earnings reports ("E" markers under the bars, TradingView-style).
+  // Past earnings reports + dividends (badges in a lane under the price pane).
   const [earningsMarks, setEarningsMarks] = useState<{ date: string; surprisePct: number | null }[]>([])
+  const [dividendMarks, setDividendMarks] = useState<{ date: string; amount: number | null }[]>([])
   // Pre/after-hours quote for the TradingView-style legend badge inside the chart.
   const [extSession, setExtSession] = useState<{ label: 'Pre' | 'After'; price: number; pct: number | null } | null>(null)
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null)
@@ -1532,17 +1532,19 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     return () => { cancel = true; clearInterval(id) }
   }, [symbol])
 
-  // Earnings dates for the active symbol (plain equities only).
+  // Earnings + dividend dates for the active symbol (plain equities only).
   useEffect(() => {
     const v = symbol.trim().toUpperCase()
     setEarningsMarks([])
+    setDividendMarks([])
     if (!v || /^fred:/i.test(v) || /[/^=]/.test(v) || /-USD$/i.test(v) || v.includes('.')) return
     let cancel = false
     fetch(`/api/symbol-earnings?symbol=${encodeURIComponent(v)}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
-        if (cancel || !j?.data) return
-        setEarningsMarks(j.data.map((r: any) => ({ date: r.date, surprisePct: r.surprisePct ?? null })))
+        if (cancel || !j) return
+        if (j.data) setEarningsMarks(j.data.map((r: any) => ({ date: r.date, surprisePct: r.surprisePct ?? null })))
+        if (j.dividends) setDividendMarks(j.dividends.map((r: any) => ({ date: r.date, amount: r.amount ?? null })))
       })
       .catch(() => { /* markers are optional */ })
     return () => { cancel = true }
@@ -1556,6 +1558,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const selectedDrawingIdRef = useRef(selectedDrawingId); useEffect(() => { selectedDrawingIdRef.current = selectedDrawingId }, [selectedDrawingId])
   // Bars + active indicators exposed to the canvas overlay renderer (volume profiles).
   const barsRef = useRef(bars); useEffect(() => { barsRef.current = bars }, [bars])
+  const earningsRef = useRef(earningsMarks); useEffect(() => { earningsRef.current = earningsMarks }, [earningsMarks])
+  const dividendsRef = useRef(dividendMarks); useEffect(() => { dividendsRef.current = dividendMarks }, [dividendMarks])
   const indicatorsRef = useRef(indicators); useEffect(() => { indicatorsRef.current = indicators }, [indicators])
   const themeRef = useRef(themeTokens); useEffect(() => { themeRef.current = themeTokens }, [themeTokens])
   const chartStyleRef = useRef(chartStyle); useEffect(() => { chartStyleRef.current = chartStyle }, [chartStyle])
@@ -2049,32 +2053,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     }
 
-    // ===== Earnings "E" markers under the bars (daily+ intervals only) =====
-    if (mainSeriesRef.current && earningsMarks.length && !isIntraday && bars.length) {
-      const markers = earningsMarks
-        .map(m => {
-          const target = Math.floor(new Date(`${m.date}T00:00:00Z`).getTime() / 1000)
-          // snap to the nearest bar (skip if none within ~6 days)
-          let lo = 0, hi = bars.length - 1
-          while (lo + 1 < hi) { const mid = (lo + hi) >> 1; if (bars[mid].time <= target) lo = mid; else hi = mid }
-          const idx = Math.abs(bars[lo].time - target) <= Math.abs(bars[hi].time - target) ? lo : hi
-          if (Math.abs(bars[idx].time - target) > 6 * 86400) return null
-          const beat = m.surprisePct != null ? m.surprisePct >= 0 : null
-          return {
-            time: timeLabels[idx],
-            position: 'belowBar' as const,
-            color: beat == null ? '#94a3b8' : beat ? '#22c55e' : '#ef4444',
-            shape: 'circle' as const,
-            text: 'E',
-            size: 0.6,
-          }
-        })
-        .filter(Boolean) as { time: Time; position: 'belowBar'; color: string; shape: 'circle'; text: string; size: number }[]
-      if (markers && markers.length) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        try { createSeriesMarkers(mainSeriesRef.current as any, markers as any) } catch { /* optional */ }
-      }
-    }
+    // ===== Earnings "E" markers are drawn on the overlay canvas (bottom lane) =====
 
     // ===== Helper to add overlay line =====
     const addOverlay = (vals: (number | null)[], color: string, style: LineStyle = LineStyle.Solid, width = 1) => {
@@ -2740,6 +2719,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Redraw overlay on visible range changes
     const redrawOnRange = () => requestAnimationFrame(redrawOverlay)
     chart.timeScale().subscribeVisibleLogicalRangeChange(redrawOnRange)
+    // Vertical pans (price-scale drags) don't fire a logical-range change —
+    // repaint while the pointer moves with a button held so drawings stay glued.
+    const redrawOnDrag = (e: PointerEvent) => { if (e.buttons) requestAnimationFrame(redrawOverlay) }
+    container.addEventListener('pointermove', redrawOnDrag)
+    container.addEventListener('wheel', redrawOnRange, { passive: true })
 
     // Resize observer (debounced via RAF to avoid layout-thrash flicker)
     let roRaf = 0
@@ -2777,7 +2761,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme, earningsMarks])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -3021,6 +3005,41 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     drawingsRef.current.forEach(d => drawShape(d, false, d.id === selectedDrawingIdRef.current))
 
+    // ===== Earnings (E) + Dividend (D) badge lane — bottom of the price pane,
+    // TradingView-style, so report dates never cover the candles. Daily+ only.
+    const badgeBars = barsRef.current
+    const marksE = earningsRef.current
+    const marksD = dividendsRef.current
+    if (badgeBars.length > 1 && (marksE.length || marksD.length)) {
+      const step = badgeBars[badgeBars.length - 1].time - badgeBars[badgeBars.length - 2].time
+      if (step >= 20 * 3600) {
+        let laneY = H - 12
+        try {
+          const ps = (chart as any).paneSize?.(0)
+          if (ps?.height) laneY = Math.min(ps.height - 12, H - 12)
+        } catch { /* fall back to chart bottom */ }
+        const drawBadge = (dateStr: string, letter: string, color: string) => {
+          const target = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000)
+          if (target < badgeBars[0].time - step || target > badgeBars[badgeBars.length - 1].time + step) return
+          let lo = 0, hi = badgeBars.length - 1
+          while (lo + 1 < hi) { const mid = (lo + hi) >> 1; if (badgeBars[mid].time <= target) lo = mid; else hi = mid }
+          const idx = Math.abs(badgeBars[lo].time - target) <= Math.abs(badgeBars[hi].time - target) ? lo : hi
+          const x = chart.timeScale().logicalToCoordinate(idx as any)
+          if (x == null || x < -8 || x > W + 8) return
+          ctx.save()
+          ctx.beginPath(); ctx.arc(x, laneY, 7, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(2,6,23,0.88)'; ctx.fill()
+          ctx.lineWidth = 1.4; ctx.strokeStyle = color; ctx.stroke()
+          ctx.fillStyle = color; ctx.font = '700 9px ui-sans-serif, system-ui'
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText(letter, x, laneY + 0.5)
+          ctx.restore()
+        }
+        for (const m of marksD) drawBadge(m.date, 'D', '#c084fc')
+        for (const m of marksE) drawBadge(m.date, 'E', m.surprisePct == null ? '#94a3b8' : m.surprisePct >= 0 ? '#22c55e' : '#ef4444')
+      }
+    }
+
     // Preview pending drawing with current hover
     const tool = activeToolRef.current
     const pend = pendingPtsRef.current
@@ -3036,7 +3055,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [])
 
   // Trigger redraw on drawings/pending/hover/tool changes
-  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, selectedDrawingId, indicators, redrawOverlay, bars])
+  useEffect(() => { requestAnimationFrame(redrawOverlay) }, [drawings, pendingPts, hoverPt, activeTool, selectedDrawingId, indicators, redrawOverlay, bars, earningsMarks, dividendMarks])
 
   const clearDrawings = useCallback(() => { setDrawings([]); setPendingPts([]); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
   const undoDrawing = useCallback(() => { setDrawings(d => d.slice(0, -1)); setSelectedDrawingId(null); setDrawMenu(null) }, [setDrawings])
@@ -3191,8 +3210,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         case 'fib-ext':
           if (a && b) {
             if (distToSegment(px, py, a.x, a.y, b.x, b.y) <= TOL) { hit = true; break }
+            // Levels are grabbable only within the fib's own x-span, otherwise a
+            // fib on screen hijacks every chart pan attempt.
+            const x0 = Math.min(a.x, b.x) - TOL, x1 = Math.max(a.x, b.x) + TOL
             const levels = d.tool === 'fib-retr' ? FIB_LEVELS : FIB_EXT_LEVELS
-            hit = levels.some(lv => Math.abs(py - (a.y + (b.y - a.y) * lv)) <= TOL && px >= 0 && px <= W)
+            hit = px >= x0 && px <= x1 && levels.some(lv => Math.abs(py - (a.y + (b.y - a.y) * lv)) <= TOL)
           }
           break
         case 'text':

@@ -624,6 +624,17 @@ Keep prose crisp and professional.`
       }
     }
 
+    if (error?.code === 'insufficient_quota' || /exceeded your current quota/i.test(error?.message || '')) {
+      return NextResponse.json({
+        answer: 'EconoAI is temporarily offline: the AI provider capacity has been exhausted and is being restored. Live market data on this page keeps updating — please try the chat again later.',
+        question: 'quota_exhausted',
+        usedContext: false,
+        fallback: true,
+        reason: 'insufficient_quota',
+        timestamp: new Date().toISOString(),
+      }, { status: 200 })
+    }
+
     if (error?.status === 401 || error?.message?.includes('API key')) {
       return NextResponse.json({
         answer: 'Authentication issue with AI provider. Meanwhile, here’s a structured framework: summarize current trend, watch support/resistance, and align with macro (rates, USD).',

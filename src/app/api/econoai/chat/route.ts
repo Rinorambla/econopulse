@@ -84,6 +84,9 @@ const NAME_TO_TICKER: Record<string, string> = {
   nasdaq: 'QQQ', 'dow': 'DIA', 'dow jones': 'DIA', 'russell': 'IWM', vix: '^VIX',
   'dollar': 'DX-Y.NYB', 'us dollar': 'DX-Y.NYB', dxy: 'DX-Y.NYB', euro: 'EURUSD=X', 'eur/usd': 'EURUSD=X',
   treasury: 'TLT', bonds: 'TLT', 'yield': 'TLT', 'yields': 'TLT',
+  // Italian aliases
+  oro: 'GC=F', petrolio: 'CL=F', argento: 'SI=F', rame: 'HG=F', grano: 'ZW=F', 'gas naturale': 'NG=F',
+  dollaro: 'DX-Y.NYB', obbligazioni: 'TLT',
 }
 
 // A reasonable set of words that look like tickers but aren't, to avoid noise.
@@ -119,6 +122,70 @@ function price(n: number | null | undefined): string {
   if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
   if (n >= 1) return n.toFixed(2)
   return n.toFixed(4)
+}
+function big(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return 'n/a'
+  const a = Math.abs(n)
+  if (a >= 1e12) return `${(n / 1e12).toFixed(2)}T`
+  if (a >= 1e9) return `${(n / 1e9).toFixed(2)}B`
+  if (a >= 1e6) return `${(n / 1e6).toFixed(1)}M`
+  return n.toFixed(0)
+}
+
+// ── Yahoo crumb auth (needed by v10 quoteSummary for fundamentals) ──────────
+const Y_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+let yAuthCache: { crumb: string; cookie: string; ts: number } | null = null
+async function getYAuth(): Promise<{ crumb: string; cookie: string } | null> {
+  if (yAuthCache && Date.now() - yAuthCache.ts < 30 * 60 * 1000) return yAuthCache
+  try {
+    const r1 = await fetch('https://fc.yahoo.com/', { signal: AbortSignal.timeout(4000), headers: { 'User-Agent': Y_UA } }).catch(() => null)
+    const cookie = (r1?.headers.get('set-cookie') || '').split(/,(?=[^ ])/g).map(c => c.split(';')[0].trim()).filter(Boolean).join('; ')
+    if (!cookie) return null
+    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { signal: AbortSignal.timeout(4000), headers: { 'User-Agent': Y_UA, Cookie: cookie } })
+    if (!r2.ok) return null
+    const crumb = (await r2.text()).trim()
+    if (!crumb) return null
+    yAuthCache = { crumb, cookie, ts: Date.now() }
+    return yAuthCache
+  } catch { return null }
+}
+
+// Deep fundamentals for one ticker: revenue, margins, cash flow, FCF, capex,
+// cash/debt, ROE, forward P/E, PEG, dividend yield/rate/payout.
+async function fetchFundamentals(ticker: string): Promise<string | null> {
+  try {
+    const auth = await getYAuth()
+    if (!auth) return null
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=financialData%2CdefaultKeyStatistics%2CsummaryDetail&crumb=${encodeURIComponent(auth.crumb)}`
+    const r = await fetch(url, { headers: { 'User-Agent': Y_UA, Cookie: auth.cookie, Accept: 'application/json' }, signal: AbortSignal.timeout(7000), cache: 'no-store' })
+    if (!r.ok) return null
+    const j = await r.json()
+    const res = j?.quoteSummary?.result?.[0]
+    if (!res) return null
+    const fd = res.financialData, ks = res.defaultKeyStatistics, sd = res.summaryDetail
+    const raw = (x: any): number | null => (x && typeof x.raw === 'number' && isFinite(x.raw)) ? x.raw : null
+    const bits: string[] = []
+    const rev = raw(fd?.totalRevenue); if (rev != null) bits.push(`revenue(ttm) ${big(rev)}`)
+    const rg = raw(fd?.revenueGrowth); if (rg != null) bits.push(`revenue growth ${(rg * 100).toFixed(1)}%`)
+    const gm = raw(fd?.grossMargins); if (gm != null) bits.push(`gross margin ${(gm * 100).toFixed(1)}%`)
+    const om = raw(fd?.operatingMargins); if (om != null) bits.push(`operating margin ${(om * 100).toFixed(1)}%`)
+    const ocf = raw(fd?.operatingCashflow); if (ocf != null) bits.push(`operating cash flow ${big(ocf)}`)
+    const fcf = raw(fd?.freeCashflow); if (fcf != null) bits.push(`free cash flow ${big(fcf)}`)
+    if (ocf != null && fcf != null && ocf - fcf > 0) bits.push(`capex ≈ ${big(ocf - fcf)}`)
+    const cash = raw(fd?.totalCash); if (cash != null) bits.push(`cash ${big(cash)}`)
+    const debt = raw(fd?.totalDebt); if (debt != null) bits.push(`total debt ${big(debt)}`)
+    const ebitda = raw(fd?.ebitda); if (ebitda != null) bits.push(`EBITDA ${big(ebitda)}`)
+    const roe = raw(fd?.returnOnEquity); if (roe != null) bits.push(`ROE ${(roe * 100).toFixed(1)}%`)
+    const tpe = raw(sd?.trailingPE); if (tpe != null) bits.push(`P/E(ttm) ${tpe.toFixed(1)}`)
+    const fpe = raw(ks?.forwardPE) ?? raw(sd?.forwardPE); if (fpe != null) bits.push(`forward P/E ${fpe.toFixed(1)}`)
+    const peg = raw(ks?.pegRatio); if (peg != null) bits.push(`PEG ${peg.toFixed(2)}`)
+    const dy = raw(sd?.dividendYield); if (dy != null) bits.push(`dividend yield ${(dy * 100).toFixed(2)}%`)
+    const drate = raw(sd?.dividendRate); if (drate != null) bits.push(`dividend rate $${drate.toFixed(2)}/yr`)
+    const payout = raw(sd?.payoutRatio); if (payout != null) bits.push(`payout ratio ${(payout * 100).toFixed(0)}%`)
+    const target = raw(fd?.targetMeanPrice); if (target != null) bits.push(`analyst mean target $${target.toFixed(2)}`)
+    if (!bits.length) return null
+    return `${ticker} fundamentals: ${bits.join('; ')}.`
+  } catch { return null }
 }
 
 // Fetch ~1y of daily bars and derive technical levels for one ticker.
@@ -226,7 +293,7 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
   const wants = (...kw: string[]) => kw.some(k => q.includes(k))
 
   // Treasury yields / yield curve
-  if (wants('yield', 'treasury', 'bond', 'curve', 'rates', '10y', '2y', 'duration')) {
+  if (wants('yield', 'treasury', 'bond', 'curve', 'rates', '10y', '2y', 'duration', 'tassi', 'rendiment', 'obbligazion', 'btp', 'bund')) {
     topicFetches.push((async () => {
       const y = await fetchJson('/api/visual-ai/yields', 8000)
       const rows = y?.data
@@ -237,7 +304,7 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     })())
   }
   // Real estate / housing
-  if (wants('real estate', 'housing', 'home', 'mortgage', 'property', 'reit', 'immobil', 'case')) {
+  if (wants('real estate', 'housing', 'home', 'mortgage', 'property', 'reit', 'immobil', 'case', 'mutu')) {
     topicFetches.push((async () => {
       const re = await fetchJson('/api/visual-ai/real-estate', 8000)
       const s = re?.summary || re?.data || re
@@ -261,7 +328,7 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     })())
   }
   // Valuations / P/E
-  if (wants('p/e', 'pe ratio', 'valuation', 'multiple', 'overvalued', 'undervalued', 'earnings yield')) {
+  if (wants('p/e', 'pe ratio', 'valuation', 'multiple', 'overvalued', 'undervalued', 'earnings yield', 'forward pe', 'pe forward', 'valutazion', 'multipli', 'sopravvalutat', 'sottovalutat')) {
     topicFetches.push((async () => {
       const pe = await fetchJson('/api/visual-ai/pe-predictor', 8000)
       const s = pe?.summary || pe?.data || pe
@@ -269,7 +336,7 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     })())
   }
   // Fed / monetary policy
-  if (wants('fed', 'fomc', 'rate cut', 'rate hike', 'powell', 'monetary', 'central bank')) {
+  if (wants('fed', 'fomc', 'rate cut', 'rate hike', 'powell', 'monetary', 'central bank', 'bce', 'banca centrale', 'taglio tassi', 'rialzo tassi')) {
     topicFetches.push((async () => {
       const fw = await fetchJson('/api/fed-watch', 8000)
       const s = fw?.data || fw
@@ -277,16 +344,61 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
     })())
   }
   // Recession / cycle risk
-  if (wants('recession', 'slowdown', 'downturn', 'hard landing', 'soft landing', 'recessione')) {
+  if (wants('recession', 'slowdown', 'downturn', 'hard landing', 'soft landing', 'recessione', 'rallentamento')) {
     topicFetches.push((async () => {
       const rec = await fetchJson('/api/recession-index', 8000)
       const s = rec?.data || rec
       if (s) parts.push('Recession indicators: ' + JSON.stringify(s).slice(0, 700) + '.')
     })())
   }
+  // Commodities complex
+  if (wants('commodit', 'oil', 'gold', 'silver', 'copper', 'gas', 'wheat', 'crude', 'brent', 'petrolio', 'oro', 'argento', 'rame', 'grano', 'materie prime', 'energia')) {
+    topicFetches.push((async () => {
+      const syms = ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'ZW=F', 'ZC=F', 'ZS=F']
+      const names: Record<string, string> = { 'GC=F': 'Gold', 'SI=F': 'Silver', 'CL=F': 'WTI', 'BZ=F': 'Brent', 'NG=F': 'NatGas', 'HG=F': 'Copper', 'PL=F': 'Platinum', 'ZW=F': 'Wheat', 'ZC=F': 'Corn', 'ZS=F': 'Soybeans' }
+      const qs = await withTimeout(getYahooQuotes(syms), 8000).catch(() => [] as any[])
+      if (Array.isArray(qs) && qs.length) {
+        parts.push('Commodities: ' + qs.map((c: any) => `${names[c.ticker] || c.ticker} ${price(c.price)} (${pct(c.changePercent)})`).join('; ') + '.')
+      }
+    })())
+  }
+  // Banks / financials
+  if (wants('bank', 'banche', 'banca', 'banking', 'financial sector', 'credit suisse', 'lending')) {
+    topicFetches.push((async () => {
+      const qs = await withTimeout(getYahooQuotes(['JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'XLF', 'KRE']), 8000).catch(() => [] as any[])
+      if (Array.isArray(qs) && qs.length) {
+        parts.push('Banks & financials: ' + qs.map((c: any) => `${c.ticker} ${price(c.price)} (${pct(c.changePercent)})`).join('; ') + '.')
+      }
+    })())
+  }
+  // Inflation detail (breakevens on top of the CPI already in the macro block)
+  if (wants('inflation', 'inflazione', 'cpi', 'ppi', 'prezzi', 'breakeven', 'pce')) {
+    topicFetches.push((async () => {
+      const [t10, t5] = await Promise.all([
+        fetchJson('/api/fred-history?series=T10YIE&range=1y', 7000),
+        fetchJson('/api/fred-history?series=T5YIE&range=1y', 7000),
+      ])
+      const last = (j: any) => { const b = j?.data?.bars; return Array.isArray(b) && b.length ? b[b.length - 1].close : null }
+      const v10 = last(t10), v5 = last(t5)
+      if (v10 != null || v5 != null) parts.push(`Inflation expectations (breakevens): 5Y ${v5 != null ? v5.toFixed(2) + '%' : 'n/a'}, 10Y ${v10 != null ? v10.toFixed(2) + '%' : 'n/a'}.`)
+    })())
+  }
+  // Earnings season (market-wide beats/misses)
+  if (wants('earning', 'earnings', 'utili', 'trimestral', 'eps', 'yerning', 'risultati', 'reporting season')) {
+    topicFetches.push((async () => {
+      const er = await fetchJson('/api/earnings-results', 9000)
+      const sum = er?.summary
+      const rows = er?.data
+      if (sum) parts.push(`Earnings season (last 7 days): ${JSON.stringify(sum).slice(0, 400)}.`)
+      if (Array.isArray(rows) && rows.length) {
+        const top = rows.slice(0, 8).map((r: any) => `${r.symbol} EPS ${r.epsActual ?? r.eps ?? 'n/a'} vs est ${r.epsEstimate ?? r.estimate ?? 'n/a'} (${r.surprisePct != null ? (r.surprisePct > 0 ? '+' : '') + Number(r.surprisePct).toFixed(1) + '%' : 'n/a'})`).join('; ')
+        parts.push('Recent reports: ' + top + '.')
+      }
+    })())
+  }
   if (topicFetches.length) { try { await Promise.all(topicFetches) } catch { /* ignore */ } }
 
-  // 4) Live quotes + technicals for tickers mentioned in the question.
+  // 4) Live quotes + technicals + fundamentals for tickers mentioned in the question.
   const tickers = extractTickers(question)
   if (tickers.length) {
     try {
@@ -299,6 +411,37 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
       // Detailed technicals for up to 3 of them.
       const techs = await Promise.all(tickers.slice(0, 3).map(t => fetchTechnical(t)))
       for (const t of techs) if (t) parts.push(t)
+      // Valuation snapshot (mcap, P/E, forward P/E, EPS, 52w range) — cheap, own API.
+      const ext = await fetchJson(`/api/yahoo-extended-quotes?symbols=${encodeURIComponent(tickers.slice(0, 6).join(','))}`, 8000)
+      if (Array.isArray(ext?.data) && ext.data.length) {
+        parts.push('Valuation snapshot: ' + ext.data.map((r: any) =>
+          `${r.symbol}: mcap ${big(r.marketCap)}, P/E ${r.trailingPE != null ? Number(r.trailingPE).toFixed(1) : 'n/a'}, fwd P/E ${r.forwardPE != null ? Number(r.forwardPE).toFixed(1) : 'n/a'}, EPS(ttm) ${r.epsTrailingTwelveMonths ?? 'n/a'}, 52w ${price(r.fiftyTwoWeekLow)}–${price(r.fiftyTwoWeekHigh)}${r.sector ? `, ${r.sector}` : ''}`
+        ).join('; ') + '.')
+      }
+      // Deep fundamentals (cash flow, FCF, capex, margins, PEG, dividends) when asked.
+      if (wants('fundament', 'capex', 'cash flow', 'fcf', 'free cash', 'flusso di cassa', 'cassa', 'margin', 'margini', 'fatturato', 'ricavi', 'revenue', 'buyback', 'debt', 'debito', 'pe', 'p/e', 'forward', 'valuation', 'valutazion', 'utili', 'earning', 'eps', 'yerning', 'dividend', 'dividendi', 'cedol', 'roe', 'ebitda', 'peg', 'target')) {
+        const funds = await Promise.all(tickers.slice(0, 3).map(t => fetchFundamentals(t)))
+        for (const f of funds) if (f) parts.push(f)
+      }
+      // Per-ticker earnings history + dividends when asked.
+      if (wants('earning', 'earnings', 'utili', 'trimestral', 'eps', 'yerning', 'risultati', 'dividend', 'dividendi', 'cedol')) {
+        const es = await Promise.all(tickers.slice(0, 3).map(t => fetchJson(`/api/symbol-earnings?symbol=${encodeURIComponent(t)}`, 8000)))
+        es.forEach((j, i) => {
+          const rows = j?.data || []
+          if (rows.length) {
+            parts.push(`${tickers[i]} recent earnings: ` + rows.slice(0, 4).map((r: any) =>
+              `${r.date} EPS ${r.eps ?? 'n/a'} vs est ${r.estimate ?? 'n/a'}${r.surprisePct != null ? ` (${r.surprisePct > 0 ? '+' : ''}${r.surprisePct}% surprise)` : ''}`
+            ).join('; ') + '.')
+          }
+          const divs = j?.dividends || []
+          if (divs.length) {
+            const lastDiv = divs[divs.length - 1]
+            const yr = divs.filter((d: any) => d.date >= new Date(Date.now() - 366 * 86400000).toISOString().slice(0, 10))
+            const annual = yr.reduce((s: number, d: any) => s + (d.amount || 0), 0)
+            parts.push(`${tickers[i]} dividends: last $${lastDiv.amount ?? 'n/a'} on ${lastDiv.date}; ~$${annual.toFixed(2)}/share paid in the last 12 months (${yr.length} payments).`)
+          }
+        })
+      }
     } catch { /* ignore */ }
   }
 
@@ -455,7 +598,7 @@ TONE & STYLE:
 
 CRITICAL: Answer EVERY question asked, even if you need to make reasonable market assumptions based on typical conditions. Never say "I don't have real-time data" - provide framework-based analysis instead.
 
-YOU CAN ANSWER ANY ECONOMIC/FINANCIAL TOPIC. The live data feed routinely includes: economy & macroeconomics, GDP growth, CPI/inflation, unemployment/labor, the Fed & rate path, consumer sentiment & retail sales/consumption, housing/real estate, industrial production, government debt & fiscal deficits, corporate earnings, P/E & valuations, Treasury yields & the yield curve, recession indicators, geopolitics/wars/sanctions/tariffs, market indices, sectors, movers, and breaking news. Use whichever of these are present to answer thoroughly. Never refuse a topic — if the user asks about economy, wars, debt, real estate, consumption, earnings, P/E, GDP, indicators or comparisons, answer it with the data provided plus your framework.
+YOU CAN ANSWER ANY ECONOMIC/FINANCIAL TOPIC. The live data feed routinely includes: economy & macroeconomics, GDP growth, CPI/inflation + breakeven expectations, unemployment/labor, the Fed & rate path, consumer sentiment & retail sales/consumption, housing/real estate, industrial production, government debt & fiscal deficits, corporate earnings (market-wide beats/misses AND per-ticker EPS history vs estimates), dividends (per-ticker history & yield), company fundamentals (revenue, margins, operating/free cash flow, capex, cash, debt, EBITDA, ROE, P/E, forward P/E, PEG, payout, analyst targets), commodities (gold, silver, oil, gas, copper, grains), banks & financials, P/E & valuations, Treasury yields & the yield curve, recession indicators, geopolitics/wars/sanctions/tariffs, market indices, sectors, movers, and breaking news. Use whichever of these are present to answer thoroughly. Never refuse a topic — if the user asks about economy, wars, debt, real estate, consumption, earnings, dividends, capex, cash flow, P/E, GDP, indicators or comparisons, answer it with the data provided plus your framework. The user may write in Italian — always answer in the user's language.
 
 USING LIVE DATA (highest priority):
 - A message labeled "LIVE MARKET DATA" contains REAL, up-to-the-minute numbers fetched from the market and the economy (index levels, % changes, sector performance, top movers, US macro from FRED — GDP, inflation, unemployment, Fed funds, consumer sentiment, retail sales, housing starts, industrial production — plus topic snapshots for yields, real estate, debt, geopolitical risk, valuations/P-E, Fed Watch and recession indicators, the specific quotes/technicals for any ticker mentioned, and the latest news headlines).

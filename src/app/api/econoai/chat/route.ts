@@ -11,6 +11,10 @@ export const preferredRegion = 'auto'
 export const maxDuration = 55
 
 // Initialize AI client — supports Anthropic (Claude), OpenAI and Groq (free)
+// When OpenAI reports insufficient_quota we skip it for a while and go straight
+// to the next configured provider instead of burning a failed roundtrip per chat.
+let openaiQuotaBlockUntil = 0
+
 function getAIClient(): { client: OpenAI; model: string; fallbackModel: string; provider: string } {
   // Priority: Anthropic (Claude) → OpenAI → Groq (free)
   // Anthropic exposes an OpenAI-compatible endpoint, so we can reuse the OpenAI SDK.
@@ -27,7 +31,8 @@ function getAIClient(): { client: OpenAI; model: string; fallbackModel: string; 
       provider: 'anthropic',
     }
   }
-  if (process.env.OPENAI_API_KEY) {
+  const openaiBlocked = Date.now() < openaiQuotaBlockUntil
+  if (process.env.OPENAI_API_KEY && !(openaiBlocked && process.env.GROQ_API_KEY)) {
     return {
       client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -556,6 +561,11 @@ Keep prose crisp and professional.`
       stack: error?.stack?.split('\n').slice(0, 3).join('\n')
     })
 
+    // OpenAI out of credit → route future requests straight to Groq for 15 min.
+    if (error?.code === 'insufficient_quota' || /exceeded your current quota/i.test(error?.message || '')) {
+      openaiQuotaBlockUntil = Date.now() + 15 * 60 * 1000
+    }
+
     // Any provider error (429 rate limit, 404/400 bad model, 5xx outage):
     // try every other configured provider before giving a canned fallback,
     // so the chat ALWAYS answers when at least one provider works.
@@ -568,6 +578,7 @@ Keep prose crisp and professional.`
       if (process.env.GROQ_API_KEY) {
         const groq = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
         candidates.push({ client: groq, model: 'llama-3.3-70b-versatile', label: 'groq:llama-3.3-70b' });
+        candidates.push({ client: groq, model: 'openai/gpt-oss-120b', label: 'groq:gpt-oss-120b' });
         candidates.push({ client: groq, model: 'llama-3.1-8b-instant', label: 'groq:llama-3.1-8b' });
       }
       if (process.env.OPENAI_API_KEY) {

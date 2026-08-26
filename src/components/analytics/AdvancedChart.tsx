@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   LineSeries,
   AreaSeries,
@@ -97,7 +98,7 @@ const CHART_THEMES: Record<ChartThemeKey, ChartThemeTokens> = {
   white: { text: '#475569', grid: 'rgba(15,23,42,0.08)',    axisBorder: 'rgba(15,23,42,0.18)',    cross: 'rgba(15,23,42,0.35)',    crossLabel: '#475569', plate: '#e2e8f0' },
 }
 
-interface DrawPoint { logical: number; price: number }
+interface DrawPoint { logical: number; price: number; t?: number }
 interface Drawing {
   id: number
   tool: DrawingTool
@@ -1408,6 +1409,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastPrice, setLastPrice] = useState<{ price: number; change: number; changePct: number } | null>(null)
+  // Past earnings reports ("E" markers under the bars, TradingView-style).
+  const [earningsMarks, setEarningsMarks] = useState<{ date: string; surprisePct: number | null }[]>([])
   // Pre/after-hours quote for the TradingView-style legend badge inside the chart.
   const [extSession, setExtSession] = useState<{ label: 'Pre' | 'After'; price: number; pct: number | null } | null>(null)
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null)
@@ -1527,6 +1530,22 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     load()
     const id = setInterval(() => { if (!document.hidden) load() }, 60_000)
     return () => { cancel = true; clearInterval(id) }
+  }, [symbol])
+
+  // Earnings dates for the active symbol (plain equities only).
+  useEffect(() => {
+    const v = symbol.trim().toUpperCase()
+    setEarningsMarks([])
+    if (!v || /^fred:/i.test(v) || /[/^=]/.test(v) || /-USD$/i.test(v) || v.includes('.')) return
+    let cancel = false
+    fetch(`/api/symbol-earnings?symbol=${encodeURIComponent(v)}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (cancel || !j?.data) return
+        setEarningsMarks(j.data.map((r: any) => ({ date: r.date, surprisePct: r.surprisePct ?? null })))
+      })
+      .catch(() => { /* markers are optional */ })
+    return () => { cancel = true }
   }, [symbol])
 
   // Refs for handlers (avoid stale closures)
@@ -2027,6 +2046,33 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           })
           priceLinesRef.current.push(pl)
         } catch { /* ignore */ }
+      }
+    }
+
+    // ===== Earnings "E" markers under the bars (daily+ intervals only) =====
+    if (mainSeriesRef.current && earningsMarks.length && !isIntraday && bars.length) {
+      const markers = earningsMarks
+        .map(m => {
+          const target = Math.floor(new Date(`${m.date}T00:00:00Z`).getTime() / 1000)
+          // snap to the nearest bar (skip if none within ~6 days)
+          let lo = 0, hi = bars.length - 1
+          while (lo + 1 < hi) { const mid = (lo + hi) >> 1; if (bars[mid].time <= target) lo = mid; else hi = mid }
+          const idx = Math.abs(bars[lo].time - target) <= Math.abs(bars[hi].time - target) ? lo : hi
+          if (Math.abs(bars[idx].time - target) > 6 * 86400) return null
+          const beat = m.surprisePct != null ? m.surprisePct >= 0 : null
+          return {
+            time: timeLabels[idx],
+            position: 'belowBar' as const,
+            color: beat == null ? '#94a3b8' : beat ? '#22c55e' : '#ef4444',
+            shape: 'circle' as const,
+            text: 'E',
+            size: 0.6,
+          }
+        })
+        .filter(Boolean) as { time: Time; position: 'belowBar'; color: string; shape: 'circle'; text: string; size: number }[]
+      if (markers && markers.length) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        try { createSeriesMarkers(mainSeriesRef.current as any, markers as any) } catch { /* optional */ }
       }
     }
 
@@ -2648,7 +2694,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const logical = chart.timeScale().coordinateToLogical(param.point.x)
       const price = mainSeriesRef.current.coordinateToPrice(param.point.y)
       if (logical == null || price == null) return
-      const pt: DrawPoint = { logical, price }
+      const barsNow = barsRef.current
+      const tAnchor = (() => {
+        const n = barsNow.length
+        if (!n) return undefined
+        const i = Math.floor(logical as number)
+        const frac = (logical as number) - i
+        const stepL = n > 1 ? barsNow[1].time - barsNow[0].time : 86400
+        const stepR = n > 1 ? barsNow[n - 1].time - barsNow[n - 2].time : 86400
+        const timeAt = (idx: number): number => idx < 0 ? barsNow[0].time + idx * (stepL || 86400) : idx >= n ? barsNow[n - 1].time + (idx - (n - 1)) * (stepR || 86400) : barsNow[idx].time
+        return timeAt(i) + (timeAt(i + 1) - timeAt(i)) * frac
+      })()
+      const pt: DrawPoint = { logical, price, t: tAnchor }
 
       if (tool === 'alert') {
         addAlert(Math.round(price * 100) / 100)
@@ -2720,7 +2777,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme, earningsMarks])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -2994,6 +3051,69 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     return { x, y }
   }, [])
 
+  // ── Time anchoring: drawings persist by TIMESTAMP, not bar index, so they
+  // stay glued to the same candles when the user switches timeframe (1D→1Y).
+  const logicalToTime = useCallback((l: number): number | null => {
+    const b = barsRef.current
+    const n = b.length
+    if (!n) return null
+    const stepR = n > 1 ? (b[n - 1].time - b[n - 2].time) : 86400
+    const stepL = n > 1 ? (b[1].time - b[0].time) : 86400
+    const timeAt = (idx: number): number => {
+      if (idx < 0) return b[0].time + idx * (stepL || 86400)
+      if (idx >= n) return b[n - 1].time + (idx - (n - 1)) * (stepR || 86400)
+      return b[idx].time
+    }
+    const i = Math.floor(l)
+    const frac = l - i
+    const t0 = timeAt(i)
+    const t1 = timeAt(i + 1)
+    return t0 + (t1 - t0) * frac
+  }, [])
+
+  const timeToLogical = useCallback((t: number): number | null => {
+    const b = barsRef.current
+    const n = b.length
+    if (!n) return null
+    if (t <= b[0].time) {
+      const step = n > 1 ? (b[1].time - b[0].time) : 86400
+      return (t - b[0].time) / (step || 86400)
+    }
+    if (t >= b[n - 1].time) {
+      const step = n > 1 ? (b[n - 1].time - b[n - 2].time) : 86400
+      return (n - 1) + (t - b[n - 1].time) / (step || 86400)
+    }
+    let lo = 0, hi = n - 1
+    while (lo + 1 < hi) { const mid = (lo + hi) >> 1; if (b[mid].time <= t) lo = mid; else hi = mid }
+    const span = b[hi].time - b[lo].time || 1
+    return lo + (t - b[lo].time) / span
+  }, [])
+
+  // Re-anchor every drawing when a new bar set loads (timeframe/symbol change):
+  // points with a stored timestamp get a fresh logical index in the new series;
+  // legacy points (no timestamp) are back-filled once from their current index.
+  useEffect(() => {
+    if (!bars.length) return
+    setDrawings(list => {
+      let changed = false
+      const next = list.map(d => {
+        const pts = d.pts.map(p => {
+          if (p.t != null) {
+            const l = timeToLogical(p.t)
+            if (l != null && Math.abs(l - p.logical) > 1e-6) { changed = true; return { ...p, logical: l } }
+            return p
+          }
+          const t = logicalToTime(p.logical)
+          if (t != null) { changed = true; return { ...p, t } }
+          return p
+        })
+        return pts.some((p, i) => p !== d.pts[i]) ? { ...d, pts } : d
+      })
+      return changed ? next : list
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bars])
+
   // Return the id of the drawing closest to a pixel click (or null). Iterates in
   // reverse so the topmost (last-drawn) shape wins. Tolerance ≈ 7px.
   const hitTestDrawings = useCallback((px: number, py: number): number | null => {
@@ -3128,8 +3248,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const logical = chart.timeScale().coordinateToLogical(x as any)
     const price = main.coordinateToPrice(y)
     if (logical == null || price == null) return null
-    return { logical: logical as number, price }
-  }, [])
+    return { logical: logical as number, price, t: logicalToTime(logical as number) ?? undefined }
+  }, [logicalToTime])
 
   // Return which anchor handle of a drawing (if any) sits under the pixel. Larger
   // tolerance for touch so endpoints are easy to grab with a finger.
@@ -3339,7 +3459,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                 : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-white/20'
             }`}
           >
-            <span className="font-semibold uppercase tracking-wider text-[10px]">Tools</span>
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             <span className="text-[10px] opacity-70">{CHART_TOOLS.find(t => t.id === activeTool)?.label}</span>
             <svg className={`w-3 h-3 transition-transform ${toolsOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </button>
@@ -3900,8 +4020,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           )
         })()}
 
-        {/* Chart navigation — appears on hover at the bottom-center of the chart */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-1.5 py-1 rounded-lg bg-slate-900/90 border border-white/15 shadow-lg backdrop-blur opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+        {/* Chart navigation — appears on hover, kept translucent so the time axis stays readable */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-1.5 py-1 rounded-lg bg-slate-900/25 border border-white/5 hover:bg-slate-900/80 hover:border-white/15 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all duration-150">
           <button onClick={() => scrollChart(-1)} title="Scroll left" className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-white">
             <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5l-5 5 5 5"/></svg>
           </button>

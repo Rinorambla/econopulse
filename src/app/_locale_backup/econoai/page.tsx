@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import Footer from '@/components/Footer'
 import RequirePlan from '@/components/RequirePlan'
+import { useAuth } from '@/hooks/useAuth'
 import {
   ArrowPathIcon,
   ArrowTrendingUpIcon,
@@ -149,6 +150,7 @@ function renderBrief(text: string): React.ReactNode {
 }
 
 export default function UpdateAIPage() {
+  const { session } = useAuth()
   const [data, setData] = useState<WrapData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -220,20 +222,28 @@ export default function UpdateAIPage() {
     setMessages((m) => [...m, { role: 'user', content: q, ts: Date.now() }])
     setSending(true)
     try {
+      const token = session?.access_token
       const r = await fetch('/api/econoai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ question: q, userId: 'econoai-web', context: buildContext() }),
       })
       const j = await r.json().catch(() => ({}))
-      const answer = j?.answer || j?.error || 'Sorry, I could not generate a response right now. Please try again.'
+      const answer = r.status === 401
+        ? 'Your session has expired — please log in again to chat with EconoAI.'
+        : r.status === 403
+        ? 'EconoAI chat requires a Premium plan. Upgrade from the Pricing page to unlock it.'
+        : (j?.answer || j?.error || 'Sorry, I could not generate a response right now. Please try again.')
       setMessages((m) => [...m, { role: 'assistant', content: answer, ts: Date.now() }])
     } catch {
       setMessages((m) => [...m, { role: 'assistant', content: 'Network error. Please try again in a moment.', ts: Date.now() }])
     } finally {
       setSending(false)
     }
-  }, [sending, buildContext])
+  }, [sending, buildContext, session])
 
   const suggestions = [
     'What is the market doing today and why?',

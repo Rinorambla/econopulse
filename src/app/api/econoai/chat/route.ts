@@ -493,8 +493,8 @@ Keep prose crisp and professional.`
         TIMEOUT_MS
       )
     } catch (err: any) {
-      // Retry on model not found / no access
-      const isModelNotFound = err?.status === 404 || err?.code === 'model_not_found' || /model .* does not exist/i.test(err?.message||'');
+      // Retry on model not found / no access / invalid model id
+      const isModelNotFound = err?.status === 404 || err?.code === 'model_not_found' || /model .* does not exist|invalid model|unexpected value.*model|not_found_error/i.test(err?.message || '');
       // If timed out, return fallback
       if (err?.message === 'openai_timeout') {
         console.warn(`⏳ OpenAI request timed out after ${TIMEOUT_MS}ms, returning fallback`)
@@ -556,8 +556,10 @@ Keep prose crisp and professional.`
       stack: error?.stack?.split('\n').slice(0, 3).join('\n')
     })
 
-    // Handle specific OpenAI errors with retry logic
-    if (error?.status === 429) {
+    // Any provider error (429 rate limit, 404/400 bad model, 5xx outage):
+    // try every other configured provider before giving a canned fallback,
+    // so the chat ALWAYS answers when at least one provider works.
+    {
       // Rate limited – try cross-provider failover (e.g. OpenAI → Groq) and smaller models.
       const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -610,14 +612,16 @@ Keep prose crisp and professional.`
           console.warn(`Failover ${label} failed:`, retryErr?.status, retryErr?.message)
         }
       }
-      return NextResponse.json({
-        answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
-        question: 'rate_limited',
-        usedContext: false,
-        fallback: true,
-        reason: 'rate_limited',
-        timestamp: new Date().toISOString(),
-      }, { status: 200 })
+      if (error?.status === 429) {
+        return NextResponse.json({
+          answer: 'High demand right now. Quick actionable view: clarify your time horizon, define key levels, and manage size while activity normalizes. Try again shortly for a full AI response.',
+          question: 'rate_limited',
+          usedContext: false,
+          fallback: true,
+          reason: 'rate_limited',
+          timestamp: new Date().toISOString(),
+        }, { status: 200 })
+      }
     }
 
     if (error?.status === 401 || error?.message?.includes('API key')) {

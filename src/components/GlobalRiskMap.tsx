@@ -229,16 +229,19 @@ export default function GlobalRiskMap() {
     geo: {
       showframe: false,
       showcoastlines: true,
-      coastlinecolor: '#334155',
-      bgcolor: 'rgba(0,0,0,0)',
-      projection: { type: 'natural earth' },
-      landcolor: '#111a2e',
-      lakecolor: '#0b1220',
+      coastlinecolor: 'rgba(90,104,128,0.45)',
+      bgcolor: '#04060c',
+      // Polar-tilted azimuthal globe — dark pro cartography style.
+      projection: { type: 'azimuthal equal area', rotation: { lon: 10, lat: 48 }, scale: 0.98 },
+      landcolor: '#23272f',
+      lakecolor: '#04060c',
       showland: true,
       showocean: true,
-      oceancolor: '#0b1220',
+      oceancolor: '#04060c',
       showcountries: true,
-      countrycolor: '#1f2937',
+      countrycolor: 'rgba(120,132,156,0.35)',
+      lonaxis: { showgrid: true, gridcolor: 'rgba(125,140,170,0.10)', gridwidth: 0.5, dtick: 30 },
+      lataxis: { showgrid: true, gridcolor: 'rgba(125,140,170,0.10)', gridwidth: 0.5, dtick: 30 },
     },
     hoverlabel: { bgcolor: '#0f172a', bordercolor: '#475569', font: { color: '#f1f5f9', size: 12 } },
   };
@@ -305,7 +308,7 @@ export default function GlobalRiskMap() {
       </div>
 
       {/* Map */}
-      <div className="relative w-full h-[520px] rounded-lg border border-white/10 bg-slate-950/40 overflow-hidden">
+      <div className="relative w-full h-[380px] sm:h-[520px] rounded-xl border border-white/10 overflow-hidden" style={{ background: '#04060c' }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-300">
             <svg className="animate-spin h-5 w-5 mr-2 text-white/80" viewBox="0 0 24 24" fill="none">

@@ -183,10 +183,92 @@ async function fetchFundamentals(ticker: string): Promise<string | null> {
     const drate = raw(sd?.dividendRate); if (drate != null) bits.push(`dividend rate $${drate.toFixed(2)}/yr`)
     const payout = raw(sd?.payoutRatio); if (payout != null) bits.push(`payout ratio ${(payout * 100).toFixed(0)}%`)
     const target = raw(fd?.targetMeanPrice); if (target != null) bits.push(`analyst mean target $${target.toFixed(2)}`)
+    // Balance sheet / valuation / ownership extras
+    const cr = raw(fd?.currentRatio); if (cr != null) bits.push(`current ratio ${cr.toFixed(2)}`)
+    const qr = raw(fd?.quickRatio); if (qr != null) bits.push(`quick ratio ${qr.toFixed(2)}`)
+    const de = raw(fd?.debtToEquity); if (de != null) bits.push(`debt/equity ${de.toFixed(0)}%`)
+    const roa = raw(fd?.returnOnAssets); if (roa != null) bits.push(`ROA ${(roa * 100).toFixed(1)}%`)
+    const ev = raw(ks?.enterpriseValue); if (ev != null) bits.push(`EV ${big(ev)}`)
+    const evR = raw(ks?.enterpriseToRevenue); if (evR != null) bits.push(`EV/Sales ${evR.toFixed(2)}`)
+    const evE = raw(ks?.enterpriseToEbitda); if (evE != null) bits.push(`EV/EBITDA ${evE.toFixed(1)}`)
+    const pb = raw(ks?.priceToBook); if (pb != null) bits.push(`P/B ${pb.toFixed(2)}`)
+    const ps = raw(sd?.priceToSalesTrailing12Months); if (ps != null) bits.push(`P/S ${ps.toFixed(2)}`)
+    const bvps = raw(ks?.bookValue); if (bvps != null) bits.push(`book value/share $${bvps.toFixed(2)}`)
+    const so = raw(ks?.sharesOutstanding); if (so != null) bits.push(`shares out ${big(so)}`)
+    const fl = raw(ks?.floatShares); if (fl != null) bits.push(`float ${big(fl)}`)
+    const spf = raw(ks?.shortPercentOfFloat); if (spf != null) bits.push(`short float ${(spf * 100).toFixed(1)}%`)
+    const inst = raw(ks?.heldPercentInstitutions); if (inst != null) bits.push(`institutional ${(inst * 100).toFixed(1)}%`)
+    const ins = raw(ks?.heldPercentInsiders); if (ins != null) bits.push(`insiders ${(ins * 100).toFixed(1)}%`)
+    const beta = raw(sd?.beta) ?? raw(ks?.beta); if (beta != null) bits.push(`beta ${beta.toFixed(2)}`)
     if (!bits.length) return null
     return `${ticker} fundamentals: ${bits.join('; ')}.`
   } catch { return null }
 }
+
+// ── Macro indicator catalog: question keywords (EN+IT) → FRED series ────────
+// Lets the chat quote the LATEST real value (+YoY where meaningful) for ~50
+// macro indicators without hardcoding topic branches for each one.
+type MacroDef = { kw: string[]; id: string; label: string; unit: 'pct' | 'lvl' | 'idx'; yoy?: boolean; mom?: boolean }
+const MACRO_CATALOG: MacroDef[] = [
+  { kw: ['real gdp', 'pil reale', 'gdp', 'pil '], id: 'GDPC1', label: 'Real GDP ($B)', unit: 'lvl', yoy: true },
+  { kw: ['gdp per capita', 'pil pro capite'], id: 'A939RX0Q048SBEA', label: 'Real GDP per capita ($)', unit: 'lvl', yoy: true },
+  { kw: ['industrial production', 'produzione industriale'], id: 'INDPRO', label: 'Industrial production (index)', unit: 'idx', yoy: true },
+  { kw: ['capacity utilization', 'capacità produttiva', 'capacita produttiva'], id: 'TCU', label: 'Capacity utilization', unit: 'pct' },
+  { kw: ['manufacturing production', 'produzione manifatturiera'], id: 'IPMAN', label: 'Manufacturing production (index)', unit: 'idx', yoy: true },
+  { kw: ['retail sales', 'vendite al dettaglio'], id: 'RSAFS', label: 'Retail sales ($M)', unit: 'lvl', yoy: true },
+  { kw: ['personal income', 'reddito personale', 'redditi'], id: 'PI', label: 'Personal income ($B)', unit: 'lvl', yoy: true },
+  { kw: ['personal spending', 'consumer spending', 'consumi', 'spesa delle famiglie'], id: 'PCE', label: 'Personal spending ($B)', unit: 'lvl', yoy: true },
+  { kw: ['saving rate', 'savings rate', 'risparmio'], id: 'PSAVERT', label: 'Personal saving rate', unit: 'pct' },
+  { kw: ['consumer credit', 'credito al consumo'], id: 'TOTALSL', label: 'Consumer credit ($B)', unit: 'lvl', yoy: true },
+  { kw: ['auto sales', 'vehicle sales', 'vendite di auto'], id: 'TOTALSA', label: 'Vehicle sales (M SAAR)', unit: 'lvl' },
+  { kw: ['core cpi'], id: 'CPILFESL', label: 'Core CPI (index)', unit: 'idx', yoy: true },
+  { kw: ['cpi', 'consumer price', 'prezzi al consumo'], id: 'CPIAUCSL', label: 'CPI (index)', unit: 'idx', yoy: true },
+  { kw: ['core ppi'], id: 'PPIFES', label: 'Core PPI final demand (index)', unit: 'idx', yoy: true },
+  { kw: ['ppi', 'producer price', 'prezzi alla produzione'], id: 'PPIACO', label: 'PPI all commodities (index)', unit: 'idx', yoy: true },
+  { kw: ['core pce'], id: 'PCEPILFE', label: 'Core PCE price index', unit: 'idx', yoy: true },
+  { kw: ['pce price', 'pce inflation', 'deflatore pce'], id: 'PCEPI', label: 'PCE price index', unit: 'idx', yoy: true },
+  { kw: ['import price', 'prezzi all\'importazione', 'prezzi import'], id: 'IR', label: 'Import prices (index)', unit: 'idx', yoy: true },
+  { kw: ['gdp deflator', 'deflatore del pil'], id: 'GDPDEF', label: 'GDP deflator (index)', unit: 'idx', yoy: true },
+  { kw: ['unemployment', 'disoccupazione'], id: 'UNRATE', label: 'Unemployment rate', unit: 'pct' },
+  { kw: ['participation rate', 'partecipazione'], id: 'CIVPART', label: 'Labor participation rate', unit: 'pct' },
+  { kw: ['employment rate', 'tasso di occupazione'], id: 'EMRATIO', label: 'Employment-population ratio', unit: 'pct' },
+  { kw: ['payroll', 'nfp', 'non-farm', 'nonfarm', 'buste paga'], id: 'PAYEMS', label: 'Nonfarm payrolls (K jobs)', unit: 'lvl', mom: true },
+  { kw: ['initial claims', 'jobless claims', 'sussidi di disoccupazione'], id: 'ICSA', label: 'Initial jobless claims', unit: 'lvl' },
+  { kw: ['continuing claims'], id: 'CCSA', label: 'Continuing claims', unit: 'lvl' },
+  { kw: ['hourly earnings', 'salari', 'wage growth', 'wages'], id: 'CES0500000003', label: 'Avg hourly earnings ($)', unit: 'lvl', yoy: true },
+  { kw: ['employment cost'], id: 'ECIALLCIV', label: 'Employment cost index', unit: 'idx', yoy: true },
+  { kw: ['job opening', 'jolts', 'posti di lavoro vacanti'], id: 'JTSJOL', label: 'Job openings (K)', unit: 'lvl' },
+  { kw: ['quit rate', 'quits', 'dimissioni'], id: 'JTSQUR', label: 'Quits rate', unit: 'pct' },
+  { kw: ['durable goods', 'beni durevoli'], id: 'DGORDER', label: 'Durable goods orders ($M)', unit: 'lvl', yoy: true },
+  { kw: ['factory orders', 'ordini alle fabbriche'], id: 'AMTMNO', label: 'Factory new orders ($M)', unit: 'lvl', yoy: true },
+  { kw: ['business inventories', 'scorte'], id: 'BUSINV', label: 'Business inventories ($M)', unit: 'lvl', yoy: true },
+  { kw: ['corporate profits', 'profitti aziendali', 'utili aziendali aggregati'], id: 'CP', label: 'Corporate profits ($B)', unit: 'lvl', yoy: true },
+  { kw: ['housing starts', 'cantieri'], id: 'HOUST', label: 'Housing starts (K SAAR)', unit: 'lvl' },
+  { kw: ['building permits', 'permessi di costruzione'], id: 'PERMIT', label: 'Building permits (K SAAR)', unit: 'lvl' },
+  { kw: ['existing home sales'], id: 'EXHOSLUSM495S', label: 'Existing home sales (SAAR)', unit: 'lvl' },
+  { kw: ['new home sales'], id: 'HSN1F', label: 'New home sales (K SAAR)', unit: 'lvl' },
+  { kw: ['case-shiller', 'case shiller', 'prezzi delle case', 'home price'], id: 'CSUSHPINSA', label: 'Case-Shiller home prices (index)', unit: 'idx', yoy: true },
+  { kw: ['mortgage rate', 'mutuo', 'mutui'], id: 'MORTGAGE30US', label: '30Y mortgage rate', unit: 'pct' },
+  { kw: ['trade balance', 'bilancia commerciale'], id: 'BOPGSTB', label: 'Trade balance ($M)', unit: 'lvl' },
+  { kw: ['debt to gdp', 'debito/pil', 'debito pil'], id: 'GFDEGDQ188S', label: 'Federal debt/GDP', unit: 'pct' },
+  { kw: ['public debt', 'federal debt', 'debito pubblico'], id: 'GFDEBTN', label: 'Federal debt ($M)', unit: 'lvl', yoy: true },
+  { kw: ['deficit'], id: 'MTSDS133FMS', label: 'Federal surplus/deficit ($M, monthly)', unit: 'lvl' },
+  { kw: ['m2', 'money supply', 'massa monetaria'], id: 'M2SL', label: 'M2 money supply ($B)', unit: 'lvl', yoy: true },
+  { kw: ['m1 '], id: 'M1SL', label: 'M1 money supply ($B)', unit: 'lvl', yoy: true },
+  { kw: ['fed balance sheet', 'bilancio della fed', 'walcl', 'quantitative'], id: 'WALCL', label: 'Fed balance sheet ($M)', unit: 'lvl', yoy: true },
+  { kw: ['reverse repo', 'rrp'], id: 'RRPONTSYD', label: 'Reverse repo ($B)', unit: 'lvl' },
+  { kw: ['bank reserves', 'riserve bancarie'], id: 'TOTRESNS', label: 'Bank reserves ($B)', unit: 'lvl' },
+  { kw: ['sofr'], id: 'SOFR', label: 'SOFR', unit: 'pct' },
+  { kw: ['2y yield', '2 anni', '2-year'], id: 'DGS2', label: '2Y Treasury yield', unit: 'pct' },
+  { kw: ['5y yield', '5 anni'], id: 'DGS5', label: '5Y Treasury yield', unit: 'pct' },
+  { kw: ['10y yield', '10 anni', '10-year', 'decennale'], id: 'DGS10', label: '10Y Treasury yield', unit: 'pct' },
+  { kw: ['30y yield', '30 anni', 'trentennale'], id: 'DGS30', label: '30Y Treasury yield', unit: 'pct' },
+  { kw: ['yield curve', 'curva dei rendimenti', '2s10s', 'spread 2y'], id: 'T10Y2Y', label: '10Y-2Y spread', unit: 'pct' },
+  { kw: ['high yield spread', 'spread hy', 'credit spread', 'spread di credito'], id: 'BAMLH0A0HYM2', label: 'High-yield OAS spread', unit: 'pct' },
+  { kw: ['investment grade spread', 'spread ig'], id: 'BAMLC0A0CM', label: 'Investment-grade OAS spread', unit: 'pct' },
+  { kw: ['real yield', 'rendimento reale', 'rendimenti reali'], id: 'DFII10', label: '10Y real yield (TIPS)', unit: 'pct' },
+  { kw: ['sahm'], id: 'SAHMREALTIME', label: 'Sahm rule indicator', unit: 'pct' },
+]
 
 // Fetch ~1y of daily bars and derive technical levels for one ticker.
 async function fetchTechnical(ticker: string): Promise<string | null> {
@@ -395,6 +477,48 @@ async function buildLiveContext(req: NextRequest, question: string, clientContex
         parts.push('Recent reports: ' + top + '.')
       }
     })())
+  }
+  // PMI / ISM business surveys
+  if (wants('pmi', 'ism', 'manufacturing survey', 'business confidence', 'fiducia delle imprese', 'new orders')) {
+    topicFetches.push((async () => {
+      const p = await fetchJson('/api/visual-ai/pmi', 8000)
+      const s = p?.data || p
+      if (s) parts.push('PMI / ISM surveys: ' + JSON.stringify(s).slice(0, 800) + '.')
+    })())
+  }
+  // Generic macro-indicator lookup: any FRED series from the catalog whose
+  // keywords appear in the question gets its latest value (+YoY/MoM) included.
+  {
+    const matched: MacroDef[] = []
+    for (const def of MACRO_CATALOG) {
+      if (def.kw.some(k => q.includes(k)) && !matched.some(m => m.id === def.id)) matched.push(def)
+      if (matched.length >= 8) break
+    }
+    if (matched.length) {
+      topicFetches.push((async () => {
+        const results = await Promise.all(matched.map(async (def) => {
+          const j = await fetchJson(`/api/fred-history?series=${def.id}&range=3y`, 7000)
+          const b = j?.data?.bars
+          if (!Array.isArray(b) || !b.length) return null
+          const last = b[b.length - 1]
+          const val = last.close
+          let out = `${def.label}: ${def.unit === 'pct' ? `${Number(val).toFixed(2)}%` : Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+          const lastTs = last.time
+          if (def.yoy) {
+            const target = lastTs - 365 * 86400
+            const prev = b.reduce((best: any, bar: any) => Math.abs(bar.time - target) < Math.abs(best.time - target) ? bar : best, b[0])
+            if (prev?.close) out += ` (YoY ${pct(((val - prev.close) / prev.close) * 100)})`
+          }
+          if (def.mom && b.length > 1) {
+            const prev = b[b.length - 2]
+            out += ` (last change ${(val - prev.close) >= 0 ? '+' : ''}${(val - prev.close).toLocaleString('en-US', { maximumFractionDigits: 0 })})`
+          }
+          return out
+        }))
+        const ok = results.filter(Boolean) as string[]
+        if (ok.length) parts.push('Macro indicators (FRED, latest): ' + ok.join(' | ') + '.')
+      })())
+    }
   }
   if (topicFetches.length) { try { await Promise.all(topicFetches) } catch { /* ignore */ } }
 

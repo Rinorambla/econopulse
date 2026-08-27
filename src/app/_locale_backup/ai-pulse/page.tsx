@@ -16,6 +16,7 @@ const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { 
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 const TradaysCalendarWidget = dynamic(() => import('@/components/TradaysCalendarWidget'), { ssr: false });
 const WorldEconomicCycleMap = dynamic(() => import('@/components/WorldEconomicCycleMap'), { ssr: false });
+const TopAssetsPanel = dynamic(() => import('@/components/TopAssetsPanel'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface SectorPerformance {
@@ -1169,6 +1170,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
               <Panel title="Global Indices" className="lg:col-span-12 min-h-[260px]">
                 <IndicesPanel />
+              </Panel>
+            </div>
+
+            {/* ─── ROW 2.6: Top Assets by Market Cap (companies + gold/silver/crypto) ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Top Assets by Market Cap" className="lg:col-span-12 min-h-[300px]">
+                <TopAssetsPanel />
               </Panel>
             </div>
 

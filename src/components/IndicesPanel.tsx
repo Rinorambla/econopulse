@@ -94,6 +94,90 @@ function fmtPrice(p: number) {
   return p.toFixed(2);
 }
 
+// ── Government bonds · world 10Y yields (FRED: US daily, others OECD monthly) ─
+const BOND_SERIES: { id: string; short: string; name: string; flag: string }[] = [
+  { id: 'DGS10', short: 'US 10Y', name: 'US Treasury', flag: '🇺🇸' },
+  { id: 'IRLTLT01DEM156N', short: 'DE 10Y', name: 'Bund', flag: '🇩🇪' },
+  { id: 'IRLTLT01ITM156N', short: 'IT 10Y', name: 'BTP', flag: '🇮🇹' },
+  { id: 'IRLTLT01FRM156N', short: 'FR 10Y', name: 'OAT', flag: '🇫🇷' },
+  { id: 'IRLTLT01GBM156N', short: 'UK 10Y', name: 'Gilt', flag: '🇬🇧' },
+  { id: 'IRLTLT01JPM156N', short: 'JP 10Y', name: 'JGB', flag: '🇯🇵' },
+  { id: 'IRLTLT01CAM156N', short: 'CA 10Y', name: 'Canada', flag: '🇨🇦' },
+  { id: 'IRLTLT01AUM156N', short: 'AU 10Y', name: 'Australia', flag: '🇦🇺' },
+];
+
+function GovBondsCard() {
+  const [rows, setRows] = useState<Record<string, { yield: number; deltaBp: number | null }>>({});
+  useEffect(() => {
+    let alive = true;
+    const fetchOne = async (b: { id: string }) => {
+      try {
+        const r = await fetch(`/api/fred-history?series=${b.id}&range=1y`, { cache: 'no-store', signal: AbortSignal.timeout(9000) });
+        if (!r.ok) return null;
+        const j = await r.json();
+        const bars = j?.data?.bars;
+        if (!Array.isArray(bars) || !bars.length) return null;
+        const last = bars[bars.length - 1].close;
+        const prev = bars.length > 1 ? bars[bars.length - 2].close : null;
+        return { id: b.id, yield: last, deltaBp: prev != null ? (last - prev) * 100 : null };
+      } catch { return null; }
+    };
+    const load = async () => {
+      let results = await Promise.all(BOND_SERIES.map(fetchOne));
+      // retry once for rows that raced/rate-limited on first load
+      const missing = BOND_SERIES.filter((_, i) => !results[i]);
+      if (missing.length && alive) {
+        await new Promise(r => setTimeout(r, 1500));
+        const retry = await Promise.all(missing.map(fetchOne));
+        results = results.map(r => r ?? retry.shift() ?? null);
+      }
+      if (!alive) return;
+      setRows(prevRows => {
+        const map = { ...prevRows };
+        for (const r of results) if (r) map[r.id] = { yield: r.yield, deltaBp: r.deltaBp };
+        return map;
+      });
+    };
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, 10 * 60 * 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  return (
+    <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-base">🏛️</span>
+          <h4 className="text-xs font-bold text-white">Govt Bonds · 10Y</h4>
+        </div>
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+      </div>
+      <div className="space-y-1">
+        {BOND_SERIES.map((b) => {
+          const r = rows[b.id];
+          const up = r?.deltaBp != null && r.deltaBp >= 0;
+          return (
+            <div key={b.id} className="flex items-center justify-between text-[10px] border-b border-slate-800/40 last:border-0 py-0.5">
+              <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                <span className="text-[11px]" aria-hidden>{b.flag}</span>
+                <div className="min-w-0">
+                  <div className="text-white font-semibold truncate">{b.short}</div>
+                  <div className="text-[9px] text-gray-500 truncate">{b.name}</div>
+                </div>
+              </div>
+              <div className="text-right ml-2">
+                <div className="text-gray-200 tabular-nums">{r ? `${r.yield.toFixed(2)}%` : '—'}</div>
+                <div className={`tabular-nums font-semibold ${r?.deltaBp == null ? 'text-gray-500' : up ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {r?.deltaBp == null ? '—' : `${up ? '+' : ''}${r.deltaBp.toFixed(0)} bp`}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function startOfYearTs(): number {
   const d = new Date();
   return new Date(d.getFullYear(), 0, 1).getTime();
@@ -276,10 +360,11 @@ export default function IndicesPanel() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         {REGIONS.map(region => (
           <RegionCard key={region.key} region={region} quotes={quotes} perf={perf} tf={tf} />
         ))}
+        <GovBondsCard />
       </div>
     </div>
   );

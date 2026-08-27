@@ -14,7 +14,7 @@ import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
-const TradaysCalendarWidget = dynamic(() => import('@/components/TradaysCalendarWidget'), { ssr: false });
+const EconomicCalendarPanel = dynamic(() => import('@/components/EconomicCalendarPanel'), { ssr: false });
 const WorldEconomicCycleMap = dynamic(() => import('@/components/WorldEconomicCycleMap'), { ssr: false });
 const TopAssetsPanel = dynamic(() => import('@/components/TopAssetsPanel'), { ssr: false });
 
@@ -762,6 +762,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               <WorldEconomicCycleMap />
             </Panel>
 
+            {/* ─── ROW 0.5: Top Assets by Market Cap (companies + gold/silver/crypto) ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+              <Panel title="Top Assets by Market Cap" className="lg:col-span-12 min-h-[300px]">
+                <TopAssetsPanel />
+              </Panel>
+            </div>
+
             {/* ─── ROW 1: Screener | Company + Industry ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
@@ -1173,13 +1180,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               </Panel>
             </div>
 
-            {/* ─── ROW 2.6: Top Assets by Market Cap (companies + gold/silver/crypto) ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-              <Panel title="Top Assets by Market Cap" className="lg:col-span-12 min-h-[300px]">
-                <TopAssetsPanel />
-              </Panel>
-            </div>
-
             {/* ─── ROW 3: Cross-Asset Markets, then RRG (compact) ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
 
@@ -1194,9 +1194,7 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
             {/* ─── ROW 3.5: Economic Calendar + Earnings Calendar ─── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
               <Panel title="Economic Calendar" className="lg:col-span-7 min-h-[440px]">
-                <div className="p-2">
-                  <TradaysCalendarWidget height={400} mode="2" theme={1} />
-                </div>
+                <EconomicCalendarPanel height={420} />
               </Panel>
               <Panel title="Earnings Calendar" badge="14 DAYS" className="lg:col-span-5 min-h-[440px]">
                 <div className="p-2 max-h-[420px] overflow-y-auto">

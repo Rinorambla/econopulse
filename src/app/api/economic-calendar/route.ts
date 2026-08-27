@@ -46,6 +46,52 @@ function generateSeedEconomic(): EconEvent[] {
   ]
 }
 
+// ── ForexFactory weekly JSON feed (free, no key) — primary source ────────────
+const FF_REGION: Record<string, string> = {
+  USD: 'United States', EUR: 'Euro Area', GBP: 'United Kingdom', JPY: 'Japan',
+  CAD: 'Canada', AUD: 'Australia', NZD: 'New Zealand', CHF: 'Switzerland', CNY: 'China',
+}
+
+async function getForexFactoryCalendar(): Promise<EconEvent[]> {
+  const urls = [
+    'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
+    'https://nfs.faireconomy.media/ff_calendar_nextweek.json',
+  ]
+  const lists = await Promise.all(urls.map(async (u) => {
+    try {
+      const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000), next: { revalidate: 900 } })
+      if (!r.ok) return []
+      const j = await r.json()
+      return Array.isArray(j) ? j : []
+    } catch { return [] }
+  }))
+  const out: EconEvent[] = []
+  for (const raw of lists.flat()) {
+    const iso = String(raw?.date || '')
+    if (!iso) continue
+    const impact = String(raw?.impact || '').toLowerCase()
+    out.push({
+      date: iso.slice(0, 10),
+      time: iso.length >= 16 ? iso.slice(11, 16) + ' ET' : undefined,
+      region: FF_REGION[String(raw?.country || '').toUpperCase()] || String(raw?.country || ''),
+      event: String(raw?.title || '').trim(),
+      importance: impact === 'high' ? 'High' : impact === 'medium' ? 'Medium' : 'Low',
+      previous: raw?.previous ? String(raw.previous) : undefined,
+      forecast: raw?.forecast ? String(raw.forecast) : undefined,
+      actual: undefined,
+      source: 'forexfactory',
+    })
+  }
+  // De-dupe (thisweek/nextweek can overlap) and keep chronological order.
+  const seen = new Set<string>()
+  return out.filter(e => {
+    const k = `${e.date}|${e.time}|${e.region}|${e.event}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  }).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
+}
+
 export async function GET(req: NextRequest) {
   try {
     // cache
@@ -72,13 +118,23 @@ export async function GET(req: NextRequest) {
       d2 = end.toISOString().slice(0,10)
     }
 
-    // Prefer FMP (user-provided key), fallback to TradingEconomics
+    // Prefer ForexFactory (free weekly feed) → FMP → TradingEconomics
     let calendar: EconEvent[] = []
     try {
-      const fmp = await getFmpEconomicCalendar(d1, d2)
-      if (fmp.length) calendar = fmp as any
+      const ff = await getForexFactoryCalendar()
+      // Keep only events inside the requested window
+      if (ff.length) calendar = ff.filter(e => e.date >= d1 && e.date <= d2)
+      if (!calendar.length && ff.length) calendar = ff
     } catch (e) {
-      console.warn('FMP calendar error, will fallback to TE:', e)
+      console.warn('ForexFactory calendar error, will fallback:', e)
+    }
+    if (!calendar.length) {
+      try {
+        const fmp = await getFmpEconomicCalendar(d1, d2)
+        if (fmp.length) calendar = fmp as any
+      } catch (e) {
+        console.warn('FMP calendar error, will fallback to TE:', e)
+      }
     }
 
     if (!calendar.length) {

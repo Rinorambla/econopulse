@@ -636,7 +636,6 @@ export default function AIPortfolioPage() {
     rows.sort((a,b)=> b.score - a.score)
     return rows
   }, [economicPortfolios, currentRegime])
-  const topPick = aiRankings[0] || null
 
   useEffect(() => {
     fetchEconomicPortfolios();
@@ -1639,9 +1638,10 @@ export default function AIPortfolioPage() {
 
           {activeTab === 'economic-portfolios' && (
             <div className="space-y-6">
-              {/* AI cycle detector — which regime we're in and where we're heading (3-month trends) */}
+              {/* AI cycle detector — which regime we're in and where we're heading (3-month trends).
+                  The detected regime is applied automatically to the portfolio ranking below. */}
               <EconomicCycleDetector
-                onApply={(reg) => {
+                onDetect={(reg) => {
                   const key = reg as RegimeKey
                   setGlobalRegime(key)
                   setCurrentRegime(key)
@@ -1654,43 +1654,8 @@ export default function AIPortfolioPage() {
                     Economic Portfolios
                   </h2>
                   <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <span>Ready-to-use portfolios for different economic scenarios</span>
-                    {lastUpdated && (
-                      <span>• Last updated: {new Date(lastUpdated).toLocaleTimeString()}</span>
-                    )}
+                    <span>Ready-to-use portfolios for different economic scenarios — ranked for the detected regime: <span className="text-indigo-300 font-semibold">{friendlyRegimeLabel(currentRegime)}</span></span>
                   </div>
-                </div>
-                <div className="shrink-0 text-right space-y-2">
-                  {topPick && (
-                    <div className="bg-gradient-to-br from-white/[0.04] to-transparent border border-white/[0.06] rounded-xl p-3 w-72 text-left shadow-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="text-[11px] text-gray-300 font-medium">AI Best Entry Now</div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">{friendlyRegimeLabel(currentRegime)}</span>
-                      </div>
-                      <div className="text-sm font-semibold text-white truncate">{topPick.name}</div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="rounded-md border border-emerald-500/50 bg-emerald-500/10 p-2">
-                          <div className="text-[10px] text-emerald-300 uppercase tracking-wide">Entry</div>
-                          <div className="text-lg font-bold text-emerald-300">{topPick.entry}%</div>
-                        </div>
-                        <div className="rounded-md border border-red-500/50 bg-red-500/10 p-2">
-                          <div className="text-[10px] text-red-300 uppercase tracking-wide">Exit</div>
-                          <div className="text-lg font-bold text-red-300">{topPick.exit}%</div>
-                        </div>
-                      </div>
-                      {topPick.reasons?.length ? (
-                        <div className="mt-2">
-                          <div className="text-[10px] text-gray-400 mb-0.5">Why</div>
-                          <ul className="list-disc ml-4 text-[11px] text-gray-300 space-y-0.5">
-                            {topPick.reasons.slice(0,2).map((r, i)=> (
-                              <li key={i}>{r}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      <a href={`#portfolio-${topPick.key}`} className="mt-2 inline-block text-[11px] text-indigo-300 hover:text-indigo-200 transition-colors">Open portfolio →</a>
-                    </div>
-                  )}
                 </div>
                 {/* auto-refresh hidden per requirements */}
               </div>

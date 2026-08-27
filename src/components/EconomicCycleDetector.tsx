@@ -29,7 +29,7 @@ const REGIME_STYLE: Record<Regime, { color: string; bg: string; icon: string }> 
   disinflation: { color: '#22d3ee', bg: 'rgba(34,211,238,0.12)', icon: '🍃' },
 };
 
-export default function EconomicCycleDetector({ onApply }: { onApply?: (regime: Regime) => void }) {
+export default function EconomicCycleDetector({ onApply, onDetect }: { onApply?: (regime: Regime) => void; onDetect?: (regime: Regime) => void }) {
   const [data, setData] = useState<CycleData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,10 +37,16 @@ export default function EconomicCycleDetector({ onApply }: { onApply?: (regime: 
     let alive = true;
     fetch('/api/economic-cycle', { cache: 'no-store', signal: AbortSignal.timeout(25000) })
       .then(r => (r.ok ? r.json() : null))
-      .then(j => { if (alive && j?.ok) setData(j); })
+      .then(j => {
+        if (alive && j?.ok) {
+          setData(j);
+          onDetect?.(j.regime);
+        }
+      })
       .catch(() => { /* card hides on failure */ })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
@@ -85,14 +91,18 @@ export default function EconomicCycleDetector({ onApply }: { onApply?: (regime: 
         <div className="text-right">
           <div className="text-[10px] uppercase tracking-wider text-gray-500">Confidence</div>
           <div className="text-2xl font-black text-white tabular-nums">{data.confidence}<span className="text-sm text-gray-500">%</span></div>
-          {onApply && (
+          {onDetect ? (
+            <div className="mt-1 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-semibold">
+              ✓ applied to portfolio ranking
+            </div>
+          ) : onApply ? (
             <button
               onClick={() => onApply(data.regime)}
               className="mt-1 text-[11px] px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
             >
               Apply to portfolios
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 

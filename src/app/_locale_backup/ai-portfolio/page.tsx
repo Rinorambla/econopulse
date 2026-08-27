@@ -5,7 +5,10 @@ import RequirePlan from '@/components/RequirePlan';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { NavigationLink } from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import dynamic from 'next/dynamic';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, LabelList } from 'recharts';
+
+const EconomicCycleDetector = dynamic(() => import('@/components/EconomicCycleDetector'), { ssr: false });
 
 interface PortfolioData {
   [key: string]: {
@@ -1636,6 +1639,14 @@ export default function AIPortfolioPage() {
 
           {activeTab === 'economic-portfolios' && (
             <div className="space-y-6">
+              {/* AI cycle detector — which regime we're in and where we're heading (3-month trends) */}
+              <EconomicCycleDetector
+                onApply={(reg) => {
+                  const key = reg as RegimeKey
+                  setGlobalRegime(key)
+                  setCurrentRegime(key)
+                }}
+              />
               <div className="mb-6 flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-bold mb-2 text-white flex items-center gap-2">

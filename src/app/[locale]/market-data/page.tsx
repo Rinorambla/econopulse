@@ -31,6 +31,8 @@ import {
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
 
+const MarketCopilot = dynamic(() => import('@/components/MarketCopilot'), { ssr: false })
+
 interface SearchResult {
   symbol: string
   name: string
@@ -1618,6 +1620,9 @@ export default function MarketDataPage() {
           {isFullscreen ? <Minimize2 className="w-4 h-4 text-blue-300" /> : <Maximize2 className="w-4 h-4 text-blue-300" />}
           <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
         </button>
+
+        {/* EconoPulse Copilot — AI assistant grounded on the active chart */}
+        <MarketCopilot symbol={layoutMode === 'single' ? symbol : (gridSymbols[0] || symbol)} />
 
         {/* Watchlist side panel (TradingView-style) */}
         {panelOpen ? (

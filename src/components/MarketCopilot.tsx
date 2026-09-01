@@ -126,7 +126,7 @@ export default function MarketCopilot({ symbol }: { symbol: string }) {
       {/* Floating launcher */}
       <button
         onClick={() => setOpen(true)}
-        className="absolute right-3 bottom-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-cyan-400/30 bg-gradient-to-r from-blue-600/90 to-cyan-500/90 hover:from-blue-500 hover:to-cyan-400 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 backdrop-blur"
+        className="absolute right-3 bottom-14 z-30 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-cyan-400/30 bg-gradient-to-r from-blue-600/90 to-cyan-500/90 hover:from-blue-500 hover:to-cyan-400 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 backdrop-blur"
         title="EconoPulse Copilot — AI assistant for this chart"
       >
         <Sparkles className="w-4 h-4" />

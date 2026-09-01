@@ -27,6 +27,7 @@ import {
   LayoutGrid,
   Maximize2,
   Minimize2,
+  Menu,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
@@ -372,6 +373,29 @@ function GridSymbolBox({ value, onSubmit }: { value: string; onSubmit: (s: strin
   const [open, setOpen] = useState(false)
   const [val, setVal] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
+
+  // Fixed-position dropdown so grid cells / overflow-hidden charts never clip it.
+  useEffect(() => {
+    if (!open) return
+    const compute = () => {
+      const r = wrapRef.current?.getBoundingClientRect()
+      if (!r) return
+      const width = 240
+      let left = r.left
+      if (left + width > window.innerWidth - 8) left = window.innerWidth - 8 - width
+      if (left < 8) left = 8
+      setMenuStyle({ position: 'fixed', top: Math.round(r.bottom + 4), left: Math.round(left), width })
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', compute, true)
+    return () => {
+      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', compute, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) { setResults([]); return }
@@ -399,7 +423,7 @@ function GridSymbolBox({ value, onSubmit }: { value: string; onSubmit: (s: strin
   }
 
   return (
-    <div className="relative w-32 sm:w-40">
+    <div ref={wrapRef} className="relative w-32 sm:w-40">
       <div className="flex items-center bg-white/5 border border-white/10 rounded px-2 py-1 focus-within:border-blue-500">
         <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
         <input
@@ -416,7 +440,7 @@ function GridSymbolBox({ value, onSubmit }: { value: string; onSubmit: (s: strin
         />
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-56 max-h-60 overflow-y-auto bg-slate-900 border border-white/15 rounded-lg shadow-xl">
+        <div style={menuStyle} className="z-[60] max-h-60 overflow-y-auto bg-slate-900 border border-white/15 rounded-lg shadow-xl">
           {results.map((r) => (
             <button
               key={`${r.symbol}-${r.exchange}`}
@@ -636,6 +660,17 @@ export default function MarketDataPage() {
       void containerRef.current?.requestFullscreen().catch(() => {})
     }
   }, [])
+
+  // The site navbar is hidden while the terminal is mounted (true full-screen
+  // experience); the hamburger in the toolbar toggles it back on demand.
+  const [navVisible, setNavVisible] = useState(false)
+  useEffect(() => {
+    const header = document.querySelector('header')
+    if (!(header instanceof HTMLElement)) return
+    header.style.display = navVisible ? '' : 'none'
+    window.dispatchEvent(new Event('resize'))
+    return () => { header.style.display = '' }
+  }, [navVisible])
 
   // On phones/tablets the watchlist would push the chart off-screen, so collapse
   // it by default there; it stays open on desktop where there is room beside the chart.
@@ -1136,6 +1171,16 @@ export default function MarketDataPage() {
   }, [])
 
   const searchSlot = (
+          <>
+          {/* Hamburger: the site navbar is hidden on this page for a true full-screen
+              terminal — this toggles it back for navigation. */}
+          <button
+            onClick={() => setNavVisible(v => !v)}
+            className={`shrink-0 p-1.5 rounded border transition-colors ${navVisible ? 'bg-blue-600/30 border-blue-500/40 text-blue-200' : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-white/10'}`}
+            title={navVisible ? 'Hide site menu' : 'Show site menu'}
+          >
+            <Menu className="w-4 h-4" />
+          </button>
           <div ref={searchWrapRef} className="relative w-40 sm:w-52 md:w-64 shrink-0">
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -1269,18 +1314,11 @@ export default function MarketDataPage() {
               </>
             )}
           </div>
+          </>
   )
 
   const actionsSlot = (
           <div className="relative flex items-center gap-1.5">
-            <button
-              onClick={() => downloadChart()}
-              className="flex items-center gap-1 px-2 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
-              title="Download chart image (PNG)"
-            >
-              <Download className="w-4 h-4 text-blue-300" />
-              <span className="font-semibold hidden lg:inline">Save</span>
-            </button>
             <button
               onClick={() => { setMenuOpen((o) => !o); setWatchlistMenuOpen(false); setNotifMenuOpen(false) }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
@@ -1576,7 +1614,7 @@ export default function MarketDataPage() {
       ref={containerRef}
       data-theme={theme}
       style={containerH ? { height: containerH } : undefined}
-      className="mkt-terminal bg-[#05070d] text-white overflow-hidden flex flex-col h-[calc(100dvh-3.5rem)]"
+      className="mkt-terminal bg-[#05070d] text-white overflow-hidden flex flex-col h-[100dvh]"
     >
       {/* MAIN */}
       <div ref={mainRef} className="relative flex-1 min-h-0 flex flex-col lg:flex-row gap-3 p-2 sm:p-3 overflow-hidden">

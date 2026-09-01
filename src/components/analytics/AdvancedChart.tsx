@@ -5,6 +5,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage'
 import {
   createChart,
   CandlestickSeries,
+  BarSeries,
+  BaselineSeries,
   LineSeries,
   AreaSeries,
   HistogramSeries,
@@ -23,7 +25,7 @@ import {
 } from 'lightweight-charts'
 
 // ========== Types ==========
-type ChartStyle = 'candle' | 'line' | 'area'
+type ChartStyle = 'candle' | 'hollow' | 'heikin' | 'bar' | 'line' | 'area' | 'baseline'
 type RangeKey = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
 type IndicatorKey =
   // Trend
@@ -175,6 +177,15 @@ const WINDOW_SECONDS: Partial<Record<RangeKey, number>> = {
 
 
 // Drawing tools surfaced inside the chart toolbar dropdown
+const CHART_STYLES: { key: ChartStyle; icon: string; label: string }[] = [
+  { key: 'candle', icon: '🕯', label: 'Candles' },
+  { key: 'hollow', icon: '◇', label: 'Hollow candles' },
+  { key: 'heikin', icon: '⧈', label: 'Heikin Ashi' },
+  { key: 'bar', icon: '∥', label: 'Bars (OHLC)' },
+  { key: 'line', icon: '📈', label: 'Line' },
+  { key: 'area', icon: '📊', label: 'Area' },
+  { key: 'baseline', icon: '⚖', label: 'Baseline' },
+]
 const CHART_TOOLS: { id: DrawingTool; label: string }[] = [
   { id: 'cursor', label: 'Cursor' },
   { id: 'crosshair', label: 'Crosshair' },
@@ -1385,6 +1396,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [indicatorsOpen, setIndicatorsOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [rangeOpen, setRangeOpen] = useState(false)
+  const [styleOpen, setStyleOpen] = useState(false)
   // Per-indicator user settings (colors / length / width / style / mult / OB-OS).
   const [indSettings, setIndSettings] = useLocalStorage<Record<string, Partial<IndicatorConfig>>>('mkt:indSettings', {})
   const [settingsKey, setSettingsKey] = useState<IndicatorKey | null>(null)
@@ -1409,8 +1421,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [error, setError] = useState<string | null>(null)
   const [lastPrice, setLastPrice] = useState<{ price: number; change: number; changePct: number } | null>(null)
   // Past earnings reports + dividends (badges in a lane under the price pane).
-  const [earningsMarks, setEarningsMarks] = useState<{ date: string; surprisePct: number | null }[]>([])
+  const [earningsMarks, setEarningsMarks] = useState<{ date: string; surprisePct: number | null; eps: number | null; estimate: number | null }[]>([])
   const [dividendMarks, setDividendMarks] = useState<{ date: string; amount: number | null }[]>([])
+  // Popup shown when the user taps an E/D badge (earnings / dividend details).
+  const [badgePopup, setBadgePopup] = useState<{ x: number; y: number; title: string; lines: string[]; color: string } | null>(null)
+  const badgeAreasRef = useRef<{ x: number; y: number; title: string; lines: string[]; color: string }[]>([])
   // Pre/after-hours quote for the TradingView-style legend badge inside the chart.
   const [extSession, setExtSession] = useState<{ label: 'Pre' | 'After'; price: number; pct: number | null } | null>(null)
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null)
@@ -1465,7 +1480,6 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   // ===== Price alerts (TradingView-style) =====
   type PriceAlert = { id: number; price: number }
   const [alertsMap, setAlertsMap] = useLocalStorage<Record<string, PriceAlert[]>>('mkt:priceAlerts', {})
-  const [alertInput, setAlertInput] = useState('')
   const [triggeredAlert, setTriggeredAlert] = useState<{ price: number } | null>(null)
   const priceLinesRef = useRef<IPriceLine[]>([])
   const prevPriceRef = useRef<number | null>(null)
@@ -1543,7 +1557,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
         if (cancel || !j) return
-        if (j.data) setEarningsMarks(j.data.map((r: any) => ({ date: r.date, surprisePct: r.surprisePct ?? null })))
+        if (j.data) setEarningsMarks(j.data.map((r: any) => ({ date: r.date, surprisePct: r.surprisePct ?? null, eps: r.eps ?? null, estimate: r.estimate ?? null })))
         if (j.dividends) setDividendMarks(j.dividends.map((r: any) => ({ date: r.date, amount: r.amount ?? null })))
       })
       .catch(() => { /* markers are optional */ })
@@ -1971,22 +1985,38 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // also read best as a single line.
     const isFredSeries = /^fred:/i.test(symbol)
     const isRatioSeries = !isFredSeries && /^[^/]+\/[^/]+$/.test(symbol.trim())
-    const effStyle: ChartStyle = (isFredSeries || isRatioSeries) && chartStyle === 'candle' ? 'line' : chartStyle
+    const candleFamily = ['candle', 'hollow', 'heikin', 'bar'].includes(chartStyle)
+    const effStyle: ChartStyle = (isFredSeries || isRatioSeries) && candleFamily ? 'line' : chartStyle
 
     // Main series
-    if (effStyle === 'candle') {
+    if (effStyle === 'candle' || effStyle === 'hollow' || effStyle === 'heikin') {
+      const hollow = effStyle === 'hollow'
       const cs = chart.addSeries(CandlestickSeries, {
-        upColor: '#22c55e',
+        upColor: hollow ? 'rgba(0,0,0,0)' : '#22c55e',
         downColor: '#ef4444',
-        borderUpColor: '#16a34a',
+        borderUpColor: hollow ? '#22c55e' : '#16a34a',
         borderDownColor: '#dc2626',
         wickUpColor: '#22c55e',
         wickDownColor: '#ef4444',
       })
+      // Heikin-Ashi transform: smoothed candles from raw OHLC.
+      let seriesData: CandlestickData[] = candleData
+      if (effStyle === 'heikin' && bars.length) {
+        const ha: CandlestickData[] = []
+        let prevO = bars[0].open, prevC = bars[0].close
+        for (let i = 0; i < bars.length; i++) {
+          const b = bars[i]
+          const cVal = (b.open + b.high + b.low + b.close) / 4
+          const oVal = i === 0 ? (b.open + b.close) / 2 : (prevO + prevC) / 2
+          ha.push({ time: timeLabels[i], open: oVal, high: Math.max(b.high, oVal, cVal), low: Math.min(b.low, oVal, cVal), close: cVal })
+          prevO = oVal; prevC = cVal
+        }
+        seriesData = ha
+      }
       // Volume Candles: repaint each candle by relative volume (vs its N-bar
       // average) — heavy-volume bars glow, quiet bars fade.
       const vcCfg = cfgFor('volcandles')
-      if (indicators.has('volcandles') && vcCfg.visible !== false) {
+      if (effStyle === 'candle' && indicators.has('volcandles') && vcCfg.visible !== false) {
         const per = Math.max(2, vcCfg.period || 20)
         const tint = (hex: string, a: number): string => {
           const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
@@ -1997,7 +2027,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         const upC = vcCfg.color || '#22c55e'
         const dnC = vcCfg.color2 || '#ef4444'
         let volSum = 0
-        const colored = candleData.map((cd, i) => {
+        const colored = seriesData.map((cd, i) => {
           const v = bars[i]?.volume || 0
           volSum += v
           if (i >= per) volSum -= bars[i - per]?.volume || 0
@@ -2011,9 +2041,31 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         })
         cs.setData(colored)
       } else {
-        cs.setData(candleData)
+        cs.setData(seriesData)
       }
       mainSeriesRef.current = cs
+    } else if (effStyle === 'bar') {
+      const bs = chart.addSeries(BarSeries, {
+        upColor: '#22c55e',
+        downColor: '#ef4444',
+        thinBars: false,
+      })
+      bs.setData(candleData)
+      mainSeriesRef.current = bs
+    } else if (effStyle === 'baseline') {
+      const base = closes.length ? closes[0] : 0
+      const bl = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: base },
+        topLineColor: '#22c55e',
+        topFillColor1: 'rgba(34,197,94,0.28)',
+        topFillColor2: 'rgba(34,197,94,0.03)',
+        bottomLineColor: '#ef4444',
+        bottomFillColor1: 'rgba(239,68,68,0.03)',
+        bottomFillColor2: 'rgba(239,68,68,0.28)',
+        lineWidth: 2,
+      })
+      bl.setData(closes.map((c, i) => ({ time: timeLabels[i], value: c } as LineData)))
+      mainSeriesRef.current = bl
     } else if (effStyle === 'line') {
       const ls = chart.addSeries(LineSeries, {
         color: '#3b82f6',
@@ -3007,6 +3059,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // ===== Earnings (E) + Dividend (D) badge lane — bottom of the price pane,
     // TradingView-style, so report dates never cover the candles. Daily+ only.
+    badgeAreasRef.current = []
     const badgeBars = barsRef.current
     const marksE = earningsRef.current
     const marksD = dividendsRef.current
@@ -3018,7 +3071,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           const ps = (chart as any).paneSize?.(0)
           if (ps?.height) laneY = Math.min(ps.height - 12, H - 12)
         } catch { /* fall back to chart bottom */ }
-        const drawBadge = (dateStr: string, letter: string, color: string) => {
+        const drawBadge = (dateStr: string, letter: string, color: string, title: string, lines: string[]) => {
           const target = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000)
           if (target < badgeBars[0].time - step || target > badgeBars[badgeBars.length - 1].time + step) return
           let lo = 0, hi = badgeBars.length - 1
@@ -3026,6 +3079,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           const idx = Math.abs(badgeBars[lo].time - target) <= Math.abs(badgeBars[hi].time - target) ? lo : hi
           const x = chart.timeScale().logicalToCoordinate(idx as any)
           if (x == null || x < -8 || x > W + 8) return
+          badgeAreasRef.current.push({ x, y: laneY, title, lines, color })
           ctx.save()
           ctx.beginPath(); ctx.arc(x, laneY, 7, 0, Math.PI * 2)
           ctx.fillStyle = 'rgba(2,6,23,0.88)'; ctx.fill()
@@ -3035,8 +3089,20 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           ctx.fillText(letter, x, laneY + 0.5)
           ctx.restore()
         }
-        for (const m of marksD) drawBadge(m.date, 'D', '#c084fc')
-        for (const m of marksE) drawBadge(m.date, 'E', m.surprisePct == null ? '#94a3b8' : m.surprisePct >= 0 ? '#22c55e' : '#ef4444')
+        for (const m of marksD) {
+          drawBadge(m.date, 'D', '#c084fc', `Dividend · ${m.date}`, [
+            m.amount != null ? `Amount: $${m.amount} per share` : 'Amount: n/a',
+            'Ex-dividend date',
+          ])
+        }
+        for (const m of marksE) {
+          const beat = m.surprisePct == null ? null : m.surprisePct >= 0
+          drawBadge(m.date, 'E', beat == null ? '#94a3b8' : beat ? '#22c55e' : '#ef4444', `Earnings · ${m.date}`, [
+            m.eps != null ? `EPS actual: $${m.eps}` : 'EPS actual: n/a',
+            m.estimate != null ? `EPS estimate: $${m.estimate}` : 'EPS estimate: n/a',
+            m.surprisePct != null ? `Surprise: ${m.surprisePct >= 0 ? '+' : ''}${m.surprisePct}% ${beat ? '✓ beat' : '✗ miss'}` : 'Surprise: n/a',
+          ])
+        }
       }
     }
 
@@ -3311,6 +3377,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       if (e.button != null && e.button !== 0) return
       const { x, y } = localXY(e)
       const touch = e.pointerType === 'touch'
+      // E/D badge tap → show earnings/dividend details popup.
+      const hitBadge = badgeAreasRef.current.find(b => Math.hypot(x - b.x, y - b.y) <= (touch ? 14 : 10))
+      if (hitBadge) {
+        setBadgePopup({ x: hitBadge.x, y: hitBadge.y, title: hitBadge.title, lines: hitBadge.lines, color: hitBadge.color })
+        e.preventDefault(); e.stopPropagation()
+        return
+      }
+      setBadgePopup(null)
       const handle = grabHandleAt(x, y, touch ? 16 : 10)
       const id = handle ? handle.id : hitTestDrawings(x, y)
       if (id == null) return // empty space → let the chart pan/zoom normally
@@ -3412,18 +3486,33 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {/* Separator */}
         <div className="h-5 w-px bg-white/15 mx-1" />
 
-        {/* Chart style buttons */}
-        <div className="flex items-center gap-0.5">
-          {([['candle', '🕯'], ['line', '📈'], ['area', '📊']] as [ChartStyle, string][]).map(([s, icon]) => (
-            <button
-              key={s}
-              onClick={() => setChartStyle(s)}
-              className={`px-2 py-1 text-[10px] rounded transition-colors ${chartStyle === s ? 'bg-blue-600/80 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
-              title={s.charAt(0).toUpperCase() + s.slice(1)}
-            >
-              {icon}
-            </button>
-          ))}
+        {/* Chart style dropdown (candles, hollow, Heikin-Ashi, bars, line, area, baseline) */}
+        <div className="relative">
+          <button
+            onClick={() => { setStyleOpen(o => !o); setRangeOpen(false); setToolsOpen(false); setIndicatorsOpen(false) }}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10"
+            title="Chart style"
+          >
+            <span>{CHART_STYLES.find(s => s.key === chartStyle)?.icon || '🕯'}</span>
+            <svg className={`w-3 h-3 transition-transform ${styleOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </button>
+          {styleOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setStyleOpen(false)} />
+              <div className="absolute top-full left-0 mt-1 w-44 z-30 bg-slate-900 border border-white/15 rounded-md shadow-xl p-1">
+                {CHART_STYLES.map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => { setChartStyle(s.key); setStyleOpen(false) }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-[11px] text-left ${chartStyle === s.key ? 'bg-blue-600/30 text-blue-200' : 'text-gray-300 hover:bg-white/5'}`}
+                  >
+                    <span className="w-5 text-center">{s.icon}</span>
+                    <span className="font-semibold">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Separator */}
@@ -3504,6 +3593,17 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                   <div className="border-t border-white/10 mt-1 pt-1 flex gap-1">
                     <button onClick={() => { undoDrawing(); setToolsOpen(false) }} className="flex-1 px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-white/10 text-gray-300">↶ Undo</button>
                     <button onClick={() => { clearDrawings(); setToolsOpen(false) }} className="flex-1 px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-rose-500/20 text-rose-300">Clear</button>
+                  </div>
+                )}
+                {currentAlerts.length > 0 && (
+                  <div className="border-t border-white/10 mt-1 pt-1">
+                    <div className="px-2 py-0.5 text-[9px] uppercase tracking-wider text-gray-500">Active alerts</div>
+                    {currentAlerts.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between px-2 py-1 text-[11px] text-amber-200">
+                        <span>⏰ {a.price}</span>
+                        <button onClick={() => removeAlert(a.id)} className="text-gray-400 hover:text-rose-300" title="Remove alert">✕</button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -3587,44 +3687,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           )}
         </div>
 
-        {/* Price alerts */}
-        <div className="flex items-center gap-1 flex-wrap">
-          <button
-            onClick={() => {
-              try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission() } catch {}
-              setActiveTool(activeTool === 'alert' ? 'cursor' : 'alert')
-            }}
-            className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
-              activeTool === 'alert' ? 'bg-amber-600/30 border-amber-500/50 text-amber-200' : 'bg-white/5 border-white/10 text-gray-300 hover:text-white hover:border-amber-400/40'
-            }`}
-            title="Add a price alert — then click on the chart at the desired price"
-          >
-            <span className="text-amber-300">＋</span>
-            <span className="font-semibold uppercase tracking-wider text-[10px]">Alert</span>
-          </button>
-          <input
-            value={alertInput}
-            onChange={(e) => setAlertInput(e.target.value.replace(/[^0-9.]/g, ''))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const p = parseFloat(alertInput)
-                if (Number.isFinite(p)) { addAlert(p); setAlertInput('') }
-              }
-              if (e.key === 'Escape') setAlertInput('')
-            }}
-            placeholder={lastPrice ? `${lastPrice.price.toFixed(2)}` : 'price'}
-            className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-20 focus:outline-none focus:border-amber-500 placeholder-gray-500"
-          />
-          {currentAlerts.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-amber-500/40 text-amber-200"
-            >
-              ⏰ {a.price}
-              <button onClick={() => removeAlert(a.id)} className="text-gray-400 hover:text-rose-300" title="Remove alert">✕</button>
-            </span>
-          ))}
-        </div>
+        {/* Price alerts live inside the Tools dropdown (⏰ Price Alert). */}
       </div>
 
       {/* ===== INDICATORS BAR (single dropdown) ===== */}
@@ -3908,6 +3971,25 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-100 text-xs font-semibold shadow-lg">
             ⏰ {symbol} reached {triggeredAlert.price}
             <button onClick={() => setTriggeredAlert(null)} className="text-amber-300 hover:text-white">✕</button>
+          </div>
+        )}
+        {/* E/D badge details popup (earnings / dividends) */}
+        {badgePopup && (
+          <div
+            className="absolute z-30 rounded-lg border bg-slate-900/97 shadow-xl p-2.5 min-w-[190px]"
+            style={{
+              left: Math.max(6, Math.min(badgePopup.x - 95, (chartContainerRef.current?.clientWidth ?? 300) - 200)),
+              top: Math.max(6, badgePopup.y - 118),
+              borderColor: `${badgePopup.color}66`,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-[11px] font-bold" style={{ color: badgePopup.color }}>{badgePopup.title}</span>
+              <button onClick={() => setBadgePopup(null)} className="text-gray-500 hover:text-white text-[11px]" title="Close">✕</button>
+            </div>
+            {badgePopup.lines.map((l, i) => (
+              <div key={i} className="text-[11px] text-gray-200 leading-relaxed">{l}</div>
+            ))}
           </div>
         )}
         {activeTool === 'alert' && (

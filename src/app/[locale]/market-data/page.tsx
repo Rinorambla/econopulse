@@ -327,6 +327,18 @@ function labelForSymbol(s: string): string {
   return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^FRED:/i, '')
 }
 
+// "EUR/USD" typed with a slash is a CURRENCY pair, not a ratio chart — convert
+// it to Yahoo's forex ticker (EURUSD=X) so it renders with real candles.
+const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
+function normalizeFxPair(sym: string): string {
+  const m = /^([A-Za-z]{3})\/([A-Za-z]{3})$/.exec(sym.trim())
+  if (!m) return sym
+  const a = m[1].toUpperCase(), b = m[2].toUpperCase()
+  if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
+  if (a === 'BTC' || a === 'ETH') return `${a}-${b}` // crypto pairs use dash form
+  return `${a}${b}=X`
+}
+
 // Full catalog of FRED macro series so they are discoverable directly from the
 // autocomplete search (Yahoo search never returns FRED series). Built from the
 // popular macro groups + friendly labels above.
@@ -744,7 +756,7 @@ export default function MarketDataPage() {
   }, [searchVal, searchOpen])
 
   const submitSearch = useCallback((s?: string) => {
-    const v = (s ?? searchVal).trim().toUpperCase()
+    const v = normalizeFxPair((s ?? searchVal).trim().toUpperCase())
     if (!v) return
     // Only load the symbol on the chart. Do NOT auto-save it to a watchlist —
     // the user decides what to save via the explicit "Save" action / side panel.
@@ -1211,7 +1223,7 @@ export default function MarketDataPage() {
                 <div style={searchMenuStyle} className="bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
-                      {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && (
+                      {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && normalizeFxPair(searchVal.trim().toUpperCase()) === searchVal.trim().toUpperCase() && (
                         <button
                           onMouseDown={(e) => { e.preventDefault(); submitSearch(searchVal.trim()) }}
                           className="w-full text-left px-3 py-2 bg-pink-500/10 hover:bg-pink-500/20 border-b border-pink-500/20 flex items-center gap-2"

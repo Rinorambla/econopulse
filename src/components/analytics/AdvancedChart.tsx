@@ -139,6 +139,18 @@ const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 // Pro-only indicators: visible in the menu with a lock, usable only on paid plans.
 const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta'])
 
+// "EUR/USD" is a CURRENCY pair, not a ratio chart — map it to Yahoo's forex
+// ticker (EURUSD=X) so it renders with real candles instead of a ratio line.
+const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
+function normalizeFxPair(sym: string): string {
+  const m = /^([A-Za-z]{3})\/([A-Za-z]{3})$/.exec(sym.trim())
+  if (!m) return sym
+  const a = m[1].toUpperCase(), b = m[2].toUpperCase()
+  if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
+  if (a === 'BTC' || a === 'ETH') return `${a}-${b}`
+  return `${a}${b}=X`
+}
+
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
   // Intraday (TradingView-style) — range picked to respect Yahoo's per-interval limits.
   { key: '1m', label: '1m', range: '1d', interval: '1m' },
@@ -1400,7 +1412,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [symbol, setSymbol] = useState(propSymbol)
+  const [symbol, setSymbol] = useState(() => normalizeFxPair(propSymbol))
   const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('mkt:rangeKey', '1Y')
   const [chartStyle, setChartStyle] = useLocalStorage<ChartStyle>('mkt:chartStyle', 'candle')
   const [indicatorList, setIndicatorList] = useLocalStorage<IndicatorKey[]>('mkt:indicators', ['volume'])
@@ -1603,8 +1615,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const themeRef = useRef(themeTokens); useEffect(() => { themeRef.current = themeTokens }, [themeTokens])
   const chartStyleRef = useRef(chartStyle); useEffect(() => { chartStyleRef.current = chartStyle }, [chartStyle])
 
-  // Sync prop → state
-  useEffect(() => { if (propSymbol !== symbol) { setSymbol(propSymbol) } }, [propSymbol])
+  // Sync prop → state (currency pairs typed as EUR/USD become EURUSD=X candles)
+  useEffect(() => {
+    const next = normalizeFxPair(propSymbol)
+    if (next !== symbol) { setSymbol(next) }
+  }, [propSymbol])
 
   const currentRange = useMemo(() => RANGE_OPTS.find(r => r.key === rangeKey) || RANGE_OPTS[3], [rangeKey])
 

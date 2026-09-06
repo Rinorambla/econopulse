@@ -132,26 +132,39 @@ function CategoryTile({ category, label, icon, tf }: { category: string; label: 
         <div className="text-[10px] text-gray-500 italic">Data unavailable</div>
       ) : (
         <div className="space-y-1">
-          {(loading && !data.length ? Array.from({ length: 5 }) : data).map((a: any, i: number) => {
-            if (!a) return <div key={i} className="h-4 bg-slate-800/50 rounded animate-pulse" />;
-            const tfPerf = tf === '1D' ? Number(a.changePercent) : perf[a.symbol.toUpperCase()];
-            const cp = typeof tfPerf === 'number' && isFinite(tfPerf) ? tfPerf : null;
-            const positive = cp != null && cp >= 0;
-            return (
-              <div key={a.symbol} className="flex items-center justify-between text-[10px] border-b border-slate-800/40 last:border-0 py-0.5">
-                <div className="min-w-0 flex-1">
-                  <div className="text-white font-semibold truncate">{a.symbol.replace('=X', '').replace('=F', '').replace('-USD', '')}</div>
-                  <div className="text-[9px] text-gray-500 truncate">{a.name}</div>
-                </div>
-                <div className="text-right ml-2">
-                  <div className="text-gray-200 tabular-nums">{fmtPrice(a.price, category)}</div>
-                  <div className={`tabular-nums font-semibold ${cp == null ? 'text-gray-500' : positive ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {cp == null ? '—' : `${positive ? '+' : ''}${cp.toFixed(2)}%`}
+          {(() => {
+            if (loading && !data.length) return Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-4 bg-slate-800/50 rounded animate-pulse" />);
+            const rows = data.map((a: any) => {
+              const tfPerf = tf === '1D' ? Number(a.changePercent) : perf[a.symbol.toUpperCase()];
+              const cp = typeof tfPerf === 'number' && isFinite(tfPerf) ? tfPerf : null;
+              return { a, cp };
+            });
+            const maxAbs = Math.max(...rows.map(r => Math.abs(r.cp ?? 0)), 0.01);
+            return rows.map(({ a, cp }) => {
+              const positive = cp != null && cp >= 0;
+              const barW = cp == null ? 0 : Math.max(3, (Math.abs(cp) / maxAbs) * 100);
+              return (
+                <div key={a.symbol} className="flex items-center gap-1.5 text-[10px] border-b border-slate-800/40 last:border-0 py-1">
+                  <div className="w-16 shrink-0 min-w-0">
+                    <div className="text-white font-semibold truncate">{a.symbol.replace('=X', '').replace('=F', '').replace('-USD', '')}</div>
+                    <div className="text-[8.5px] text-gray-500 truncate">{a.name}</div>
+                  </div>
+                  <div className="flex-1 h-3 bg-white/[0.03] rounded-sm overflow-hidden">
+                    <div
+                      className={`h-full rounded-sm transition-all ${cp == null ? '' : positive ? 'bg-emerald-500/50' : 'bg-red-500/50'}`}
+                      style={{ width: `${barW}%` }}
+                    />
+                  </div>
+                  <div className="text-right ml-1 w-[76px] shrink-0">
+                    <div className="text-gray-200 tabular-nums leading-tight">{fmtPrice(a.price, category)}</div>
+                    <div className={`tabular-nums font-semibold leading-tight ${cp == null ? 'text-gray-500' : positive ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {cp == null ? '—' : `${positive ? '+' : ''}${cp.toFixed(2)}%`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       )}
     </div>

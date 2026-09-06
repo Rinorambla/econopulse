@@ -202,6 +202,23 @@ function RegionCard({ region, quotes, perf, tf }: {
   perf: Record<string, number | null>;
   tf: TF;
 }) {
+  // Resolve quote + timeframe % for each row first so bars can share one scale.
+  const rows = region.items.map(meta => {
+    const primary = quotes[meta.symbol.toUpperCase()];
+    const fb = meta.fallback ? quotes[meta.fallback.toUpperCase()] : undefined;
+    const q = primary && isFinite(primary.price) && primary.price > 0 ? primary : fb;
+    let cp: number | null;
+    if (tf === '1D') {
+      cp = q && isFinite(q.changePercent) ? q.changePercent : null;
+    } else {
+      const keys = [q?.symbol?.toUpperCase(), meta.symbol.toUpperCase(), meta.fallback?.toUpperCase()].filter(Boolean) as string[];
+      let v: number | null | undefined;
+      for (const k of keys) { if (perf[k] != null) { v = perf[k]; break; } }
+      cp = typeof v === 'number' && isFinite(v) ? v : null;
+    }
+    return { meta, q, cp };
+  });
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.cp ?? 0)), 0.01);
   return (
     <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-3">
       <div className="flex items-center justify-between mb-2">
@@ -212,47 +229,28 @@ function RegionCard({ region, quotes, perf, tf }: {
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
       <div className="space-y-1">
-        {region.items.map(meta => {
-          const primary = quotes[meta.symbol.toUpperCase()];
-          const fb = meta.fallback ? quotes[meta.fallback.toUpperCase()] : undefined;
-          const q = primary && isFinite(primary.price) && primary.price > 0 ? primary : fb;
+        {rows.map(({ meta, q, cp }) => {
           const isVix = ['VIX', 'VVIX', 'V2X', 'MOVE'].includes(meta.short);
-
-          let cp: number | null;
-          if (tf === '1D') {
-            cp = q && isFinite(q.changePercent) ? q.changePercent : null;
-          } else {
-            // Look up the historical % under any symbol form we might have used
-            // (the resolved quote symbol, the primary, or the fallback) so a
-            // primary/fallback mismatch never blanks a real value.
-            const keys = [
-              q?.symbol?.toUpperCase(),
-              meta.symbol.toUpperCase(),
-              meta.fallback?.toUpperCase(),
-            ].filter(Boolean) as string[];
-            let v: number | null | undefined;
-            for (const k of keys) { if (perf[k] != null) { v = perf[k]; break; } }
-            cp = typeof v === 'number' && isFinite(v) ? v : null;
-          }
           const positive = cp != null && cp >= 0;
-          const colorClass = cp == null
-            ? 'text-gray-500'
-            : isVix
-              ? (positive ? 'text-red-400' : 'text-emerald-400')
-              : (positive ? 'text-emerald-400' : 'text-red-400');
-
+          const good = isVix ? !positive : positive;
+          const colorClass = cp == null ? 'text-gray-500' : good ? 'text-emerald-400' : 'text-red-400';
+          const barW = cp == null ? 0 : Math.max(3, (Math.abs(cp) / maxAbs) * 100);
           return (
-            <div key={meta.symbol} className="flex items-center justify-between text-[10px] border-b border-slate-800/40 last:border-0 py-0.5">
-              <div className="min-w-0 flex-1 flex items-center gap-1.5">
-                <span className="text-[11px]" aria-hidden>{meta.flag}</span>
-                <div className="min-w-0">
-                  <div className="text-white font-semibold truncate">{meta.short}</div>
-                  <div className="text-[9px] text-gray-500 truncate">{meta.name}</div>
-                </div>
+            <div key={meta.symbol} className="flex items-center gap-1.5 text-[10px] border-b border-slate-800/40 last:border-0 py-1">
+              <span className="text-[11px] shrink-0" aria-hidden>{meta.flag}</span>
+              <div className="w-16 shrink-0 min-w-0">
+                <div className="text-white font-semibold truncate">{meta.short}</div>
+                <div className="text-[8.5px] text-gray-500 truncate">{meta.name}</div>
               </div>
-              <div className="text-right ml-2">
-                <div className="text-gray-200 tabular-nums">{q ? fmtPrice(q.price) : '—'}</div>
-                <div className={`tabular-nums font-semibold ${colorClass}`}>
+              <div className="flex-1 h-3 bg-white/[0.03] rounded-sm overflow-hidden">
+                <div
+                  className={`h-full rounded-sm transition-all ${cp == null ? '' : good ? 'bg-emerald-500/50' : 'bg-red-500/50'}`}
+                  style={{ width: `${barW}%` }}
+                />
+              </div>
+              <div className="text-right ml-1 w-[74px] shrink-0">
+                <div className="text-gray-200 tabular-nums leading-tight">{q ? fmtPrice(q.price) : '—'}</div>
+                <div className={`tabular-nums font-semibold leading-tight ${colorClass}`}>
                   {cp == null ? '—' : `${positive ? '+' : ''}${cp.toFixed(2)}%`}
                 </div>
               </div>

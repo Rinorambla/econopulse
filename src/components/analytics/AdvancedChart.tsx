@@ -26,7 +26,7 @@ import {
 
 // ========== Types ==========
 type ChartStyle = 'candle' | 'hollow' | 'heikin' | 'bar' | 'line' | 'area' | 'baseline'
-type RangeKey = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
+type RangeKey = '1m' | '5m' | '15m' | '30m' | '1H' | '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'MAX'
 type IndicatorKey =
   // Trend
   | 'sma20' | 'sma50' | 'sma100' | 'sma200'
@@ -39,7 +39,7 @@ type IndicatorKey =
   | 'bb' | 'keltner' | 'atr' | 'donchian' | 'envelopes' | 'stddev'
   | 'bbwidth' | 'bbpercent' | 'choppiness' | 'histvol'
   // Volume
-  | 'volume' | 'vwap' | 'obv' | 'volprofile' | 'vpvr' | 'vpfr'
+  | 'volume' | 'vwap' | 'obv' | 'volprofile' | 'vpvr' | 'vpfr' | 'svp'
   | 'mfi' | 'cmf' | 'adl' | 'chaikinosc' | 'forceindex' | 'eom' | 'volcandles'
   // Momentum
   | 'rsi' | 'macd' | 'stochastic' | 'cci' | 'williamsR' | 'mom'
@@ -136,6 +136,12 @@ const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
+  // Intraday (TradingView-style) — range picked to respect Yahoo's per-interval limits.
+  { key: '1m', label: '1m', range: '1d', interval: '1m' },
+  { key: '5m', label: '5m', range: '5d', interval: '5m' },
+  { key: '15m', label: '15m', range: '5d', interval: '15m' },
+  { key: '30m', label: '30m', range: '1mo', interval: '30m' },
+  { key: '1H', label: '1H', range: '3mo', interval: '1h' },
   { key: '1D', label: '1D', range: '1d', interval: '5m' },
   { key: '5D', label: '5D', range: '5d', interval: '30m' },
   { key: '1M', label: '1M', range: '1mo', interval: '1d' },
@@ -154,6 +160,10 @@ const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: strin
 // Intraday 1D/5D fetch several extra days of intraday bars so a SMA200 (which
 // needs 200 prior bars) still spans the entire visible session. MAX needs none.
 const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
+  '1m': '5d',
+  '5m': '1mo',
+  '15m': '1mo',
+  '1H': '1y',
   '1D': '5d',
   '5D': '1mo',
   '1M': '1y',
@@ -166,6 +176,10 @@ const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
 
 // Approx seconds covered by the requested window, used to zoom back after warm-up.
 const WINDOW_SECONDS: Partial<Record<RangeKey, number>> = {
+  '1m': 1 * 86400,
+  '5m': 5 * 86400,
+  '15m': 5 * 86400,
+  '1H': 93 * 86400,
   '1D': 1 * 86400,
   '5D': 5 * 86400,
   '1M': 31 * 86400,
@@ -258,6 +272,7 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
       { key: 'volprofile', label: 'Volume Profile' },
       { key: 'vpvr', label: 'Vol Profile · Visible Range' },
       { key: 'vpfr', label: 'Vol Profile · Fixed Range' },
+      { key: 'svp', label: 'Vol Profile · Sessions' },
       { key: 'mfi', label: 'Money Flow (MFI)' },
       { key: 'cmf', label: 'Chaikin MF' },
       { key: 'adl', label: 'Accum/Dist' },
@@ -2913,6 +2928,72 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       drawVolumeProfile(slice, '#a78bfa', 'VPVR')
     }
 
+    // ===== Session Volume Profile (TradingView-style): one profile per day
+    // (intraday) or per month (daily bars), anchored at the LEFT of each session,
+    // blue bars + amber value area + red POC line spanning the session. =====
+    if (inds.has('svp') && allBars.length > 4) {
+      const step = allBars[allBars.length - 1].time - allBars[allBars.length - 2].time
+      if (step < 25 * 86400) { // skip weekly/monthly charts
+        const byDay = step < 20 * 3600
+        const keyFor = (t: number) => {
+          const d = new Date(t * 1000)
+          return byDay ? `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}` : `${d.getUTCFullYear()}-${d.getUTCMonth()}`
+        }
+        const sessions: { from: number; to: number }[] = []
+        let sStart = 0
+        for (let i = 1; i <= allBars.length; i++) {
+          if (i === allBars.length || keyFor(allBars[i].time) !== keyFor(allBars[sStart].time)) {
+            sessions.push({ from: sStart, to: i - 1 })
+            sStart = i
+          }
+        }
+        ctx.save()
+        for (const s of sessions) {
+          if (s.to - s.from < 4) continue
+          const x0 = chart.timeScale().logicalToCoordinate(s.from as any)
+          const x1 = chart.timeScale().logicalToCoordinate(s.to as any)
+          if (x0 == null || x1 == null || x1 < 0 || x0 > W) continue
+          const sessW = (x1 as number) - (x0 as number)
+          if (sessW < 26) continue
+          const sBars = allBars.slice(s.from, s.to + 1)
+          const vp = computeVolumeProfile(sBars, 22)
+          if (!vp) continue
+          const maxV = vp.maxVolume || 1
+          const maxBarW = Math.min(sessW * 0.38, 130)
+          // Faint session backdrop across its high-low box.
+          const yHi = main.priceToCoordinate(Math.max(...sBars.map(b => b.high)))
+          const yLo = main.priceToCoordinate(Math.min(...sBars.map(b => b.low)))
+          if (yHi != null && yLo != null) {
+            ctx.fillStyle = 'rgba(56,189,248,0.045)'
+            ctx.fillRect(x0 as number, Math.min(yHi, yLo) - 4, sessW, Math.abs(yLo - yHi) + 8)
+          }
+          const yVAH = main.priceToCoordinate(vp.vah)
+          const yVAL = main.priceToCoordinate(vp.val)
+          const levelH = vp.levels.length > 1
+            ? Math.abs((main.priceToCoordinate(vp.levels[1].price) ?? 0) - (main.priceToCoordinate(vp.levels[0].price) ?? 0))
+            : 6
+          const barH = Math.max(1, levelH - 1)
+          for (const lv of vp.levels) {
+            const y = main.priceToCoordinate(lv.price)
+            if (y == null) continue
+            const w = (lv.volume / maxV) * maxBarW
+            if (w < 0.5) continue
+            const inVA = yVAH != null && yVAL != null && y >= Math.min(yVAH, yVAL) && y <= Math.max(yVAH, yVAL)
+            ctx.fillStyle = inVA ? 'rgba(245,158,11,0.55)' : 'rgba(59,130,246,0.45)'
+            ctx.fillRect(x0 as number, y - barH / 2, w, barH)
+          }
+          // POC: red line from the session start to its end.
+          const yPoc = main.priceToCoordinate(vp.poc)
+          if (yPoc != null) {
+            ctx.strokeStyle = '#ef4444'
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.moveTo(x0 as number, yPoc); ctx.lineTo(x1 as number, yPoc); ctx.stroke()
+          }
+        }
+        ctx.restore()
+      }
+    }
+
     const drawShape = (d: Drawing | { tool: DrawingTool; pts: DrawPoint[]; color: string; text?: string; width?: number }, isPreview = false, selected = false) => {
       const pts = d.pts.map(toXY).filter(Boolean) as { x: number; y: number }[]
       if (pts.length === 0) return
@@ -3873,6 +3954,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
             { key: 'vwap', label: 'VWAP', cls: 'text-pink-400' },
             { key: 'vpvr', label: 'VPVR', cls: 'text-violet-400' },
             { key: 'vpfr', label: 'VPFR', cls: 'text-sky-400' },
+            { key: 'svp', label: 'SVP', cls: 'text-amber-400' },
             { key: 'obv', label: 'OBV', cls: 'text-cyan-400' },
             { key: 'rsi', label: 'RSI', cls: 'text-purple-400' },
             { key: 'macd', label: 'MACD', cls: 'text-blue-400' },

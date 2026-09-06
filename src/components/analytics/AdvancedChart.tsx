@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import { useAuth } from '@/hooks/useAuth'
 import {
   createChart,
   CandlestickSeries,
@@ -134,6 +135,9 @@ const TOOL_STEPS: Record<DrawingTool, number> = {
 }
 const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
+
+// Pro-only indicators: visible in the menu with a lock, usable only on paid plans.
+const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta'])
 
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
   // Intraday (TradingView-style) — range picked to respect Yahoo's per-interval limits.
@@ -1400,7 +1404,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('mkt:rangeKey', '1Y')
   const [chartStyle, setChartStyle] = useLocalStorage<ChartStyle>('mkt:chartStyle', 'candle')
   const [indicatorList, setIndicatorList] = useLocalStorage<IndicatorKey[]>('mkt:indicators', ['volume'])
-  const indicators = useMemo(() => new Set(indicatorList), [indicatorList])
+  const { plan, isAdmin, isDevUser } = useAuth()
+  const isPaidUser = plan === 'premium' || isAdmin || isDevUser
+  const [lockNotice, setLockNotice] = useState<string | null>(null)
+  const indicators = useMemo(
+    () => new Set(indicatorList.filter(k => isPaidUser || !PREMIUM_INDICATORS.has(k))),
+    [indicatorList, isPaidUser],
+  )
   const setIndicators = useCallback((updater: Set<IndicatorKey> | ((prev: Set<IndicatorKey>) => Set<IndicatorKey>)) => {
     setIndicatorList((prev) => {
       const prevSet = new Set(prev)
@@ -2832,12 +2842,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
+    if (PREMIUM_INDICATORS.has(key) && !isPaidUser) {
+      const label = IND_CATEGORIES.flatMap(g => g.items).find(i => i.key === key)?.label || key
+      setLockNotice(label)
+      window.setTimeout(() => setLockNotice(null), 5000)
+      return
+    }
     setIndicators(prev => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key); else next.add(key)
       return next
     })
-  }, [])
+  }, [isPaidUser])
 
   // (Symbol changes are now driven exclusively by the parent page search bar.)
 
@@ -3806,19 +3822,21 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                             {cat.items.map(ind => {
                               const isActive = indicators.has(ind.key)
                               const hasSettings = !!IND_DEFAULTS[ind.key]
+                              const locked = PREMIUM_INDICATORS.has(ind.key) && !isPaidUser
                               return (
                                 <div
                                   key={ind.key}
                                   className={`flex items-center rounded transition-colors ${
-                                    isActive ? 'bg-blue-600/30 text-blue-200' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                    isActive ? 'bg-blue-600/30 text-blue-200' : locked ? 'text-gray-500' : 'text-gray-300 hover:bg-white/5 hover:text-white'
                                   }`}
                                 >
                                   <button
                                     onClick={() => toggleIndicator(ind.key)}
                                     className="flex-1 flex items-center justify-between px-2 py-1 text-[11px] text-left"
+                                    title={locked ? 'Premium indicator — upgrade to unlock' : undefined}
                                   >
                                     <span>{ind.label}</span>
-                                    {isActive && <span className="text-blue-400">✓</span>}
+                                    {locked ? <span className="text-amber-400">🔒</span> : isActive ? <span className="text-blue-400">✓</span> : null}
                                   </button>
                                   {isActive && (
                                     <button
@@ -4053,6 +4071,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-100 text-xs font-semibold shadow-lg">
             ⏰ {symbol} reached {triggeredAlert.price}
             <button onClick={() => setTriggeredAlert(null)} className="text-amber-300 hover:text-white">✕</button>
+          </div>
+        )}
+        {lockNotice && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/95 border border-amber-500/50 text-xs font-semibold shadow-lg">
+            <span className="text-amber-300">🔒 {lockNotice} is a Premium indicator</span>
+            <a href="/pricing" className="px-2 py-0.5 rounded bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-[11px] font-bold">Upgrade</a>
+            <button onClick={() => setLockNotice(null)} className="text-gray-400 hover:text-white">✕</button>
           </div>
         )}
         {/* E/D badge details popup (earnings / dividends) */}

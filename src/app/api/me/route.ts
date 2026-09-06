@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase-server';
 import { supabase as supabaseAnon } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { statusToPlan } from '@/lib/subscription';
+import { enforceSingleSession } from '@/lib/single-session';
 
 const ADMIN_EMAIL = 'info@econopulse.ai';
 
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
     // Resolve user (Bearer or cookie)
     let userId: string | undefined;
     let userEmail: string | undefined;
+    let accessToken: string | undefined;
 
     const auth = req.headers.get('authorization');
     if (auth?.startsWith('Bearer ')) {
@@ -35,6 +37,7 @@ export async function GET(req: Request) {
       if (!error && data.user) {
         userId = data.user.id;
         userEmail = data.user.email || undefined;
+        accessToken = auth.slice(7);
       }
     }
     if (!userId) {
@@ -43,6 +46,10 @@ export async function GET(req: Request) {
       if (data.user) {
         userId = data.user.id;
         userEmail = data.user.email || undefined;
+        try {
+          const { data: sess } = await supa.auth.getSession();
+          accessToken = sess.session?.access_token || undefined;
+        } catch { /* session token optional */ }
       }
     }
 
@@ -70,6 +77,16 @@ export async function GET(req: Request) {
       res.headers.set('Cache-Control', 'no-store');
       res.cookies.set('ep_plan', 'premium', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
       res.cookies.set('ep_admin', '1', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
+      return res;
+    }
+
+    // Anti account-sharing: only the newest sign-in keeps access — older
+    // sessions on other devices are logged out (session_superseded).
+    const single = await enforceSingleSession(userId, accessToken);
+    if (!single.ok) {
+      const res = NextResponse.json({ authenticated: false, plan: 'free', reason: 'session_superseded' });
+      res.headers.set('Cache-Control', 'no-store');
+      res.cookies.set('ep_plan', 'free', { path: '/', maxAge: 60, sameSite: 'lax', secure: true });
       return res;
     }
 

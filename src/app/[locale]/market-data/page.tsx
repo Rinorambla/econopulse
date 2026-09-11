@@ -213,6 +213,8 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Macro · Rates & Fed', symbols: ['FRED:DFF', 'FRED:FEDFUNDS', 'FRED:SOFR', 'FRED:DGS2', 'FRED:DGS10', 'FRED:DGS30', 'FRED:T10Y2Y', 'FRED:T10Y3M', 'FRED:MORTGAGE30US', 'FRED:WALCL', 'FRED:RRPONTSYD'] },
   { label: 'Macro · Economy', symbols: ['FRED:UNRATE', 'FRED:PAYEMS', 'FRED:GDPC1', 'FRED:INDPRO', 'FRED:UMCSENT', 'FRED:HOUST', 'FRED:RSAFS', 'FRED:ICSA', 'FRED:JTSJOL'] },
   { label: 'Macro · Credit & Money', symbols: ['FRED:REVOLSL', 'FRED:TOTALSL', 'FRED:M2SL', 'FRED:DRCCLACBS', 'FRED:BAMLH0A0HYM2', 'FRED:DRSFRMACBS', 'FRED:DPSACBW027SBOG', 'FRED:CCLACBW027SBOG'] },
+  // TradingView-style ECONOMICS symbols (USINTR, USIRYY, USM2…) mapped to FRED.
+  { label: 'Economy', symbols: ['FRED:FEDFUNDS', 'FRED:CPIAUCSL@PC1', 'FRED:M2SL', 'FRED:M1SL', 'FRED:PAYEMS', 'FRED:UNRATE', 'FRED:WALCL', 'FRED:ICSA', 'FRED:RSAFS@PC1', 'FRED:GDPC1', 'FRED:ECBDFR', 'FRED:CP0000EZ19M086NEST@PC1', 'FRED:IUDSOIA', 'FRED:CP0000ITM086NEST@PC1', 'FRED:IRSTCI01JPM156N'] },
 ]
 
 // Friendly display labels for instruments whose ticker isn't self-explanatory
@@ -264,10 +266,19 @@ const SYMBOL_LABELS: Record<string, string> = {
   'FRED:RSAFS': 'Retail Sales',
   'FRED:ICSA': 'Initial Jobless Claims',
   'FRED:JTSJOL': 'Job Openings (JOLTS)',
+  // Economy — TradingView ECONOMICS-style series (via FRED, @PC1 = YoY % change)
+  'FRED:CPIAUCSL@PC1': 'US Inflation Rate YoY (CPI)',
+  'FRED:RSAFS@PC1': 'US Retail Sales YoY',
+  'FRED:ECBDFR': 'Euro Area Interest Rate (ECB Deposit)',
+  'FRED:CP0000EZ19M086NEST@PC1': 'Euro Area Inflation Rate YoY (HICP)',
+  'FRED:CP0000ITM086NEST@PC1': 'Italy Inflation Rate YoY (HICP)',
+  'FRED:IUDSOIA': 'UK Interest Rate (SONIA)',
+  'FRED:IRSTCI01JPM156N': 'Japan Interest Rate',
   // FRED — Credit & Money
   'FRED:REVOLSL': 'Revolving Credit (Cards)',
   'FRED:TOTALSL': 'Total Consumer Credit',
   'FRED:M2SL': 'M2 Money Supply',
+  'FRED:M1SL': 'M1 Money Supply',
   'FRED:DRCCLACBS': 'Credit Card Delinquency',
   'FRED:BAMLH0A0HYM2': 'High-Yield Spread',
   'FRED:DRSFRMACBS': 'Mortgage Delinquency',
@@ -327,17 +338,41 @@ function labelForSymbol(s: string): string {
   return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^FRED:/i, '')
 }
 
-// "EUR/USD" typed with a slash is a CURRENCY pair, not a ratio chart — convert
-// it to Yahoo's forex ticker (EURUSD=X) so it renders with real candles.
+// "EUR/USD" (also "EURUSD" or "EUR-USD") is a CURRENCY pair, not a ratio chart —
+// convert it to Yahoo's forex ticker (EURUSD=X) so it renders with real candles.
 const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
 function normalizeFxPair(sym: string): string {
-  const m = /^([A-Za-z]{3})\/([A-Za-z]{3})$/.exec(sym.trim())
+  const m = /^([A-Za-z]{3})[/\- ]?([A-Za-z]{3})$/.exec(sym.trim())
   if (!m) return sym
   const a = m[1].toUpperCase(), b = m[2].toUpperCase()
   if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
   if (a === 'BTC' || a === 'ETH') return `${a}-${b}` // crypto pairs use dash form
   return `${a}${b}=X`
 }
+
+// TradingView-style ECONOMICS codes (USINTR, USM2…) → FRED series, so users can
+// search/type the familiar economics tickers and get the underlying macro chart.
+const ECONOMICS_ALIASES: { code: string; symbol: string; name: string }[] = [
+  { code: 'USINTR', symbol: 'FRED:FEDFUNDS', name: 'United States Interest Rate' },
+  { code: 'USIRYY', symbol: 'FRED:CPIAUCSL@PC1', name: 'United States Inflation Rate YoY' },
+  { code: 'USCPI', symbol: 'FRED:CPIAUCSL', name: 'United States CPI' },
+  { code: 'USM1', symbol: 'FRED:M1SL', name: 'United States Money Supply M1' },
+  { code: 'USM2', symbol: 'FRED:M2SL', name: 'United States Money Supply M2' },
+  { code: 'USNFP', symbol: 'FRED:PAYEMS', name: 'United States Nonfarm Payrolls' },
+  { code: 'USUR', symbol: 'FRED:UNRATE', name: 'United States Unemployment Rate' },
+  { code: 'USCBBS', symbol: 'FRED:WALCL', name: 'United States Central Bank Balance Sheet' },
+  { code: 'USIJC', symbol: 'FRED:ICSA', name: 'United States Initial Jobless Claims' },
+  { code: 'USRSYY', symbol: 'FRED:RSAFS@PC1', name: 'United States Retail Sales YoY' },
+  { code: 'USGDP', symbol: 'FRED:GDPC1', name: 'United States Real GDP' },
+  { code: 'EUINTR', symbol: 'FRED:ECBDFR', name: 'Euro Area Interest Rate' },
+  { code: 'EUIRYY', symbol: 'FRED:CP0000EZ19M086NEST@PC1', name: 'Euro Area Inflation Rate YoY' },
+  { code: 'ITIRYY', symbol: 'FRED:CP0000ITM086NEST@PC1', name: 'Italy Inflation Rate YoY' },
+  { code: 'GBINTR', symbol: 'FRED:IUDSOIA', name: 'United Kingdom Interest Rate' },
+  { code: 'JPINTR', symbol: 'FRED:IRSTCI01JPM156N', name: 'Japan Interest Rate' },
+]
+const ECONOMICS_BY_CODE: Record<string, string> = Object.fromEntries(
+  ECONOMICS_ALIASES.map((a) => [a.code, a.symbol])
+)
 
 // Full catalog of FRED macro series so they are discoverable directly from the
 // autocomplete search (Yahoo search never returns FRED series). Built from the
@@ -353,10 +388,16 @@ const FRED_CATALOG: { symbol: string; name: string }[] = Array.from(
 function searchFred(query: string): SearchResult[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
-  return FRED_CATALOG.filter((f) => {
+  // TradingView-style ECONOMICS codes first (USINTR, USM2, USIRYY…).
+  const econ = ECONOMICS_ALIASES.filter(
+    (a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
+  ).map((a) => ({ symbol: a.symbol, name: `${a.code} · ${a.name}`, exchange: 'ECONOMICS', type: 'economic' }))
+  const fred = FRED_CATALOG.filter((f) => {
     const id = f.symbol.replace(/^FRED:/i, '').toLowerCase()
     return id.includes(q) || f.name.toLowerCase().includes(q) || `fred:${id}`.includes(q)
   }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
+  const seen = new Set<string>()
+  return [...econ, ...fred].filter((r) => { if (seen.has(r.symbol)) return false; seen.add(r.symbol); return true })
 }
 
 // ── Symbol news (Yahoo headlines for the chart's active symbol) ───────────────
@@ -756,7 +797,9 @@ export default function MarketDataPage() {
   }, [searchVal, searchOpen])
 
   const submitSearch = useCallback((s?: string) => {
-    const v = normalizeFxPair((s ?? searchVal).trim().toUpperCase())
+    const raw = (s ?? searchVal).trim().toUpperCase()
+    // Resolve TradingView-style economics codes (USINTR → FRED:FEDFUNDS) first.
+    const v = ECONOMICS_BY_CODE[raw] || normalizeFxPair(raw)
     if (!v) return
     // Only load the symbol on the chart. Do NOT auto-save it to a watchlist —
     // the user decides what to save via the explicit "Save" action / side panel.

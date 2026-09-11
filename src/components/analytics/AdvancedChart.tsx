@@ -139,11 +139,11 @@ const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 // Pro-only indicators: visible in the menu with a lock, usable only on paid plans.
 const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta'])
 
-// "EUR/USD" is a CURRENCY pair, not a ratio chart — map it to Yahoo's forex
+// "EUR/USD" (also "EURUSD" or "EUR-USD") is a CURRENCY pair, not a ratio chart — map it to Yahoo's forex
 // ticker (EURUSD=X) so it renders with real candles instead of a ratio line.
 const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
 function normalizeFxPair(sym: string): string {
-  const m = /^([A-Za-z]{3})\/([A-Za-z]{3})$/.exec(sym.trim())
+  const m = /^([A-Za-z]{3})[/\- ]?([A-Za-z]{3})$/.exec(sym.trim())
   if (!m) return sym
   const a = m[1].toUpperCase(), b = m[2].toUpperCase()
   if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
@@ -1636,8 +1636,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const fetchRange = WARMUP_FETCH[rangeKey] || currentRange.range
 
       // Helper: fetch + normalize bars for a single Yahoo symbol.
-      const fetchYahooBars = async (sym: string, range: string): Promise<Bar[]> => {
-        const q = new URLSearchParams({ symbol: sym, range, interval: currentRange.interval })
+      const fetchYahooBarsAt = async (sym: string, range: string, interval: string): Promise<Bar[]> => {
+        const q = new URLSearchParams({ symbol: sym, range, interval })
         const r = await fetch(`/api/yahoo-history?${q}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
         if (!r.ok) throw new Error(`API ${r.status}`)
         const j = await r.json()
@@ -1652,13 +1652,22 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           .filter((b: Bar) => isSaneEpoch(b.time))
           .sort((a: Bar, b: Bar) => a.time - b.time)
       }
+      const fetchYahooBars = (sym: string, range: string) => fetchYahooBarsAt(sym, range, currentRange.interval)
 
       if (isRatio) {
         const [numSym, denSym] = symbol.split('/').map((s) => s.trim())
-        const [numBars, denBars] = await Promise.all([
-          fetchYahooBars(numSym, fetchRange),
-          fetchYahooBars(denSym, fetchRange),
+        let [numBars, denBars] = await Promise.all([
+          fetchYahooBars(numSym, fetchRange).catch(() => [] as Bar[]),
+          fetchYahooBars(denSym, fetchRange).catch(() => [] as Bar[]),
         ])
+        // Some instruments have no intraday history — fall back to daily bars
+        // instead of showing an error.
+        if ((numBars.length < 2 || denBars.length < 2) && /(m|h)$/i.test(currentRange.interval)) {
+          ;[numBars, denBars] = await Promise.all([
+            fetchYahooBarsAt(numSym, '6mo', '1d').catch(() => [] as Bar[]),
+            fetchYahooBarsAt(denSym, '6mo', '1d').catch(() => [] as Bar[]),
+          ])
+        }
         if (numBars.length < 2 || denBars.length < 2) throw new Error(`No data for ${symbol}`)
         // Align by timestamp and divide to build the relative-strength series.
         const denMap = new Map<number, Bar>()
@@ -1690,21 +1699,42 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         return
       }
 
-      const qs = new URLSearchParams({ symbol, range: fetchRange, interval: currentRange.interval })
-      // Include pre-market / after-hours bars on intraday intervals so the
-      // chart shows extended-hours trading (premarket).
-      const isIntraday = /m$/i.test(currentRange.interval)
-      if (isIntraday) qs.set('prepost', '1')
-      const endpoint = isFred
-        ? `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
-        : `/api/yahoo-history?${qs}`
-      const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
-      if (!res.ok) {
-        if (isFred && res.status === 503) throw new Error('Macro data unavailable (FRED API key not configured)')
-        throw new Error(`API ${res.status}`)
+      let raw: any[] = []
+      if (isFred) {
+        const endpoint = `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
+        const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+        if (!res.ok) {
+          if (res.status === 503) throw new Error('Macro data unavailable (FRED API key not configured)')
+          throw new Error(`API ${res.status}`)
+        }
+        const json = await res.json()
+        raw = json?.bars || json?.data?.bars || json?.data || []
+      } else {
+        const loadRaw = async (range: string, interval: string, prepost: boolean): Promise<any[]> => {
+          const qs = new URLSearchParams({ symbol, range, interval })
+          // Include pre-market / after-hours bars on intraday intervals so the
+          // chart shows extended-hours trading (premarket).
+          if (prepost) qs.set('prepost', '1')
+          const res = await fetch(`/api/yahoo-history?${qs}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+          if (!res.ok) throw new Error(`API ${res.status}`)
+          const json = await res.json()
+          const rw = json?.bars || json?.data?.bars || json?.data || []
+          return Array.isArray(rw) ? rw : []
+        }
+        const subDaily = /(m|h)$/i.test(currentRange.interval)
+        const isIntraday = /m$/i.test(currentRange.interval)
+        try {
+          raw = await loadRaw(fetchRange, currentRange.interval, isIntraday)
+        } catch (e) {
+          if (!subDaily) throw e
+          raw = []
+        }
+        // Symbols without intraday history (many macro/OTC/foreign listings)
+        // gracefully fall back to daily bars instead of erroring out.
+        if (raw.length < 2 && subDaily) {
+          raw = await loadRaw('6mo', '1d', false)
+        }
       }
-      const json = await res.json()
-      const raw = json?.bars || json?.data?.bars || json?.data || []
       if (!Array.isArray(raw) || raw.length < 2) throw new Error('No data for this symbol')
       const parsed: Bar[] = raw
         .filter((b: any) => b && Number.isFinite(b.close) && (isFred || b.close > 0))

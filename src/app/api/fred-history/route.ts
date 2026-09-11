@@ -42,6 +42,15 @@ export async function GET(request: Request) {
   const symbol = searchParams.get('symbol') || ''
   if (!series && symbol) series = symbol.replace(/^fred:/i, '')
   series = series.trim().toUpperCase()
+  // "SERIES@PC1" → FRED units=pc1 (percent change from year ago), used for
+  // TradingView-style YoY series (e.g. Inflation Rate YoY from CPIAUCSL).
+  let units = ''
+  const at = series.indexOf('@')
+  if (at > 0) {
+    const suffix = series.slice(at + 1)
+    series = series.slice(0, at)
+    if (['PC1', 'PCH', 'CH1', 'CHG'].includes(suffix)) units = suffix.toLowerCase()
+  }
   const range = searchParams.get('range') || '5y'
 
   if (!series) return NextResponse.json({ ok: false, error: 'series param required' }, { status: 400 })
@@ -50,7 +59,7 @@ export async function GET(request: Request) {
   if (!FRED_API_KEY) return NextResponse.json({ ok: false, error: 'FRED not configured' }, { status: 503 })
 
   const start = startForRange(range)
-  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(series)}&api_key=${FRED_API_KEY}&file_type=json&observation_start=${start}&sort_order=asc`
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(series)}&api_key=${FRED_API_KEY}&file_type=json&observation_start=${start}&sort_order=asc${units ? `&units=${units}` : ''}`
 
   try {
     const res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(10000) })

@@ -7,8 +7,8 @@ android {
         applicationId "ai.econopulse.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file('econopulse-release.keystore')
-            storePassword System.getenv('ECONOPULSE_KEYSTORE_PASSWORD') ?: 'Codici@1987'
+            storePassword System.getenv('ECONOPULSE_KEYSTORE_PASSWORD')
             keyAlias 'econopulse'
-            keyPassword System.getenv('ECONOPULSE_KEY_PASSWORD') ?: 'Codici@1987'
+            keyPassword System.getenv('ECONOPULSE_KEY_PASSWORD')
         }
     }
     buildTypes {

@@ -174,6 +174,7 @@ const PORTFOLIO_TO_SECTOR: Record<string, string> = {
   'Reflation': 'Industrials',
   'Disinflation Soft Landing': 'Technology',
   'Dollar Weakness & Global Rebalancing': 'Industrials',
+  'Weak Dollar & Global Rotation': 'Industrials',
   
   // Direct sector portfolio names
   'Tech-Heavy Portfolio': 'Technology',

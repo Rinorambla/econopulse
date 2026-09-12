@@ -1056,7 +1056,7 @@ export default function AIPortfolioPage() {
     reflation: 'Reflation',
     deflation: 'Deflation',
     disinflation: 'Disinflation',
-    dollarWeakness: 'Dollar Weakness',
+    dollarWeakness: 'Weak Dollar',
   }[reg] || reg)
   const nameToRegime = (name: string): RegimeKey | null => {
     const s = (name || '').toLowerCase()
@@ -1066,7 +1066,7 @@ export default function AIPortfolioPage() {
     if (s.includes('reflation')) return 'reflation'
     if (s.includes('deflation')) return 'deflation'
     if (s.includes('disinflation') || s.includes('soft landing')) return 'disinflation'
-    if (s.includes('dollar') && (s.includes('weakness') || s.includes('rebalancing'))) return 'dollarWeakness'
+    if (s.includes('dollar') && (s.includes('weakness') || s.includes('rebalancing') || s.includes('rotation') || s.includes('weak'))) return 'dollarWeakness'
     return null
   }
   const setGlobalRegime = (reg: RegimeKey) => {

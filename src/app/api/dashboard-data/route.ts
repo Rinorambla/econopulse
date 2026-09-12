@@ -613,7 +613,7 @@ function getEconomicPortfolios() {
       ]
     },
     'DOLLAR_WEAKNESS_GLOBAL_REBALANCING': {
-      name: 'Dollar Weakness & Global Rebalancing',
+      name: 'Weak Dollar & Global Rotation',
       description: 'Weak USD with international diversification',
       performance: { daily: '0.95%', weekly: '3.5%', monthly: '7.2%', quarterly: '14.1%', yearly: '22.3%' },
       holdings: [

@@ -151,6 +151,9 @@ function normalizeFxPair(sym: string): string {
   return `${a}${b}=X`
 }
 
+// Macro series without intraday ticks: FRED:<id> and DBnomics DBN:<prov>/<ds>/<series>.
+const isMacroSymbol = (s: string) => /^(fred|dbn):/i.test(s)
+
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
   // Intraday (TradingView-style) — range picked to respect Yahoo's per-interval limits.
   { key: '1m', label: '1m', range: '1d', interval: '1m' },
@@ -1628,8 +1631,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setLoading(true)
     setError(null)
     try {
-      // Macro / economic series (CPI, PPI, Fed Funds, etc.) are served from FRED.
-      const isFred = /^fred:/i.test(symbol)
+      // Macro / economic series (CPI, PPI, Fed Funds, ISM PMI, etc.) are served
+      // from FRED or DBnomics.
+      const isFred = isMacroSymbol(symbol)
       // Relative-strength ratio chart: "SPY/QQQ" → one line of SPY ÷ QQQ.
       const isRatio = !isFred && /^[^/]+\/[^/]+$/.test(symbol.trim())
       // Fetch a larger range when warm-up is configured so long MAs cover the full window.
@@ -1701,7 +1705,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
       let raw: any[] = []
       if (isFred) {
-        const endpoint = `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
+        const endpoint = /^dbn:/i.test(symbol)
+          ? `/api/dbnomics-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
+          : `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
         const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
         if (!res.ok) {
           if (res.status === 503) throw new Error('Macro data unavailable (FRED API key not configured)')
@@ -1781,8 +1787,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   // series.update() — which updates the forming candle (or appends a new one)
   // WITHOUT resetting the user's zoom/pan or reloading the whole dataset.
   useEffect(() => {
-    // Macro (FRED) and relative-strength ratio charts have no intraday ticks.
-    const isFred = /^fred:/i.test(symbol)
+    // Macro (FRED/DBnomics) and relative-strength ratio charts have no intraday ticks.
+    const isFred = isMacroSymbol(symbol)
     const isRatio = !isFred && /^[^/]+\/[^/]+$/.test(symbol.trim())
     if (isFred || isRatio) return
     // Only ranges whose right-most bar is "today/now" benefit from live ticks.
@@ -2053,7 +2059,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Macro / FRED series carry a single value per date — render them as a line
     // (candles would just show flat crosses). Ratio (relative-strength) charts
     // also read best as a single line.
-    const isFredSeries = /^fred:/i.test(symbol)
+    const isFredSeries = isMacroSymbol(symbol)
     const isRatioSeries = !isFredSeries && /^[^/]+\/[^/]+$/.test(symbol.trim())
     const candleFamily = ['candle', 'hollow', 'heikin', 'bar'].includes(chartStyle)
     const effStyle: ChartStyle = (isFredSeries || isRatioSeries) && candleFamily ? 'line' : chartStyle
@@ -2693,7 +2699,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Fit content — but when warm-up history was fetched, zoom to the requested
     // window so long moving averages span the entire visible chart (not half).
     // Macro/FRED series are sparse (monthly/weekly) so we always fit their full range.
-    const warmupActive = !/^fred:/i.test(symbol) && !/^[^/]+\/[^/]+$/.test(symbol.trim()) && !!WARMUP_FETCH[rangeKey]
+    const warmupActive = !isMacroSymbol(symbol) && !/^[^/]+\/[^/]+$/.test(symbol.trim()) && !!WARMUP_FETCH[rangeKey]
     if (warmupActive && bars.length > 2) {
       const lastSec = bars[bars.length - 1].time
       let startSec: number

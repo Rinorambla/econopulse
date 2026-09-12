@@ -214,7 +214,7 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'Macro · Economy', symbols: ['FRED:UNRATE', 'FRED:PAYEMS', 'FRED:GDPC1', 'FRED:INDPRO', 'FRED:UMCSENT', 'FRED:HOUST', 'FRED:RSAFS', 'FRED:ICSA', 'FRED:JTSJOL'] },
   { label: 'Macro · Credit & Money', symbols: ['FRED:REVOLSL', 'FRED:TOTALSL', 'FRED:M2SL', 'FRED:DRCCLACBS', 'FRED:BAMLH0A0HYM2', 'FRED:DRSFRMACBS', 'FRED:DPSACBW027SBOG', 'FRED:CCLACBW027SBOG'] },
   // TradingView-style ECONOMICS symbols (USINTR, USIRYY, USM2…) mapped to FRED.
-  { label: 'Economy', symbols: ['FRED:FEDFUNDS', 'FRED:CPIAUCSL@PC1', 'FRED:M2SL', 'FRED:M1SL', 'FRED:PAYEMS', 'FRED:UNRATE', 'FRED:WALCL', 'FRED:ICSA', 'FRED:RSAFS@PC1', 'FRED:GDPC1', 'FRED:ECBDFR', 'FRED:CP0000EZ19M086NEST@PC1', 'FRED:IUDSOIA', 'FRED:CP0000ITM086NEST@PC1', 'FRED:IRSTCI01JPM156N'] },
+  { label: 'Economy', symbols: ['FRED:FEDFUNDS', 'FRED:CPIAUCSL@PC1', 'FRED:M2SL', 'FRED:M1SL', 'FRED:PAYEMS', 'FRED:UNRATE', 'FRED:WALCL', 'FRED:ICSA', 'FRED:RSAFS@PC1', 'FRED:GDPC1', 'DBN:ISM/pmi/pm', 'DBN:ISM/nm-pmi/pm', 'FRED:ECBDFR', 'FRED:CP0000EZ19M086NEST@PC1', 'FRED:IUDSOIA', 'FRED:CP0000ITM086NEST@PC1', 'FRED:IRSTCI01JPM156N'] },
 ]
 
 // Friendly display labels for instruments whose ticker isn't self-explanatory
@@ -274,6 +274,9 @@ const SYMBOL_LABELS: Record<string, string> = {
   'FRED:CP0000ITM086NEST@PC1': 'Italy Inflation Rate YoY (HICP)',
   'FRED:IUDSOIA': 'UK Interest Rate (SONIA)',
   'FRED:IRSTCI01JPM156N': 'Japan Interest Rate',
+  // ISM (via DBnomics — not available on FRED)
+  'DBN:ISM/pmi/pm': 'ISM Manufacturing PMI',
+  'DBN:ISM/nm-pmi/pm': 'ISM Services PMI',
   // FRED — Credit & Money
   'FRED:REVOLSL': 'Revolving Credit (Cards)',
   'FRED:TOTALSL': 'Total Consumer Credit',
@@ -335,7 +338,7 @@ const SYMBOL_LABELS: Record<string, string> = {
 }
 
 function labelForSymbol(s: string): string {
-  return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^FRED:/i, '')
+  return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^(FRED|DBN):/i, '')
 }
 
 // "EUR/USD" (also "EURUSD" or "EUR-USD") is a CURRENCY pair, not a ratio chart —
@@ -360,6 +363,8 @@ const ECONOMICS_ALIASES: { code: string; symbol: string; name: string }[] = [
   { code: 'USM2', symbol: 'FRED:M2SL', name: 'United States Money Supply M2' },
   { code: 'USNFP', symbol: 'FRED:PAYEMS', name: 'United States Nonfarm Payrolls' },
   { code: 'USUR', symbol: 'FRED:UNRATE', name: 'United States Unemployment Rate' },
+  { code: 'USBCOI', symbol: 'DBN:ISM/pmi/pm', name: 'United States ISM Manufacturing PMI' },
+  { code: 'USNMI', symbol: 'DBN:ISM/nm-pmi/pm', name: 'United States ISM Services PMI' },
   { code: 'USCBBS', symbol: 'FRED:WALCL', name: 'United States Central Bank Balance Sheet' },
   { code: 'USIJC', symbol: 'FRED:ICSA', name: 'United States Initial Jobless Claims' },
   { code: 'USRSYY', symbol: 'FRED:RSAFS@PC1', name: 'United States Retail Sales YoY' },
@@ -380,9 +385,9 @@ const ECONOMICS_BY_CODE: Record<string, string> = Object.fromEntries(
 const FRED_CATALOG: { symbol: string; name: string }[] = Array.from(
   new Set(
     POPULAR_GROUPS.flatMap((g) => g.symbols)
-      .filter((s) => /^FRED:/i.test(s))
+      .filter((s) => /^(FRED|DBN):/i.test(s))
   )
-).map((symbol) => ({ symbol, name: SYMBOL_LABELS[symbol] || symbol.replace(/^FRED:/i, '') }))
+).map((symbol) => ({ symbol, name: SYMBOL_LABELS[symbol] || symbol.replace(/^(FRED|DBN):/i, '') }))
 
 // Return FRED series matching a free-text query (matches series id or label).
 function searchFred(query: string): SearchResult[] {
@@ -393,7 +398,7 @@ function searchFred(query: string): SearchResult[] {
     (a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
   ).map((a) => ({ symbol: a.symbol, name: `${a.code} · ${a.name}`, exchange: 'ECONOMICS', type: 'economic' }))
   const fred = FRED_CATALOG.filter((f) => {
-    const id = f.symbol.replace(/^FRED:/i, '').toLowerCase()
+    const id = f.symbol.replace(/^(FRED|DBN):/i, '').toLowerCase()
     return id.includes(q) || f.name.toLowerCase().includes(q) || `fred:${id}`.includes(q)
   }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
   const seen = new Set<string>()

@@ -148,7 +148,7 @@ export default function MarketInteractiveChart({ initialSymbol = '^GSPC', initia
     reflation: 'Reflation',
     deflation: 'Deflation',
     disinflation: 'Disinflation (Soft Landing)',
-    dollarWeakness: 'Dollar Weakness / Global Rebalancing',
+    dollarWeakness: 'Weak Dollar / Global Rotation',
   }
   const [regime, setRegime] = useState<RegimeKey>(urlReg || initialRegime || 'goldilocks')
   const [showAIEntryExit, setShowAIEntryExit] = useState(true)

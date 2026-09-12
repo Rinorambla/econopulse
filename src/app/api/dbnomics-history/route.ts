@@ -50,19 +50,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: 'series must be provider/dataset/series' }, { status: 400 })
   }
 
-  const url = `https://api.db.nomics.world/v22/series/${series}?observations=1`
-
   try {
-    // One retry — DBnomics can be slow on a cold TLS handshake.
+    // One retry — DBnomics can be slow on a cold TLS handshake. DBnomics codes
+    // are case-sensitive and the UI uppercases symbols, so on 404 retry with the
+    // conventional lowercase dataset/series spelling.
+    const provider = series.split('/')[0]
+    const variants = Array.from(new Set([
+      series,
+      `${provider.toUpperCase()}/${series.split('/').slice(1).join('/').toLowerCase()}`,
+    ]))
     let res: Response | null = null
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(9000) })
-        if (res.ok) break
-      } catch (err) {
-        if (attempt === 1) throw err
-        res = null
+    for (const v of variants) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await fetch(`https://api.db.nomics.world/v22/series/${v}?observations=1`, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(9000) })
+          if (res.ok) { series = v; break }
+        } catch (err) {
+          if (attempt === 1 && v === variants[variants.length - 1]) throw err
+          res = null
+        }
       }
+      if (res?.ok) break
     }
     if (!res || !res.ok) return NextResponse.json({ ok: false, error: `DBnomics ${res?.status ?? 'unreachable'}` }, { status: res?.status ?? 502 })
     const json = await res.json()

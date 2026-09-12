@@ -49,10 +49,18 @@ function resolvePair(a: string, b: string): string | null {
   return null
 }
 
+// DBnomics codes are case-sensitive but the UI uppercases input — map the
+// uppercased forms back to their canonical spelling.
+const DBN_CANONICAL: Record<string, string> = {
+  'DBN:ISM/PMI/PM': 'DBN:ISM/pmi/pm',
+  'DBN:ISM/NM-PMI/PM': 'DBN:ISM/nm-pmi/pm',
+}
+
 export function normalizeSymbol(sym: string): string {
   const s = sym.trim()
   if (!s) return sym
-  // Already-explicit forms: FRED:/DBN:, Yahoo suffixes (=X, =F, -USD), indices (^), exchange dots.
+  if (/^dbn:/i.test(s)) return DBN_CANONICAL[s.toUpperCase()] || s
+  // Already-explicit forms: FRED:, Yahoo suffixes (=X, =F, -USD), indices (^), exchange dots.
   if (/[:=^.]/.test(s)) return s
   const U = s.toUpperCase()
   if (ALIASES[U]) return ALIASES[U]

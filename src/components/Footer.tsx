@@ -174,6 +174,23 @@ const Footer = () => {
         <p className="text-sm text-white/60 mt-1">EconoPulse is not a financial advisor. All information is provided for educational purposes only.</p>
             </div>
 
+            {/* Google Play badge (hidden inside the iOS native app) */}
+            {!isIOSApp && (
+              <a
+                href="https://play.google.com/store/apps/details?id=ai.econopulse.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Get it on Google Play"
+                className="shrink-0"
+              >
+                <img
+                  src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                  alt="Get it on Google Play"
+                  className="h-14 w-auto"
+                />
+              </a>
+            )}
+
             {/* Social Links */}
             <div className="flex space-x-4">
               <a

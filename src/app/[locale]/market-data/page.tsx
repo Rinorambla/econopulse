@@ -30,6 +30,7 @@ import {
   Menu,
 } from 'lucide-react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import { normalizeSymbol } from '@/lib/symbol-resolver'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
 
 const MarketCopilot = dynamic(() => import('@/components/MarketCopilot'), { ssr: false })
@@ -341,18 +342,6 @@ function labelForSymbol(s: string): string {
   return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^(FRED|DBN):/i, '')
 }
 
-// "EUR/USD" (also "EURUSD" or "EUR-USD") is a CURRENCY pair, not a ratio chart —
-// convert it to Yahoo's forex ticker (EURUSD=X) so it renders with real candles.
-const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
-function normalizeFxPair(sym: string): string {
-  const m = /^([A-Za-z]{3})[/\- ]?([A-Za-z]{3})$/.exec(sym.trim())
-  if (!m) return sym
-  const a = m[1].toUpperCase(), b = m[2].toUpperCase()
-  if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
-  if (a === 'BTC' || a === 'ETH') return `${a}-${b}` // crypto pairs use dash form
-  return `${a}${b}=X`
-}
-
 // TradingView-style ECONOMICS codes (USINTR, USM2…) → FRED series, so users can
 // search/type the familiar economics tickers and get the underlying macro chart.
 const ECONOMICS_ALIASES: { code: string; symbol: string; name: string }[] = [
@@ -475,7 +464,8 @@ function GridSymbolBox({ value, onSubmit }: { value: string; onSubmit: (s: strin
   }, [val, open])
 
   const submit = (s?: string) => {
-    const v = (s ?? val).trim().toUpperCase()
+    const raw = (s ?? val).trim().toUpperCase()
+    const v = ECONOMICS_BY_CODE[raw] || normalizeSymbol(raw)
     if (v) onSubmit(v)
     setOpen(false); setVal('')
   }
@@ -804,7 +794,7 @@ export default function MarketDataPage() {
   const submitSearch = useCallback((s?: string) => {
     const raw = (s ?? searchVal).trim().toUpperCase()
     // Resolve TradingView-style economics codes (USINTR → FRED:FEDFUNDS) first.
-    const v = ECONOMICS_BY_CODE[raw] || normalizeFxPair(raw)
+    const v = ECONOMICS_BY_CODE[raw] || normalizeSymbol(raw)
     if (!v) return
     // Only load the symbol on the chart. Do NOT auto-save it to a watchlist —
     // the user decides what to save via the explicit "Save" action / side panel.
@@ -867,8 +857,9 @@ export default function MarketDataPage() {
 
   // Add a symbol directly into the active watchlist (from the side panel input).
   const addToWatchlist = useCallback((raw?: string) => {
-    const v = (raw ?? panelInput).trim().toUpperCase()
-    if (!v) return
+    const typed = (raw ?? panelInput).trim().toUpperCase()
+    if (!typed) return
+    const v = ECONOMICS_BY_CODE[typed] || normalizeSymbol(typed)
     setWatchlists((wls) => {
       const cur = wls[activeListName] || []
       if (cur.some((s) => s.toUpperCase() === v)) return wls
@@ -1271,7 +1262,7 @@ export default function MarketDataPage() {
                 <div style={searchMenuStyle} className="bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
-                      {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && normalizeFxPair(searchVal.trim().toUpperCase()) === searchVal.trim().toUpperCase() && (
+                      {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && normalizeSymbol(searchVal.trim().toUpperCase()) === searchVal.trim().toUpperCase() && (
                         <button
                           onMouseDown={(e) => { e.preventDefault(); submitSearch(searchVal.trim()) }}
                           className="w-full text-left px-3 py-2 bg-pink-500/10 hover:bg-pink-500/20 border-b border-pink-500/20 flex items-center gap-2"

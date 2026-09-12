@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import { useAuth } from '@/hooks/useAuth'
+import { normalizeSymbol } from '@/lib/symbol-resolver'
 import {
   createChart,
   CandlestickSeries,
@@ -138,18 +139,6 @@ const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 
 // Pro-only indicators: visible in the menu with a lock, usable only on paid plans.
 const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta'])
-
-// "EUR/USD" (also "EURUSD" or "EUR-USD") is a CURRENCY pair, not a ratio chart — map it to Yahoo's forex
-// ticker (EURUSD=X) so it renders with real candles instead of a ratio line.
-const FX_CODES = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'CNY', 'CNH', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'MXN', 'ZAR', 'HKD', 'SGD', 'INR', 'BRL', 'KRW', 'RUB', 'HUF', 'CZK', 'ILS', 'THB', 'IDR', 'MYR', 'PHP', 'TWD', 'SAR', 'AED', 'BTC', 'ETH'])
-function normalizeFxPair(sym: string): string {
-  const m = /^([A-Za-z]{3})[/\- ]?([A-Za-z]{3})$/.exec(sym.trim())
-  if (!m) return sym
-  const a = m[1].toUpperCase(), b = m[2].toUpperCase()
-  if (!FX_CODES.has(a) || !FX_CODES.has(b)) return sym
-  if (a === 'BTC' || a === 'ETH') return `${a}-${b}`
-  return `${a}${b}=X`
-}
 
 // Macro series without intraday ticks: FRED:<id> and DBnomics DBN:<prov>/<ds>/<series>.
 const isMacroSymbol = (s: string) => /^(fred|dbn):/i.test(s)
@@ -1415,7 +1404,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [symbol, setSymbol] = useState(() => normalizeFxPair(propSymbol))
+  const [symbol, setSymbol] = useState(() => normalizeSymbol(propSymbol))
   const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('mkt:rangeKey', '1Y')
   const [chartStyle, setChartStyle] = useLocalStorage<ChartStyle>('mkt:chartStyle', 'candle')
   const [indicatorList, setIndicatorList] = useLocalStorage<IndicatorKey[]>('mkt:indicators', ['volume'])
@@ -1620,7 +1609,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
   // Sync prop → state (currency pairs typed as EUR/USD become EURUSD=X candles)
   useEffect(() => {
-    const next = normalizeFxPair(propSymbol)
+    const next = normalizeSymbol(propSymbol)
     if (next !== symbol) { setSymbol(next) }
   }, [propSymbol])
 
@@ -1771,7 +1760,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         })
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to load data')
+      const msg: string = e?.message || 'Failed to load data'
+      // "API 404" is meaningless to users — the symbol simply doesn't exist.
+      setError(/API 4\d\d/.test(msg) || /No data/i.test(msg) ? `Symbol not found: ${symbol}` : msg)
       setBars([])
       setLastPrice(null)
     } finally {

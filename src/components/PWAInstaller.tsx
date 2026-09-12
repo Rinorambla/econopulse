@@ -5,10 +5,12 @@ import { useEffect } from 'react';
 export default function PWAInstaller() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      // Register service worker
-      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      // Register service worker. updateViaCache:'none' + explicit update() force
+      // clients stuck on an old caching SW to fetch the current (disabled) one.
+      navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
         .then((registration) => {
-          console.log('💾 PWA: Service Worker registered successfully', registration.scope);
+          console.log('💾 PWA: Service Worker registered successfully', registration.scope)
+          registration.update().catch(() => {})
           // Attempt background sync registration
           try {
             // @ts-expect-error: sync may be experimental

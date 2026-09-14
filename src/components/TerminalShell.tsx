@@ -151,17 +151,7 @@ export default function TerminalShell({
                   <li key={item.href}>
                     <a
                       href={item.href}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setMobileOpen(false);
-                        // Pages can open Charts inline (dashboard overlay) instead of navigating.
-                        if (item.href === '/market-data') {
-                          const ev = new CustomEvent('terminal:openCharts', { cancelable: true });
-                          const handled = !window.dispatchEvent(ev);
-                          if (handled) return;
-                        }
-                        router.push(item.href);
-                      }}
+                      onClick={(e) => { e.preventDefault(); setMobileOpen(false); router.push(item.href); }}
                       title={item.label}
                       className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors ${collapsed ? 'justify-center' : ''} ${
                         active

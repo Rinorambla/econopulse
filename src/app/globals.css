@@ -61,6 +61,8 @@ a {
 /* Terminal pages (TerminalShell) hide the global site header */
 html[data-terminal='1'] header[data-site-header] { display: none; }
 html[data-terminal='1'] footer[data-site-footer] { display: none; }
+/* Fit the Charts terminal below the shell topbar (h-14) */
+html[data-terminal='1'] .mkt-terminal { height: calc(100dvh - 3.5rem) !important; }
 
 /* ============================================================
    Market-Data terminal themes (Black / Blue / Grey / White)

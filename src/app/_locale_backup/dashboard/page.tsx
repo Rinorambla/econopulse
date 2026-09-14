@@ -10,6 +10,10 @@ import SecurityPanel from '@/components/SecurityPanel';
 import RequirePlan from '@/components/RequirePlan';
 
 const KeyLevels = dynamic(() => import('@/components/KeyLevels'), { ssr: false });
+const AdvancedChart = dynamic(() => import('@/components/analytics/AdvancedChart'), {
+	ssr: false,
+	loading: () => <div className="flex-1 flex items-center justify-center text-xs text-gray-400">Loading chart engine…</div>,
+});
 
 interface MarketData {
 	ticker: string;
@@ -404,6 +408,21 @@ export default function DashboardPage() {
 	const [selectedRow, setSelectedRow] = useState<null | { item: MarketData; opt: any; dex: number }>(null);
 	// Inline quote drawer (chart + technicals + news) — stays on the dashboard
 	const [quoteSymbol, setQuoteSymbol] = useState<string | null>(null);
+	// Full-screen Charts overlay (sidebar "Charts") — stays on the dashboard
+	const [chartsOpen, setChartsOpen] = useState(false);
+	const [chartSym, setChartSym] = useState<string>('AAPL');
+	const [chartSymInput, setChartSymInput] = useState('');
+	const [chartH, setChartH] = useState(600);
+	useEffect(() => {
+		try { const s = JSON.parse(localStorage.getItem('mkt:symbol') || '"AAPL"'); if (typeof s === 'string' && s) setChartSym(s.toUpperCase()); } catch {}
+	}, []);
+	useEffect(() => {
+		if (!chartsOpen) return;
+		const compute = () => setChartH(Math.max(360, window.innerHeight - 110));
+		compute();
+		window.addEventListener('resize', compute);
+		return () => window.removeEventListener('resize', compute);
+	}, [chartsOpen]);
 
 	// Sidebar watchlist clicks + topbar search open the inline drawer (no navigation)
 	useEffect(() => {
@@ -411,8 +430,13 @@ export default function DashboardPage() {
 			const ce = e as CustomEvent<{ symbol: string }>;
 			if (ce?.detail?.symbol) { ce.preventDefault(); setQuoteSymbol(ce.detail.symbol); }
 		};
+		const onCharts = (e: Event) => { e.preventDefault(); setChartsOpen(true); };
 		window.addEventListener('terminal:openQuote', onOpen);
-		return () => window.removeEventListener('terminal:openQuote', onOpen);
+		window.addEventListener('terminal:openCharts', onCharts);
+		return () => {
+			window.removeEventListener('terminal:openQuote', onOpen);
+			window.removeEventListener('terminal:openCharts', onCharts);
+		};
 	}, []);
 
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
@@ -690,6 +714,40 @@ export default function DashboardPage() {
 									<DashboardCharts enrichedData={enrichedData as any} />
 								)}
 								</div>
+
+				{/* Full-screen Charts overlay */}
+				{chartsOpen && (
+					<div className="fixed inset-0 z-50 bg-[#0b0e14] flex flex-col">
+						<div className="flex items-center gap-3 px-3 py-2 border-b border-[#1d232e] bg-[#0d1017]">
+							<span className="text-sm font-bold text-white">Charts · {chartSym}</span>
+							<form
+								onSubmit={(e) => {
+									e.preventDefault();
+									const s = chartSymInput.trim().toUpperCase();
+									if (!s) return;
+									setChartSym(s);
+									setChartSymInput('');
+									try { localStorage.setItem('mkt:symbol', JSON.stringify(s)); } catch {}
+								}}
+								className="flex-1 max-w-xs"
+							>
+								<input
+									value={chartSymInput}
+									onChange={(e) => setChartSymInput(e.target.value)}
+									placeholder="Symbol… (AAPL, EURUSD, BTC-USD)"
+									className="w-full bg-[#141926] border border-[#232a3a] rounded-md px-3 py-1.5 text-[12px] text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
+								/>
+							</form>
+							<div className="ml-auto flex items-center gap-3">
+								<a href="/market-data" className="text-[11px] text-indigo-300 hover:text-indigo-200 hover:underline">Full terminal ↗</a>
+								<button onClick={() => setChartsOpen(false)} className="text-gray-400 hover:text-white text-2xl leading-none px-1" aria-label="Close charts">×</button>
+							</div>
+						</div>
+						<div className="flex-1 min-h-0 p-2">
+							<AdvancedChart symbol={chartSym} height={chartH} onSymbolChange={(s: string) => setChartSym(s.toUpperCase())} />
+						</div>
+					</div>
+				)}
 
 				{/* Inline quote drawer */}
 				{quoteSymbol && (

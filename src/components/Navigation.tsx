@@ -154,32 +154,9 @@ export function Navigation({ className }: NavigationProps) {
           </button>
           {toolsMenuOpen && (
             <div role="menu" className="absolute left-0 top-full mt-2 w-52 rounded-xl bg-slate-900 border border-white/20 shadow-2xl overflow-hidden z-[100] py-1">
+              {/* All app sections open from the Dashboard sidebar (terminal) */}
               <NavigationLink href="/dashboard" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-blue-600/30" onClick={() => setToolsMenuOpen(false)}>
                 Dashboard
-              </NavigationLink>
-              <NavigationLink href="/ai-portfolio" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-emerald-600/30" onClick={() => setToolsMenuOpen(false)}>
-                AI Portfolio
-              </NavigationLink>
-              <NavigationLink href="/ai-pulse" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-pink-600/30" onClick={() => setToolsMenuOpen(false)}>
-                AI Pulse
-              </NavigationLink>
-              <NavigationLink href="/visual-ai" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-violet-600/30" onClick={() => setToolsMenuOpen(false)}>
-                Visual AI
-              </NavigationLink>
-              <NavigationLink href="/market-dna" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
-                Market DNA
-              </NavigationLink>
-              <NavigationLink href="/market-data" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-fuchsia-600/30" onClick={() => setToolsMenuOpen(false)}>
-                Market Data
-              </NavigationLink>
-              <NavigationLink href="/econoai" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-sky-600/30" onClick={() => setToolsMenuOpen(false)}>
-                UpdateAI
-              </NavigationLink>
-              <NavigationLink href="/top-analysts" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-amber-600/30" onClick={() => setToolsMenuOpen(false)}>
-                Top Analyst AI
-              </NavigationLink>
-              <NavigationLink href="/news" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-cyan-600/30" onClick={() => setToolsMenuOpen(false)}>
-                News
               </NavigationLink>
               {!isIOSApp && (
               <NavigationLink href="/pricing" className="block px-4 py-2.5 text-[13px] font-semibold text-white/90 hover:text-white hover:bg-cyan-600/30" onClick={() => setToolsMenuOpen(false)}>
@@ -291,32 +268,9 @@ export function Navigation({ className }: NavigationProps) {
           {/* Panel */}
           <div id="mobile-nav" className="absolute top-0 left-0 right-0 bg-slate-950 border-b border-slate-800 shadow-xl">
             <div className="px-4 py-4 space-y-1">
+              {/* All app sections open from the Dashboard sidebar (terminal) */}
               <NavigationLink href="/dashboard" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
                 Dashboard
-              </NavigationLink>
-              <NavigationLink href="/ai-portfolio" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                AI Portfolio
-              </NavigationLink>
-              <NavigationLink href="/ai-pulse" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                AI Pulse
-              </NavigationLink>
-              <NavigationLink href="/visual-ai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                Visual AI
-              </NavigationLink>
-              <NavigationLink href="/market-dna" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                Market DNA
-              </NavigationLink>
-              <NavigationLink href="/market-data" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                Market Data
-              </NavigationLink>
-              <NavigationLink href="/econoai" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                UpdateAI
-              </NavigationLink>
-              <NavigationLink href="/top-analysts" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                Top Analyst AI
-              </NavigationLink>
-              <NavigationLink href="/news" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-                News
               </NavigationLink>
               {!isIOSApp && (
               <NavigationLink href="/pricing" className="block w-full text-white/90 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10" onClick={() => setMobileOpen(false)}>

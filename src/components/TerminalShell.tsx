@@ -54,6 +54,8 @@ export default function TerminalShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [watchSymbols, setWatchSymbols] = useState<string[]>([]);
+  const [watchQuotes, setWatchQuotes] = useState<Record<string, { price: number; changePercent: number }>>({});
 
   useEffect(() => {
     try { setCollapsed(localStorage.getItem('shell:collapsed') === '1'); } catch {}
@@ -64,6 +66,39 @@ export default function TerminalShell({
     document.documentElement.setAttribute('data-terminal', '1');
     return () => { document.documentElement.removeAttribute('data-terminal'); };
   }, []);
+
+  // Sidebar watchlist: reads the same storage used by the Charts terminal.
+  useEffect(() => {
+    const read = () => {
+      try {
+        const lists = JSON.parse(localStorage.getItem('mkt:watchlists') || '{}');
+        const active = JSON.parse(localStorage.getItem('mkt:activeList') || '"Main"');
+        const syms: string[] = Array.isArray(lists?.[active]) ? lists[active] : Object.values(lists)[0] as string[] || [];
+        setWatchSymbols((syms || []).slice(0, 15));
+      } catch { setWatchSymbols([]); }
+    };
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
+  }, []);
+
+  useEffect(() => {
+    if (!watchSymbols.length) return;
+    let stop = false;
+    const load = async () => {
+      try {
+        const r = await fetch(`/api/yahoo-quotes?symbols=${encodeURIComponent(watchSymbols.join(','))}`, { cache: 'no-store' });
+        if (!r.ok || stop) return;
+        const js = await r.json();
+        const out: Record<string, { price: number; changePercent: number }> = {};
+        (js?.data || []).forEach((q: any) => { if (q?.symbol) out[String(q.symbol).toUpperCase()] = { price: q.price, changePercent: q.changePercent }; });
+        if (!stop) setWatchQuotes(out);
+      } catch {}
+    };
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, 60000);
+    return () => { stop = true; clearInterval(id); };
+  }, [watchSymbols]);
   const toggleCollapsed = () => {
     setCollapsed(c => {
       try { localStorage.setItem('shell:collapsed', c ? '0' : '1'); } catch {}
@@ -122,6 +157,35 @@ export default function TerminalShell({
             </ul>
           </div>
         ))}
+
+        {/* Watchlist */}
+        {!collapsed && watchSymbols.length > 0 && (
+          <div>
+            <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Watchlist</div>
+            <ul className="space-y-0.5">
+              {watchSymbols.map(sym => {
+                const q = watchQuotes[sym.toUpperCase()];
+                const pct = q?.changePercent;
+                const pctCls = pct == null ? 'text-slate-500' : pct > 0 ? 'text-emerald-400' : pct < 0 ? 'text-red-400' : 'text-slate-400';
+                return (
+                  <li key={sym}>
+                    <a
+                      href={`/security/${encodeURIComponent(sym)}`}
+                      onClick={(e) => { e.preventDefault(); setMobileOpen(false); router.push(`/security/${encodeURIComponent(sym)}`); }}
+                      className="flex items-center justify-between gap-1 rounded-md px-2 py-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/5"
+                    >
+                      <span className="font-semibold truncate">{sym}</span>
+                      <span className="flex items-center gap-1.5 tabular-nums shrink-0">
+                        <span className="text-slate-400">{q?.price != null ? (q.price >= 1000 ? q.price.toFixed(0) : q.price.toFixed(2)) : '—'}</span>
+                        <span className={pctCls}>{pct != null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : ''}</span>
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </nav>
 
       {/* Bottom */}

@@ -60,6 +60,7 @@ a {
 
 /* Terminal pages (TerminalShell) hide the global site header */
 html[data-terminal='1'] header[data-site-header] { display: none; }
+html[data-terminal='1'] footer[data-site-footer] { display: none; }
 
 /* ============================================================
    Market-Data terminal themes (Black / Blue / Grey / White)

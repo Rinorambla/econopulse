@@ -350,6 +350,42 @@ export default function DashboardPage() {
 		if (sortKey === key) setSortDir(d=> d==='asc'?'desc':'asc'); else { setSortKey(key); setSortDir('desc'); }
 	};
 
+	// 1M sparklines for the visible slice (batched, cached server-side)
+	const [sparks, setSparks] = useState<Record<string, number[]>>({});
+	useEffect(() => {
+		let abort = false;
+		const run = async () => {
+			const want = filteredData.slice(0, 75).map(x => x.ticker).filter(t => !sparks[t] && !t.includes('/'));
+			for (let i = 0; i < want.length && !abort; i += 25) {
+				const chunk = want.slice(i, i + 25);
+				try {
+					const r = await fetch(`/api/sparkline?symbols=${encodeURIComponent(chunk.join(','))}`, { cache: 'no-store' });
+					if (!r.ok) continue;
+					const js = await r.json();
+					if (abort) return;
+					if (js?.data) setSparks(prev => ({ ...prev, ...js.data }));
+				} catch {}
+			}
+		};
+		run();
+		return () => { abort = true; };
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filteredData]);
+
+	const Sparkline: React.FC<{ closes?: number[] }> = ({ closes }) => {
+		if (!closes || closes.length < 2) return <span className="text-gray-600">—</span>;
+		const w = 64, h = 20;
+		const min = Math.min(...closes), max = Math.max(...closes);
+		const span = max - min || 1;
+		const pts = closes.map((c, i) => `${(i / (closes.length - 1)) * w},${h - ((c - min) / span) * (h - 2) - 1}`).join(' ');
+		const up = closes[closes.length - 1] >= closes[0];
+		return (
+			<svg width={w} height={h} className="block">
+				<polyline points={pts} fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth="1.2" />
+			</svg>
+		);
+	};
+
 	const getPCRClass = (val: string | null | undefined) => {
 		if (!val) return 'text-gray-300';
 		const num = parseFloat(val);
@@ -443,6 +479,7 @@ export default function DashboardPage() {
 														{[
 															{k:'ticker', l:'Ticker / Name'},
 															{k:'price', l:'Price / Δ'},
+															{k:'spark', l:'1M'},
 															// performance removed per request
 															{k:'volume', l:'Volume'},
 															{k:'trend', l:'Trend'},
@@ -510,7 +547,7 @@ export default function DashboardPage() {
 																		onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
 																		loading="lazy"
 																	/>
-																	<span className="font-bold text-white tracking-tight" title={item.name}>{item.ticker}</span>
+																					<a href={`/security/${encodeURIComponent(item.ticker)}`} onClick={(e)=> e.stopPropagation()} className="font-bold text-white tracking-tight hover:text-indigo-300 hover:underline" title={item.name}>{item.ticker}</a>
 																	{item.direction && <span className="text-[9px] text-gray-500">{item.direction}</span>}
 																</div>
 																{item.sector && <span className="text-[9px] text-blue-400/70">{item.sector}</span>}
@@ -521,6 +558,7 @@ export default function DashboardPage() {
 																	<span className={`text-[10px] ${getPerformanceColor(item.change)}`}>{item.change?`${item.change.startsWith('$')? '': '$'}${item.change}`:'—'}</span>
 																</div>
 															</td>
+															<td className="px-2 py-1"><Sparkline closes={sparks[item.ticker]} /></td>
 															{/* Performance column removed */}
 															<td className="px-2 py-1 tabular-nums">{item.volume || '—'}</td>
 															<td className="px-2 py-1"><span className={`inline-flex px-1 py-0.5 rounded ${getTrendColor(item.trend)} font-semibold`}>{item.trend}</span></td>
@@ -617,7 +655,7 @@ export default function DashboardPage() {
 																	);
 																})}
 													{!filteredData.length && (
-														<tr><td colSpan={15} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
+														<tr><td colSpan={16} className="px-4 py-6 text-center text-gray-500">No results match current filters.</td></tr>
 													)}
 												</tbody>
 											</table>

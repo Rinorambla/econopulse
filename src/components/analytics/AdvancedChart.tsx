@@ -2022,7 +2022,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         timeVisible: /m$|h$/.test(currentRange.interval),
         secondsVisible: false,
       },
-      handleScroll: { vertTouchDrag: false },
+      handleScroll: { vertTouchDrag: true },
     })
     chartRef.current = chart
 
@@ -2843,6 +2843,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     const redrawOnDrag = (e: PointerEvent) => { if (e.buttons) requestAnimationFrame(redrawOverlay) }
     container.addEventListener('pointermove', redrawOnDrag)
     container.addEventListener('wheel', redrawOnRange, { passive: true })
+    // Touch pans are handled internally by the chart (pointermove may not fire) —
+    // keep the overlay glued to the candles while a finger drags.
+    container.addEventListener('touchmove', redrawOnRange, { passive: true })
 
     // Resize observer (debounced via RAF to avoid layout-thrash flicker)
     let roRaf = 0
@@ -3527,6 +3530,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const handle = grabHandleAt(x, y, touch ? 16 : 10)
       const id = handle ? handle.id : hitTestDrawings(x, y)
       if (id == null) return // empty space → let the chart pan/zoom normally
+      // TradingView-style: an UNSELECTED drawing never blocks panning. First click
+      // (no move) selects it via subscribeClick; only a selected drawing is draggable.
+      if (selectedDrawingIdRef.current !== id) return
       const d = drawingsRef.current.find(dd => dd.id === id)
       if (!d) return
       // Freeze chart pan/zoom + page scroll while we manipulate the drawing.
@@ -3570,7 +3576,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const drag = dragRef.current
       if (!drag) return
       dragRef.current = null
-      chartRef.current?.applyOptions({ handleScroll: { vertTouchDrag: false }, handleScale: true })
+      chartRef.current?.applyOptions({ handleScroll: { vertTouchDrag: true }, handleScale: true })
       el.style.touchAction = 'none'
       try { el.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
       if (drag.moved) {
@@ -3584,13 +3590,15 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       }
     }
 
-    // Cursor feedback so users see anchors/lines are draggable.
+    // Cursor feedback so users see anchors/lines are draggable (selected only).
     const onHover = (e: PointerEvent) => {
       if (dragRef.current) return
       if (activeToolRef.current !== 'cursor') { el.style.cursor = ''; return }
       const { x, y } = localXY(e)
-      if (grabHandleAt(x, y)) el.style.cursor = 'pointer'
-      else if (hitTestDrawings(x, y) != null) el.style.cursor = 'move'
+      const selId = selectedDrawingIdRef.current
+      const handle = grabHandleAt(x, y)
+      if (handle && handle.id === selId) el.style.cursor = 'pointer'
+      else if (selId != null && hitTestDrawings(x, y) === selId) el.style.cursor = 'move'
       else el.style.cursor = ''
     }
 

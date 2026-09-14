@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
 import TerminalShell from '@/components/TerminalShell';
+import SecurityPanel from '@/components/SecurityPanel';
 import RequirePlan from '@/components/RequirePlan';
 
 const KeyLevels = dynamic(() => import('@/components/KeyLevels'), { ssr: false });
@@ -401,6 +402,8 @@ export default function DashboardPage() {
 
 	// Selected ticker for DEX/GEX modal
 	const [selectedRow, setSelectedRow] = useState<null | { item: MarketData; opt: any; dex: number }>(null);
+	// Inline quote drawer (chart + technicals + news) — stays on the dashboard
+	const [quoteSymbol, setQuoteSymbol] = useState<string | null>(null);
 
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
 
@@ -547,7 +550,7 @@ export default function DashboardPage() {
 																		onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
 																		loading="lazy"
 																	/>
-																					<a href={`/security/${encodeURIComponent(item.ticker)}`} onClick={(e)=> e.stopPropagation()} className="font-bold text-white tracking-tight hover:text-indigo-300 hover:underline" title={item.name}>{item.ticker}</a>
+																					<a href={`/security/${encodeURIComponent(item.ticker)}`} onClick={(e)=> { e.preventDefault(); e.stopPropagation(); setQuoteSymbol(item.ticker); }} className="font-bold text-white tracking-tight hover:text-indigo-300 hover:underline" title={item.name}>{item.ticker}</a>
 																	{item.direction && <span className="text-[9px] text-gray-500">{item.direction}</span>}
 																</div>
 																{item.sector && <span className="text-[9px] text-blue-400/70">{item.sector}</span>}
@@ -676,6 +679,25 @@ export default function DashboardPage() {
 									<DashboardCharts enrichedData={enrichedData as any} />
 								)}
 								</div>
+
+				{/* Inline quote drawer */}
+				{quoteSymbol && (
+					<div className="fixed inset-0 z-50">
+						<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setQuoteSymbol(null)} />
+						<div className="absolute right-0 top-0 h-full w-full max-w-3xl bg-[#0b0e14] border-l border-[#1d232e] shadow-2xl overflow-y-auto">
+							<div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 bg-[#0d1017] border-b border-[#1d232e]">
+								<span className="text-sm font-bold text-white">{quoteSymbol}</span>
+								<div className="flex items-center gap-2">
+									<a href={`/security/${encodeURIComponent(quoteSymbol)}`} className="text-[11px] text-indigo-300 hover:text-indigo-200 hover:underline">Full page ↗</a>
+									<button onClick={() => setQuoteSymbol(null)} className="text-gray-400 hover:text-white text-xl leading-none px-1">×</button>
+								</div>
+							</div>
+							<div className="p-3">
+								<SecurityPanel symbol={quoteSymbol} chartHeight={380} stacked />
+							</div>
+						</div>
+					</div>
+				)}
 
 				{/* Info Guide Modal */}
 				{showInfo && (

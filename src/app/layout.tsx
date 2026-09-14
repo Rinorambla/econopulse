@@ -125,7 +125,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <NativeFeaturesInit />
           {/* Auto-recover when an old cached HTML references chunks no longer on CDN */}
           <ChunkErrorRecovery />
-          <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
+          <header data-site-header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-white/10">
             <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2">
               <SafeBoundary fallback={<div className="text-white/60 text-sm">EconoPulse</div>}>
                 <Navigation />

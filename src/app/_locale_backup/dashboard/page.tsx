@@ -4,9 +4,8 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeftIcon, ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
-import { NavigationLink } from '@/components/Navigation';
-import Footer from '@/components/Footer';
+import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
+import TerminalShell from '@/components/TerminalShell';
 import RequirePlan from '@/components/RequirePlan';
 
 const KeyLevels = dynamic(() => import('@/components/KeyLevels'), { ssr: false });
@@ -371,32 +370,23 @@ export default function DashboardPage() {
 
 	return (
 		<RequirePlan min="premium">
-			<div className="min-h-screen bg-[var(--background)] text-white">
-				<div className="border-b border-slate-700/80 bg-gradient-to-b from-slate-900/95 to-slate-900/65 backdrop-blur-sm">
-					<div className="max-w-7xl mx-auto px-3 py-3">
-						<div className="flex flex-wrap items-center gap-2">
-							<NavigationLink href="/" className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-700 bg-slate-800/70 text-blue-300 hover:text-blue-200 hover:border-blue-500/40 transition-colors">
-								<ArrowLeftIcon className="h-4 w-4" />
-							</NavigationLink>
-							<div className="min-w-0">
-								<h1 className="text-base sm:text-lg font-extrabold tracking-tight">Market Dashboard Pro</h1>
-								<p className="text-[11px] text-gray-400">Live options, flow and directional pressure analytics for execution</p>
-							</div>
-							<div className="ml-auto flex items-center gap-2">
-								<span className="hidden sm:inline text-[10px] text-gray-400">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'}</span>
-								<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-300 hover:text-white hover:bg-slate-700 rounded border border-slate-700 transition-colors" title="Column guide">
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
-									<span className="text-[10px]">Guide</span>
-								</button>
-							</div>
-						</div>
-						<div className="mt-2 text-[10px] text-gray-400">Sentiment &amp; Risk panel moved to <NavigationLink href="/market-dna" className="text-blue-300 hover:underline">Market DNA</NavigationLink></div>
-					</div>
-				</div>
+			<TerminalShell
+				title="Dashboard"
+				right={(
+					<>
+						<span className="hidden sm:inline text-[10px] text-gray-400">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'}</span>
+						<button onClick={() => setShowInfo(true)} className="flex items-center gap-1 px-2 py-1 text-gray-300 hover:text-white hover:bg-slate-700 rounded border border-[#232a3a] transition-colors" title="Column guide">
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5"/><text x="10" y="14.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">i</text></svg>
+							<span className="text-[10px]">Guide</span>
+						</button>
+					</>
+				)}
+			>
+			<div className="text-white">
 
 				{/* Market Sentiment & Risk block moved to /market-dna */}
 				{summary && (
-					<div className="max-w-7xl mx-auto px-3 pt-2 grid grid-cols-2 lg:grid-cols-5 gap-2">
+					<div className="w-full px-3 pt-2 grid grid-cols-2 lg:grid-cols-5 gap-2">
 						{(() => {
 							const parseNum = (s: string) => {
 								const cleaned = s.replace(/[%+,\s]/g, '')
@@ -430,7 +420,7 @@ export default function DashboardPage() {
 			<ImportantNewsPopup />
 
 			{/* Advanced Filters */}
-								<div className="max-w-7xl mx-auto px-3 pt-2 pb-3">
+								<div className="w-full px-3 pt-2 pb-3">
 												{/* Sector diagnostics removed */}
 									<div className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-lg p-2.5 mb-2 grid gap-2 md:grid-cols-6 lg:grid-cols-8 text-[11px] ring-1 ring-white/10 border border-slate-700/70">
 										<input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search Ticker / Name" className="px-2 py-1 bg-slate-700 border border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
@@ -810,8 +800,8 @@ export default function DashboardPage() {
 					);
 				})()}
 
-				<Footer />
 			</div>
+			</TerminalShell>
 		</RequirePlan>
 	);
 }

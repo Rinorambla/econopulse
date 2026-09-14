@@ -58,6 +58,9 @@ a {
   color: var(--foreground);
 }
 
+/* Terminal pages (TerminalShell) hide the global site header */
+html[data-terminal='1'] header[data-site-header] { display: none; }
+
 /* ============================================================
    Market-Data terminal themes (Black / Blue / Grey / White)
    The terminal root carries .mkt-terminal + data-theme="...".

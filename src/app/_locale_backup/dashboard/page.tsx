@@ -405,12 +405,23 @@ export default function DashboardPage() {
 	// Inline quote drawer (chart + technicals + news) — stays on the dashboard
 	const [quoteSymbol, setQuoteSymbol] = useState<string | null>(null);
 
+	// Sidebar watchlist clicks + topbar search open the inline drawer (no navigation)
+	useEffect(() => {
+		const onOpen = (e: Event) => {
+			const ce = e as CustomEvent<{ symbol: string }>;
+			if (ce?.detail?.symbol) { ce.preventDefault(); setQuoteSymbol(ce.detail.symbol); }
+		};
+		window.addEventListener('terminal:openQuote', onOpen);
+		return () => window.removeEventListener('terminal:openQuote', onOpen);
+	}, []);
+
 	if (loading) return <div className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-white text-xl">Loading dashboard...</div></div>;
 
 	return (
 		<RequirePlan min="premium">
 			<TerminalShell
 				title="Dashboard"
+				search
 				right={(
 					<>
 						<span className="hidden sm:inline text-[10px] text-gray-400">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'}</span>

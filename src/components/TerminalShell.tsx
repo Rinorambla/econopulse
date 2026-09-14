@@ -43,10 +43,12 @@ const NAV: NavSection[] = [
 export default function TerminalShell({
   title,
   right,
+  search = false,
   children,
 }: {
   title: string;
   right?: React.ReactNode;
+  search?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -56,6 +58,16 @@ export default function TerminalShell({
   const [query, setQuery] = useState('');
   const [watchSymbols, setWatchSymbols] = useState<string[]>([]);
   const [watchQuotes, setWatchQuotes] = useState<Record<string, { price: number; changePercent: number }>>({});
+
+  // Ask the current page to open the symbol inline (drawer); fall back to the quote page.
+  const openQuote = (sym: string) => {
+    const s = sym.trim().toUpperCase();
+    if (!s) return;
+    setMobileOpen(false);
+    const ev = new CustomEvent('terminal:openQuote', { detail: { symbol: s }, cancelable: true });
+    const handled = !window.dispatchEvent(ev); // preventDefault() → handled by the page
+    if (!handled) router.push(`/security/${encodeURIComponent(s)}`);
+  };
 
   useEffect(() => {
     try { setCollapsed(localStorage.getItem('shell:collapsed') === '1'); } catch {}
@@ -111,8 +123,7 @@ export default function TerminalShell({
     const q = query.trim().toUpperCase();
     if (!q) return;
     setQuery('');
-    setMobileOpen(false);
-    router.push(`/market-data?symbol=${encodeURIComponent(q)}`);
+    openQuote(q);
   };
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
@@ -171,7 +182,7 @@ export default function TerminalShell({
                   <li key={sym}>
                     <a
                       href={`/security/${encodeURIComponent(sym)}`}
-                      onClick={(e) => { e.preventDefault(); setMobileOpen(false); router.push(`/security/${encodeURIComponent(sym)}`); }}
+                      onClick={(e) => { e.preventDefault(); openQuote(sym); }}
                       className="flex items-center justify-between gap-1 rounded-md px-2 py-1 text-[11px] text-slate-300 hover:text-white hover:bg-white/5"
                     >
                       <span className="font-semibold truncate">{sym}</span>
@@ -233,17 +244,19 @@ export default function TerminalShell({
         <header className="sticky top-0 z-40 h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[#1d232e] bg-[#0d1017]/95 backdrop-blur">
           <button onClick={() => setMobileOpen(true)} className="lg:hidden text-slate-400 hover:text-white p-1"><Menu className="w-5 h-5" /></button>
           <h1 className="text-sm font-bold tracking-tight text-white whitespace-nowrap">{title}</h1>
-          <form onSubmit={submitSearch} className="flex-1 max-w-md ml-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search symbol… (AAPL, EURUSD, BTC-USD)"
-                className="w-full bg-[#141926] border border-[#232a3a] rounded-md pl-8 pr-3 py-1.5 text-[12px] text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 focus:border-indigo-500/60"
-              />
-            </div>
-          </form>
+          {search && (
+            <form onSubmit={submitSearch} className="flex-1 max-w-md ml-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search symbol… (AAPL, EURUSD, BTC-USD)"
+                  className="w-full bg-[#141926] border border-[#232a3a] rounded-md pl-8 pr-3 py-1.5 text-[12px] text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 focus:border-indigo-500/60"
+                />
+              </div>
+            </form>
+          )}
           <div className="ml-auto flex items-center gap-2">{right}</div>
         </header>
 

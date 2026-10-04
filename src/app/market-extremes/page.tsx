@@ -1,13 +1,6 @@
-"use client";
+import { redirect } from 'next/navigation';
 
-import React from 'react';
-import LocalErrorBoundary from '@/components/LocalErrorBoundary';
-import MarketExtremesInner from '../_locale_backup/market-extremes/page';
-
+// Replaced by the Global Economics hub (Trading Economics-style macro page).
 export default function MarketExtremesPage() {
-	return (
-		<LocalErrorBoundary fallbackTitle="Market Extremes error">
-			<MarketExtremesInner />
-		</LocalErrorBoundary>
-	);
+	redirect('/economics');
 }

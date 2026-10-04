@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Logo from './Logo';
 import {
-  LayoutDashboard, CandlestickChart, Activity, Dna, Gauge, Briefcase, Globe,
+  LayoutDashboard, CandlestickChart, Activity, Dna, Landmark, Briefcase, Globe,
   Star, Newspaper, Bot, Search, Menu, X, ChevronsLeft, ChevronsRight, Home, User,
 } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const NAV: NavSection[] = [
       { label: 'Charts', href: '/market-data', icon: CandlestickChart },
       { label: 'AI Pulse', href: '/ai-pulse', icon: Activity },
       { label: 'Market DNA', href: '/market-dna', icon: Dna },
-      { label: 'Extremes', href: '/market-extremes', icon: Gauge },
+      { label: 'Economics', href: '/economics', icon: Landmark },
     ],
   },
   {

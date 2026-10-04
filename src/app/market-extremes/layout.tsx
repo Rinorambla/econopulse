@@ -1,4 +1,4 @@
-import TerminalShell from '@/components/TerminalShell';
+// Pass-through: this route only redirects to /economics.
 export default function Layout({ children }: { children: React.ReactNode }) {
-	return <TerminalShell title="Market Extremes">{children}</TerminalShell>;
+	return <>{children}</>;
 }

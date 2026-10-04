@@ -10,6 +10,7 @@
    ───────────────────────────────────────────── */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import PlanGate from '@/components/PlanGate';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type EconEvent = {
@@ -198,6 +199,160 @@ const DOT: Record<EconEvent['importance'], string> = {
   High: 'bg-red-400', Medium: 'bg-amber-400', Low: 'bg-slate-500',
 };
 
+// ── Event → history series mapping (FRED:/DBN: symbols served by fred-history / dbnomics-history) ──
+type SeriesMatch = { re: RegExp; sym: string; label: string };
+const US_SERIES: SeriesMatch[] = [
+  { re: /ism (manufacturing|mfg) pmi/, sym: 'DBN:ISM/pmi/pm', label: 'ISM Manufacturing PMI' },
+  { re: /ism (services|non-?manufacturing) pmi/, sym: 'DBN:ISM/nm-pmi/pm', label: 'ISM Services PMI' },
+  { re: /core cpi/, sym: 'FRED:CPILFESL@PC1', label: 'Core CPI YoY %' },
+  { re: /\bcpi\b|inflation rate/, sym: 'FRED:CPIAUCSL@PC1', label: 'CPI YoY %' },
+  { re: /core pce/, sym: 'FRED:PCEPILFE@PC1', label: 'Core PCE YoY %' },
+  { re: /\bppi\b/, sym: 'FRED:PPIACO@PC1', label: 'PPI YoY %' },
+  { re: /unemployment rate/, sym: 'FRED:UNRATE', label: 'Unemployment Rate %' },
+  { re: /non-?farm|nfp|payroll/, sym: 'FRED:PAYEMS@CHG', label: 'Nonfarm Payrolls m/m (K)' },
+  { re: /jobless claims|unemployment claims/, sym: 'FRED:ICSA', label: 'Initial Jobless Claims' },
+  { re: /jolts|job openings/, sym: 'FRED:JTSJOL', label: 'Job Openings (K)' },
+  { re: /\bgdp\b/, sym: 'FRED:A191RL1Q225SBEA', label: 'GDP QoQ SAAR %' },
+  { re: /retail sales/, sym: 'FRED:RSAFS@PC1', label: 'Retail Sales YoY %' },
+  { re: /industrial production/, sym: 'FRED:INDPRO@PC1', label: 'Industrial Production YoY %' },
+  { re: /consumer sentiment|uom/, sym: 'FRED:UMCSENT', label: 'Michigan Consumer Sentiment' },
+  { re: /housing starts/, sym: 'FRED:HOUST', label: 'Housing Starts (K, SAAR)' },
+  { re: /building permits/, sym: 'FRED:PERMIT', label: 'Building Permits (K, SAAR)' },
+  { re: /durable goods/, sym: 'FRED:DGORDER@PCH', label: 'Durable Goods Orders m/m %' },
+  { re: /trade balance/, sym: 'FRED:BOPGSTB', label: 'Trade Balance ($M)' },
+  { re: /fomc|federal funds|fed funds/, sym: 'FRED:FEDFUNDS', label: 'Fed Funds Rate %' },
+  { re: /inflation expectations/, sym: 'FRED:MICH', label: 'Michigan 1Y Inflation Expectations %' },
+];
+const EUR_SERIES: SeriesMatch[] = [
+  { re: /german.*(cpi|inflation)/, sym: 'FRED:CP0000DEM086NEST@PC1', label: 'Germany CPI YoY %' },
+  { re: /french.*(cpi|inflation)/, sym: 'FRED:CP0000FRM086NEST@PC1', label: 'France CPI YoY %' },
+  { re: /italian.*(cpi|inflation)/, sym: 'FRED:CP0000ITM086NEST@PC1', label: 'Italy CPI YoY %' },
+  { re: /spanish.*(cpi|inflation)/, sym: 'FRED:CP0000ESM086NEST@PC1', label: 'Spain CPI YoY %' },
+  { re: /german.*unemployment/, sym: 'FRED:LRHUTTTTDEM156S', label: 'Germany Unemployment %' },
+  { re: /italian.*unemployment/, sym: 'FRED:LRHUTTTTITM156S', label: 'Italy Unemployment %' },
+  { re: /cpi|hicp|inflation/, sym: 'FRED:CP0000EZ19M086NEST@PC1', label: 'Euro Area HICP YoY %' },
+  { re: /ecb|refinancing|deposit facility/, sym: 'FRED:ECBDFR', label: 'ECB Deposit Rate %' },
+];
+const REGION_SERIES: { region: RegExp; list: SeriesMatch[] }[] = [
+  { region: /united states|^us$/, list: US_SERIES },
+  { region: /euro|germany|france|italy|spain|^(ea|eu|de|fr|it|es)$/, list: EUR_SERIES },
+  { region: /united kingdom|^(gb|uk)$/, list: [
+    { re: /unemployment|claimant/, sym: 'FRED:LRHUTTTTGBM156S', label: 'UK Unemployment %' },
+    { re: /bank rate|official bank|boe/, sym: 'FRED:IUDSOIA', label: 'UK Overnight Rate (SONIA) %' },
+  ]},
+  { region: /japan|^jp$/, list: [
+    { re: /unemployment/, sym: 'FRED:LRHUTTTTJPM156S', label: 'Japan Unemployment %' },
+    { re: /boj|policy rate/, sym: 'FRED:IRSTCI01JPM156N', label: 'Japan Overnight Rate %' },
+  ]},
+  { region: /canada|^ca$/, list: [
+    { re: /unemployment/, sym: 'FRED:LRUNTTTTCAM156S', label: 'Canada Unemployment %' },
+    { re: /boc|overnight rate|rate decision/, sym: 'FRED:IRSTCI01CAM156N', label: 'Canada Overnight Rate %' },
+  ]},
+  { region: /australia|^au$/, list: [
+    { re: /unemployment/, sym: 'FRED:LRHUTTTTAUM156S', label: 'Australia Unemployment %' },
+    { re: /rba|cash rate/, sym: 'FRED:IRSTCI01AUM156N', label: 'Australia Cash Rate %' },
+  ]},
+  { region: /switzerland|^ch$/, list: [
+    { re: /snb|policy rate|libor/, sym: 'FRED:IR3TIB01CHM156N', label: 'Switzerland 3M Rate %' },
+  ]},
+];
+
+function seriesForEvent(e: EconEvent): { sym: string; label: string } | null {
+  const region = regionLabel(e.region).toLowerCase();
+  const name = e.event.toLowerCase();
+  for (const grp of REGION_SERIES) {
+    if (!grp.region.test(region)) continue;
+    for (const m of grp.list) if (m.re.test(name)) return { sym: m.sym, label: m.label };
+  }
+  return null;
+}
+
+// ── Inline history chart (line / bars) shown under a clicked calendar event ──
+type Bar = { time: number; close: number };
+const chartCache = new Map<string, Bar[]>();
+
+function InlineMacroChart({ sym, label }: { sym: string; label: string }) {
+  const [bars, setBars] = useState<Bar[] | null>(chartCache.get(sym) || null);
+  const [err, setErr] = useState(false);
+  const [mode, setMode] = useState<'line' | 'bars'>('line');
+
+  useEffect(() => {
+    if (chartCache.has(sym)) { setBars(chartCache.get(sym)!); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const url = sym.startsWith('DBN:')
+          ? `/api/dbnomics-history?symbol=${encodeURIComponent(sym)}&range=5y`
+          : `/api/fred-history?symbol=${encodeURIComponent(sym)}&range=5y`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const j = await r.json();
+        const raw: { time: number; close: number }[] = j?.data?.bars || [];
+        if (!alive) return;
+        if (!raw.length) { setErr(true); return; }
+        const pts = raw.slice(-120).map(b => ({ time: b.time, close: b.close }));
+        chartCache.set(sym, pts);
+        setBars(pts);
+      } catch { if (alive) setErr(true); }
+    })();
+    return () => { alive = false; };
+  }, [sym]);
+
+  if (err) return <div className="text-[11px] text-gray-600 py-3">History unavailable for this indicator.</div>;
+  if (!bars) return <div className="text-[11px] text-gray-600 py-3">Loading history…</div>;
+
+  const W = 720, H = 150, PAD = 4;
+  const vals = bars.map(b => b.close);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = max - min || 1;
+  const x = (i: number) => PAD + (i / Math.max(bars.length - 1, 1)) * (W - PAD * 2);
+  const y = (v: number) => H - PAD - ((v - min) / span) * (H - PAD * 2);
+  const zeroY = min < 0 && max > 0 ? y(0) : H - PAD;
+  const last = vals[vals.length - 1];
+  const first = vals[0];
+  const up = last >= first;
+  const fmtD = (t: number) => new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const fmtV = (v: number) => Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(Math.abs(v) < 10 ? 2 : 1);
+
+  return (
+    <div className="py-2">
+      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+        <span className="text-[11px] font-semibold text-gray-300">{label}</span>
+        <span className={`text-[11px] font-bold ${up ? 'text-emerald-400' : 'text-red-400'}`}>Last: {fmtV(last)}</span>
+        <span className="text-[10px] text-gray-600">5Y · {bars.length} obs · min {fmtV(min)} / max {fmtV(max)}</span>
+        <div className="ml-auto inline-flex rounded bg-slate-900/80 border border-slate-700 p-0.5 gap-0.5">
+          {(['line', 'bars'] as const).map(m => (
+            <button key={m} onClick={(ev) => { ev.stopPropagation(); setMode(m); }}
+              className={`text-[10px] px-2 py-0.5 rounded font-semibold ${mode === m ? 'bg-slate-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+              {m === 'line' ? 'Line' : 'Bars'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-36 rounded border border-slate-800 bg-slate-950" preserveAspectRatio="none">
+        {min < 0 && max > 0 && <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="#334155" strokeDasharray="3,3" strokeWidth={1} />}
+        {mode === 'line' ? (
+          <polyline
+            fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth={1.8}
+            points={bars.map((b, i) => `${x(i)},${y(b.close)}`).join(' ')}
+          />
+        ) : (
+          bars.map((b, i) => {
+            const bw = Math.max((W - PAD * 2) / bars.length - 1, 1);
+            const yv = y(b.close);
+            const base = min < 0 && max > 0 ? zeroY : H - PAD;
+            const top = Math.min(yv, base), h = Math.max(Math.abs(base - yv), 1);
+            return <rect key={i} x={x(i) - bw / 2} y={top} width={bw} height={h} fill={b.close >= (min < 0 ? 0 : min) ? '#38bdf8' : '#f87171'} opacity={i === bars.length - 1 ? 1 : 0.75} />;
+          })
+        )}
+      </svg>
+      <div className="flex justify-between text-[10px] text-gray-600 mt-0.5">
+        <span>{fmtD(bars[0].time)}</span>
+        <span>{fmtD(bars[bars.length - 1].time)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Formatting helpers ──────────────────────────────────────────────────────
 const fmtPct = (v: number | null | undefined, digits = 1) =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(digits)}%`;
@@ -209,6 +364,14 @@ const fmtPop = (v: number) =>
 type Tab = 'calendar' | 'releases' | 'countries';
 
 export default function EconomicsPage() {
+  return (
+    <PlanGate requiredPlan="free">
+      <EconomicsInner />
+    </PlanGate>
+  );
+}
+
+function EconomicsInner() {
   const [tab, setTab] = useState<Tab>('calendar');
   const [calendar, setCalendar] = useState<EconEvent[]>([]);
   const [releases, setReleases] = useState<EconEvent[]>([]);
@@ -222,6 +385,7 @@ export default function EconomicsPage() {
   const [regionQuery, setRegionQuery] = useState('');
   const [sortKey, setSortKey] = useState<'gdp' | 'growth' | 'inflation' | 'unemployment' | 'rate'>('gdp');
   const [sortDesc, setSortDesc] = useState(true);
+  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
 
   // Calendar (next 14 days)
   useEffect(() => {
@@ -425,9 +589,16 @@ export default function EconomicsPage() {
                     {events.map((e, i) => {
                       const tone = e.actual ? actualTone(e) : 'neutral';
                       const preview = e.importance === 'High' ? makeComment(e) : null;
+                      const chart = seriesForEvent(e);
+                      const rowKey = `${date}|${i}|${e.event}`;
+                      const isOpen = expandedEvent === rowKey;
                       return (
-                        <React.Fragment key={`${date}-${i}`}>
-                          <tr className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+                        <React.Fragment key={rowKey}>
+                          <tr
+                            className={`border-b border-slate-800/60 transition-colors ${chart ? 'cursor-pointer hover:bg-slate-800/50' : 'hover:bg-slate-800/30'} ${isOpen ? 'bg-slate-800/40' : ''}`}
+                            onClick={() => { if (chart) setExpandedEvent(isOpen ? null : rowKey); }}
+                            title={chart ? 'Click to show historical chart' : undefined}
+                          >
                             <td className="pl-4 pr-2 py-2 text-gray-500 whitespace-nowrap w-20">{e.time || '—'}</td>
                             <td className="px-2 py-2 whitespace-nowrap w-44">
                               <span className="mr-1.5">{flagFor(e.region)}</span>
@@ -436,11 +607,19 @@ export default function EconomicsPage() {
                             <td className="px-2 py-2">
                               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-2 align-middle ${DOT[e.importance]}`} />
                               <span className="text-gray-200">{e.event}</span>
+                              {chart && <span className={`ml-2 text-[10px] ${isOpen ? 'text-sky-300' : 'text-sky-500/70'}`}>{isOpen ? '▾ chart' : '▸ chart'}</span>}
                             </td>
                             <td className={`px-2 py-2 text-right font-semibold whitespace-nowrap w-24 ${TONE_TEXT[tone]}`}>{e.actual || '—'}</td>
                             <td className="px-2 py-2 text-right text-gray-400 whitespace-nowrap w-24">{e.forecast || '—'}</td>
                             <td className="px-2 pr-4 py-2 text-right text-gray-500 whitespace-nowrap w-24">{e.previous || '—'}</td>
                           </tr>
+                          {isOpen && chart && (
+                            <tr className="border-b border-slate-800/60 bg-slate-900/60">
+                              <td colSpan={6} className="px-4">
+                                <InlineMacroChart sym={chart.sym} label={chart.label} />
+                              </td>
+                            </tr>
+                          )}
                           {preview && (
                             <tr className="border-b border-slate-800/60">
                               <td />
@@ -459,7 +638,7 @@ export default function EconomicsPage() {
               </div>
             ))}
             <div className="px-4 py-2 flex justify-between text-[10px] text-gray-600 bg-slate-900/60">
-              <span>Actual / Forecast / Previous · auto-refresh every 10 min</span>
+              <span>Actual / Forecast / Previous · click ▸ chart events for history · auto-refresh every 10 min</span>
               <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1" />High <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 ml-2 mr-1" />Medium <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-500 ml-2 mr-1" />Low</span>
             </div>
           </div>

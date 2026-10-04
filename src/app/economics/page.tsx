@@ -350,12 +350,6 @@ export default function EconomicsPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-white">Global Economics</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">
-              Worldwide macro calendar, live releases with instant commentary, and country indicators.
-            </p>
-          </div>
-          <div className="text-[11px] text-gray-500">
-            Sources: ForexFactory · FMP · World Bank · FRED
           </div>
         </div>
 
@@ -576,7 +570,7 @@ export default function EconomicsPage() {
               </table>
             )}
             <div className="px-4 py-2 text-[10px] text-gray-600 bg-slate-900/60">
-              World Bank annual indicators · US policy rate via FRED · sorted by {sortKey}
+              {sortedCountries.length} countries · sorted by {sortKey}
             </div>
           </div>
         )}

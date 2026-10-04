@@ -2,13 +2,9 @@ import { NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 /**
- * Dynamic country macro data using public World Bank indicators + optional FRED (US policy rate).
- * Indicators (World Bank):
- *  - GDP current US$ (NY.GDP.MKTP.CD)
- *  - GDP growth % (NY.GDP.MKTP.KD.ZG)
- *  - Inflation CPI YoY % (FP.CPI.TOTL.ZG)
- *  - Unemployment % (SL.UEM.TOTL.ZS)
- * Policy rate (US only) via FRED FEDFUNDS if FRED_API_KEY provided; others fallback to static reference list.
+ * Dynamic country macro data — World Bank (batched, most-recent non-null value per country)
+ * with FRED overrides for monthly CPI YoY, harmonised unemployment and central-bank policy
+ * rates where available. All sources self-update when agencies publish.
  */
 
 interface CountryMacroConfig { code:string; name:string; currency:string; creditRating:string; fallbackPolicyRate?:number }
@@ -27,63 +23,130 @@ interface CountryIndicators {
 }
 
 const COUNTRIES:CountryMacroConfig[] = [
-  { code:'US', name:'United States', currency:'USD', creditRating:'AAA' },
+  { code:'US', name:'United States', currency:'USD', creditRating:'AA+' },
   { code:'CN', name:'China', currency:'CNY', creditRating:'A+' },
   { code:'DE', name:'Germany', currency:'EUR', creditRating:'AAA' },
   { code:'JP', name:'Japan', currency:'JPY', creditRating:'A+' },
   { code:'IN', name:'India', currency:'INR', creditRating:'BBB-' },
   { code:'GB', name:'United Kingdom', currency:'GBP', creditRating:'AA' },
-  { code:'FR', name:'France', currency:'EUR', creditRating:'AA' },
+  { code:'FR', name:'France', currency:'EUR', creditRating:'AA-' },
   { code:'CA', name:'Canada', currency:'CAD', creditRating:'AAA' },
   { code:'IT', name:'Italy', currency:'EUR', creditRating:'BBB' },
+  { code:'BR', name:'Brazil', currency:'BRL', creditRating:'BB' },
+  { code:'RU', name:'Russia', currency:'RUB', creditRating:'NR' },
+  { code:'KR', name:'South Korea', currency:'KRW', creditRating:'AA', fallbackPolicyRate:2.50 },
   { code:'AU', name:'Australia', currency:'AUD', creditRating:'AAA' },
-  { code:'BR', name:'Brazil', currency:'BRL', creditRating:'BB-' },
-  { code:'KR', name:'South Korea', currency:'KRW', creditRating:'AA' },
+  { code:'MX', name:'Mexico', currency:'MXN', creditRating:'BBB' },
   { code:'ES', name:'Spain', currency:'EUR', creditRating:'A' },
+  { code:'ID', name:'Indonesia', currency:'IDR', creditRating:'BBB' },
   { code:'NL', name:'Netherlands', currency:'EUR', creditRating:'AAA' },
-  { code:'CH', name:'Switzerland', currency:'CHF', creditRating:'AAA' }
+  { code:'SA', name:'Saudi Arabia', currency:'SAR', creditRating:'A+', fallbackPolicyRate:5.00 },
+  { code:'TR', name:'Turkey', currency:'TRY', creditRating:'BB-' },
+  { code:'CH', name:'Switzerland', currency:'CHF', creditRating:'AAA' },
+  { code:'PL', name:'Poland', currency:'PLN', creditRating:'A-' },
+  { code:'AR', name:'Argentina', currency:'ARS', creditRating:'CCC' },
+  { code:'BE', name:'Belgium', currency:'EUR', creditRating:'AA' },
+  { code:'SE', name:'Sweden', currency:'SEK', creditRating:'AAA', fallbackPolicyRate:2.00 },
+  { code:'IE', name:'Ireland', currency:'EUR', creditRating:'AA' },
+  { code:'AT', name:'Austria', currency:'EUR', creditRating:'AA+' },
+  { code:'NO', name:'Norway', currency:'NOK', creditRating:'AAA', fallbackPolicyRate:4.00 },
+  { code:'IL', name:'Israel', currency:'ILS', creditRating:'A+' },
+  { code:'TH', name:'Thailand', currency:'THB', creditRating:'BBB+' },
+  { code:'AE', name:'United Arab Emirates', currency:'AED', creditRating:'AA', fallbackPolicyRate:4.40 },
+  { code:'SG', name:'Singapore', currency:'SGD', creditRating:'AAA', fallbackPolicyRate:2.30 },
+  { code:'MY', name:'Malaysia', currency:'MYR', creditRating:'A-' },
+  { code:'VN', name:'Vietnam', currency:'VND', creditRating:'BB+' },
+  { code:'PH', name:'Philippines', currency:'PHP', creditRating:'BBB+' },
+  { code:'DK', name:'Denmark', currency:'DKK', creditRating:'AAA', fallbackPolicyRate:1.60 },
+  { code:'HK', name:'Hong Kong', currency:'HKD', creditRating:'AA+', fallbackPolicyRate:4.75 },
+  { code:'FI', name:'Finland', currency:'EUR', creditRating:'AA+' },
+  { code:'PT', name:'Portugal', currency:'EUR', creditRating:'A-' },
+  { code:'GR', name:'Greece', currency:'EUR', creditRating:'BBB-' },
+  { code:'NZ', name:'New Zealand', currency:'NZD', creditRating:'AA+', fallbackPolicyRate:2.25 },
+  { code:'CL', name:'Chile', currency:'CLP', creditRating:'A' },
+  { code:'CO', name:'Colombia', currency:'COP', creditRating:'BB+' },
+  { code:'ZA', name:'South Africa', currency:'ZAR', creditRating:'BB-' },
+  { code:'EG', name:'Egypt', currency:'EGP', creditRating:'B-' },
+  { code:'CZ', name:'Czech Republic', currency:'CZK', creditRating:'AA-' },
+  { code:'RO', name:'Romania', currency:'RON', creditRating:'BBB-' },
+  { code:'HU', name:'Hungary', currency:'HUF', creditRating:'BBB-' }
 ];
+
+// Euro-area members use the ECB deposit facility rate.
+const EURO_AREA = new Set(['DE','FR','IT','ES','NL','BE','IE','AT','FI','PT','GR']);
+// Central-bank policy/overnight rate series on FRED.
+const POLICY_SERIES: Record<string,string> = {
+  US:'FEDFUNDS', GB:'IUDSOIA', JP:'IRSTCI01JPM156N', CA:'IRSTCI01CAM156N', AU:'IRSTCI01AUM156N', CH:'IR3TIB01CHM156N',
+};
+// Monthly CPI YoY overrides (fresher than World Bank annual).
+const CPI_SERIES: Record<string,string> = {
+  US:'CPIAUCSL', DE:'CP0000DEM086NEST', IT:'CP0000ITM086NEST', FR:'CP0000FRM086NEST', ES:'CP0000ESM086NEST',
+};
+// Monthly harmonised unemployment overrides.
+const UNEMP_SERIES: Record<string,string> = {
+  US:'UNRATE', DE:'LRHUTTTTDEM156S', IT:'LRHUTTTTITM156S', FR:'LRHUTTTTFRM156S',
+  GB:'LRHUTTTTGBM156S', JP:'LRHUTTTTJPM156S', CA:'LRUNTTTTCAM156S', AU:'LRHUTTTTAUM156S',
+};
 
 // Simple in-memory cache (server runtime) to avoid hammering public APIs
 let cache: { timestamp:number; data:CountryIndicators[] } | null = null;
 const CACHE_TTL_MS = 1000 * 60 * 60; // 1h
 
-async function fetchWorldBankIndicator(countryCode:string, indicator:string) {
-  const url = `https://api.worldbank.org/v2/country/${countryCode}/indicator/${indicator}?format=json&per_page=10`;
-  const res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(9000) });
-  if(!res.ok) throw new Error(`WorldBank ${countryCode} ${indicator}`);
-  const json:any = await res.json();
-  const rows = Array.isArray(json) ? json[1] : [];
-  if(!rows) throw new Error('Invalid WorldBank response');
-  const valid = rows.find((r:any)=> r && r.value !== null);
-  if(!valid) throw new Error('No recent value');
-  return { value: Number(valid.value), date: valid.date };
-}
-
-async function fetchUsdFxRate(currency:string):Promise<number> {
-  if(currency==='USD') return 1;
-  // Use exchangerate.host (ECB) free API
+// Batched World Bank fetch: one request per indicator for all countries (mrnev=1 → most recent non-null).
+async function fetchWbAll(indicator:string, codes:string[]):Promise<Map<string,{value:number;date:string}>> {
+  const out = new Map<string,{value:number;date:string}>();
   try {
-  const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${currency}`, { signal: AbortSignal.timeout(6000) });
-    if(!res.ok) return NaN;
-    const j = await res.json();
-    return j.rates?.[currency] || NaN;
-  } catch { return NaN; }
+    const url = `https://api.worldbank.org/v2/country/${codes.join(';')}/indicator/${indicator}?format=json&mrnev=1&per_page=200`;
+    const res = await fetch(url, { next:{ revalidate: 3600 }, signal: AbortSignal.timeout(15000) });
+    if(!res.ok) return out;
+    const json:any = await res.json();
+    const rows = Array.isArray(json) ? json[1] : [];
+    for (const r of rows || []) {
+      const id = r?.country?.id;
+      const v = Number(r?.value);
+      if (id && Number.isFinite(v)) out.set(String(id).toUpperCase(), { value: v, date: String(r.date || '') });
+    }
+  } catch (e) { console.warn('WB batch fetch failed', indicator, e); }
+  return out;
 }
 
-async function fetchFredPolicyRate():Promise<{ value:number; date:string } | null> {
+// Latest valid observation of a FRED series (optionally YoY % via units=pc1).
+async function fredLatest(seriesId:string, units?:'pc1'):Promise<{ value:number; date:string } | null> {
   const key = process.env.FRED_API_KEY;
   if(!key) return null;
   try {
-    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=${key}&file_type=json&observation_start=2024-01-01`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if(!res.ok) throw new Error('FRED');
+    const qp = new URLSearchParams({ series_id: seriesId, api_key: key, file_type: 'json', sort_order: 'desc', limit: '3' });
+    if (units) qp.set('units', units);
+    const res = await fetch(`https://api.stlouisfed.org/fred/series/observations?${qp}`, { next:{ revalidate: 3600 }, signal: AbortSignal.timeout(9000) });
+    if(!res.ok) return null;
     const j:any = await res.json();
-    const obs = j.observations?.filter((o:any)=> o.value !== '.' );
-    const last = obs?.[obs.length-1];
-    if(!last) return null;
-    return { value: Number(last.value), date: last.date };
+    const ob = (j.observations || []).find((o:any)=> o.value !== '.');
+    if(!ob) return null;
+    const v = Number(ob.value);
+    return Number.isFinite(v) ? { value: v, date: ob.date } : null;
   } catch { return null; }
+}
+
+// All USD FX rates in one keyless call.
+async function fetchFxRates():Promise<Record<string,number>> {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', { next:{ revalidate: 3600 }, signal: AbortSignal.timeout(8000) });
+    if(!res.ok) return {};
+    const j:any = await res.json();
+    return j?.rates && typeof j.rates === 'object' ? j.rates : {};
+  } catch { return {}; }
+}
+
+// NaN-safe aggregates for the header cards.
+function buildGlobalStats(rows: CountryIndicators[]) {
+  const avg = (vals:number[]) => { const f = vals.filter(Number.isFinite); return f.length ? f.reduce((s,v)=> s+v, 0) / f.length : NaN; };
+  return {
+    totalGdp: rows.reduce((s,c)=> s + (Number.isFinite(c.gdp.value) ? c.gdp.value : 0), 0),
+    averageGrowth: avg(rows.map(c=> c.gdp.growth)),
+    averageInflation: avg(rows.map(c=> c.inflation.value)),
+    averageUnemployment: avg(rows.map(c=> c.unemployment.value)),
+    totalCountries: rows.length,
+  };
 }
 
 export async function GET(request:Request) {
@@ -96,70 +159,77 @@ export async function GET(request:Request) {
   const url = new URL(request.url);
   const forceRefresh = url.searchParams.get('refresh') === '1';
   if(!forceRefresh && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-      const totalGdp = cache.data.reduce((s,c)=> s + c.gdp.value, 0); // already trillions
-      const avgGrowth = cache.data.reduce((s,c)=> s + c.gdp.growth, 0) / cache.data.length;
-      const avgInfl = cache.data.reduce((s,c)=> s + c.inflation.value, 0) / cache.data.length;
-      const avgUnemp = cache.data.reduce((s,c)=> s + c.unemployment.value, 0) / cache.data.length;
-      return NextResponse.json({ success:true, data: { countries: cache.data.sort((a,b)=> b.gdp.value - a.gdp.value), global:{ totalGdp, averageGrowth: avgGrowth, averageInflation: avgInfl, averageUnemployment: avgUnemp, totalCountries: cache.data.length }, lastUpdated: new Date(cache.timestamp).toISOString() }, realtime:true, cached:true }, { headers: rateLimitHeaders(rl) });
+      const g = buildGlobalStats(cache.data);
+      return NextResponse.json({ success:true, data: { countries: cache.data.sort((a,b)=> b.gdp.value - a.gdp.value), global: g, lastUpdated: new Date(cache.timestamp).toISOString() }, realtime:true, cached:true }, { headers: rateLimitHeaders(rl) });
     }
 
-    // Fetch FRED policy rate for US if available
-    const fredPolicy = await fetchFredPolicyRate();
+    // Fetch everything in parallel: batched World Bank indicators, FRED overrides, FX table.
+    const codes = COUNTRIES.map(c => c.code);
+    const fredKeys = Object.keys(POLICY_SERIES) as (keyof typeof POLICY_SERIES)[];
+    const cpiKeys = Object.keys(CPI_SERIES);
+    const unempKeys = Object.keys(UNEMP_SERIES);
+    const [gdpMap, growthMap, inflMap, unempMap, popMap, mcapMap, lendMap, fx, ecbRate, ...fredResults] = await Promise.all([
+      fetchWbAll('NY.GDP.MKTP.CD', codes),       // GDP current USD
+      fetchWbAll('NY.GDP.MKTP.KD.ZG', codes),    // GDP growth %
+      fetchWbAll('FP.CPI.TOTL.ZG', codes),       // Inflation CPI % (annual)
+      fetchWbAll('SL.UEM.TOTL.ZS', codes),       // Unemployment % (annual)
+      fetchWbAll('SP.POP.TOTL', codes),          // Population
+      fetchWbAll('CM.MKT.LCAP.CD', codes),       // Market cap (sparse)
+      fetchWbAll('FR.INR.LEND', codes),          // Lending rate proxy
+      fetchFxRates(),
+      fredLatest('ECBDFR'),
+      ...fredKeys.map(c => fredLatest(POLICY_SERIES[c])),
+      ...cpiKeys.map(c => fredLatest(CPI_SERIES[c], 'pc1')),
+      ...unempKeys.map(c => fredLatest(UNEMP_SERIES[c])),
+    ]);
+    const policyByCountry = new Map<string,{value:number;date:string}>();
+    fredKeys.forEach((c, i) => { const v = fredResults[i]; if (v) policyByCountry.set(c, v); });
+    const cpiByCountry = new Map<string,{value:number;date:string}>();
+    cpiKeys.forEach((c, i) => { const v = fredResults[fredKeys.length + i]; if (v) cpiByCountry.set(c, v); });
+    const unempByCountry = new Map<string,{value:number;date:string}>();
+    unempKeys.forEach((c, i) => { const v = fredResults[fredKeys.length + cpiKeys.length + i]; if (v) unempByCountry.set(c, v); });
 
-    const indicatorsPromises = COUNTRIES.map(async cfg => {
-      try {
-        const [gdpCurrent, gdpGrowth, inflation, unemployment, population, marketCap, lendingRate] = await Promise.all([
-          fetchWorldBankIndicator(cfg.code, 'NY.GDP.MKTP.CD'),       // GDP current USD
-          fetchWorldBankIndicator(cfg.code, 'NY.GDP.MKTP.KD.ZG'),    // GDP growth %
-          fetchWorldBankIndicator(cfg.code, 'FP.CPI.TOTL.ZG'),       // Inflation CPI %
-          fetchWorldBankIndicator(cfg.code, 'SL.UEM.TOTL.ZS'),       // Unemployment %
-          fetchWorldBankIndicator(cfg.code, 'SP.POP.TOTL'),          // Population
-          fetchWorldBankIndicator(cfg.code, 'CM.MKT.LCAP.CD').catch(()=> ({ value:0, date:'' })), // Market cap (may be 0)
-          fetchWorldBankIndicator(cfg.code, 'FR.INR.LEND').catch(()=> ({ value: NaN, date: new Date().getFullYear().toString() })) // Lending interest rate proxy (if unavailable -> NaN)
-        ]);
+    const countries: CountryIndicators[] = COUNTRIES.map(cfg => {
+      const gdp = gdpMap.get(cfg.code);
+      const growth = growthMap.get(cfg.code);
+      const inflWb = inflMap.get(cfg.code);
+      const unempWb = unempMap.get(cfg.code);
+      const pop = popMap.get(cfg.code);
+      const mcap = mcapMap.get(cfg.code);
 
-        // GDP current is absolute (USD). Convert to trillions for UI consistency (value property expects T as in previous UI)
-        const gdpValueTrn = gdpCurrent.value / 1e12;
-        const fx = await fetchUsdFxRate(cfg.currency);
-  const policyRateValue = cfg.code==='US' && fredPolicy ? fredPolicy.value : (typeof lendingRate.value === 'number' ? lendingRate.value : NaN);
-  const policyDate = cfg.code==='US' && fredPolicy ? fredPolicy.date : lendingRate.date || new Date().toISOString().slice(0,10);
-  const interestRate = { value: policyRateValue, date: policyDate, source: (cfg.code==='US' && fredPolicy)? 'FRED' : (typeof lendingRate.value === 'number' ? 'WorldBank:LendRate':'N/A') };
+      // Inflation / unemployment: prefer monthly FRED series, else World Bank annual.
+      const infl = cpiByCountry.get(cfg.code) || inflWb;
+      const unemp = unempByCountry.get(cfg.code) || unempWb;
 
-        const indicator:CountryIndicators = {
-          country: cfg.name,
-            countryCode: cfg.code,
-            gdp: { value: gdpValueTrn, growth: gdpGrowth.value, date: gdpGrowth.date },
-            inflation: { value: inflation.value, date: inflation.date },
-            unemployment: { value: unemployment.value, date: unemployment.date },
-            interestRate,
-            currency: { code: cfg.currency, usdRate: fx },
-            marketCap: { value: marketCap.value, date: marketCap.date, source: marketCap.value? 'WorldBank:CM.MKT.LCAP.CD':'N/A' },
-            population: { value: population.value, date: population.date },
-            creditRating: cfg.creditRating,
-            realtime: true
-        };
-        return indicator;
-      } catch (e) {
-        console.error('Country fetch failed', cfg.code, e);
-        // Minimal fallback retains previous style but marks realtime false
-        return {
-          country: cfg.name,
-          countryCode: cfg.code,
-          gdp: { value: 0, growth: 0, date: '' },
-          inflation: { value: 0, date: '' },
-          unemployment: { value: 0, date: '' },
-          interestRate: { value: NaN, date: new Date().toISOString().slice(0,10), source:'N/A' },
-          currency: { code: cfg.currency, usdRate: NaN },
-          marketCap: { value: 0, date: '', source:'N/A' },
-          population: { value: 0, date: '' },
-          creditRating: cfg.creditRating,
-          realtime: false,
-          diagnostics:{ missing:['all'] }
-        } as CountryIndicators;
-      }
-    });
+      // Policy rate cascade: FRED country series → ECB (euro area) → WB lending rate → static reference.
+      let interestRate: CountryIndicators['interestRate'];
+      const fredRate = policyByCountry.get(cfg.code);
+      const lend = lendMap.get(cfg.code);
+      if (fredRate) interestRate = { value: fredRate.value, date: fredRate.date, source: 'FRED' };
+      else if (EURO_AREA.has(cfg.code) && ecbRate) interestRate = { value: ecbRate.value, date: ecbRate.date, source: 'ECB (FRED)' };
+      else if (lend && Number.isFinite(lend.value)) interestRate = { value: lend.value, date: lend.date, source: 'WorldBank:LendRate' };
+      else if (cfg.fallbackPolicyRate != null) interestRate = { value: cfg.fallbackPolicyRate, date: new Date().toISOString().slice(0,10), source: 'Reference' };
+      else interestRate = { value: NaN, date: '', source: 'N/A' };
 
-    const countries = await Promise.all(indicatorsPromises);
+      const realtime = !!(gdp && growth && infl && unemp && pop);
+      const row: CountryIndicators = {
+        country: cfg.name,
+        countryCode: cfg.code,
+        gdp: { value: gdp ? gdp.value / 1e12 : 0, growth: growth ? growth.value : NaN, date: growth?.date || gdp?.date || '' },
+        inflation: { value: infl ? infl.value : NaN, date: infl?.date || '' },
+        unemployment: { value: unemp ? unemp.value : NaN, date: unemp?.date || '' },
+        interestRate,
+        currency: { code: cfg.currency, usdRate: cfg.currency === 'USD' ? 1 : (Number(fx[cfg.currency]) || NaN) },
+        marketCap: { value: mcap?.value || 0, date: mcap?.date || '', source: mcap?.value ? 'WorldBank:CM.MKT.LCAP.CD' : 'N/A' },
+        population: { value: pop ? pop.value : 0, date: pop?.date || '' },
+        creditRating: cfg.creditRating,
+        realtime,
+      };
+      return row;
+    })
+    // Drop countries with no usable core data instead of showing zero rows.
+    .filter(c => c.gdp.value > 0);
+
 
     // Validation diagnostics
     countries.forEach(c => {
@@ -176,10 +246,7 @@ export async function GET(request:Request) {
     });
     cache = { timestamp: Date.now(), data: countries };
 
-  const totalGdp = countries.reduce((s,c)=> s + c.gdp.value, 0);
-    const averageGrowth = countries.reduce((s,c)=> s + c.gdp.growth, 0) / countries.length;
-    const averageInflation = countries.reduce((s,c)=> s + c.inflation.value, 0) / countries.length;
-    const averageUnemployment = countries.reduce((s,c)=> s + c.unemployment.value, 0) / countries.length;
+    const globalStats = buildGlobalStats(countries);
 
     const validationSummary = {
       countriesTotal: countries.length,
@@ -192,18 +259,12 @@ export async function GET(request:Request) {
       success:true,
       data:{
         countries: countries.sort((a,b)=> b.gdp.value - a.gdp.value),
-        global:{
-          totalGdp: totalGdp, // already in trillions
-          averageGrowth,
-          averageInflation,
-          averageUnemployment,
-          totalCountries: countries.length
-        },
+        global: globalStats,
         lastUpdated: new Date().toISOString()
       },
       realtime:true,
       validation: validationSummary,
-      sources:[ 'World Bank API', 'FRED (US policy rate where available)' ]
+      sources:[ 'World Bank API', 'FRED (monthly CPI, unemployment, policy rates)' ]
     }, { headers: rateLimitHeaders(rl) });
     return res;
   } catch (error) {

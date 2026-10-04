@@ -311,7 +311,10 @@ function InlineMacroChart({ sym, label }: { sym: string; label: string }) {
   const first = vals[0];
   const up = last >= first;
   const fmtD = (t: number) => new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const fmtDFull = (t: number) => new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const fmtV = (v: number) => Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(Math.abs(v) < 10 ? 2 : 1);
+  // 5 evenly spaced time ticks
+  const tickIdx = [0, 1, 2, 3, 4].map(k => Math.round(k * (bars.length - 1) / 4)).filter((v, i, a) => a.indexOf(v) === i);
 
   return (
     <div className="py-2">
@@ -328,26 +331,49 @@ function InlineMacroChart({ sym, label }: { sym: string; label: string }) {
           ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-36 rounded border border-slate-800 bg-slate-950" preserveAspectRatio="none">
-        {min < 0 && max > 0 && <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="#334155" strokeDasharray="3,3" strokeWidth={1} />}
-        {mode === 'line' ? (
-          <polyline
-            fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth={1.8}
-            points={bars.map((b, i) => `${x(i)},${y(b.close)}`).join(' ')}
-          />
-        ) : (
-          bars.map((b, i) => {
-            const bw = Math.max((W - PAD * 2) / bars.length - 1, 1);
-            const yv = y(b.close);
-            const base = min < 0 && max > 0 ? zeroY : H - PAD;
-            const top = Math.min(yv, base), h = Math.max(Math.abs(base - yv), 1);
-            return <rect key={i} x={x(i) - bw / 2} y={top} width={bw} height={h} fill={b.close >= (min < 0 ? 0 : min) ? '#38bdf8' : '#f87171'} opacity={i === bars.length - 1 ? 1 : 0.75} />;
-          })
-        )}
-      </svg>
-      <div className="flex justify-between text-[10px] text-gray-600 mt-0.5">
-        <span>{fmtD(bars[0].time)}</span>
-        <span>{fmtD(bars[bars.length - 1].time)}</span>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40 rounded border border-slate-800 bg-slate-950" preserveAspectRatio="none">
+          {/* Horizontal grid at 5 value levels */}
+          {[0, 0.25, 0.5, 0.75, 1].map(f => (
+            <line key={f} x1={0} x2={W} y1={PAD + f * (H - PAD * 2)} y2={PAD + f * (H - PAD * 2)} stroke="#1e293b" strokeWidth={1} />
+          ))}
+          {min < 0 && max > 0 && <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="#475569" strokeDasharray="3,3" strokeWidth={1} />}
+          {mode === 'line' ? (
+            <polyline
+              fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth={1.8}
+              points={bars.map((b, i) => `${x(i)},${y(b.close)}`).join(' ')}
+            />
+          ) : (
+            bars.map((b, i) => {
+              const bw = Math.max((W - PAD * 2) / bars.length - 1, 1);
+              const yv = y(b.close);
+              const base = min < 0 && max > 0 ? zeroY : H - PAD;
+              const top = Math.min(yv, base), h = Math.max(Math.abs(base - yv), 1);
+              return <rect key={i} x={x(i) - bw / 2} y={top} width={bw} height={h} fill={b.close >= (min < 0 ? 0 : min) ? '#38bdf8' : '#f87171'} opacity={i === bars.length - 1 ? 1 : 0.75} />;
+            })
+          )}
+          {/* Hover targets: native tooltip with date + value for every observation */}
+          {bars.map((b, i) => {
+            const slot = W / bars.length;
+            return (
+              <rect key={`h${i}`} x={i * slot} y={0} width={slot} height={H} fill="transparent" className="hover:fill-slate-400/10">
+                <title>{`${fmtDFull(b.time)} — ${fmtV(b.close)}`}</title>
+              </rect>
+            );
+          })}
+        </svg>
+        {/* Value axis labels (max → min) */}
+        <div className="absolute inset-y-0 right-1 flex flex-col justify-between py-0.5 pointer-events-none text-right">
+          {[1, 0.75, 0.5, 0.25, 0].map(f => (
+            <span key={f} className="text-[9px] leading-none text-gray-400 bg-slate-950/80 px-1 rounded">
+              {fmtV(min + f * span)}
+            </span>
+          ))}
+        </div>
+      </div>
+      {/* Time axis */}
+      <div className="flex justify-between text-[10px] text-gray-500 mt-0.5 px-0.5">
+        {tickIdx.map(i => <span key={i}>{fmtD(bars[i].time)}</span>)}
       </div>
     </div>
   );

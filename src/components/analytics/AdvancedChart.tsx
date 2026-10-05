@@ -1514,6 +1514,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     setIndSettings(prev => { const next = { ...prev }; delete next[key]; return next })
   }, [setIndSettings])
   const [compareSyms, setCompareSyms] = useLocalStorage<string[]>('mkt:compareSyms', [])
+  // How compared symbols are displayed: shared % scale, own price scale, or own pane.
+  const [compareMode, setCompareMode] = useLocalStorage<'percent' | 'scale' | 'pane'>('mkt:cmpMode', 'percent')
   const [compareInput, setCompareInput] = useState('')
   // Compare-symbol autocomplete (live Yahoo search dropdown)
   const [compareResults, setCompareResults] = useState<{ symbol: string; name: string; exchange?: string; type?: string }[]>([])
@@ -1795,8 +1797,13 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         try {
           raw = await loadRaw(fetchRange, currentRange.interval, isIntraday)
         } catch (e) {
-          if (!subDaily) throw e
+          if (!subDaily && fetchRange === currentRange.range) throw e
           raw = []
+        }
+        // The warm-up window can predate an instrument's listing (Yahoo errors on
+        // e.g. range=5y for young futures/stocks) — retry with the plain range.
+        if (raw.length < 2 && fetchRange !== currentRange.range) {
+          try { raw = await loadRaw(currentRange.range, currentRange.interval, isIntraday) } catch { raw = [] }
         }
         // Symbols without intraday history (many macro/OTC/foreign listings)
         // gracefully fall back to daily bars instead of erroring out.
@@ -2751,7 +2758,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       addSubLine(computeHistVol(closes, c.period!), 'histvol-panel', c.color, c.style, c.width)
     }
 
-    // ===== COMPARE OVERLAY (normalized % performance lines on their own scale) =====
+    // ===== COMPARE OVERLAY (mode: same % scale / own price scale / own pane) =====
     const activeCompare = compareSyms.filter((s) => (compareData[s]?.length || 0) > 1)
     if (activeCompare.length > 0) {
       try {
@@ -2761,20 +2768,45 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           if (!cbars || cbars.length < 2) return
           const base = cbars[0].close
           if (!base || base <= 0) return
-          const line: LineData[] = cbars.map((b) => ({
-            time: formatTime(b.time) as Time,
-            value: (b.close / base - 1) * 100,
-          }))
-          if (line.length < 2) return
           const color = COMPARE_COLORS[idx % COMPARE_COLORS.length]
-          const cmpSeries = chart.addSeries(LineSeries, {
-            color, lineWidth: 2, priceScaleId: 'compare',
-            crosshairMarkerVisible: false, lastValueVisible: true,
-            title: sym,
-          })
-          cmpSeries.setData(line)
-          overlaySeriesRef.current.push(cmpSeries)
-          scaleUsed = true
+          if (compareMode === 'percent') {
+            const line: LineData[] = cbars.map((b) => ({
+              time: formatTime(b.time) as Time,
+              value: (b.close / base - 1) * 100,
+            }))
+            if (line.length < 2) return
+            const cmpSeries = chart.addSeries(LineSeries, {
+              color, lineWidth: 2, priceScaleId: 'compare',
+              crosshairMarkerVisible: false, lastValueVisible: true,
+              title: sym,
+            })
+            cmpSeries.setData(line)
+            overlaySeriesRef.current.push(cmpSeries)
+            scaleUsed = true
+          } else {
+            const line: LineData[] = cbars.map((b) => ({ time: formatTime(b.time) as Time, value: b.close }))
+            if (line.length < 2) return
+            if (compareMode === 'scale') {
+              // Raw prices on the symbol's own autoscaled overlay price scale.
+              const cmpSeries = chart.addSeries(LineSeries, {
+                color, lineWidth: 2, priceScaleId: `cmp-${sym}`,
+                crosshairMarkerVisible: false, lastValueVisible: true,
+                title: sym,
+              })
+              cmpSeries.setData(line)
+              try { chart.priceScale(`cmp-${sym}`).applyOptions({ scaleMargins: { top: 0.15, bottom: 0.15 } }) } catch { /* ignore */ }
+              overlaySeriesRef.current.push(cmpSeries)
+            } else {
+              // Dedicated pane below the price chart.
+              const cmpSeries = chart.addSeries(LineSeries, {
+                color, lineWidth: 2,
+                crosshairMarkerVisible: false, lastValueVisible: true,
+                title: sym,
+              }, getPane(`cmp-${sym}`))
+              cmpSeries.setData(line)
+              overlaySeriesRef.current.push(cmpSeries)
+            }
+          }
         })
         if (scaleUsed) {
           chart.priceScale('compare').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 }, visible: true })
@@ -2998,7 +3030,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         chartRef.current = null
       }
     }
-  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, symbol, currentAlerts, rangeKey, indSettings, theme])
+  }, [bars, chartStyle, indicators, height, currentRange.interval, layoutTick, compareSyms, compareData, compareMode, symbol, currentAlerts, rangeKey, indSettings, theme])
 
   // ========== Handlers ==========
   const toggleIndicator = useCallback((key: IndicatorKey) => {
@@ -3691,7 +3723,12 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const drag = dragRef.current
       if (!drag) return
       dragRef.current = null
-      chartRef.current?.applyOptions({ handleScroll: { vertTouchDrag: true }, handleScale: true })
+      // Re-enable EVERY scroll flag: `handleScroll: false` zeroed them all, so a
+      // partial restore would leave mouse pan/wheel dead (chart "frozen" bug).
+      chartRef.current?.applyOptions({
+        handleScroll: { pressedMouseMove: true, mouseWheel: true, horzTouchDrag: true, vertTouchDrag: true },
+        handleScale: true,
+      })
       el.style.touchAction = 'none'
       try { el.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
       if (drag.moved) {
@@ -3907,6 +3944,18 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
               </div>
             )}
           </div>
+          {compareSyms.length > 0 && (
+            <select
+              value={compareMode}
+              onChange={(e) => setCompareMode(e.target.value as 'percent' | 'scale' | 'pane')}
+              className="bg-slate-800 border border-white/10 rounded px-1 py-1 text-[10px] text-gray-300 focus:outline-none focus:border-pink-500"
+              title="How compared symbols are displayed"
+            >
+              <option value="percent">Same % scale</option>
+              <option value="scale">New price scale</option>
+              <option value="pane">New pane</option>
+            </select>
+          )}
           {compareSyms.map((s, idx) => (
             <span
               key={s}

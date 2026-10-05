@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Logo from './Logo';
+import { normalizeSymbol } from '@/lib/symbol-resolver';
 import {
   LayoutDashboard, CandlestickChart, Activity, Dna, Landmark, Briefcase, Globe,
   Star, Newspaper, Bot, Search, Menu, X, ChevronsLeft, ChevronsRight, Home, User,
@@ -103,7 +104,10 @@ export default function TerminalShell({
         if (!r.ok || stop) return;
         const js = await r.json();
         const out: Record<string, { price: number; changePercent: number }> = {};
-        (js?.data || []).forEach((q: any) => { if (q?.symbol) out[String(q.symbol).toUpperCase()] = { price: q.price, changePercent: q.changePercent }; });
+        (js?.data || []).forEach((q: any) => {
+          const key = q?.symbol || q?.ticker;
+          if (key) out[String(key).toUpperCase()] = { price: q.price, changePercent: q.changePercent };
+        });
         if (!stop) setWatchQuotes(out);
       } catch {}
     };
@@ -123,7 +127,9 @@ export default function TerminalShell({
     const q = query.trim().toUpperCase();
     if (!q) return;
     setQuery('');
-    openQuote(q);
+    // Resolve pairs/aliases (EUR/USD → EURUSD=X, SPX → ^GSPC…) so the quote page
+    // charts real candles instead of falling back to a line ratio chart.
+    openQuote(normalizeSymbol(q) || q);
   };
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');

@@ -1608,157 +1608,75 @@ function VisualAIPageLegacy() {
         const sortedSectors = widget.data.slice().sort((a: SectorMetrics, b: SectorMetrics) =>
           sectorSortDir === 'desc' ? (b[sectorMetric] as number) - (a[sectorMetric] as number) : (a[sectorMetric] as number) - (b[sectorMetric] as number)
         );
+        const maxSectorAbs = Math.max(...sortedSectors.map((d: SectorMetrics) => Math.abs(Number(d[sectorMetric]) || 0)), 0.01);
         return (
-          <BarChart data={sortedSectors}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="sector" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'rgba(11,18,32,0.97)', 
-                border: '1px solid rgba(56,189,248,0.22)', 
-                borderRadius: '12px',
-                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
-                padding: '14px',
-                minWidth: '220px'
-              }}
-              labelStyle={{ color: '#e5e7eb', fontSize: '13px', fontWeight: 700 }}
-              cursor={{ fill: 'rgba(56, 189, 248, 0.08)' }}
-              formatter={(value, name, props) => {
-                const data = props.payload;
-                const typeColor = data?.type === 'growth' ? '#22d3ee' : data?.type === 'defensive' ? '#34d399' : '#fbbf24';
-                const row = (label: string, val: React.ReactNode) => (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', padding: '5px 0', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
-                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}</span>
-                    <span style={{ color: '#f8fafc', fontWeight: 600, fontSize: '13px' }}>{val}</span>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedSectors.map((d: SectorMetrics) => {
+              const val = Number(d[sectorMetric]) || 0;
+              const pct = Math.max(4, (Math.abs(val) / maxSectorAbs) * 100);
+              const positive = val >= 0;
+              const label = d.sector;
+              return (
+                <div key={label} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{label}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className={`h-full rounded-sm ${positive ? 'bg-gradient-to-r from-emerald-500/70 to-emerald-400/50' : 'bg-gradient-to-r from-red-500/70 to-red-400/50'}`} style={{ width: `${pct}%` }} />
                   </div>
-                );
-                return [
-                  <div key="detailed-sector-tooltip" style={{ color: '#f8fafc' }}>
-                    <div style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>
-                      {data?.sector}
-                    </div>
-                    {row('1Y Performance', `${value}%`)}
-                    {row('6M Performance', `${data?.performance6M}%`)}
-                    {row('1M Performance', `${data?.performance1M}%`)}
-                    {row('P/E Ratio', data?.pe)}
-                    {row('Dividend Yield', `${data?.dividendYield}%`)}
-                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '9999px', backgroundColor: typeColor }} />
-                      <span style={{ color: typeColor, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{data?.type}</span>
-                    </div>
-                  </div>
-                ];
-              }}
-            />
-            <Bar dataKey={sectorMetric} name={sectorMetric === 'performance1Y' ? '1Y %' : sectorMetric === 'performance6M' ? '6M %' : '1M %'}>
-              {sortedSectors.map((entry: SectorMetrics, index: number) => (
-                <Cell key={`cell-${index}`} fill={
-                  entry.type === 'growth' ? '#22d3ee' :
-                  entry.type === 'defensive' ? '#22c55e' : '#f59e0b'
-                } />
-              ))}
-            </Bar>
-          </BarChart>
+                  <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{val.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+          </div>
         );
       
       case 'pmi':
       case 'pmi_fallback':
+        const sortedPMI = widget.data.slice().sort((a: PMIData, b: PMIData) => b.composite - a.composite);
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="country" stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
-            <YAxis domain={[40, 60]} stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'rgba(11,18,32,0.97)', 
-                border: '1px solid rgba(56,189,248,0.22)', 
-                borderRadius: '12px',
-                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
-                padding: '14px',
-                minWidth: '350px'
-              }}
-              labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
-              cursor={{ fill: 'rgba(239, 68, 68, 0.15)' }}
-              formatter={(value, name, props) => {
-                const data = props.payload;
-                const isExpansion = typeof value === 'number' && value >= 50;
-                return [
-                  <div key="detailed-pmi-tooltip" style={{ color: '#ffffff' }}>
-                    <div style={{ color: '#22d3ee', fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
-                      🏭 {data?.country}
-                    </div>
-                    <div style={{ color: '#f59e0b', marginBottom: '10px', fontSize: '16px' }}>
-                      📊 PMI Composite: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{value}</span>
-                    </div>
-                    <div style={{ color: '#38bdf8', marginBottom: '10px', fontSize: '16px' }}>
-                      🏭 Manufacturing: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.manufacturing}</span>
-                    </div>
-                    <div style={{ color: '#06b6d4', marginBottom: '10px', fontSize: '16px' }}>
-                      🏪 Services: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.services}</span>
-                    </div>
-                    <div style={{ color: '#10b981', marginBottom: '16px', fontSize: '16px' }}>
-                      📈 Trend: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{data?.trend?.toUpperCase()}</span>
-                    </div>
-                    <div style={{ 
-                      color: isExpansion ? '#22c55e' : '#ef4444',
-                      fontSize: '18px',
-                      textAlign: 'center',
-                      marginTop: '16px',
-                      padding: '16px',
-                      borderRadius: '12px',
-                      backgroundColor: isExpansion ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-                      border: `3px solid ${isExpansion ? '#22c55e' : '#ef4444'}`
-                    }}>
-                      {isExpansion ? '🟢 EXPANSION' : '🔴 CONTRACTION'}
-                      <div style={{ fontSize: '14px', marginTop: '6px', opacity: 0.9 }}>
-                        {isExpansion ? 'Economic Growth Mode' : 'Economic Slowdown'}
-                      </div>
-                      <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>
-                        Threshold: 50 (Current: {value})
-                      </div>
-                    </div>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedPMI.map((d: PMIData) => {
+              const val = Number(d.composite) || 0;
+              const pct = Math.max(4, Math.min(100, ((val - 30) / 40) * 100));
+              const expansion = val >= 50;
+              return (
+                <div key={d.country} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.country}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className={`h-full rounded-sm ${expansion ? 'bg-gradient-to-r from-emerald-500/70 to-emerald-400/50' : 'bg-gradient-to-r from-red-500/70 to-red-400/50'}`} style={{ width: `${pct}%` }} />
                   </div>
-                ];
-              }}
-            />
-            <Bar dataKey="composite" name="PMI Composite">
-              {widget.data.map((entry: PMIData, index: number) => (
-                <Cell key={`cell-${index}`} fill={entry.composite >= 50 ? '#22c55e' : '#ef4444'} />
-              ))}
-            </Bar>
-          </BarChart>
+                  <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${expansion ? 'text-emerald-400' : 'text-red-400'}`}>{val.toFixed(1)}</span>
+                </div>
+              );
+            })}
+          </div>
         );
       
       case 'central_bank': {
         const chartData = (widget.data as CentralBankStatement[])
           .filter(s => typeof s.currentRate === 'number')
+          .sort((a, b) => (b.currentRate ?? 0) - (a.currentRate ?? 0))
           .slice(0, 8);
+        const maxRate = Math.max(...chartData.map(s => Math.abs(Number(s.currentRate) || 0)), 0.01);
         return (
           <div className="space-y-4">
             {chartData.length > 0 && (
               <div className="bg-white/5 rounded-lg p-3 border border-white/10">
                 <div className="text-xs text-gray-300 mb-2">Current Policy Rates</div>
-                <ResponsiveContainer width="100%" height={140}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3,3" stroke="#ffffff15" />
-                    <XAxis dataKey="bank" stroke="#9ca3af" fontSize={11} angle={-30} textAnchor="end" height={60} />
-                    <YAxis stroke="#9ca3af" fontSize={11} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#1e293b', border: '2px solid #334155', borderRadius: '10px' }}
-                      labelStyle={{ color: '#e5e7eb', fontWeight: 700 }}
-                      formatter={(v:any, _n:any, p:any) => [ `${Number(v).toFixed(2)}%`, p?.payload?.bank ]}
-                    />
-                    <Bar dataKey="currentRate" radius={[4,4,0,0]}>
-                      {chartData.map((s, i) => (
-                        <Cell key={s.id || i} fill={
-                          s.sentiment === 'hawkish' ? '#ef4444' :
-                          s.sentiment === 'dovish' ? '#22c55e' : '#3b82f6'
-                        } />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+                  {chartData.map((d) => {
+                    const val = Number(d.currentRate) || 0;
+                    const pct = Math.max(4, (Math.abs(val) / maxRate) * 100);
+                    return (
+                      <div key={d.id || d.bank} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                        <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.bank}</span>
+                        <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                          <div className="h-full rounded-sm bg-gradient-to-r from-amber-500/70 to-amber-400/50" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-16 shrink-0 text-right tabular-nums font-semibold text-white">{val.toFixed(2)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             {(widget.data as CentralBankStatement[]).slice(0, 3).map((statement: CentralBankStatement) => (
@@ -1794,123 +1712,47 @@ function VisualAIPageLegacy() {
       }
 
       case 'gdp':
+        const sortedGDP = widget.data.slice().sort((a: GDPData, b: GDPData) => Math.abs(b.gdpGrowth) - Math.abs(a.gdpGrowth));
+        const maxGDPAbs = Math.max(...sortedGDP.map((d: GDPData) => Math.abs(Number(d.gdpGrowth) || 0)), 0.01);
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="country" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'rgba(11,18,32,0.97)', 
-                border: '1px solid rgba(56,189,248,0.22)', 
-                borderRadius: '12px',
-                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
-                padding: '14px',
-                minWidth: '350px'
-              }}
-              labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
-              cursor={{ fill: 'rgba(16, 185, 129, 0.15)' }}
-              formatter={(value, name, props) => {
-                const data = props.payload;
-                return [
-                  <div key="gdp-tooltip" style={{ color: '#ffffff' }}>
-                    <div style={{ color: '#22d3ee', fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
-                      🌍 {data?.country}
-                    </div>
-                    <div style={{ color: '#10b981', marginBottom: '10px', fontSize: '16px' }}>
-                      📈 Annual Growth: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{formatPercent(value,2)}</span>
-                    </div>
-                    <div style={{ color: '#06b6d4', marginBottom: '10px', fontSize: '16px' }}>
-                      📊 Quarterly Growth: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>{formatPercent(data?.quarterlyGrowth,2)}</span>
-                    </div>
-                    <div style={{ color: '#f59e0b', marginBottom: '16px', fontSize: '16px' }}>
-                      💰 GDP per Capita: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${formatNumber(data?.gdpPerCapita,0)}</span>
-                    </div>
-                    <div style={{ 
-                      color: data?.trend === 'accelerating' ? '#22c55e' : 
-                            data?.trend === 'decelerating' ? '#ef4444' : '#f59e0b',
-                      fontSize: '18px',
-                      textAlign: 'center',
-                      marginTop: '16px',
-                      padding: '16px',
-                      borderRadius: '12px',
-                      backgroundColor: data?.trend === 'accelerating' ? 'rgba(34, 197, 94, 0.25)' : 
-                                      data?.trend === 'decelerating' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)',
-                      border: `3px solid ${data?.trend === 'accelerating' ? '#22c55e' : 
-                                          data?.trend === 'decelerating' ? '#ef4444' : '#f59e0b'}`
-                    }}>
-                      📈 <span style={{ fontWeight: 'bold', fontSize: '18px' }}>{data?.trend?.toUpperCase()}</span>
-                    </div>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedGDP.map((d: GDPData) => {
+              const val = Number(d.gdpGrowth) || 0;
+              const pct = Math.max(4, (Math.abs(val) / maxGDPAbs) * 100);
+              const positive = val >= 0;
+              return (
+                <div key={d.country} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.country}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className={`h-full rounded-sm ${positive ? 'bg-gradient-to-r from-emerald-500/70 to-emerald-400/50' : 'bg-gradient-to-r from-red-500/70 to-red-400/50'}`} style={{ width: `${pct}%` }} />
                   </div>
-                ];
-              }}
-            />
-            <Bar dataKey="gdpGrowth" name="GDP Growth %">
-              {widget.data.map((entry: GDPData, index: number) => (
-                <Cell key={`cell-${index}`} fill={
-                  entry.trend === 'accelerating' ? '#22c55e' :
-                  entry.trend === 'decelerating' ? '#ef4444' : '#f59e0b'
-                } />
-              ))}
-            </Bar>
-          </BarChart>
+                  <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{val.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+          </div>
         );
 
       case 'trade':
+        const sortedTrade = widget.data.slice().sort((a: TradeData, b: TradeData) => Math.abs(b.tradeBalance) - Math.abs(a.tradeBalance));
+        const maxTradeAbs = Math.max(...sortedTrade.map((d: TradeData) => Math.abs(Number(d.tradeBalance) || 0)), 0.01);
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="country" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'rgba(11,18,32,0.97)', 
-                border: '1px solid rgba(56,189,248,0.22)', 
-                borderRadius: '12px',
-                boxShadow: '0 16px 40px rgba(0, 0, 0, 0.55)',
-                padding: '14px',
-                minWidth: '300px'
-              }}
-              labelStyle={{ color: '#f9fafb', fontSize: '18px', fontWeight: 'bold' }}
-              cursor={{ fill: 'rgba(139, 92, 246, 0.15)' }}
-              formatter={(value, name, props) => {
-                const data = props.payload;
-                return [
-                  <div key="trade-tooltip" style={{ color: '#ffffff' }}>
-                    <div style={{ color: '#22d3ee', fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
-                      🌐 {data?.country}
-                    </div>
-                    <div style={{ color: '#10b981', marginBottom: '10px', fontSize: '16px' }}>
-                      📤 Exports: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${data?.exports}B</span>
-                    </div>
-                    <div style={{ color: '#ef4444', marginBottom: '10px', fontSize: '16px' }}>
-                      📥 Imports: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${data?.imports}B</span>
-                    </div>
-                    <div style={{ 
-                      color: data?.tradeBalance >= 0 ? '#22c55e' : '#ef4444', 
-                      marginBottom: '16px', 
-                      fontSize: '16px' 
-                    }}>
-                      ⚖️ Trade Balance: <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '18px' }}>${data?.tradeBalance}B</span>
-                    </div>
-                    <div style={{ fontSize: '14px', marginTop: '12px' }}>
-                      <div style={{ color: '#38bdf8', marginBottom: '6px' }}>
-                        🔝 Main Exports: {data?.mainExports?.slice(0, 2).join(', ')}
-                      </div>
-                      <div style={{ color: '#f59e0b' }}>
-                        🤝 Top Partners: {data?.tradePartners?.slice(0, 2).join(', ')}
-                      </div>
-                    </div>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedTrade.map((d: TradeData) => {
+              const val = Number(d.tradeBalance) || 0;
+              const pct = Math.max(4, (Math.abs(val) / maxTradeAbs) * 100);
+              const positive = val >= 0;
+              return (
+                <div key={d.country} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.country}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className={`h-full rounded-sm ${positive ? 'bg-gradient-to-r from-emerald-500/70 to-emerald-400/50' : 'bg-gradient-to-r from-red-500/70 to-red-400/50'}`} style={{ width: `${pct}%` }} />
                   </div>
-                ];
-              }}
-            />
-            <Bar dataKey="tradeBalance" name="Trade Balance $B">
-              {widget.data.map((entry: TradeData, index: number) => (
-                <Cell key={`cell-${index}`} fill={entry.tradeBalance >= 0 ? '#22c55e' : '#ef4444'} />
-              ))}
-            </Bar>
-          </BarChart>
+                  <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>${val.toFixed(0)}B</span>
+                </div>
+              );
+            })}
+          </div>
         );
 
       case 'oil_seasonality':
@@ -1972,31 +1814,45 @@ function VisualAIPageLegacy() {
 
       
       case 'agriculture':
+        const sortedAgriculture = widget.data.slice().sort((a: any, b: any) => Number(b.price) - Number(a.price));
+        const maxAgriculturePrice = Math.max(...sortedAgriculture.map((d: any) => Math.abs(Number(d.price) || 0)), 0.01);
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="commodity" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              labelStyle={{ color: '#f9fafb' }}
-            />
-            <Bar dataKey="price" fill="#22c55e" />
-          </BarChart>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedAgriculture.map((d: any) => {
+              const val = Number(d.price) || 0;
+              const pct = Math.max(4, (Math.abs(val) / maxAgriculturePrice) * 100);
+              return (
+                <div key={d.commodity} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.commodity}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className="h-full rounded-sm bg-gradient-to-r from-cyan-500/70 to-cyan-400/50" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-16 shrink-0 text-right tabular-nums font-semibold text-white">${val.toFixed(0)}</span>
+                </div>
+              );
+            })}
+          </div>
         );
       
       case 'metals':
+        const sortedMetals = widget.data.slice().sort((a: any, b: any) => Number(b.price) - Number(a.price));
+        const maxMetalPrice = Math.max(...sortedMetals.map((d: any) => Math.abs(Number(d.price) || 0)), 0.01);
         return (
-          <BarChart data={widget.data}>
-            <CartesianGrid strokeDasharray="3,3" stroke="#ffffff20" />
-            <XAxis dataKey="metal" stroke="#9ca3af" />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              labelStyle={{ color: '#f9fafb' }}
-            />
-            <Bar dataKey="price" fill="#f59e0b" />
-          </BarChart>
+          <div className="h-full max-h-[340px] overflow-y-auto pr-1 space-y-1">
+            {sortedMetals.map((d: any) => {
+              const val = Number(d.price) || 0;
+              const pct = Math.max(4, (Math.abs(val) / maxMetalPrice) * 100);
+              return (
+                <div key={d.metal} className="flex items-center gap-2 text-[11px] py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="w-24 shrink-0 truncate text-gray-300 font-medium">{d.metal}</span>
+                  <div className="flex-1 h-3 bg-white/[0.04] rounded-sm overflow-hidden">
+                    <div className="h-full rounded-sm bg-gradient-to-r from-amber-500/70 to-amber-400/50" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-16 shrink-0 text-right tabular-nums font-semibold text-white">${val.toFixed(0)}</span>
+                </div>
+              );
+            })}
+          </div>
         );
       
       case 'stocks':

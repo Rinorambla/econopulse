@@ -2,7 +2,7 @@
 // If you need to revert to the Visual AI dashboard, reintroduce the export to '../visual-ai/page'.
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline';
 import TerminalShell from '@/components/TerminalShell';
@@ -137,7 +137,7 @@ export default function DashboardPage() {
 			// Request a larger universe of symbols for richer coverage
 			const ctrl = new AbortController();
 			const t = setTimeout(() => ctrl.abort(), 15000);
-			const response = await fetch('/api/dashboard-data?scope=full&limit=900&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
+			const response = await fetch('/api/dashboard-data?scope=full&limit=2000&crypto=1&forex=1', { cache: 'no-store', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal });
 			// Also refresh sector snapshots for weekly/monthly panels
 			await Promise.all([
 				fetch('/api/sector-performance?period=weekly', { cache:'no-store' }),
@@ -533,7 +533,9 @@ export default function DashboardPage() {
 																		return Math.max(-100, Math.min(100, Math.round(raw)));
 																	};
 																	return (
-														<tr key={item.ticker} onClick={() => {
+														<Fragment key={item.ticker}>
+														<tr onClick={() => {
+															if (selectedRow?.item.ticker === item.ticker) { setSelectedRow(null); return; }
 															setSelectedRow({ item, opt, dex: computeDex() });
 															// Lazy-load options metrics for this ticker if missing or stale
 															if (!opt || opt.gammaExposure == null) {
@@ -666,6 +668,107 @@ export default function DashboardPage() {
 															{/* RS% column removed */}
 															<td className="px-2 py-1 text-center"><AIScoreBadge item={item} /></td>
 														</tr>
+														{selectedRow?.item.ticker === item.ticker && (() => {
+															const { opt: selOpt, dex } = selectedRow;
+															const sOpt = optsByTicker[item.ticker] || selOpt;
+															const perf = parsePerf(item.performance);
+															const volStr = item.volume || '0';
+															const volNum = parseFloat(volStr) * (volStr.includes('B') ? 1e9 : volStr.includes('M') ? 1e6 : volStr.includes('K') ? 1e3 : 1);
+															const trendW = item.trend === 'Strong Up' ? 1 : item.trend === 'Strong Down' ? -1 : item.trend === 'Up' ? 0.4 : item.trend === 'Down' ? -0.4 : 0;
+															const dsW = item.demandSupply === 'High Demand' ? 1 : item.demandSupply === 'Moderate Demand' ? 0.4 : item.demandSupply === 'High Supply' ? -1 : item.demandSupply === 'Moderate Supply' ? -0.4 : 0;
+															const volW = volNum > 50e6 ? 8 : volNum > 10e6 ? 5 : volNum > 1e6 ? 2 : 0;
+															const components = [
+																{ label: 'Performance', value: perf * 8, raw: `${perf.toFixed(2)}%` },
+																{ label: 'Trend', value: trendW * 18, raw: item.trend },
+																{ label: 'Demand/Supply', value: dsW * 14, raw: item.demandSupply },
+																{ label: 'Volume', value: perf > 0 ? volW : -volW, raw: item.volume || '—' },
+															];
+															const maxAbs = Math.max(...components.map(c => Math.abs(c.value)), 1);
+															const gex = sOpt?.gammaExposure;
+															const gexAbs = gex != null && isFinite(gex) ? Math.abs(gex) : 0;
+															const gexFmt = gex != null && isFinite(gex)
+																? (gexAbs >= 1e9 ? `${(gex / 1e9).toFixed(2)}B` : gexAbs >= 1e6 ? `${(gex / 1e6).toFixed(1)}M` : `${(gex / 1e3).toFixed(0)}K`)
+																: null;
+															return (
+																<tr>
+																	<td colSpan={16} className="p-0 bg-[#0a0e16] border-y border-blue-500/20">
+																		<div className="p-4" onClick={e => e.stopPropagation()}>
+																			<div className="flex items-start justify-between mb-3">
+																				<div className="flex items-center gap-2">
+																					<img src={`https://assets.parqet.com/logos/symbol/${item.ticker}?format=jpg`} alt="" className="w-6 h-6 rounded-full bg-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+																					<h3 className="text-base font-bold text-white">{item.ticker}</h3>
+																					{item.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">{item.sector}</span>}
+																					<span className="text-[11px] text-gray-400">{item.name}</span>
+																				</div>
+																				<button onClick={() => setSelectedRow(null)} className="text-gray-400 hover:text-white text-xl leading-none px-1">×</button>
+																			</div>
+																			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+																				<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
+																					<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">DEX (Demand Exposure)</div>
+																					<div className={`text-2xl font-bold tabular-nums ${dex > 20 ? 'text-emerald-400' : dex < -20 ? 'text-red-400' : 'text-gray-300'}`}>{dex > 0 ? '+' : ''}{dex}</div>
+																					<div className="text-[10px] text-gray-500 mt-1">
+																						{dex > 50 ? 'Strong demand pressure' : dex > 20 ? 'Net buying' : dex < -50 ? 'Strong supply pressure' : dex < -20 ? 'Net selling' : 'Balanced'}
+																					</div>
+																				</div>
+																				<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
+																					<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">GEX (Gamma Exposure)</div>
+																					{gexFmt ? (
+																						<>
+																							<div className={`text-2xl font-bold tabular-nums ${gex! > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{gex! > 0 ? '+' : '−'}{gexFmt}</div>
+																							<div className="text-[10px] text-gray-500 mt-1">{gex! > 0 ? 'Dealers long gamma → stabilizing' : 'Dealers short gamma → volatile'}</div>
+																						</>
+																					) : (
+																						<>
+																							<div className="text-xl font-bold text-gray-400 flex items-center gap-2">
+																								<span>{sOpt?.gammaLabel || item.gammaRisk || '—'}</span>
+																								<span className="inline-block w-3 h-3 border-2 border-blue-400/60 border-t-transparent rounded-full animate-spin" />
+																							</div>
+																							<div className="text-[10px] text-gray-500 mt-1">Loading live exposure…</div>
+																						</>
+																					)}
+																				</div>
+																			</div>
+																			<div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5 mb-3">
+																				<div className="text-[11px] font-semibold text-gray-300 mb-2">DEX components</div>
+																				<div className="space-y-2">
+																					{components.map(c => {
+																						const pct = (Math.abs(c.value) / maxAbs) * 100;
+																						const positive = c.value >= 0;
+																						return (
+																							<div key={c.label}>
+																								<div className="flex justify-between text-[10px] mb-1">
+																									<span className="text-gray-400">{c.label} <span className="text-gray-500">({c.raw})</span></span>
+																									<span className={`tabular-nums ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{positive ? '+' : ''}{c.value.toFixed(1)}</span>
+																								</div>
+																								<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+																									<div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600" />
+																									<div className={`absolute top-0 bottom-0 ${positive ? 'left-1/2 bg-emerald-500' : 'right-1/2 bg-red-500'} rounded-full`} style={{ width: `${pct / 2}%` }} />
+																								</div>
+																							</div>
+																						);
+																					})}
+																				</div>
+																			</div>
+																			{sOpt && (
+																				<div className="grid grid-cols-3 gap-2 text-[10px] mb-3">
+																					<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Vol P/C</div><div className="text-white font-semibold">{sOpt.putCallRatioVol ?? '—'}</div></div>
+																					<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">OI P/C</div><div className="text-white font-semibold">{sOpt.putCallRatioOI ?? '—'}</div></div>
+																					<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Source</div><div className="text-white font-semibold uppercase">{sOpt.dataSource || '—'}</div></div>
+																				</div>
+																			)}
+																			<div className="mt-2 pt-3 border-t border-slate-700/60">
+																				<div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+																					<span>🎯 Options Key Levels</span>
+																					<span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">PRO</span>
+																				</div>
+																				<KeyLevels symbol={item.ticker} hintPrice={parseFloat(String(item.price || '').replace(/[^0-9.\-]/g, '')) || undefined} />
+																			</div>
+																		</div>
+																	</td>
+																</tr>
+															);
+														})()}
+														</Fragment>
 																	);
 																})}
 													{!filteredData.length && (
@@ -759,117 +862,6 @@ export default function DashboardPage() {
 						</div>
 					</div>
 				)}
-
-				{/* DEX / GEX detail modal */}
-				{selectedRow && (() => {
-					const { item, opt, dex } = selectedRow;
-					const perf = parsePerf(item.performance);
-					const volStr = item.volume || '0';
-					const volNum = parseFloat(volStr) * (volStr.includes('B') ? 1e9 : volStr.includes('M') ? 1e6 : volStr.includes('K') ? 1e3 : 1);
-					const trendW = item.trend === 'Strong Up' ? 1 : item.trend === 'Strong Down' ? -1 : item.trend === 'Up' ? 0.4 : item.trend === 'Down' ? -0.4 : 0;
-					const dsW = item.demandSupply === 'High Demand' ? 1 : item.demandSupply === 'Moderate Demand' ? 0.4 : item.demandSupply === 'High Supply' ? -1 : item.demandSupply === 'Moderate Supply' ? -0.4 : 0;
-					const volW = volNum > 50e6 ? 8 : volNum > 10e6 ? 5 : volNum > 1e6 ? 2 : 0;
-					const components = [
-						{ label: 'Performance', value: perf * 8, raw: `${perf.toFixed(2)}%` },
-						{ label: 'Trend', value: trendW * 18, raw: item.trend },
-						{ label: 'Demand/Supply', value: dsW * 14, raw: item.demandSupply },
-						{ label: 'Volume', value: perf > 0 ? volW : -volW, raw: item.volume || '—' },
-					];
-					const maxAbs = Math.max(...components.map(c => Math.abs(c.value)), 1);
-					const gex = opt?.gammaExposure;
-					const gexAbs = gex != null && isFinite(gex) ? Math.abs(gex) : 0;
-					const gexFmt = gex != null && isFinite(gex)
-						? (gexAbs >= 1e9 ? `${(gex / 1e9).toFixed(2)}B` : gexAbs >= 1e6 ? `${(gex / 1e6).toFixed(1)}M` : `${(gex / 1e3).toFixed(0)}K`)
-						: null;
-					return (
-						<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setSelectedRow(null)}>
-							<div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-4xl w-[94%] max-h-[88vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-								<div className="flex items-start justify-between mb-4">
-									<div>
-										<div className="flex items-center gap-2">
-											<img src={`https://assets.parqet.com/logos/symbol/${item.ticker}?format=jpg`} alt="" className="w-7 h-7 rounded-full bg-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-											<h3 className="text-lg font-bold text-white">{item.ticker}</h3>
-											{item.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">{item.sector}</span>}
-										</div>
-										<p className="text-[11px] text-gray-400 mt-1">{item.name}</p>
-									</div>
-									<button onClick={() => setSelectedRow(null)} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
-								</div>
-
-								<div className="grid grid-cols-2 gap-3 mb-4">
-									<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
-										<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">DEX (Demand Exposure)</div>
-										<div className={`text-3xl font-bold tabular-nums ${dex > 20 ? 'text-emerald-400' : dex < -20 ? 'text-red-400' : 'text-gray-300'}`}>{dex > 0 ? '+' : ''}{dex}</div>
-										<div className="text-[10px] text-gray-500 mt-1">
-											{dex > 50 ? 'Strong demand pressure' : dex > 20 ? 'Net buying' : dex < -50 ? 'Strong supply pressure' : dex < -20 ? 'Net selling' : 'Balanced'}
-										</div>
-									</div>
-									<div className="bg-slate-800/60 rounded-lg p-3 ring-1 ring-white/5">
-										<div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">GEX (Gamma Exposure)</div>
-										{gexFmt ? (
-											<>
-												<div className={`text-3xl font-bold tabular-nums ${gex! > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{gex! > 0 ? '+' : '−'}{gexFmt}</div>
-												<div className="text-[10px] text-gray-500 mt-1">{gex! > 0 ? 'Dealers long gamma → stabilizing' : 'Dealers short gamma → volatile'}</div>
-											</>
-										) : (
-											<>
-												<div className="text-2xl font-bold text-gray-400 flex items-center gap-2">
-													<span>{opt?.gammaLabel || item.gammaRisk || '—'}</span>
-													<span className="inline-block w-3 h-3 border-2 border-blue-400/60 border-t-transparent rounded-full animate-spin" />
-												</div>
-												<div className="text-[10px] text-gray-500 mt-1">Loading live exposure…</div>
-											</>
-										)}
-									</div>
-								</div>
-
-								<div className="bg-slate-800/40 rounded-lg p-3 ring-1 ring-white/5 mb-3">
-									<div className="text-[11px] font-semibold text-gray-300 mb-2">DEX components</div>
-									<div className="space-y-2">
-										{components.map(c => {
-											const pct = (Math.abs(c.value) / maxAbs) * 100;
-											const positive = c.value >= 0;
-											return (
-												<div key={c.label}>
-													<div className="flex justify-between text-[10px] mb-1">
-														<span className="text-gray-400">{c.label} <span className="text-gray-500">({c.raw})</span></span>
-														<span className={`tabular-nums ${positive ? 'text-emerald-400' : 'text-red-400'}`}>{positive ? '+' : ''}{c.value.toFixed(1)}</span>
-													</div>
-													<div className="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
-														<div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600" />
-														<div className={`absolute top-0 bottom-0 ${positive ? 'left-1/2 bg-emerald-500' : 'right-1/2 bg-red-500'} rounded-full`} style={{ width: `${pct / 2}%` }} />
-													</div>
-												</div>
-											);
-										})}
-									</div>
-								</div>
-
-								{opt && (
-									<div className="grid grid-cols-3 gap-2 text-[10px] mb-3">
-										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Vol P/C</div><div className="text-white font-semibold">{opt.putCallRatioVol ?? '—'}</div></div>
-										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">OI P/C</div><div className="text-white font-semibold">{opt.putCallRatioOI ?? '—'}</div></div>
-										<div className="bg-slate-800/40 rounded p-2"><div className="text-gray-500">Source</div><div className="text-white font-semibold uppercase">{opt.dataSource || '—'}</div></div>
-									</div>
-								)}
-
-								{/* Options Key Levels: max pain, call/put walls, S/R */}
-								<div className="mt-2 pt-3 border-t border-slate-700/60">
-									<div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
-										<span>🎯 Options Key Levels</span>
-										<span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">PRO</span>
-									</div>
-									<KeyLevels symbol={item.ticker} hintPrice={parseFloat(String(item.price || '').replace(/[^0-9.\-]/g, '')) || undefined} />
-								</div>
-
-								<p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
-									DEX combines short-term performance, trend strength, demand/supply pressure, and signed volume into a −100…+100 score of net buying/selling pressure.
-									GEX (when available) reflects dealer gamma positioning: positive values dampen volatility (dealers buy dips/sell rips), negative values amplify it.
-								</p>
-							</div>
-						</div>
-					);
-				})()}
 
 			</div>
 			</TerminalShell>

@@ -42,6 +42,29 @@ interface SearchResult {
   type: string
 }
 
+// TradingView-style symbol-search category tabs. Yahoo's quoteType + symbol
+// suffix heuristics bucket every instrument into one tab.
+const SEARCH_TABS = ['All', 'Stocks', 'Futures', 'Forex', 'Crypto', 'Indices', 'Bonds', 'ETFs', 'Economy'] as const
+type SearchTab = (typeof SEARCH_TABS)[number]
+const BOND_SET = new Set(['TLT', 'IEF', 'SHY', 'GOVT', 'VGSH', 'VGIT', 'VGLT', 'EDV', 'ZROZ', 'SPTL', 'BIL', 'BWX', 'IGOV', 'EMB', 'EMLC', 'VWOB', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'BNDX', 'JNK', 'MUB', '^TNX', '^TYX', '^FVX', '^IRX', 'ZB=F', 'ZN=F', 'ZF=F', 'ZT=F'])
+function searchCategory(r: SearchResult): SearchTab {
+  const sym = r.symbol.toUpperCase()
+  const t = (r.type || '').toUpperCase()
+  if (/^(FRED|DBN):/i.test(sym)) return /DGS|IRLTLT/i.test(sym) ? 'Bonds' : 'Economy'
+  if (BOND_SET.has(sym)) return 'Bonds'
+  if (t === 'FUTURE' || sym.endsWith('=F')) return 'Futures'
+  if (t === 'CURRENCY' || sym.endsWith('=X') || sym === 'DX-Y.NYB') return 'Forex'
+  if (t === 'CRYPTOCURRENCY') return 'Crypto'
+  if (t === 'INDEX' || sym.startsWith('^')) return 'Indices'
+  if (t === 'ETF' || t === 'MUTUALFUND') return 'ETFs'
+  if (t === 'EQUITY') return 'Stocks'
+  if (/-(USD|USDT|EUR|BTC)$/.test(sym)) return 'Crypto'
+  return 'Stocks'
+}
+const TAB_BADGE: Record<SearchTab, string> = {
+  All: '', Stocks: 'Stock', Futures: 'Futures', Forex: 'Forex', Crypto: 'Crypto', Indices: 'Index', Bonds: 'Bond', ETFs: 'ETF', Economy: 'Macro',
+}
+
 const AdvancedChart = dynamic(
   () => import('@/components/analytics/AdvancedChart'),
   { ssr: false, loading: () => <ChartSkeleton /> }
@@ -634,6 +657,7 @@ export default function MarketDataPage() {
   // Ephemeral state
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchVal, setSearchVal] = useState('')
+  const [searchTab, setSearchTab] = useState<SearchTab>('All')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   // Anchor the search dropdown to the input's real screen position so the
@@ -1220,8 +1244,10 @@ export default function MarketDataPage() {
     if (!window.matchMedia('(max-width: 1023px)').matches) return
     const { body } = document
     const prevOverflow = body.style.overflow
+    const prevOverscroll = body.style.overscrollBehavior
     body.style.overflow = 'hidden'
-    return () => { body.style.overflow = prevOverflow }
+    body.style.overscrollBehavior = 'none'
+    return () => { body.style.overflow = prevOverflow; body.style.overscrollBehavior = prevOverscroll }
   }, [searchOpen])
 
   // Position the search dropdown directly under the input, clamped to the
@@ -1233,7 +1259,8 @@ export default function MarketDataPage() {
       if (!el) return
       const r = el.getBoundingClientRect()
       const margin = 8
-      const width = Math.min(Math.max(r.width, 340), window.innerWidth - margin * 2)
+      // TradingView-style wide panel (tabs + exchange/type columns need room).
+      const width = Math.min(Math.max(r.width, 620), window.innerWidth - margin * 2)
       let left = r.left
       if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
       if (left < margin) left = margin
@@ -1307,6 +1334,18 @@ export default function MarketDataPage() {
                 <div style={searchMenuStyle} className="bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">
                   {searchVal.trim() ? (
                     <div className="py-1">
+                      {/* Category tabs (TradingView-style) */}
+                      <div className="px-2 pt-1.5 pb-2 border-b border-white/5 flex items-center gap-1 flex-wrap sticky top-0 bg-slate-900 z-10">
+                        {SEARCH_TABS.map((t) => (
+                          <button
+                            key={t}
+                            onMouseDown={(e) => { e.preventDefault(); setSearchTab(t) }}
+                            className={`px-2.5 py-1 text-[11px] rounded-full font-medium transition-colors ${searchTab === t ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/10'}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
                       {/^[^/]+\/[^/]+$/.test(searchVal.trim()) && normalizeSymbol(searchVal.trim().toUpperCase()) === searchVal.trim().toUpperCase() && (
                         <button
                           onMouseDown={(e) => { e.preventDefault(); submitSearch(searchVal.trim()) }}
@@ -1319,45 +1358,56 @@ export default function MarketDataPage() {
                           </span>
                         </button>
                       )}
-                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                        Search results
-                        {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}
+                      <div className="px-3 py-1.5 grid grid-cols-[1fr_auto] sm:grid-cols-[180px_1fr_110px_70px] gap-2 text-[10px] uppercase tracking-wider text-gray-500 items-center">
+                        <span className="flex items-center gap-2">Symbol {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}</span>
+                        <span className="hidden sm:block">Description</span>
+                        <span className="hidden sm:block text-right">Exchange</span>
+                        <span className="text-right">Type</span>
                       </div>
-                      {!searchLoading && searchResults.length === 0 && (
-                        <div className="px-3 py-3 text-xs text-gray-500">No matches. Press Go to use “{searchVal}” directly.</div>
-                      )}
-                      {searchResults.map((r) => {
-                        const q = quotes[r.symbol.toUpperCase()]
-                        return (
-                          <button
-                            key={`${r.symbol}-${r.exchange}`}
-                            onMouseDown={(e) => { e.preventDefault(); submitSearch(r.symbol) }}
-                            className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between gap-2"
-                          >
-                            <span className="min-w-0 flex items-center gap-2">
-                              <img
-                                src={`https://assets.parqet.com/logos/symbol/${r.symbol}?format=jpg`}
-                                alt=""
-                                loading="lazy"
-                                className="w-5 h-5 rounded-full bg-slate-700 object-cover shrink-0"
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-                              />
-                              <span className="min-w-0">
-                                <span className="text-xs font-bold text-white">{r.symbol}</span>
-                                {r.name && <span className="block text-[11px] text-gray-400 truncate">{r.name}</span>}
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-right">
-                              {r.exchange && <span className="block text-[9px] uppercase tracking-wide text-gray-500">{r.exchange}{r.type ? ` · ${r.type}` : ''}</span>}
-                              {q && (
-                                <span className={`text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {fmtPct(q.changePercent)}
+                      {(() => {
+                        const visible = searchResults.filter((r) => searchTab === 'All' || searchCategory(r) === searchTab)
+                        if (!searchLoading && visible.length === 0) {
+                          return <div className="px-3 py-3 text-xs text-gray-500">No matches{searchTab !== 'All' ? ` in ${searchTab}` : ''}. Press Go to use “{searchVal}” directly.</div>
+                        }
+                        return visible.map((r) => {
+                          const q = quotes[r.symbol.toUpperCase()]
+                          const cat = searchCategory(r)
+                          const isMacro = /^(FRED|DBN):/i.test(r.symbol)
+                          return (
+                            <button
+                              key={`${r.symbol}-${r.exchange}`}
+                              onMouseDown={(e) => { e.preventDefault(); submitSearch(r.symbol) }}
+                              className="w-full text-left px-3 py-2 hover:bg-white/5 grid grid-cols-[1fr_auto] sm:grid-cols-[180px_1fr_110px_70px] gap-2 items-center"
+                            >
+                              <span className="min-w-0 flex items-center gap-2">
+                                {!isMacro && (
+                                  <img
+                                    src={`https://assets.parqet.com/logos/symbol/${r.symbol}?format=jpg`}
+                                    alt=""
+                                    loading="lazy"
+                                    className="w-5 h-5 rounded-full bg-slate-700 object-cover shrink-0"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+                                  />
+                                )}
+                                <span className="min-w-0">
+                                  <span className="text-xs font-bold text-white block truncate">{r.symbol.replace(/^(FRED|DBN):/i, '')}</span>
+                                  {r.name && <span className="sm:hidden block text-[10px] text-gray-400 truncate">{r.name}</span>}
                                 </span>
-                              )}
-                            </span>
-                          </button>
-                        )
-                      })}
+                              </span>
+                              <span className="hidden sm:block text-[11px] text-gray-400 truncate">{r.name || '—'}</span>
+                              <span className="hidden sm:block text-right text-[10px] uppercase tracking-wide text-gray-500 truncate">{r.exchange || '—'}</span>
+                              <span className="text-right">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 uppercase tracking-wide">{TAB_BADGE[cat] || r.type || '—'}</span>
+                                {q && (
+                                  <span className={`block text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {fmtPct(q.changePercent)}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          )
+                        })
+                      })()}
                     </div>
                   ) : (
                     <>

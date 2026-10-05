@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     let json: any = null;
     for (const host of hosts) {
       try {
-        const yUrl = `https://${host}/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=20&newsCount=0&listsCount=0&enableFuzzyQuery=true`;
+        const yUrl = `https://${host}/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=40&newsCount=0&listsCount=0&enableFuzzyQuery=true`;
         const res = await fetch(yUrl, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           signal: AbortSignal.timeout(8000),

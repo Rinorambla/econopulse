@@ -64,7 +64,7 @@ function truncate(text: string | undefined, max = 150): string {
 // ── Yahoo live headlines (same engine as the market-data terminal) ───────────
 // A handful of market-wide queries gives broad, always-fresh coverage with no
 // API key. Results are deduped by link and merged with Tiingo.
-const YAHOO_QUERIES = ['stock market', 'federal reserve', 'earnings', 'nasdaq', 'bitcoin crypto', 'oil prices'];
+const YAHOO_QUERIES = ['stock market', 'federal reserve', 'earnings', 'nasdaq', 'bitcoin crypto', 'oil prices', 'stock market analysts outlook', 'market valuation recession forecast'];
 
 interface RawArticle {
   id: string;

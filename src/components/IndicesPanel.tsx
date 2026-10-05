@@ -38,14 +38,41 @@ interface RegionGroup {
 
 const REGIONS: RegionGroup[] = [
   {
+    key: 'major',
+    label: 'Majors',
+    icon: '⭐',
+    items: [
+      { symbol: '^GSPC', short: 'SPX',  name: 'S&P 500',       flag: '🇺🇸' },
+      { symbol: '^NDX',  short: 'NDX',  name: 'Nasdaq 100',    flag: '🇺🇸' },
+      { symbol: '^DJI',  short: 'DJIA', name: 'Dow Jones',     flag: '🇺🇸' },
+      { symbol: '^RUT',  short: 'RUT',  name: 'Russell 2000',  flag: '🇺🇸' },
+      { symbol: '^VIX',  short: 'VIX',  name: 'CBOE Volatility', flag: '⚡' },
+      { symbol: 'DX-Y.NYB', short: 'DXY', name: 'Dollar Index', flag: '💵' },
+    ],
+  },
+  {
+    key: 'futures',
+    label: 'Index Futures',
+    icon: '📈',
+    items: [
+      { symbol: 'ES=F',  short: 'ES',   name: 'S&P 500 Fut',    flag: '🇺🇸' },
+      { symbol: 'NQ=F',  short: 'NQ',   name: 'Nasdaq 100 Fut', flag: '🇺🇸' },
+      { symbol: 'YM=F',  short: 'YM',   name: 'Dow Fut',        flag: '🇺🇸' },
+      { symbol: 'RTY=F', short: 'RTY',  name: 'Russell Fut',    flag: '🇺🇸' },
+      { symbol: 'NKD=F', short: 'NKD',  name: 'Nikkei 225 Fut', flag: '🇯🇵' },
+      { symbol: 'GC=F',  short: 'GOLD', name: 'Gold Fut',       flag: '🥇' },
+      { symbol: 'CL=F',  short: 'WTI',  name: 'Crude Oil Fut',  flag: '🛢️' },
+    ],
+  },
+  {
     key: 'americas',
     label: 'Americas',
-    icon: '🇺🇸',
+    icon: '🌎',
     items: [
-      { symbol: '^GSPC', short: 'SPX',  name: 'S&P 500',      flag: '🇺🇸' },
-      { symbol: '^NDX',  short: 'NDX',  name: 'Nasdaq 100',   flag: '🇺🇸' },
-      { symbol: '^DJI',  short: 'DJIA', name: 'Dow Jones',    flag: '🇺🇸' },
-      { symbol: '^RUT',  short: 'RUT',  name: 'Russell 2000', flag: '🇺🇸' },
+      { symbol: '^GSPTSE', short: 'TSX',    name: 'S&P/TSX (Canada)', flag: '🇨🇦' },
+      { symbol: '^BVSP',   short: 'IBOV',   name: 'Bovespa (Brazil)', flag: '🇧🇷' },
+      { symbol: '^MXX',    short: 'IPC',    name: 'IPC (Mexico)',     flag: '🇲🇽' },
+      { symbol: '^MERV',   short: 'MERVAL', name: 'Merval (Argentina)', flag: '🇦🇷' },
     ],
   },
   {
@@ -59,11 +86,14 @@ const REGIONS: RegionGroup[] = [
       { symbol: 'FTSEMIB.MI', short: 'MIB',  name: 'FTSE MIB',      flag: '🇮🇹', fallback: 'EWI' },
       { symbol: '^STOXX50E',  short: 'SX5E', name: 'Euro Stoxx 50', flag: '🇪🇺' },
       { symbol: '^IBEX',      short: 'IBEX', name: 'IBEX 35',       flag: '🇪🇸' },
+      { symbol: '^AEX',       short: 'AEX',  name: 'AEX (Netherlands)', flag: '🇳🇱' },
+      { symbol: '^SSMI',      short: 'SMI',  name: 'SMI (Switzerland)', flag: '🇨🇭' },
+      { symbol: '^OMX',       short: 'OMX',  name: 'OMX 30 (Sweden)', flag: '🇸🇪' },
     ],
   },
   {
     key: 'asia',
-    label: 'Asia-Pacific',
+    label: 'Asia/Pacific',
     icon: '🌏',
     items: [
       { symbol: '^N225',     short: 'N225',   name: 'Nikkei 225', flag: '🇯🇵' },
@@ -72,18 +102,33 @@ const REGIONS: RegionGroup[] = [
       { symbol: '^AXJO',     short: 'ASX',    name: 'ASX 200',    flag: '🇦🇺' },
       { symbol: '^KS11',     short: 'KOSPI',  name: 'KOSPI',      flag: '🇰🇷' },
       { symbol: '^BSESN',    short: 'SENSEX', name: 'BSE Sensex', flag: '🇮🇳' },
+      { symbol: '^NSEI',     short: 'NIFTY',  name: 'Nifty 50',   flag: '🇮🇳' },
+      { symbol: '^TWII',     short: 'TAIEX',  name: 'Taiwan Weighted', flag: '🇹🇼' },
+      { symbol: '^STI',      short: 'STI',    name: 'Straits Times', flag: '🇸🇬' },
+      { symbol: '^JKSE',     short: 'JCI',    name: 'Jakarta Comp.', flag: '🇮🇩' },
     ],
   },
   {
-    key: 'volatility',
-    label: 'Volatility & USD',
-    icon: '⚡',
+    key: 'mideast',
+    label: 'Middle East',
+    icon: '🕌',
     items: [
-      { symbol: '^VIX',     short: 'VIX',  name: 'CBOE Volatility', flag: '🇺🇸' },
-      { symbol: '^VVIX',    short: 'VVIX', name: 'VIX of VIX',      flag: '🇺🇸' },
-      { symbol: '^MOVE',    short: 'MOVE', name: 'Bond Volatility', flag: '🇺🇸', fallback: 'TLT' },
-      { symbol: '^V2TX',    short: 'V2X',  name: 'Euro VSTOXX',     flag: '🇪🇺' },
-      { symbol: 'DX-Y.NYB', short: 'DXY',  name: 'Dollar Index',    flag: '💵' },
+      { symbol: '^TA125.TA', short: 'TA-125', name: 'Tel Aviv 125',  flag: '🇮🇱', fallback: 'EIS' },
+      { symbol: '^TASI.SR',  short: 'TASI',   name: 'Tadawul (Saudi)', flag: '🇸🇦', fallback: 'KSA' },
+      { symbol: 'XU100.IS',  short: 'BIST',   name: 'BIST 100 (Turkey)', flag: '🇹🇷', fallback: 'TUR' },
+      { symbol: 'QAT',       short: 'QAT',    name: 'Qatar (ETF)',   flag: '🇶🇦' },
+      { symbol: 'UAE',       short: 'UAE',    name: 'UAE (ETF)',     flag: '🇦🇪' },
+    ],
+  },
+  {
+    key: 'africa',
+    label: 'Africa',
+    icon: '🌍',
+    items: [
+      { symbol: 'EZA',  short: 'EZA',  name: 'South Africa (ETF)', flag: '🇿🇦' },
+      { symbol: 'NGE',  short: 'NGE',  name: 'Nigeria (ETF)',      flag: '🇳🇬' },
+      { symbol: 'EGPT', short: 'EGPT', name: 'Egypt (ETF)',        flag: '🇪🇬' },
+      { symbol: 'AFK',  short: 'AFK',  name: 'Africa (ETF)',       flag: '🌍' },
     ],
   },
 ];
@@ -143,11 +188,11 @@ function GovBondsCard() {
     return () => { alive = false; clearInterval(id); };
   }, []);
   return (
-    <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
+    <div>
+      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#1e293b]">
         <div className="flex items-center gap-1.5">
           <span className="text-base">🏛️</span>
-          <h4 className="text-xs font-bold text-white">Govt Bonds · 10Y</h4>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wide">Govt Bonds · 10Y</h4>
         </div>
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
@@ -220,11 +265,11 @@ function RegionCard({ region, quotes, perf, tf }: {
   });
   const maxAbs = Math.max(...rows.map(r => Math.abs(r.cp ?? 0)), 0.01);
   return (
-    <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
+    <div className="px-3 py-2">
+      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#1e293b]">
         <div className="flex items-center gap-1.5">
           <span className="text-base">{region.icon}</span>
-          <h4 className="text-xs font-bold text-white">{region.label}</h4>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wide">{region.label}</h4>
         </div>
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
@@ -319,12 +364,17 @@ export default function IndicesPanel() {
     const { range, interval } = TF_TO_RANGE[tf];
     (async () => {
       try {
-        const res = await fetch(`/api/yahoo-history?symbols=${encodeURIComponent(allSymbols.join(','))}&range=${range}&interval=${interval}`, { cache: 'no-store', signal: ctrl.signal });
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!json.ok || !Array.isArray(json.data)) return;
+        // yahoo-history caps at 15 symbols per call — fetch in parallel chunks.
+        const chunks: string[][] = [];
+        for (let i = 0; i < allSymbols.length; i += 15) chunks.push(allSymbols.slice(i, i + 15));
+        const payloads = await Promise.all(chunks.map(async (chunk) => {
+          const res = await fetch(`/api/yahoo-history?symbols=${encodeURIComponent(chunk.join(','))}&range=${range}&interval=${interval}`, { cache: 'no-store', signal: ctrl.signal });
+          if (!res.ok) return [];
+          const json = await res.json();
+          return json.ok && Array.isArray(json.data) ? json.data : [];
+        }));
         const map: Record<string, number | null> = {};
-        json.data.forEach((h: any) => {
+        payloads.flat().forEach((h: any) => {
           if (!h?.bars?.length) { map[String(h.symbol).toUpperCase()] = null; return; }
           const last = h.bars[h.bars.length - 1].close;
           const ref = pickReferenceClose(h.bars, tf);
@@ -358,11 +408,18 @@ export default function IndicesPanel() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {REGIONS.map(region => (
-          <RegionCard key={region.key} region={region} quotes={quotes} perf={perf} tf={tf} />
-        ))}
-        <GovBondsCard />
+      {/* One unified list: all region groups flow inside a single card. */}
+      <div className="bg-white/[0.02] border border-[#1e293b] rounded-lg">
+        <div className="columns-1 md:columns-2 xl:columns-3 gap-0 [column-fill:_balance]">
+          {REGIONS.map(region => (
+            <div key={region.key} className="break-inside-avoid">
+              <RegionCard region={region} quotes={quotes} perf={perf} tf={tf} />
+            </div>
+          ))}
+          <div className="break-inside-avoid px-3 py-2">
+            <GovBondsCard />
+          </div>
+        </div>
       </div>
     </div>
   );

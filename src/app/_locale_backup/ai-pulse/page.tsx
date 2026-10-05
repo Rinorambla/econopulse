@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { RefreshCw, ArrowLeft, Clock, Zap, TrendingUp, TrendingDown, BarChart3, Activity, AlertTriangle, Target, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from '@/lib/sp500-stocks';
+import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP } from '@/lib/sp500-stocks';
 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
@@ -636,15 +636,15 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               )}
               {(() => {
                 const W = 1200, H = 600;
-                const SECTOR_HEADER = 20; // px height for sector label bar
-                // Build sector groups with live data
+                const SECTOR_HEADER = 26; // px height for sector label bar
+                // Build sector groups with live data — EQUAL weights so every tile
+                // is the same size (user request: uniform quadrants, readable).
                 const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
                   sector,
                   stocks: syms.map(sym => {
                     const mover = stockMap[sym];
                     const pct = mover?.changePercent ?? 0;
-                    const weight = getStockWeight(sym);
-                    return { symbol: sym, sector, pct, weight };
+                    return { symbol: sym, sector, pct, weight: 1 };
                   }),
                 })).filter(g => g.stocks.length > 0).sort((a, b) =>
                   b.stocks.reduce((s, st) => s + st.weight, 0) - a.stocks.reduce((s, st) => s + st.weight, 0)
@@ -693,13 +693,13 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                           {/* Sector header bar */}
                           {showLabel && (
                             <>
-                              <rect x={sr.x + 1} y={sr.y + 1} width={sr.w - 2} height={SECTOR_HEADER} fill="rgba(0,0,0,0.8)" rx="1" />
-                              <circle cx={sr.x + 10} cy={sr.y + SECTOR_HEADER / 2 + 1} r="3.5" fill={borderColor} />
-                              <text x={sr.x + 18} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="11" fill="white" fontWeight="800" dominantBaseline="central" letterSpacing="0.5">
+                              <rect x={sr.x + 1} y={sr.y + 1} width={sr.w - 2} height={SECTOR_HEADER} fill="rgba(0,0,0,0.85)" rx="1" />
+                              <circle cx={sr.x + 11} cy={sr.y + SECTOR_HEADER / 2 + 1} r="4" fill={borderColor} />
+                              <text x={sr.x + 20} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="13" fill="white" fontWeight="800" dominantBaseline="central" letterSpacing="0.5">
                                 {SECTOR_SHORT_MAP[sr.sector] || sr.sector.toUpperCase()}
                               </text>
                               {sr.w > 140 && (
-                                <text x={sr.x + sr.w - 6} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="10" fill={avgPct >= 0 ? '#4ade80' : '#f87171'} fontWeight="700" textAnchor="end" dominantBaseline="central">
+                                <text x={sr.x + sr.w - 6} y={sr.y + SECTOR_HEADER / 2 + 1} fontSize="12" fill={avgPct >= 0 ? '#4ade80' : '#f87171'} fontWeight="700" textAnchor="end" dominantBaseline="central">
                                   {avgPct >= 0 ? '+' : ''}{avgPct.toFixed(2)}%
                                 </text>
                               )}
@@ -713,8 +713,8 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                       const minDim = Math.min(cell.w, cell.h);
                       const showSymbol = cell.w > 18 && cell.h > 12;
                       const showPct = cell.w > 28 && cell.h > 22;
-                      const symbolSize = minDim > 60 ? 14 : minDim > 40 ? 11 : minDim > 25 ? 9 : minDim > 15 ? 7 : 5;
-                      const pctSize = minDim > 60 ? 11 : minDim > 40 ? 9 : 7;
+                      const symbolSize = minDim > 60 ? 16 : minDim > 40 ? 13 : minDim > 25 ? 10 : minDim > 15 ? 8 : 6;
+                      const pctSize = minDim > 60 ? 12 : minDim > 40 ? 10 : 8;
                       return (
                         <g key={cell.symbol} className="cursor-pointer" onClick={() => setSelectedSymbol(cell.symbol)}>
                           <rect x={cell.x + 0.5} y={cell.y + 0.5} width={Math.max(0, cell.w - 1)} height={Math.max(0, cell.h - 1)}

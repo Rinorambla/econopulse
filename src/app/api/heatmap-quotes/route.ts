@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 55;
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { getTiingoMarketData } from '@/lib/tiingo';
 import { getYahooQuotes } from '@/lib/yahooFinance';
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const period = req.nextUrl.searchParams.get('period') || 'daily';
   const validPeriod = PERIOD_RANGE[period] ? period : 'daily';
 
-  // Check cache
+  // Fresh cache → serve immediately.
   const cached = cache[validPeriod];
   if (cached && Date.now() - cached.ts < (CACHE_MS[validPeriod] || 180_000)) {
     return NextResponse.json({
@@ -50,51 +50,26 @@ export async function GET(req: NextRequest) {
     }, { headers: rateLimitHeaders(rl) });
   }
 
+  // Stale cache → serve instantly and refresh in the background (deduped), so the
+  // heatmap never blocks the page while upstream quotes are being re-fetched.
+  if (cached && cached.data.length > 0) {
+    after(async () => {
+      if (inFlight[validPeriod]) return;
+      inFlight[validPeriod] = buildQuotes(validPeriod)
+        .then((q) => { if (q.length) cache[validPeriod] = { ts: Date.now(), data: q }; })
+        .catch(() => {})
+        .finally(() => { delete inFlight[validPeriod]; }) as any;
+      await inFlight[validPeriod];
+    });
+    return NextResponse.json({
+      ok: true, data: cached.data, count: cached.data.length,
+      period: validPeriod, source: 'stale-cache',
+      asOf: new Date(cached.ts).toISOString(),
+    }, { headers: { ...rateLimitHeaders(rl), 'X-Cache': 'STALE' } });
+  }
+
   try {
-    let quotes: { symbol: string; price: number; change: number; changePercent: number; volume: number }[];
-
-    if (validPeriod === 'daily') {
-      // ── DAILY: Use Tiingo IEX bulk (fastest) + Yahoo fallback ──
-      const tiingoQuotes = await getTiingoMarketData(SP500_ALL_SYMBOLS).catch(() => []);
-      quotes = tiingoQuotes.map((q: any) => ({
-        symbol: (q.symbol || q.ticker || '').toUpperCase(),
-        price: q.price ?? 0,
-        change: q.change ?? 0,
-        changePercent: q.changePercent ?? 0,
-        volume: q.volume ?? 0,
-      }));
-      const got = new Set(quotes.map(q => q.symbol));
-      const missing = SP500_ALL_SYMBOLS.filter(s => !got.has(s.toUpperCase().replace('.', '-')));
-
-      // Fill missing from Yahoo (cap at reasonable batch)
-      if (missing.length > 0) {
-        try {
-          const yahooQ = await getYahooQuotes(missing.slice(0, 80));
-          for (const yq of yahooQ) {
-            if (yq && yq.ticker) {
-              quotes.push({
-                symbol: yq.ticker.toUpperCase(),
-                price: yq.price ?? 0,
-                change: yq.change ?? 0,
-                changePercent: yq.changePercent ?? 0,
-                volume: yq.volume ?? 0,
-              });
-            }
-          }
-        } catch (e) { console.warn('Yahoo fallback failed:', e); }
-      }
-    } else {
-      // ── NON-DAILY: Use Yahoo v8/chart with period range ──
-      const range = PERIOD_RANGE[validPeriod];
-      const chartQuotes = await fetchYahooChartQuotes(SP500_ALL_SYMBOLS, range, 12, 80);
-      quotes = Object.values(chartQuotes).map(q => ({
-        symbol: q.symbol,
-        price: q.price,
-        change: q.change,
-        changePercent: q.changePercent,
-        volume: 0,
-      }));
-    }
+    const quotes = await buildQuotes(validPeriod);
 
     // Update cache
     cache[validPeriod] = { ts: Date.now(), data: quotes };
@@ -108,4 +83,54 @@ export async function GET(req: NextRequest) {
     console.error('heatmap-quotes error:', e);
     return NextResponse.json({ ok: false, error: e?.message || 'unknown' }, { status: 500, headers: rateLimitHeaders(rl) });
   }
+}
+
+const inFlight: Record<string, Promise<void> | undefined> = {};
+
+async function buildQuotes(validPeriod: string) {
+  let quotes: { symbol: string; price: number; change: number; changePercent: number; volume: number }[];
+
+  if (validPeriod === 'daily') {
+    // ── DAILY: Use Tiingo IEX bulk (fastest) + Yahoo fallback ──
+    const tiingoQuotes = await getTiingoMarketData(SP500_ALL_SYMBOLS).catch(() => []);
+    quotes = tiingoQuotes.map((q: any) => ({
+      symbol: (q.symbol || q.ticker || '').toUpperCase(),
+      price: q.price ?? 0,
+      change: q.change ?? 0,
+      changePercent: q.changePercent ?? 0,
+      volume: q.volume ?? 0,
+    }));
+    const got = new Set(quotes.map(q => q.symbol));
+    const missing = SP500_ALL_SYMBOLS.filter(s => !got.has(s.toUpperCase().replace('.', '-')));
+
+    // Fill missing from Yahoo (cap at reasonable batch)
+    if (missing.length > 0) {
+      try {
+        const yahooQ = await getYahooQuotes(missing.slice(0, 80));
+        for (const yq of yahooQ) {
+          if (yq && yq.ticker) {
+            quotes.push({
+              symbol: yq.ticker.toUpperCase(),
+              price: yq.price ?? 0,
+              change: yq.change ?? 0,
+              changePercent: yq.changePercent ?? 0,
+              volume: yq.volume ?? 0,
+            });
+          }
+        }
+      } catch (e) { console.warn('Yahoo fallback failed:', e); }
+    }
+  } else {
+    // ── NON-DAILY: Use Yahoo v8/chart with period range ──
+    const range = PERIOD_RANGE[validPeriod];
+    const chartQuotes = await fetchYahooChartQuotes(SP500_ALL_SYMBOLS, range, 12, 80);
+    quotes = Object.values(chartQuotes).map(q => ({
+      symbol: q.symbol,
+      price: q.price,
+      change: q.change,
+      changePercent: q.changePercent,
+      volume: 0,
+    }));
+  }
+  return quotes;
 }

@@ -29,11 +29,12 @@ type Category = {
 const CATEGORIES: Category[] = [
   { key: 'markets', label: 'Markets', accent: 'text-amber-400' },
   { key: 'fed', label: 'Economics', accent: 'text-sky-400' },
-  { key: 'tech', label: 'Technology', accent: 'text-violet-400' },
+  { key: 'tech', label: 'Technology', accent: 'text-cyan-400' },
   { key: 'crypto', label: 'Crypto', accent: 'text-orange-400' },
   { key: 'energy', label: 'Energy', accent: 'text-rose-400' },
   { key: 'commodities', label: 'Commodities', accent: 'text-yellow-400' },
   { key: 'banks', label: 'Finance', accent: 'text-emerald-400' },
+  { key: 'analysts', label: 'Analysts', accent: 'text-blue-300' },
 ];
 
 const DEFAULT_CATEGORY = CATEGORIES[0]; // Markets
@@ -41,6 +42,9 @@ const DEFAULT_CATEGORY = CATEGORIES[0]; // Markets
 function classify(article: NewsArticle): Category {
   const text = `${article.title} ${article.description} ${(article.tags || []).join(' ')} ${(article.tickers || []).join(' ')}`.toLowerCase();
   const has = (...kw: string[]) => kw.some((k) => text.includes(k));
+  // Analyst/strategist commentary (Bloomberg-style opinion desk): calls on bubbles,
+  // recessions, valuations, targets — checked first so it wins over topic buckets.
+  if (has('analyst', 'strategist', 'price target', 'overvalued', 'undervalued', 'bubble', 'valuations', 'bear market', 'bull market', 'correction ahead', 'downgrade', 'upgrade', 'recession risk', 'recession odds', 'soft landing', 'hard landing', 'warns', 'predicts', 'forecasts', 'sees s&p', 'top of the market', 'market crash')) return CATEGORIES.find((c) => c.key === 'analysts')!;
   if (has('bitcoin', 'crypto', 'ethereum', 'btc', 'eth', 'blockchain', 'token', 'coinbase')) return CATEGORIES.find((c) => c.key === 'crypto')!;
   if (has('oil', 'gas', 'energy', 'crude', 'opec', 'solar', 'renewable', 'barrel')) return CATEGORIES.find((c) => c.key === 'energy')!;
   if (has('fed', 'federal reserve', 'interest rate', 'inflation', 'powell', 'fomc', 'treasury', 'yield', 'cpi', 'gdp', 'recession')) return CATEGORIES.find((c) => c.key === 'fed')!;

@@ -145,7 +145,32 @@ const EXTENDED_SYMBOLS = [
   // ── REIT / Real Estate breadth ──
   'SCHH','IYR','REET','XLRE','PSR','RWO','RWX',
   // ── Additional Bonds / Yield curve ──
-  'BIL','SHV','IEF','ZROZ','EDV','HYG','JNK','BKLN','SRLN','PFF','PGX','CWB','MBB','SCHZ','GOVT','MUB','BAB'
+  'BIL','SHV','IEF','ZROZ','EDV','HYG','JNK','BKLN','SRLN','PFF','PGX','CWB','MBB','SCHZ','GOVT','MUB','BAB',
+  // ── Leveraged / Inverse (liquid, options-heavy) ──
+  'TQQQ','SQQQ','SPXL','SPXS','UPRO','SPXU','SOXL','SOXS','TNA','TZA','LABU','LABD','FAS','FAZ','TECL','TECS',
+  'UDOW','SDOW','QLD','SSO','SDS','QID','TBT','TMF','TMV','NUGT','DUST','JNUG','JDST','BOIL','KOLD','UCO','SCO',
+  // ── Income / Covered-call / Buffer ETFs ──
+  'JEPI','JEPQ','QYLD','XYLD','RYLD','DIVO','SCHY','IDV','SPYD','HDV','NOBL','SDY','DGRO','DGRW','MOAT','COWZ','CALF',
+  // ── Active / Growth / Innovation extras ──
+  'ARKG','ARKF','ARKQ','ARKX','PRNT','IZRL','BLOK','BITQ','DAPP','WGMI','IPO','SPAK','FFTY','QQQJ','QQQM','ONEQ',
+  // ── AI / Semis / Next-gen tech ──
+  'AIQ','IGV','WCLD','XSW','IYW','FTEC','QTEC','PSI','XSD','SMCI','PLTR','SNOW','AI','BBAI','IONQ','QBTS','RGTI',
+  'ARM','AVAV','KTOS','ACHR','JOBY','LUNR','RDW','ASTS','GSAT','VSAT','SATS',
+  // ── Nuclear / Uranium / Energy transition ──
+  'URNM','URNJ','NLR','SMR','OKLO','CCJ','UEC','DNN','NXE','LEU','BWXT','VRT','ETN','PWR','FSLR','ENPH','SEDG','RUN','NOVA','BE','PLUG','FCEL',
+  // ── Pharma / Biotech extras ──
+  'NVS','SNY','GSK','TAK','TEVA','RHHBY','BAYRY','MRNA','BNTX','NVAX','ALNY','INCY','NBIX','PCRX','RARE','IONS','ARWR','BEAM','CRSP','EDIT','NTLA',
+  // ── Financials / Fintech extras ──
+  'NU','PAGS','STNE','MELI','SE','GRAB','UBER','LYFT','DASH','ABNB','BKNG','EXPE','TCOM','DKNG','FLUT','PENN','CZR','LVS','WYNN','MGM',
+  // ── Consumer / Retail extras ──
+  'CMG','SBUX','YUM','QSR','DPZ','WING','CAVA','SHAK','TXRH','DRI','EAT','CELH','MNST','KDP','STZ','BF-B','TPB','PM','MO','BTI',
+  // ── Industrials / Defense extras ──
+  'LMT','RTX','NOC','GD','LHX','HII','TDG','HEI','AXON','CW','TXT','EMR','ROK','PH','DOV','IEX','XYL','AME','FTV','ITT',
+  // ── Energy majors & midstream ──
+  'XOM','CVX','COP','EOG','SLB','HAL','BKR','OXY','DVN','FANG','HES','MRO','APA','CTRA','EQT','AR','RRC','SWN',
+  'KMI','WMB','OKE','ET','EPD','MPLX','PAA','ENB','TRP','LNG','TELL','FLNG',
+  // ── Materials / Miners extras ──
+  'FCX','NEM','GOLD','AEM','KGC','AU','HMY','PAAS','AG','HL','CDE','MP','ALB','SQM','LAC','VALE','SCCO','TECK','AA','CENX','X','NUE','STLD','CMC'
 ];
 
 // Remove duplicates and ensure unique symbols
@@ -154,7 +179,7 @@ function buildUniverse(scope: string, limit?: number) {
   if (scope === 'full') base.push(...EXTENDED_SYMBOLS);
   const uniq = [...new Set(base)];
   const maxEnv = parseInt(process.env.MAX_SYMBOL_UNIVERSE || '',10);
-  const hardCap = !isNaN(maxEnv) ? maxEnv : 1500; // expanded universe: S&P500 + Nasdaq100 + Russell1000 extras + ETFs
+  const hardCap = !isNaN(maxEnv) ? maxEnv : 2000; // expanded universe: S&P500 + Nasdaq100 + Russell1000 extras + ETFs + thematics
   const appliedLimit = Math.min(limit || hardCap, hardCap);
   return uniq.slice(0, appliedLimit);
 }

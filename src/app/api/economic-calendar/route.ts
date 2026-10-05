@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTradingEconomicsCalendar } from '../../../lib/tradingeconomics'
+import { getOfficialReleases, enrichCalendarWithActuals } from '@/lib/official-releases'
 import { getFmpEconomicCalendar } from '../../../lib/fmp'
 import fs from 'fs'
 import path from 'path'
@@ -155,6 +156,17 @@ export async function GET(req: NextRequest) {
     if (calendar.length && country) {
       const wantC = country.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
       calendar = calendar.filter(ev => wantC.some(c => ev.region.toLowerCase().includes(c)))
+    }
+
+    // ForexFactory carries no actuals — fill released events with the latest
+    // official readings (FRED + DBnomics, self-updating) so "Act" is populated.
+    if (calendar.length) {
+      try {
+        const releases = await getOfficialReleases()
+        enrichCalendarWithActuals(calendar, releases)
+      } catch (e) {
+        console.warn('economic-calendar: actuals enrichment failed', e)
+      }
     }
 
     cache = { ts: Date.now(), data: calendar }

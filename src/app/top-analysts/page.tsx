@@ -233,7 +233,7 @@ export default function TopAnalystsPage() {
 
   return (
     <RequirePlan min="premium">
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-12 overflow-x-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-4 sm:pt-6 pb-12 overflow-x-hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-3">

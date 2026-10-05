@@ -48,6 +48,8 @@ type IndicatorKey =
   | 'adx' | 'stochrsi' | 'roc' | 'trix' | 'uo' | 'ao' | 'ppo' | 'aroon' | 'vortex'
   | 'cmo' | 'dpo' | 'coppock' | 'kst' | 'elderray' | 'rvi' | 'fisher' | 'bop'
   | 'cta'
+  // Risk & Sentiment (premium composites)
+  | 'eqrisk' | 'mktsent'
   // Support/Resistance
   | 'pivots'
 
@@ -138,7 +140,7 @@ const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 const FIB_EXT_LEVELS = [0, 0.382, 0.618, 1, 1.272, 1.618, 2, 2.618]
 
 // Pro-only indicators: visible in the menu with a lock, usable only on paid plans.
-const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta'])
+const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['volprofile', 'vpvr', 'vpfr', 'svp', 'cta', 'eqrisk', 'mktsent'])
 
 // Macro series without intraday ticks: FRED:<id> and DBnomics DBN:<prov>/<ds>/<series>.
 const isMacroSymbol = (s: string) => /^(fred|dbn):/i.test(s)
@@ -174,12 +176,14 @@ const WARMUP_FETCH: Partial<Record<RangeKey, string>> = {
   '1H': '1y',
   '1D': '5d',
   '5D': '1mo',
-  '1M': '1y',
-  '3M': '2y',
-  '6M': '2y',
-  'YTD': '2y',
-  '1Y': '2y',
-  '5Y': '10y',
+  // Daily ranges fetch several years so the user can keep panning back in time
+  // without the chart "cutting off" at the selected window's left edge.
+  '1M': '2y',
+  '3M': '5y',
+  '6M': '5y',
+  'YTD': '5y',
+  '1Y': '5y',
+  '5Y': 'max',
 }
 
 // Approx seconds covered by the requested window, used to zoom back after warm-up.
@@ -319,6 +323,13 @@ const IND_CATEGORIES: { category: string; items: { key: IndicatorKey; label: str
     ],
   },
   {
+    category: 'Risk & Sentiment',
+    items: [
+      { key: 'eqrisk', label: 'Equity Risk Index' },
+      { key: 'mktsent', label: 'Market Sentiment' },
+    ],
+  },
+  {
     category: 'S / R',
     items: [
       { key: 'pivots', label: 'Pivot Points' },
@@ -413,6 +424,9 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   bop: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
   cta: { visible: true, color: '#38bdf8', period: 10, period2: 50, ob: 60, os: -60, width: 2, style: LineStyle.Solid },
   volcandles: { visible: true, color: '#22c55e', color2: '#ef4444', period: 20, width: 1, style: LineStyle.Solid },
+  // ── Risk & Sentiment ──
+  eqrisk: { visible: true, color: '#f43f5e', period: 200, period2: 14, ob: 75, os: 25, width: 2, style: LineStyle.Solid },
+  mktsent: { visible: true, color: '#38bdf8', period: 14, ob: 60, os: -60, width: 2, style: LineStyle.Solid },
 }
 
 // Friendly labels for the numeric "length" fields, per indicator (falls back to generic).
@@ -428,6 +442,8 @@ const IND_FIELD_LABELS: Partial<Record<IndicatorKey, { period?: string; period2?
   uo: { period: 'Fast', period2: 'Mid', period3: 'Slow' },
   cta: { period: 'Fast EMA', period2: 'Slow EMA' },
   volcandles: { period: 'Volume avg length' },
+  eqrisk: { period: 'Trend SMA', period2: 'RSI Length' },
+  mktsent: { period: 'Lookback' },
 }
 
 const DEFAULT_IND_CONFIG: IndicatorConfig = { visible: true, color: '#8b5cf6', width: 1, style: LineStyle.Solid }
@@ -967,6 +983,61 @@ function computeCTA(closes: number[], fast = 10, slow = 50): (number | null)[] {
     }
     return cnt ? (sum / cnt) * 100 : null
   })
+}
+
+// Equity Risk Index (0-100): composite risk gauge blending trend extension,
+// rolling drawdown, RSI extremity, realized volatility and loss of long trend.
+// High readings flag euphoric/stressed tape; low readings flag calm uptrends.
+function computeEquityRisk(bars: Bar[], smaPeriod = 200, rsiPeriod = 14): (number | null)[] {
+  const closes = bars.map(b => b.close)
+  const sma = computeSMA(closes, smaPeriod)
+  const rsi = computeRSI(closes, rsiPeriod)
+  const hv = computeHistVol(closes, 20)
+  const look = 252
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    const s = sma[i], r = rsi[i]
+    if (s == null || r == null || !s) { out.push(null); continue }
+    let peak = -Infinity
+    for (let j = Math.max(0, i - look + 1); j <= i; j++) peak = Math.max(peak, closes[j])
+    const ext = Math.max(-1, Math.min(1, ((closes[i] - s) / s) / 0.25))
+    const extRisk = ext > 0 ? ext : 0
+    const ddRisk = peak > 0 ? Math.min(1, ((peak - closes[i]) / peak) / 0.2) : 0
+    const rsiRisk = r > 70 ? (r - 70) / 30 : r < 30 ? (30 - r) / 30 : 0
+    const v = hv[i]
+    const volRisk = v != null ? Math.max(0, Math.min(1, (v - 15) / 45)) : 0
+    const belowTrend = closes[i] < s ? 0.5 : 0
+    const score = extRisk * 22 + ddRisk * 26 + rsiRisk * 16 + volRisk * 26 + belowTrend * 20
+    out.push(Math.max(0, Math.min(100, score)))
+  }
+  return out
+}
+
+// Market Sentiment (-100..+100): blends centered RSI, EMA 12/26 spread, rate of
+// change and up/down volume pressure into a single bull/bear sentiment line.
+function computeMarketSentiment(bars: Bar[], period = 14): (number | null)[] {
+  const closes = bars.map(b => b.close)
+  const rsi = computeRSI(closes, period)
+  const emaF = computeEMA(closes, 12)
+  const emaS = computeEMA(closes, 26)
+  const out: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    const r = rsi[i]
+    if (r == null) { out.push(null); continue }
+    const rsiSig = (r - 50) / 50
+    const f = emaF[i], s = emaS[i]
+    const macdSig = f != null && s != null && s ? Math.max(-1, Math.min(1, ((f - s) / s) / 0.03)) : 0
+    const base = closes[i - period]
+    const rocSig = i >= period && base ? Math.max(-1, Math.min(1, ((closes[i] - base) / base) * 10)) : 0
+    let upV = 0, dnV = 0
+    for (let j = Math.max(1, i - period + 1); j <= i; j++) {
+      const d = closes[j] - closes[j - 1]
+      if (d > 0) upV += bars[j].volume || 0; else if (d < 0) dnV += bars[j].volume || 0
+    }
+    const volSig = upV + dnV > 0 ? (upV - dnV) / (upV + dnV) : 0
+    out.push(Math.max(-100, Math.min(100, rsiSig * 35 + macdSig * 30 + rocSig * 20 + volSig * 15)))
+  }
+  return out
 }
 
 // Detrended Price Oscillator — removes trend to highlight cycles.
@@ -2194,7 +2265,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     }
 
     // Check how many sub-panels we need (for proper margin allocation)
-    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex', 'cta']
+    const subPanelKeys: IndicatorKey[] = ['rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'mom', 'atr', 'obv', 'stddev', 'mfi', 'cmf', 'adl', 'chaikinosc', 'forceindex', 'adx', 'stochrsi', 'roc', 'trix', 'uo', 'ao', 'ppo', 'aroon', 'vortex', 'cta', 'eqrisk', 'mktsent']
     const activeSubPanels = subPanelKeys.filter(k => indicators.has(k))
     const hasVolume = indicators.has('volume')
 
@@ -2551,6 +2622,26 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       const c = cfg('cta')
       const sid = 'cta-panel'
       addSubLine(computeCTA(closes, c.period!, c.period2!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 60, 'rgba(34,197,94,0.35)')
+      addGuide(sid, c.os ?? -60, 'rgba(239,68,68,0.35)')
+      addGuide(sid, 0, 'rgba(148,163,184,0.25)')
+    }
+
+    // Equity Risk Index (0-100): composite risk gauge (premium)
+    if (on('eqrisk')) {
+      const c = cfg('eqrisk')
+      const sid = 'eqrisk-panel'
+      addSubLine(computeEquityRisk(bars, c.period!, c.period2!), sid, c.color, c.style, c.width)
+      addGuide(sid, c.ob ?? 75, 'rgba(239,68,68,0.35)')
+      addGuide(sid, c.os ?? 25, 'rgba(34,197,94,0.35)')
+      addGuide(sid, 50, 'rgba(148,163,184,0.25)')
+    }
+
+    // Market Sentiment (-100..+100): composite bull/bear gauge (premium)
+    if (on('mktsent')) {
+      const c = cfg('mktsent')
+      const sid = 'mktsent-panel'
+      addSubLine(computeMarketSentiment(bars, c.period!), sid, c.color, c.style, c.width)
       addGuide(sid, c.ob ?? 60, 'rgba(34,197,94,0.35)')
       addGuide(sid, c.os ?? -60, 'rgba(239,68,68,0.35)')
       addGuide(sid, 0, 'rgba(148,163,184,0.25)')

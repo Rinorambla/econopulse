@@ -6,10 +6,15 @@ import { useParams } from 'next/navigation';
 import TerminalShell from '@/components/TerminalShell';
 import RequirePlan from '@/components/RequirePlan';
 import SecurityPanel from '@/components/SecurityPanel';
+import { normalizeSymbol } from '@/lib/symbol-resolver';
 
 export default function SecurityPage() {
   const params = useParams<{ symbol: string }>();
-  const symbol = useMemo(() => decodeURIComponent(String(params?.symbol || 'AAPL')).toUpperCase(), [params]);
+  const symbol = useMemo(() => {
+    const raw = decodeURIComponent(String(params?.symbol || 'AAPL')).toUpperCase();
+    // EUR/USD → EURUSD=X etc., so forex pairs chart real candles.
+    return normalizeSymbol(raw) || raw;
+  }, [params]);
 
   return (
     <RequirePlan min="free">

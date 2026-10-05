@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import {
   Search,
@@ -1252,7 +1252,9 @@ export default function MarketDataPage() {
 
   // Position the search dropdown directly under the input, clamped to the
   // viewport, so ticker results never cover the search bar.
-  useEffect(() => {
+  // useLayoutEffect: position the panel BEFORE paint, otherwise the first open
+  // after a page navigation renders it in-flow for one frame (panel "drops down").
+  useLayoutEffect(() => {
     if (!searchOpen) return
     const compute = () => {
       const el = searchWrapRef.current
@@ -1264,11 +1266,14 @@ export default function MarketDataPage() {
       let left = r.left
       if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
       if (left < margin) left = margin
+      const viewportH = window.visualViewport?.height ?? window.innerHeight
+      const top = Math.max(margin, Math.min(Math.round(r.bottom + 6), viewportH - 180))
       setSearchMenuStyle({
         position: 'fixed',
-        top: Math.round(r.bottom + 6),
+        top,
         left: Math.round(left),
         width: Math.round(width),
+        maxHeight: Math.max(220, viewportH - top - margin),
       })
     }
     compute()
@@ -1316,7 +1321,7 @@ export default function MarketDataPage() {
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchVal('') }
                 }}
                 placeholder="Search any symbol (AAPL, Tesla, BTC-USD, SPY/QQQ)…"
-                className="bg-transparent text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500 min-w-0"
+                className="bg-transparent text-[16px] sm:text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500 min-w-0"
               />
               {searchOpen && searchVal && (
                 <button
@@ -1328,7 +1333,7 @@ export default function MarketDataPage() {
               )}
             </div>
 
-            {searchOpen && (
+            {searchOpen && searchMenuStyle.top != null && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)} />
                 <div style={searchMenuStyle} className="bg-slate-900 border border-white/10 rounded-md shadow-xl max-h-[60vh] sm:max-h-[420px] overflow-y-auto z-50">

@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { RefreshCw, ArrowLeft, Clock, Zap, TrendingUp, TrendingDown, BarChart3, Activity, AlertTriangle, Target, Radio } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP } from '@/lib/sp500-stocks';
+import { SP500_SECTORS, SECTOR_SHORT as SECTOR_SHORT_MAP, getStockWeight } from '@/lib/sp500-stocks';
 
 const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false });
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
@@ -418,6 +418,28 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
   // Re-fetch heatmap when period changes (also runs once on mount)
   useEffect(() => { fetchHeatmapQuotes(heatmapPeriod); }, [heatmapPeriod, fetchHeatmapQuotes]);
 
+  // Background-prefetch every other timeframe once, so 1D↔1W↔1M… switches are
+  // instant (fills both the client cache and the server's warm cache).
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const periods = ['daily', 'weekly', 'monthly', '3month', '6month', 'ytd', 'yearly'];
+      for (const p of periods) {
+        if (heatmapCacheRef.current[p]?.length) continue;
+        try {
+          const r = await fetchT(`/api/heatmap-quotes?period=${p}`, 55000);
+          if (!r.ok) continue;
+          const j = await r.json();
+          if (j.ok && j.data?.length) {
+            heatmapCacheRef.current[p] = j.data;
+            if (heatmapPeriodRef.current === p) setHeatmapQuotes(j.data);
+          }
+        } catch { /* best-effort warmup */ }
+      }
+    }, 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const heavy = setInterval(() => {
       if (document.visibilityState === 'visible') { fetchSectorData(); fetchTopMovers(); fetchAIAnalysis(); fetchHeatmapQuotes(heatmapPeriod); }
@@ -637,14 +659,14 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
               {(() => {
                 const W = 1200, H = 600;
                 const SECTOR_HEADER = 26; // px height for sector label bar
-                // Build sector groups with live data — EQUAL weights so every tile
-                // is the same size (user request: uniform quadrants, readable).
+                // MarketBeat-style: tiles sized by market cap, DAMPENED (w^0.72) so
+                // megacaps stand out without crushing small names into slivers.
                 const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
                   sector,
                   stocks: syms.map(sym => {
                     const mover = stockMap[sym];
                     const pct = mover?.changePercent ?? 0;
-                    return { symbol: sym, sector, pct, weight: 1 };
+                    return { symbol: sym, sector, pct, weight: Math.pow(Math.max(1, getStockWeight(sym)), 0.72) };
                   }),
                 })).filter(g => g.stocks.length > 0).sort((a, b) =>
                   b.stocks.reduce((s, st) => s + st.weight, 0) - a.stocks.reduce((s, st) => s + st.weight, 0)
@@ -667,10 +689,11 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   'Utilities': '#0ea5e9', 'Real Estate': '#a8a29e',
                   'Materials': '#b45309',
                 };
+                // MarketBeat-style muted palette with a gray neutral band around 0.
                 const colorForPct = (p: number) =>
-                  p > 3 ? '#16a34a' : p > 2 ? '#22c55e' : p > 1 ? '#15803d' : p > 0.5 ? '#166534' :
-                  p > 0 ? '#14532d' : p > -0.5 ? '#7f1d1d' : p > -1 ? '#991b1b' :
-                  p > -2 ? '#dc2626' : p > -3 ? '#ef4444' : '#f87171';
+                  p > 3 ? '#3fa35c' : p > 2 ? '#3a9152' : p > 1 ? '#347d48' : p > 0.5 ? '#2f6b3f' :
+                  p > 0.1 ? '#2a5a37' : p >= -0.1 ? '#444c56' : p > -0.5 ? '#6b4044' :
+                  p > -1 ? '#8a3d43' : p > -2 ? '#a83a41' : p > -3 ? '#c23940' : '#d93a41';
                 return (
                   <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
                     <rect width={W} height={H} fill="#0b1120" />
@@ -750,6 +773,15 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   </svg>
                 );
               })()}
+              {/* MarketBeat-style color scale legend */}
+              <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-[#1e293b]">
+                {[
+                  ['-3%', '#d93a41'], ['-2%', '#c23940'], ['-1%', '#a83a41'], ['0%', '#444c56'],
+                  ['+1%', '#347d48'], ['+2%', '#3a9152'], ['+3%', '#3fa35c'],
+                ].map(([label, color]) => (
+                  <span key={label} className="px-2.5 py-1 rounded-sm text-[10px] font-bold text-white tabular-nums" style={{ background: color }}>{label}</span>
+                ))}
+              </div>
             </Panel>
 
             {/* ─── WORLD ECONOMIC CYCLE MAP ─── */}

@@ -389,7 +389,7 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   choppiness: { visible: true, color: '#eab308', period: 14, ob: 61.8, os: 38.2, width: 1, style: LineStyle.Solid },
   histvol: { visible: true, color: '#f87171', period: 20, width: 1, style: LineStyle.Solid },
   // ── Volume ──
-  volume: { visible: true, color: '#22c55e', color2: '#ef4444', width: 1, style: LineStyle.Solid },
+  volume: { visible: true, color: '#089981', color2: '#f23645', width: 1, style: LineStyle.Solid },
   vwap: { visible: true, color: '#ec4899', width: 1, style: LineStyle.Dotted },
   obv: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
   mfi: { visible: true, color: '#10b981', period: 14, ob: 80, os: 20, width: 1, style: LineStyle.Solid },
@@ -423,7 +423,7 @@ const IND_DEFAULTS: Partial<Record<IndicatorKey, IndicatorConfig>> = {
   fisher: { visible: true, color: '#a78bfa', color2: '#f97316', period: 9, width: 1, style: LineStyle.Solid },
   bop: { visible: true, color: '#22d3ee', width: 1, style: LineStyle.Solid },
   cta: { visible: true, color: '#38bdf8', period: 10, period2: 50, ob: 60, os: -60, width: 2, style: LineStyle.Solid },
-  volcandles: { visible: true, color: '#22c55e', color2: '#ef4444', period: 20, width: 1, style: LineStyle.Solid },
+  volcandles: { visible: true, color: '#089981', color2: '#f23645', period: 20, width: 1, style: LineStyle.Solid },
   // ── Risk & Sentiment ──
   eqrisk: { visible: true, color: '#f43f5e', period: 200, period2: 14, ob: 75, os: 25, width: 2, style: LineStyle.Solid },
   mktsent: { visible: true, color: '#38bdf8', period: 14, ob: 60, os: -60, width: 2, style: LineStyle.Solid },
@@ -1442,6 +1442,9 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
   const overlaySeriesRef = useRef<ISeriesApi<SeriesType>[]>([])
+  // User-resized sub-pane heights keyed by pane id (e.g. 'rsi-panel') — survive
+  // chart rebuilds so shrinking an indicator pane sticks across ticker changes.
+  const paneHeightsRef = useRef<Record<string, number>>({})
   const tooltipRef = useRef<HTMLDivElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -2129,13 +2132,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // Main series
     if (effStyle === 'candle' || effStyle === 'hollow' || effStyle === 'heikin') {
       const hollow = effStyle === 'hollow'
+      // TradingView palette: flat teal/red bodies, matching borders + wicks.
       const cs = chart.addSeries(CandlestickSeries, {
-        upColor: hollow ? 'rgba(0,0,0,0)' : '#22c55e',
-        downColor: '#ef4444',
-        borderUpColor: hollow ? '#22c55e' : '#16a34a',
-        borderDownColor: '#dc2626',
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
+        upColor: hollow ? 'rgba(0,0,0,0)' : '#089981',
+        downColor: '#f23645',
+        borderUpColor: '#089981',
+        borderDownColor: '#f23645',
+        wickUpColor: '#089981',
+        wickDownColor: '#f23645',
       })
       // Heikin-Ashi transform: smoothed candles from raw OHLC.
       let seriesData: CandlestickData[] = candleData
@@ -2162,8 +2166,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
           const n = parseInt(m[1], 16)
           return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
         }
-        const upC = vcCfg.color || '#22c55e'
-        const dnC = vcCfg.color2 || '#ef4444'
+        const upC = vcCfg.color || '#089981'
+        const dnC = vcCfg.color2 || '#f23645'
         let volSum = 0
         const colored = seriesData.map((cd, i) => {
           const v = bars[i]?.volume || 0
@@ -2184,8 +2188,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
       mainSeriesRef.current = cs
     } else if (effStyle === 'bar') {
       const bs = chart.addSeries(BarSeries, {
-        upColor: '#22c55e',
-        downColor: '#ef4444',
+        upColor: '#089981',
+        downColor: '#f23645',
         thinBars: false,
       })
       bs.setData(candleData)
@@ -2958,11 +2962,31 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
     // Initial overlay redraw
     requestAnimationFrame(redrawOverlay)
+    // Re-apply remembered sub-pane heights after the layout settles.
+    if (paneMap.size) {
+      requestAnimationFrame(() => {
+        try {
+          const panes = (chart as any).panes?.() || []
+          paneMap.forEach((idx: number, key: string) => {
+            const h = paneHeightsRef.current[key]
+            if (h && h > 20 && panes[idx]?.setHeight) panes[idx].setHeight(Math.round(h))
+          })
+        } catch { /* pane API unavailable */ }
+      })
+    }
     didCreate = true
 
     return () => {
       if (roRaf) cancelAnimationFrame(roRaf)
       ro.disconnect()
+      // Remember the user's pane sizes before tearing the chart down.
+      try {
+        const panes = (chart as any).panes?.() || []
+        paneMap.forEach((idx: number, key: string) => {
+          const h = panes[idx]?.getHeight?.()
+          if (typeof h === 'number' && h > 20) paneHeightsRef.current[key] = h
+        })
+      } catch { /* ignore */ }
       chart.remove()
       chartRef.current = null
     }
@@ -3863,7 +3887,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
                 if (e.key === 'Escape') { setCompareInput(''); setCompareSearchOpen(false) }
               }}
               placeholder="Compare (SPY, QQQ…)"
-              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white w-24 sm:w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[16px] sm:text-[11px] text-white w-28 sm:w-28 focus:outline-none focus:border-pink-500 placeholder-gray-500"
             />
             {compareSearchOpen && compareResults.length > 0 && (
               <div className="fixed left-2 right-2 top-24 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1 z-40 sm:w-[min(15rem,calc(100vw-2rem))] max-h-64 overflow-y-auto bg-slate-900/98 border border-white/15 rounded-lg shadow-xl backdrop-blur">

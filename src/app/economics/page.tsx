@@ -387,7 +387,17 @@ const fmtPop = (v: number) =>
   !Number.isFinite(v) || v <= 0 ? '—' : v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : `${(v / 1e6).toFixed(1)}M`;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
-type Tab = 'calendar' | 'releases' | 'countries';
+type Tab = 'calendar' | 'news' | 'releases' | 'countries' | 'forecasts';
+
+type NewsItem = { id: string; title: string; description?: string; url: string; source: string; publishedDate: string };
+
+type ForecastRow = {
+  code: string; country: string;
+  gdpGrowth: Record<string, number | null>;
+  inflation: Record<string, number | null>;
+  unemployment: Record<string, number | null>;
+  govDebt: Record<string, number | null>;
+};
 
 export default function EconomicsPage() {
   return (
@@ -412,6 +422,43 @@ function EconomicsInner() {
   const [sortKey, setSortKey] = useState<'gdp' | 'growth' | 'inflation' | 'unemployment' | 'rate'>('gdp');
   const [sortDesc, setSortDesc] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loadingNews, setLoadingNews] = useState(false);
+  const [forecasts, setForecasts] = useState<ForecastRow[]>([]);
+  const [fxYears, setFxYears] = useState<string[]>([]);
+  const [loadingFx, setLoadingFx] = useState(false);
+
+  // Economics news stream (TE "stream"-style) — fetched when the tab first opens.
+  useEffect(() => {
+    if (tab !== 'news' || news.length) return;
+    let alive = true;
+    (async () => {
+      setLoadingNews(true);
+      try {
+        const r = await fetch('/api/news', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        const j = await r.json();
+        if (alive && Array.isArray(j?.data)) setNews(j.data);
+      } catch { /* ignore */ }
+      finally { if (alive) setLoadingNews(false); }
+    })();
+    return () => { alive = false; };
+  }, [tab, news.length]);
+
+  // IMF WEO forecasts — fetched when the tab first opens.
+  useEffect(() => {
+    if (tab !== 'forecasts' || forecasts.length) return;
+    let alive = true;
+    (async () => {
+      setLoadingFx(true);
+      try {
+        const r = await fetch('/api/economics-forecasts', { cache: 'no-store', signal: AbortSignal.timeout(25000) });
+        const j = await r.json();
+        if (alive && j?.ok && Array.isArray(j.data)) { setForecasts(j.data); setFxYears(j.years || []); }
+      } catch { /* ignore */ }
+      finally { if (alive) setLoadingFx(false); }
+    })();
+    return () => { alive = false; };
+  }, [tab, forecasts.length]);
 
   // Calendar (next 14 days)
   useEffect(() => {
@@ -563,8 +610,10 @@ function EconomicsInner() {
           <div className="inline-flex rounded-lg bg-slate-900/60 border border-slate-800 p-0.5 gap-0.5">
             {([
               ['calendar', 'Calendar'],
-              ['releases', 'Latest Releases'],
+              ['news', 'News'],
+              ['releases', 'Indicators'],
               ['countries', 'Countries'],
+              ['forecasts', 'Forecasts'],
             ] as [Tab, string][]).map(([t, label]) => (
               <button
                 key={t}
@@ -575,7 +624,7 @@ function EconomicsInner() {
               </button>
             ))}
           </div>
-          {tab !== 'countries' && (
+          {(tab === 'calendar' || tab === 'releases') && (
             <>
               <div className="inline-flex rounded-lg bg-slate-900/60 border border-slate-800 p-0.5 gap-0.5">
                 {(['High', 'Medium', 'All'] as const).map(m => (
@@ -777,6 +826,102 @@ function EconomicsInner() {
             <div className="px-4 py-2 text-[10px] text-gray-600 bg-slate-900/60">
               {sortedCountries.length} countries · sorted by {sortKey}
             </div>
+          </div>
+        )}
+
+        {/* ── News tab (economics stream) ── */}
+        {tab === 'news' && (
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+            {loadingNews && <div className="p-6 text-center text-gray-500 text-sm">Loading news stream…</div>}
+            {!loadingNews && (() => {
+              const ECON_RE = /fed|ecb|boe|boj|inflation|cpi|ppi|gdp|interest rate|rate cut|rate hike|treasur|yield|bond|unemploy|jobs|payroll|recession|pmi|econom|central bank|stimulus|tariff|trade|deficit|debt|imf|consumer|housing|manufactur|retail sales/i;
+              const econ = news.filter(n => ECON_RE.test(`${n.title} ${n.description || ''}`));
+              const stream = (econ.length >= 5 ? econ : news).slice(0, 60);
+              if (!stream.length) return <div className="p-6 text-center text-gray-500 text-sm">No headlines available right now.</div>;
+              const ago = (d: string) => {
+                const ms = Date.now() - new Date(d).getTime();
+                if (!Number.isFinite(ms)) return '';
+                const m = Math.floor(ms / 60000);
+                if (m < 1) return 'now';
+                if (m < 60) return `${m}m`;
+                const h = Math.floor(m / 60);
+                if (h < 24) return `${h}h`;
+                return `${Math.floor(h / 24)}d`;
+              };
+              return (
+                <div className="divide-y divide-slate-800/60">
+                  {stream.map(n => (
+                    <a key={n.id || n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="group flex gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
+                      <span className="shrink-0 w-10 pt-0.5 text-[11px] font-mono text-amber-300/80 tabular-nums">{ago(n.publishedDate)}</span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium leading-snug text-gray-200 group-hover:text-white transition-colors">{n.title}</span>
+                        {n.description && <span className="mt-0.5 hidden sm:block text-[11.5px] text-gray-500 line-clamp-2">{n.description}</span>}
+                        <span className="text-[10px] text-gray-600">{n.source}</span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ── Forecasts tab (IMF WEO projections) ── */}
+        {tab === 'forecasts' && (
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-x-auto">
+            {loadingFx && <div className="p-6 text-center text-gray-500 text-sm">Loading IMF forecasts…</div>}
+            {!loadingFx && forecasts.length === 0 && (
+              <div className="p-6 text-center text-gray-500 text-sm">Forecast data unavailable right now.</div>
+            )}
+            {!loadingFx && forecasts.length > 0 && (
+              <>
+                <table className="w-full text-[12px] min-w-[860px]">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wider text-gray-500 border-b border-slate-800 bg-slate-900/80">
+                      <th className="pl-4 pr-2 py-2.5 font-semibold" rowSpan={2}>Country</th>
+                      <th className="px-2 py-1.5 text-center font-semibold border-l border-slate-800" colSpan={fxYears.length}>GDP Growth %</th>
+                      <th className="px-2 py-1.5 text-center font-semibold border-l border-slate-800" colSpan={fxYears.length}>Inflation %</th>
+                      <th className="px-2 py-1.5 text-center font-semibold border-l border-slate-800" colSpan={2}>Unemployment %</th>
+                      <th className="px-2 pr-4 py-1.5 text-center font-semibold border-l border-slate-800">Debt/GDP</th>
+                    </tr>
+                    <tr className="text-[10px] text-gray-600 border-b border-slate-800 bg-slate-900/80">
+                      {fxYears.map(y => <th key={`g${y}`} className="px-2 py-1 text-right font-medium first:border-l first:border-slate-800">{y}</th>)}
+                      {fxYears.map(y => <th key={`i${y}`} className="px-2 py-1 text-right font-medium first:border-l first:border-slate-800">{y}</th>)}
+                      {fxYears.slice(0, 2).map(y => <th key={`u${y}`} className="px-2 py-1 text-right font-medium first:border-l first:border-slate-800">{y}</th>)}
+                      <th className="px-2 pr-4 py-1 text-right font-medium border-l border-slate-800">{fxYears[0]}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecasts.map(f => (
+                      <tr key={f.code} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+                        <td className="pl-4 pr-2 py-2 whitespace-nowrap">
+                          <span className="mr-2">{flagFor(f.country)}</span>
+                          <span className="text-white font-medium">{f.country}</span>
+                        </td>
+                        {fxYears.map(y => {
+                          const v = f.gdpGrowth[y];
+                          return <td key={`g${y}`} className={`px-2 py-2 text-right tabular-nums first:border-l first:border-slate-800/60 ${v == null ? 'text-gray-600' : v > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{v == null ? '—' : v.toFixed(1)}</td>;
+                        })}
+                        {fxYears.map(y => {
+                          const v = f.inflation[y];
+                          return <td key={`i${y}`} className={`px-2 py-2 text-right tabular-nums first:border-l first:border-slate-800/60 ${v == null ? 'text-gray-600' : v > 4 ? 'text-red-400' : v > 2.5 ? 'text-amber-400' : 'text-emerald-400'}`}>{v == null ? '—' : v.toFixed(1)}</td>;
+                        })}
+                        {fxYears.slice(0, 2).map(y => {
+                          const v = f.unemployment[y];
+                          return <td key={`u${y}`} className={`px-2 py-2 text-right tabular-nums text-gray-300 first:border-l first:border-slate-800/60 ${v == null ? 'text-gray-600' : ''}`}>{v == null ? '—' : v.toFixed(1)}</td>;
+                        })}
+                        <td className={`px-2 pr-4 py-2 text-right tabular-nums border-l border-slate-800/60 ${f.govDebt[fxYears[0]] == null ? 'text-gray-600' : (f.govDebt[fxYears[0]] as number) > 100 ? 'text-red-400' : 'text-gray-300'}`}>
+                          {f.govDebt[fxYears[0]] == null ? '—' : `${(f.govDebt[fxYears[0]] as number).toFixed(0)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2 text-[10px] text-gray-600 bg-slate-900/60">
+                  IMF World Economic Outlook projections · {forecasts.length} countries
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

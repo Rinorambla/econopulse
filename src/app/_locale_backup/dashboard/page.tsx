@@ -692,7 +692,8 @@ export default function DashboardPage() {
 															return (
 																<tr>
 																	<td colSpan={16} className="p-0 bg-[#0a0e16] border-y border-blue-500/20">
-																		<div className="p-4" onClick={e => e.stopPropagation()}>
+																		{/* sticky-left pins the panel to the visible viewport while the table scrolls sideways */}
+																		<div className="sticky left-0 w-full max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-260px)] xl:max-w-[960px] p-3 sm:p-4" onClick={e => e.stopPropagation()}>
 																			<div className="flex items-start justify-between mb-3">
 																				<div className="flex items-center gap-2">
 																					<img src={`https://assets.parqet.com/logos/symbol/${item.ticker}?format=jpg`} alt="" className="w-6 h-6 rounded-full bg-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -761,7 +762,9 @@ export default function DashboardPage() {
 																					<span>🎯 Options Key Levels</span>
 																					<span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30">PRO</span>
 																				</div>
-																				<KeyLevels symbol={item.ticker} hintPrice={parseFloat(String(item.price || '').replace(/[^0-9.\-]/g, '')) || undefined} />
+																				<div className="overflow-x-auto">
+																					<KeyLevels symbol={item.ticker} hintPrice={parseFloat(String(item.price || '').replace(/[^0-9.\-]/g, '')) || undefined} />
+																				</div>
 																			</div>
 																		</div>
 																	</td>

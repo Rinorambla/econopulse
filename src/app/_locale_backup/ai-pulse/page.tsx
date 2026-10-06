@@ -197,6 +197,15 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
 
   // ─── State ─────────────────────────────────────────────────────
   const [sectorData, setSectorData] = useState<SectorPerformance[]>([]);
+  // Phones get a portrait-oriented heatmap that fits the screen width.
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const [allMovers, setAllMovers] = useState<Mover[]>([]);
   const [topMovers, setTopMovers] = useState<Mover[]>([]);
   const [bottomMovers, setBottomMovers] = useState<Mover[]>([]);
@@ -657,8 +666,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                 </div>
               )}
               {(() => {
-                const W = 1200, H = 600;
-                const SECTOR_HEADER = 26; // px height for sector label bar
+                // Portrait layout on phones (fits width, no giant sideways scroll).
+                const W = isNarrow ? 440 : 1200, H = isNarrow ? 860 : 600;
+                const SECTOR_HEADER = isNarrow ? 18 : 26; // px height for sector label bar
                 // MarketBeat-style: tiles sized by market cap, DAMPENED (w^0.72) so
                 // megacaps stand out without crushing small names into slivers.
                 const sectorGroups = Object.entries(SECTOR_STOCKS).map(([sector, syms]) => ({
@@ -695,9 +705,9 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   p > 0.1 ? '#2a5a37' : p >= -0.1 ? '#444c56' : p > -0.5 ? '#6b4044' :
                   p > -1 ? '#8a3d43' : p > -2 ? '#a83a41' : p > -3 ? '#c23940' : '#d93a41';
                 return (
-                  // min-width keeps the map near 1:1 scale → crisp sector labels; smaller screens scroll horizontally
+                  // Desktop keeps ~1:1 scale for crisp labels; phones use the portrait layout above.
                   <div className="overflow-x-auto">
-                    <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[1100px]" style={{ maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
+                    <svg viewBox={`0 0 ${W} ${H}`} className={`w-full ${isNarrow ? '' : 'min-w-[1100px]'}`} style={isNarrow ? undefined : { maxHeight: '620px' }} preserveAspectRatio="xMidYMid meet">
                     <rect width={W} height={H} fill="#0b1120" />
                     {/* Sector regions: tinted background + header bar + border */}
                     {sectorRects.map(sr => {

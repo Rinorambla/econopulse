@@ -4,6 +4,7 @@
 // cash flow, balance sheet, margins, per-share, ratios), annual/quarterly/TTM, YoY growth,
 // data labels, normalized comparison and saved charts. Data from /api/fundamental-history.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toPng } from 'html-to-image';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -376,6 +377,8 @@ export default function FundamentalChart({
   const [dataLabels, setDataLabels] = useState(false);
   const [normalize, setNormalize] = useState(false);
   const [saved, setSaved] = useState<SavedChart[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const dataRef = useRef(dataMap);
   dataRef.current = dataMap;
 
@@ -413,6 +416,30 @@ export default function FundamentalChart({
     const next = saved.filter((s) => s.id !== id);
     setSaved(next);
     writeSavedCharts(next);
+  };
+
+  // Download the chart card as a branded PNG (works on desktop and mobile).
+  const exportImage = async () => {
+    const node = cardRef.current;
+    if (!node || exporting) return;
+    setExporting(true);
+    try {
+      // Let the export-only header render and the chart redraw without animation.
+      await new Promise((r) => setTimeout(r, 300));
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#0b1220',
+        filter: (el) => !(el instanceof HTMLElement && el.dataset && 'exportHide' in el.dataset),
+      });
+      const a = document.createElement('a');
+      a.download = `econopulse-${symbols.join('-')}-${metricKey}-${period}.png`;
+      a.href = dataUrl;
+      a.click();
+    } catch {
+      /* canvas capture unavailable */
+    } finally {
+      setExporting(false);
+    }
   };
 
   const load = useCallback(async (syms: string[], force = false) => {
@@ -529,9 +556,24 @@ export default function FundamentalChart({
         : fmtValue(v, metric.kind === 'currency2' ? 'currency2' : metric.kind, currency, 0);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+    <div ref={cardRef} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+      {/* Export-only branded header */}
+      {exporting && (
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <div className="text-lg font-black tracking-tight text-white">
+              ECONOPULSE<span className="text-blue-400">.AI</span>
+            </div>
+            <div className="text-xs font-semibold text-white/70">
+              {symbols.join(' vs ')} · {metric.label} ·{' '}
+              {period === 'annual' ? 'Annual' : period === 'quarterly' ? 'Quarterly' : 'TTM'} · {range}
+            </div>
+          </div>
+          <div className="text-[11px] font-bold text-blue-300">econopulse.ai/fundamentals</div>
+        </div>
+      )}
       {/* Controls */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2" data-export-hide="1">
         {/* Metric dropdown (all indicators) */}
         <select
           value={metricKey}
@@ -600,17 +642,26 @@ export default function FundamentalChart({
         )}
         <button
           type="button"
+          className={`${btn(false)} border border-blue-500/40 bg-blue-600/20 text-blue-200`}
+          onClick={exportImage}
+          disabled={exporting}
+          title="Download this chart as a PNG image (save to phone or PC)"
+        >
+          {exporting ? 'Saving…' : '⬇ Save Image'}
+        </button>
+        <button
+          type="button"
           className={`${btn(false)} border border-white/10`}
           onClick={saveCurrentChart}
-          title="Save current chart configuration"
+          title="Bookmark current chart configuration"
         >
-          ★ Save Chart
+          ★ Bookmark
         </button>
       </div>
 
       {/* Saved charts */}
       {saved.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" data-export-hide="1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40">Saved:</span>
           {saved.map((c) => (
             <span
@@ -744,6 +795,7 @@ export default function FundamentalChart({
                     strokeWidth={2}
                     dot={false}
                     connectNulls
+                    isAnimationActive={!exporting}
                   />
                 ))}
               </ComposedChart>
@@ -798,7 +850,7 @@ export default function FundamentalChart({
               {showGrowth && hasNegativeGrowth && (
                 <ReferenceLine yAxisId="growth" y={0} stroke="rgba(245,158,11,0.35)" strokeDasharray="4 4" />
               )}
-              <Bar yAxisId="value" dataKey="value" name={metric.label} radius={[3, 3, 0, 0]} maxBarSize={44}>
+              <Bar yAxisId="value" dataKey="value" name={metric.label} radius={[3, 3, 0, 0]} maxBarSize={44} isAnimationActive={!exporting}>
                 {rows.map((r) => (
                   <Cell key={r.date} fill={(r.value ?? 0) >= 0 ? '#3b82f6' : '#ef4444'} />
                 ))}
@@ -822,6 +874,7 @@ export default function FundamentalChart({
                   strokeWidth={2}
                   dot={rows.length <= 24 ? { r: 3, fill: '#f59e0b', strokeWidth: 0 } : false}
                   connectNulls
+                  isAnimationActive={!exporting}
                 />
               )}
             </ComposedChart>

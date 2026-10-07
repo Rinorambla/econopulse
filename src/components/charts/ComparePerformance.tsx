@@ -3,7 +3,7 @@
 // Compare Stocks — total-return (%) comparison chart with gradient areas, popular
 // pre-set comparisons and branded PNG export (save to phone/PC).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { toPng } from 'html-to-image';
+import { saveNodeAsPng } from '@/lib/save-image';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -180,15 +180,7 @@ export default function ComparePerformance({
     try {
       // Let the export-only header render and the chart redraw without animation.
       await new Promise((r) => setTimeout(r, 300));
-      const dataUrl = await toPng(node, {
-        pixelRatio: 2,
-        backgroundColor: '#0b1220',
-        filter: (el) => !(el instanceof HTMLElement && el.dataset && 'exportHide' in el.dataset),
-      });
-      const a = document.createElement('a');
-      a.download = `econopulse-compare-${symbols.join('-')}-${range}.png`;
-      a.href = dataUrl;
-      a.click();
+      await saveNodeAsPng(node, `econopulse-compare-${symbols.join('-')}-${range}.png`);
     } catch {
       /* canvas capture unavailable */
     } finally {

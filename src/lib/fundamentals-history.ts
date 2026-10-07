@@ -61,7 +61,7 @@ export interface FundamentalsHistory {
   fetchedAt: string;
 }
 
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h for complete data
 const PARTIAL_TTL_MS = 2 * 60 * 60 * 1000; // retry sooner when AV was rate-limited
 const CACHE_DIR = path.join(process.cwd(), 'data-snapshots', 'fundamentals');
@@ -127,6 +127,139 @@ function isFresh(data: FundamentalsHistory | null | undefined): boolean {
   if (!data || data.version !== CACHE_VERSION) return false;
   const ttl = data.complete ? CACHE_TTL_MS : PARTIAL_TTL_MS;
   return Date.now() - new Date(data.fetchedAt).getTime() < ttl;
+}
+
+// ── EODHD (primary when EODHD_API_KEY is set: ~30y of statements per call) ───
+
+function eodhdSymbol(symbol: string): string {
+  // EODHD expects {TICKER}.{EXCHANGE}; default US tickers to ".US".
+  return symbol.includes('.') ? symbol : `${symbol}.US`;
+}
+
+function eodhdIncomeValues(r: Record<string, unknown>): Partial<Record<FieldKey, number | null>> {
+  return {
+    revenue: num(r.totalRevenue),
+    costOfRevenue: num(r.costOfRevenue),
+    grossProfit: num(r.grossProfit),
+    operatingExpenses: num(r.totalOperatingExpenses),
+    researchAndDevelopment: num(r.researchDevelopment),
+    sga: num(r.sellingGeneralAdministrative),
+    operatingIncome: num(r.operatingIncome),
+    ebitda: num(r.ebitda),
+    ebit: num(r.ebit),
+    interestExpense: absNum(r.interestExpense),
+    incomeTax: num(r.incomeTaxExpense),
+    pretaxIncome: num(r.incomeBeforeTax),
+    netIncome: num(r.netIncome),
+  };
+}
+
+function eodhdBalanceValues(r: Record<string, unknown>): Partial<Record<FieldKey, number | null>> {
+  let totalDebt = num(r.shortLongTermDebtTotal);
+  if (totalDebt == null) {
+    const lt = num(r.longTermDebt);
+    const st = num(r.shortTermDebt);
+    if (lt != null || st != null) totalDebt = (lt ?? 0) + (st ?? 0);
+  }
+  return {
+    totalAssets: num(r.totalAssets),
+    totalLiabilities: num(r.totalLiab),
+    equity: num(r.totalStockholderEquity),
+    cash: num(r.cashAndShortTermInvestments) ?? num(r.cash),
+    totalDebt,
+    inventory: num(r.inventory),
+    sharesOutstanding: num(r.commonStockSharesOutstanding),
+  };
+}
+
+function eodhdCashflowValues(r: Record<string, unknown>): Partial<Record<FieldKey, number | null>> {
+  const ocf = num(r.totalCashFromOperatingActivities);
+  const capex = absNum(r.capitalExpenditures);
+  const fcf = num(r.freeCashFlow);
+  return {
+    operatingCashFlow: ocf,
+    capex,
+    freeCashFlow: fcf ?? (ocf != null && capex != null ? ocf - capex : null),
+    dividendsPaid: absNum(r.dividendsPaid),
+    buybacks: absNum(r.salePurchaseOfStock),
+  };
+}
+
+interface EodhdResult {
+  annual: PointMap;
+  quarterly: PointMap;
+  currency: string | null;
+  complete: boolean;
+  anyOk: boolean;
+}
+
+async function fetchEodhd(symbol: string): Promise<EodhdResult> {
+  const annual: PointMap = new Map();
+  const quarterly: PointMap = new Map();
+  let currency: string | null = null;
+  let statements = 0;
+
+  const key = env.EODHD_API_KEY;
+  if (!key) return { annual, quarterly, currency, complete: false, anyOk: false };
+
+  try {
+    const url =
+      `https://eodhd.com/api/fundamentals/${encodeURIComponent(eodhdSymbol(symbol))}` +
+      `?api_token=${key}&fmt=json&filter=General::CurrencyCode,Financials,Earnings::History,Earnings::Annual`;
+    const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return { annual, quarterly, currency, complete: false, anyOk: false };
+    const js = await res.json();
+
+    currency = typeof js?.['General::CurrencyCode'] === 'string'
+      ? js['General::CurrencyCode']
+      : js?.General?.CurrencyCode || null;
+    const fin = js?.Financials || {};
+
+    const statementSources: Array<{
+      data: Record<string, Record<string, unknown>> | undefined;
+      bucket: PointMap;
+      mapper: (r: Record<string, unknown>) => Partial<Record<FieldKey, number | null>>;
+    }> = [
+      { data: fin?.Income_Statement?.yearly, bucket: annual, mapper: eodhdIncomeValues },
+      { data: fin?.Income_Statement?.quarterly, bucket: quarterly, mapper: eodhdIncomeValues },
+      { data: fin?.Balance_Sheet?.yearly, bucket: annual, mapper: eodhdBalanceValues },
+      { data: fin?.Balance_Sheet?.quarterly, bucket: quarterly, mapper: eodhdBalanceValues },
+      { data: fin?.Cash_Flow?.yearly, bucket: annual, mapper: eodhdCashflowValues },
+      { data: fin?.Cash_Flow?.quarterly, bucket: quarterly, mapper: eodhdCashflowValues },
+    ];
+    const seen = new Set<unknown>();
+    for (const src of statementSources) {
+      if (!src.data || typeof src.data !== 'object') continue;
+      const entries = Object.values(src.data).filter((r) => r && typeof r === 'object');
+      if (!entries.length) continue;
+      // Count each statement type (income/balance/cashflow) once.
+      if (!seen.has(src.mapper)) {
+        seen.add(src.mapper);
+        statements++;
+      }
+      for (const r of entries) {
+        const date = typeof r.date === 'string' ? r.date : null;
+        if (date) fill(src.bucket, date, src.mapper(r));
+      }
+    }
+
+    // EPS: actual reported EPS per quarter + per fiscal year.
+    const applyEps = (data: unknown, bucket: PointMap) => {
+      if (!data || typeof data !== 'object') return;
+      for (const r of Object.values(data) as Array<Record<string, unknown>>) {
+        const date = typeof r?.date === 'string' ? r.date : null;
+        const eps = num(r?.epsActual);
+        if (date && eps != null) fill(bucket, date, { eps });
+      }
+    };
+    applyEps(js?.['Earnings::History'] || js?.Earnings?.History, quarterly);
+    applyEps(js?.['Earnings::Annual'] || js?.Earnings?.Annual, annual);
+  } catch {
+    /* fall back to other sources */
+  }
+
+  const anyOk = annual.size > 0 || quarterly.size > 0;
+  return { annual, quarterly, currency, complete: statements >= 3 && anyOk, anyOk };
 }
 
 // ── Alpha Vantage ────────────────────────────────────────────────────────────
@@ -429,8 +562,8 @@ function buildTtm(quarterly: FundamentalPoint[]): FundamentalPoint[] {
 
 /**
  * Get full historical fundamentals for a symbol (income, balance sheet, cash flow, EPS).
- * Serves from cache (memory → disk, 24h TTL); otherwise merges Alpha Vantage (long
- * history), Yahoo (recent, all fields) and any stale cached data, field by field.
+ * Serves from cache (memory → disk, 24h TTL); otherwise merges EODHD (primary, ~30y),
+ * Alpha Vantage, Yahoo and any stale cached data, field by field.
  */
 export async function getFundamentalsHistory(symbolRaw: string): Promise<FundamentalsHistory | null> {
   const symbol = symbolRaw.trim().toUpperCase();
@@ -445,9 +578,12 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
     return disk;
   }
 
-  const [av, prices] = await Promise.all([fetchAlphaVantage(symbol), fetchMonthlyPrices(symbol)]);
-  // Yahoo fills whatever Alpha Vantage couldn't provide (rate limit, missing fields).
-  const yh = av.complete ? null : await fetchYahoo(symbol);
+  const [eod, prices] = await Promise.all([fetchEodhd(symbol), fetchMonthlyPrices(symbol)]);
+  // Alpha Vantage / Yahoo only fill whatever EODHD couldn't provide.
+  const av = eod.complete
+    ? { annual: new Map() as PointMap, quarterly: new Map() as PointMap, currency: null, complete: false, anyOk: false }
+    : await fetchAlphaVantage(symbol);
+  const yh = eod.complete || av.complete ? null : await fetchYahoo(symbol);
 
   const annual: PointMap = new Map();
   const quarterly: PointMap = new Map();
@@ -456,8 +592,9 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
     for (const p of src.quarterly) fill(quarterly, p.date, p);
   };
 
-  // Priority: fresh Alpha Vantage → fresh Yahoo → stale cache (keeps long histories
+  // Priority: EODHD → Alpha Vantage → Yahoo → stale cache (keeps long histories
   // alive across rate-limited days and cache-format upgrades).
+  mergeFrom({ annual: eod.annual.values(), quarterly: eod.quarterly.values() });
   mergeFrom({ annual: av.annual.values(), quarterly: av.quarterly.values() });
   if (yh) mergeFrom({ annual: yh.annual.values(), quarterly: yh.quarterly.values() });
   if (disk) mergeFrom({ annual: disk.annual || [], quarterly: disk.quarterly || [] });
@@ -472,6 +609,7 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
   attachPrices(quarterlyArr, prices);
 
   const sources: string[] = [];
+  if (eod.anyOk) sources.push('eodhd');
   if (av.anyOk) sources.push('alphavantage');
   if (yh?.anyOk) sources.push('yahoo');
   if (!sources.length) sources.push('cache');
@@ -479,9 +617,9 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
   const result: FundamentalsHistory = {
     version: CACHE_VERSION,
     symbol,
-    currency: av.currency || yh?.currency || disk?.currency || 'USD',
+    currency: eod.currency || av.currency || yh?.currency || disk?.currency || 'USD',
     source: sources.join('+'),
-    complete: av.complete,
+    complete: eod.complete || av.complete,
     annual: annualArr,
     quarterly: quarterlyArr,
     ttm: buildTtm(quarterlyArr),
@@ -491,6 +629,6 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
   memCache.set(symbol, result);
   // Only persist when live data arrived, so a rate-limited day can't shorten the TTL
   // window with cache-only content.
-  if (av.anyOk || yh?.anyOk) writeDiskCache(result);
+  if (eod.anyOk || av.anyOk || yh?.anyOk) writeDiskCache(result);
   return result;
 }

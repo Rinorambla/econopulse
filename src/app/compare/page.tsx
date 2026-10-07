@@ -18,15 +18,6 @@ const SERIES_COLORS = [
   '#84cc16', '#f97316', '#14b8a6', '#e879f9', '#eab308', '#60a5fa',
 ];
 
-// Quick-add presets covering every asset class.
-const QUICK_ADD: Array<{ label: string; symbols: string[] }> = [
-  { label: 'Stocks', symbols: ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN'] },
-  { label: 'ETFs', symbols: ['SPY', 'QQQ', 'IWM', 'VTI', 'GLD'] },
-  { label: 'Indices', symbols: ['^GSPC', '^NDX', '^DJI', '^VIX', '^STOXX50E'] },
-  { label: 'Macro', symbols: ['GC=F', 'CL=F', 'EURUSD=X', '^TNX', 'DX-Y.NYB'] },
-  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD'] },
-];
-
 function CompareInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -116,26 +107,7 @@ function CompareInner() {
         </div>
       )}
 
-      {/* Quick-add presets (shown when list is empty) */}
-      {symbols.length === 0 && (
-        <div className="space-y-2">
-          {QUICK_ADD.map((g) => (
-            <div key={g.label} className="flex flex-wrap items-center gap-1.5">
-              <span className="w-14 text-[10px] font-semibold uppercase tracking-wide text-white/40">{g.label}</span>
-              {g.symbols.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => addSymbol(s)}
-                  className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Quick-add presets removed: start empty, add symbols via search. */}
 
       <ComparePerformance symbols={symbols} onSymbolsChange={sync} />
     </div>

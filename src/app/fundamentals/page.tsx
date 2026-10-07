@@ -171,13 +171,7 @@ function FundamentalsInner() {
     <div className="p-3 sm:p-4 space-y-3">
       {/* Header + stock search */}
       <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-lg font-bold text-white">Fundamental Chart</h1>
-          <p className="text-xs text-white/50">
-            65 indicators — valuation, income statement, cash flow, balance sheet, margins,
-            per-share & ratios. Up to 20 years of history. Add a 2nd/3rd ticker to compare.
-          </p>
-        </div>
+        <h1 className="text-lg font-bold text-white">Fundamental Chart</h1>
         <div className="ml-auto">
           <StockSearch onPick={addSymbol} disabled={symbols.length >= MAX_SYMBOLS} />
         </div>
@@ -228,7 +222,7 @@ function FundamentalsInner() {
 export default function FundamentalsPage() {
   return (
     <RequirePlan min="free">
-      <TerminalShell title="Fundamentals" search>
+      <TerminalShell title="Fundamentals">
         <Suspense fallback={<div className="p-6 text-sm text-white/50">Loading…</div>}>
           <FundamentalsInner />
         </Suspense>

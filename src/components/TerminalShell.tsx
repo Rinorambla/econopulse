@@ -8,6 +8,7 @@ import { normalizeSymbol } from '@/lib/symbol-resolver';
 import {
   LayoutDashboard, CandlestickChart, Activity, Dna, Landmark, Briefcase, Globe,
   Star, Newspaper, Bot, Search, Menu, X, ChevronsLeft, ChevronsRight, Home, User,
+  BarChart3,
 } from 'lucide-react';
 
 type NavItem = { label: string; href: string; icon: React.ComponentType<{ className?: string }> };
@@ -28,6 +29,7 @@ const NAV: NavSection[] = [
     title: 'Research',
     items: [
       { label: 'AI Portfolio', href: '/ai-portfolio', icon: Briefcase },
+      { label: 'Fundamentals', href: '/fundamentals', icon: BarChart3 },
       { label: 'Visual AI', href: '/visual-ai', icon: Globe },
       { label: 'Top Analysts', href: '/top-analysts', icon: Star },
       { label: 'News', href: '/news', icon: Newspaper },

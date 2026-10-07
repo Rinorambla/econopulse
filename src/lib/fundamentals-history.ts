@@ -41,6 +41,7 @@ export const STOCK_FIELDS = [
   'totalDebt',
   'inventory',
   'sharesOutstanding',
+  'price', // as-traded close nearest to the fiscal period end (for valuation metrics)
 ] as const;
 
 export type FieldKey = (typeof FLOW_FIELDS)[number] | (typeof STOCK_FIELDS)[number];
@@ -60,7 +61,7 @@ export interface FundamentalsHistory {
   fetchedAt: string;
 }
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 4;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h for complete data
 const PARTIAL_TTL_MS = 2 * 60 * 60 * 1000; // retry sooner when AV was rate-limited
 const CACHE_DIR = path.join(process.cwd(), 'data-snapshots', 'fundamentals');
@@ -329,6 +330,81 @@ async function fetchYahoo(symbol: string): Promise<YahooResult> {
   return { annual, quarterly, currency, anyOk: annual.size > 0 || quarterly.size > 0 };
 }
 
+// ── Historical monthly prices (for valuation metrics) ───────────────────────
+// Alpha Vantage fundamentals (EPS, shares outstanding) are retroactively
+// split-adjusted, so the split-adjusted Yahoo closes are directly consistent.
+
+interface PriceHistory {
+  closes: Array<{ ts: number; close: number }>;
+}
+
+async function fetchMonthlyPrices(symbol: string): Promise<PriceHistory | null> {
+  try {
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+      `?range=max&interval=1mo`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconopulseBot/1.0)' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const js = await res.json();
+    const result = js?.chart?.result?.[0];
+    const timestamps: number[] = result?.timestamp || [];
+    const closesRaw: Array<number | null> = result?.indicators?.quote?.[0]?.close || [];
+    if (!timestamps.length) return null;
+
+    const closes: Array<{ ts: number; close: number }> = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const c = closesRaw[i];
+      if (typeof c === 'number' && Number.isFinite(c)) closes.push({ ts: timestamps[i] * 1000, close: c });
+    }
+    return closes.length ? { closes } : null;
+  } catch {
+    return null;
+  }
+}
+
+const PRICE_MATCH_WINDOW_MS = 60 * 24 * 60 * 60 * 1000; // ±60 days
+
+function attachPrices(points: FundamentalPoint[], prices: PriceHistory | null): void {
+  if (!prices?.closes.length) return;
+  for (const p of points) {
+    const target = Date.parse(p.date);
+    if (!Number.isFinite(target)) continue;
+    let best: { ts: number; close: number } | null = null;
+    for (const c of prices.closes) {
+      if (!best || Math.abs(c.ts - target) < Math.abs(best.ts - target)) best = c;
+    }
+    if (!best || Math.abs(best.ts - target) > PRICE_MATCH_WINDOW_MS) continue;
+    p.price = best.close;
+  }
+}
+
+// Some sources emit stray "annual" rows at off-fiscal dates (e.g. an in-progress year).
+// Keep annual rows that carry a revenue figure, or whose month matches the dominant
+// fiscal year-end month of the revenue-bearing rows.
+function filterAnnualOutliers(points: FundamentalPoint[]): FundamentalPoint[] {
+  const monthCount = new Map<string, number>();
+  for (const p of points) {
+    if (p.revenue != null) {
+      const m = p.date.slice(5, 7);
+      monthCount.set(m, (monthCount.get(m) || 0) + 1);
+    }
+  }
+  if (!monthCount.size) return points;
+  let fiscalMonth = '';
+  let max = 0;
+  for (const [m, c] of monthCount) {
+    if (c > max) {
+      max = c;
+      fiscalMonth = m;
+    }
+  }
+  return points.filter((p) => p.revenue != null || p.date.slice(5, 7) === fiscalMonth);
+}
+
 // ── TTM (rolling 4-quarter aggregates) ───────────────────────────────────────
 
 function buildTtm(quarterly: FundamentalPoint[]): FundamentalPoint[] {
@@ -369,7 +445,7 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
     return disk;
   }
 
-  const av = await fetchAlphaVantage(symbol);
+  const [av, prices] = await Promise.all([fetchAlphaVantage(symbol), fetchMonthlyPrices(symbol)]);
   // Yahoo fills whatever Alpha Vantage couldn't provide (rate limit, missing fields).
   const yh = av.complete ? null : await fetchYahoo(symbol);
 
@@ -389,7 +465,11 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
   if (!annual.size && !quarterly.size) return null;
 
   const sortPoints = (m: PointMap) => Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const annualArr = filterAnnualOutliers(sortPoints(annual));
   const quarterlyArr = sortPoints(quarterly);
+  // Attach as-traded prices before TTM so TTM rows inherit the latest quarter price.
+  attachPrices(annualArr, prices);
+  attachPrices(quarterlyArr, prices);
 
   const sources: string[] = [];
   if (av.anyOk) sources.push('alphavantage');
@@ -402,7 +482,7 @@ export async function getFundamentalsHistory(symbolRaw: string): Promise<Fundame
     currency: av.currency || yh?.currency || disk?.currency || 'USD',
     source: sources.join('+'),
     complete: av.complete,
-    annual: sortPoints(annual),
+    annual: annualArr,
     quarterly: quarterlyArr,
     ttm: buildTtm(quarterlyArr),
     fetchedAt: new Date().toISOString(),

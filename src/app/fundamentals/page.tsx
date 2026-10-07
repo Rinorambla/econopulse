@@ -174,8 +174,8 @@ function FundamentalsInner() {
         <div>
           <h1 className="text-lg font-bold text-white">Fundamental Chart</h1>
           <p className="text-xs text-white/50">
-            50+ indicators — income statement, cash flow, balance sheet, margins, per-share &
-            ratios. Up to 20 years of history. Add a 2nd/3rd ticker to compare.
+            65 indicators — valuation, income statement, cash flow, balance sheet, margins,
+            per-share & ratios. Up to 20 years of history. Add a 2nd/3rd ticker to compare.
           </p>
         </div>
         <div className="ml-auto">

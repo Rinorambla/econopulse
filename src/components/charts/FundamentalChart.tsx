@@ -1,7 +1,7 @@
 'use client';
 
-// Fundamental Chart — stockanalysis.com-style: 50+ indicators (income statement, cash
-// flow, balance sheet, margins, per-share, ratios), annual/quarterly/TTM, YoY growth,
+// Fundamental Chart — stockanalysis.com-style: 65 indicators (valuation, income statement,
+// cash flow, balance sheet, margins, per-share, ratios), annual/quarterly/TTM, YoY growth,
 // data labels, normalized comparison and saved charts. Data from /api/fundamental-history.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -58,16 +58,42 @@ const fcfOf = (p: FundamentalPoint): number | null => {
   const capex = n(p, 'capex');
   return ocf != null && capex != null ? ocf - capex : null;
 };
+// Annualize flow values so quarterly valuation ratios stay comparable.
+const ann = (v: number | null, period: PeriodKey): number | null =>
+  v == null ? null : period === 'quarterly' ? v * 4 : v;
+const mcapOf = (p: FundamentalPoint): number | null => {
+  const price = n(p, 'price');
+  const shares = n(p, 'sharesOutstanding');
+  return price != null && shares != null ? price * shares : null;
+};
+const evOf = (p: FundamentalPoint): number | null => {
+  const mcap = mcapOf(p);
+  if (mcap == null) return null;
+  return mcap + (n(p, 'totalDebt') ?? 0) - (n(p, 'cash') ?? 0);
+};
 
 interface MetricDef {
   key: string;
   label: string;
   group: string;
   kind: Kind;
-  compute: (p: FundamentalPoint) => number | null;
+  compute: (p: FundamentalPoint, period: PeriodKey) => number | null;
 }
 
 const METRICS: MetricDef[] = [
+  // Valuation (price-based; quarterly flows annualized)
+  { key: 'marketCap', label: 'Market Cap', group: 'Valuation', kind: 'currency', compute: mcapOf },
+  { key: 'enterpriseValue', label: 'Enterprise Value', group: 'Valuation', kind: 'currency', compute: evOf },
+  { key: 'peRatio', label: 'P/E Ratio', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(n(p, 'price'), ann(n(p, 'eps'), period)) },
+  { key: 'psRatio', label: 'P/S Ratio', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(mcapOf(p), ann(n(p, 'revenue'), period)) },
+  { key: 'pbRatio', label: 'P/B Ratio', group: 'Valuation', kind: 'ratio', compute: (p) => div(mcapOf(p), n(p, 'equity')) },
+  { key: 'pFcfRatio', label: 'P/FCF Ratio', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(mcapOf(p), ann(fcfOf(p), period)) },
+  { key: 'pOcfRatio', label: 'P/OCF Ratio', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(mcapOf(p), ann(n(p, 'operatingCashFlow'), period)) },
+  { key: 'evEbitda', label: 'EV / EBITDA', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(evOf(p), ann(n(p, 'ebitda'), period)) },
+  { key: 'evSales', label: 'EV / Sales', group: 'Valuation', kind: 'ratio', compute: (p, period) => div(evOf(p), ann(n(p, 'revenue'), period)) },
+  { key: 'earningsYield', label: 'Earnings Yield', group: 'Valuation', kind: 'percent', compute: (p, period) => pct(ann(n(p, 'eps'), period), n(p, 'price')) },
+  { key: 'fcfYield', label: 'FCF Yield', group: 'Valuation', kind: 'percent', compute: (p, period) => pct(ann(fcfOf(p), period), mcapOf(p)) },
+  { key: 'dividendYield', label: 'Dividend Yield', group: 'Valuation', kind: 'percent', compute: (p, period) => pct(ann(n(p, 'dividendsPaid'), period), mcapOf(p)) },
   // Income statement
   { key: 'revenue', label: 'Revenue', group: 'Income Statement', kind: 'currency', compute: (p) => n(p, 'revenue') },
   { key: 'grossProfit', label: 'Gross Profit', group: 'Income Statement', kind: 'currency', compute: (p) => n(p, 'grossProfit') },
@@ -130,8 +156,8 @@ const METRICS: MetricDef[] = [
   { key: 'netDebtToEbitda', label: 'Net Debt / EBITDA', group: 'Ratios', kind: 'ratio', compute: (p) => { const d = n(p, 'totalDebt'); const c = n(p, 'cash'); return d != null && c != null ? div(d - c, n(p, 'ebitda')) : null; } },
 ];
 
-const METRIC_GROUPS = ['Income Statement', 'Margins', 'Cash Flow', 'Balance Sheet', 'Per Share', 'Ratios'];
-const QUICK_METRICS = ['revenue', 'netIncome', 'eps', 'freeCashFlow', 'grossMargin', 'profitMargin'];
+const METRIC_GROUPS = ['Valuation', 'Income Statement', 'Margins', 'Cash Flow', 'Balance Sheet', 'Per Share', 'Ratios'];
+const QUICK_METRICS = ['revenue', 'netIncome', 'eps', 'freeCashFlow', 'peRatio', 'marketCap'];
 
 const PERIODS: Array<{ key: PeriodKey; label: string }> = [
   { key: 'annual', label: 'Annual' },
@@ -202,9 +228,9 @@ function buildSeries(
   const series: FundamentalPoint[] = (data?.[period] as FundamentalPoint[]) || [];
   const offset = period === 'annual' ? 1 : 4; // YoY comparison distance
   const all: SeriesRow[] = series.map((p, i) => {
-    const value = metric.compute(p);
+    const value = metric.compute(p, period);
     const prevPoint = i >= offset ? series[i - offset] : null;
-    const prev = prevPoint ? metric.compute(prevPoint) : null;
+    const prev = prevPoint ? metric.compute(prevPoint, period) : null;
     let growth: number | null = null;
     if (value != null && prev != null && prev !== 0) {
       growth = ((value - prev) / Math.abs(prev)) * 100;

@@ -29,7 +29,10 @@ interface SymbolSeries {
 }
 
 const RANGES: RangeKey[] = ['1M', '6M', 'YTD', '1Y', '5Y', '10Y', 'MAX'];
-const SERIES_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ec4899'];
+const SERIES_COLORS = [
+  '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444',
+  '#84cc16', '#f97316', '#14b8a6', '#e879f9', '#eab308', '#60a5fa',
+];
 
 const POPULAR_COMPARISONS: Array<[string, string]> = [
   ['AAPL', 'NVDA'],
@@ -103,7 +106,12 @@ export default function ComparePerformance({
   const gradientId = useRef(`cmp-${Math.random().toString(36).slice(2, 8)}`).current;
 
   useEffect(() => {
-    if (!symbols.length) return;
+    if (!symbols.length) {
+      setSeries([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -157,6 +165,12 @@ export default function ComparePerformance({
       })),
     [series]
   );
+
+  // Color by position in the page's symbol list so chips and lines always match.
+  const colorOf = (symbol: string) => {
+    const idx = symbols.indexOf(symbol);
+    return SERIES_COLORS[(idx >= 0 ? idx : 0) % SERIES_COLORS.length];
+  };
 
   // Download the chart card as a branded PNG (works on desktop and mobile).
   const exportImage = async () => {
@@ -232,13 +246,13 @@ export default function ComparePerformance({
       {/* Return chips */}
       {!loading && latest.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {latest.map((l, i) => (
+          {latest.map((l) => (
             <div
               key={l.symbol}
               className="rounded-lg border border-white/5 bg-white/5 px-3 py-1.5 text-xs"
-              style={{ borderColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}40` }}
+              style={{ borderColor: `${colorOf(l.symbol)}40` }}
             >
-              <span className="font-bold" style={{ color: SERIES_COLORS[i % SERIES_COLORS.length] }}>
+              <span className="font-bold" style={{ color: colorOf(l.symbol) }}>
                 {l.symbol}
               </span>{' '}
               <span className={`font-bold ${(l.pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -268,8 +282,8 @@ export default function ComparePerformance({
               <defs>
                 {series.map((s, i) => (
                   <linearGradient key={s.symbol} id={`${gradientId}-${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0.28} />
-                    <stop offset="100%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0} />
+                    <stop offset="0%" stopColor={colorOf(s.symbol)} stopOpacity={series.length > 4 ? 0.12 : 0.28} />
+                    <stop offset="100%" stopColor={colorOf(s.symbol)} stopOpacity={0} />
                   </linearGradient>
                 ))}
               </defs>
@@ -304,7 +318,7 @@ export default function ComparePerformance({
                   type="monotone"
                   dataKey={s.symbol}
                   name={s.symbol}
-                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  stroke={colorOf(s.symbol)}
                   strokeWidth={2.5}
                   fill={`url(#${gradientId}-${i})`}
                   dot={false}

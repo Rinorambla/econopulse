@@ -1,7 +1,8 @@
 'use client';
 
-// Compare Stocks page — total-return (%) comparison with stock search, popular
-// pre-sets and branded PNG export. Deep-linkable: /compare?symbols=NVDA,AAPL
+// Compare page — total-return (%) comparison for any instrument: stocks, ETFs,
+// indices, FX, crypto, futures. Starts empty; add symbols via search.
+// Deep-linkable: /compare?symbols=NVDA,SPY,^GSPC,BTC-USD
 import React, { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -11,30 +12,43 @@ import StockSearch, { sanitizeSymbols } from '@/components/StockSearch';
 
 const ComparePerformance = dynamic(() => import('@/components/charts/ComparePerformance'), { ssr: false });
 
-const MAX_SYMBOLS = 4;
-const SERIES_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ec4899'];
+const MAX_SYMBOLS = 13;
+const SERIES_COLORS = [
+  '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444',
+  '#84cc16', '#f97316', '#14b8a6', '#e879f9', '#eab308', '#60a5fa',
+];
+
+// Quick-add presets covering every asset class.
+const QUICK_ADD: Array<{ label: string; symbols: string[] }> = [
+  { label: 'Stocks', symbols: ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN'] },
+  { label: 'ETFs', symbols: ['SPY', 'QQQ', 'IWM', 'VTI', 'GLD'] },
+  { label: 'Indices', symbols: ['^GSPC', '^NDX', '^DJI', '^VIX', '^STOXX50E'] },
+  { label: 'Macro', symbols: ['GC=F', 'CL=F', 'EURUSD=X', '^TNX', 'DX-Y.NYB'] },
+  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD'] },
+];
 
 function CompareInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initial = sanitizeSymbols(searchParams?.get('symbols') || searchParams?.get('symbol') || 'NVDA,AAPL', MAX_SYMBOLS);
-  const [symbols, setSymbols] = useState<string[]>(initial.length ? initial : ['NVDA', 'AAPL']);
+  const initial = sanitizeSymbols(searchParams?.get('symbols') || searchParams?.get('symbol') || '', MAX_SYMBOLS);
+  const [symbols, setSymbols] = useState<string[]>(initial);
 
   const sync = (next: string[]) => {
-    if (!next.length) return;
-    setSymbols(next);
-    router.replace(`/compare?symbols=${encodeURIComponent(next.join(','))}`, { scroll: false });
+    const clean = Array.from(new Set(next)).slice(0, MAX_SYMBOLS);
+    setSymbols(clean);
+    router.replace(clean.length ? `/compare?symbols=${encodeURIComponent(clean.join(','))}` : '/compare', {
+      scroll: false,
+    });
   };
 
   const addSymbol = (raw: string) => {
     const parsed = sanitizeSymbols(raw, MAX_SYMBOLS);
     if (!parsed.length) return;
-    sync(Array.from(new Set([...symbols, ...parsed])).slice(0, MAX_SYMBOLS));
+    sync([...symbols, ...parsed]);
   };
 
   const removeSymbol = (sym: string) => {
-    const next = symbols.filter((s) => s !== sym);
-    if (next.length) sync(next);
+    sync(symbols.filter((s) => s !== sym));
   };
 
   // Let the terminal topbar search open symbols on this page instead of navigating away.
@@ -52,33 +66,34 @@ function CompareInner() {
 
   return (
     <div className="p-3 sm:p-4 space-y-3">
-      {/* Header + stock search */}
+      {/* Header + search */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-bold text-white">Compare Stocks</h1>
+        <h1 className="text-lg font-bold text-white">Compare</h1>
         <div className="ml-auto">
           <StockSearch
             onPick={addSymbol}
             disabled={symbols.length >= MAX_SYMBOLS}
-            placeholder="Add stock to compare…"
-            disabledPlaceholder={`Max ${MAX_SYMBOLS} tickers`}
+            placeholder="Add stock, ETF, index, FX, crypto…"
+            disabledPlaceholder="List is full — remove a symbol"
+            allTypes
           />
         </div>
       </div>
 
       {/* Active symbols */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {symbols.map((s, i) => (
-          <span
-            key={s}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold"
-            style={{
-              color: SERIES_COLORS[i % SERIES_COLORS.length],
-              borderColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}55`,
-              backgroundColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}1a`,
-            }}
-          >
-            {s}
-            {symbols.length > 1 && (
+      {symbols.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {symbols.map((s, i) => (
+            <span
+              key={s}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold"
+              style={{
+                color: SERIES_COLORS[i % SERIES_COLORS.length],
+                borderColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}55`,
+                backgroundColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}1a`,
+              }}
+            >
+              {s}
               <button
                 type="button"
                 onClick={() => removeSymbol(s)}
@@ -87,11 +102,40 @@ function CompareInner() {
               >
                 ×
               </button>
-            )}
-          </span>
-        ))}
-        <span className="text-[11px] text-white/30">up to {MAX_SYMBOLS} tickers</span>
-      </div>
+            </span>
+          ))}
+          {symbols.length > 1 && (
+            <button
+              type="button"
+              onClick={() => sync([])}
+              className="rounded-md px-2 py-1 text-[11px] font-semibold text-white/40 hover:bg-white/10 hover:text-white"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Quick-add presets (shown when list is empty) */}
+      {symbols.length === 0 && (
+        <div className="space-y-2">
+          {QUICK_ADD.map((g) => (
+            <div key={g.label} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-14 text-[10px] font-semibold uppercase tracking-wide text-white/40">{g.label}</span>
+              {g.symbols.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => addSymbol(s)}
+                  className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <ComparePerformance symbols={symbols} onSymbolsChange={sync} />
     </div>

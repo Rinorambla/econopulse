@@ -1,7 +1,8 @@
 'use client';
 
-// Debounced stock search (ticker or company name) backed by /api/yahoo-search.
-// Shared by the Fundamentals and Compare pages.
+// Debounced symbol search (ticker or name) backed by /api/yahoo-search.
+// Shared by the Fundamentals and Compare pages. Can search equities only or every
+// instrument type (ETFs, indices, FX, crypto, futures, funds).
 import React, { useEffect, useRef, useState } from 'react';
 
 interface SearchResult {
@@ -10,6 +11,16 @@ interface SearchResult {
   exchange: string;
   type: string;
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  EQUITY: 'Stock',
+  ETF: 'ETF',
+  INDEX: 'Index',
+  MUTUALFUND: 'Fund',
+  CURRENCY: 'FX',
+  CRYPTOCURRENCY: 'Crypto',
+  FUTURE: 'Future',
+};
 
 export function sanitizeSymbols(raw: string, max: number): string[] {
   return Array.from(
@@ -27,11 +38,14 @@ export default function StockSearch({
   disabled,
   placeholder = 'Search stock (e.g. Apple, NVDA)…',
   disabledPlaceholder = 'Max tickers reached',
+  allTypes = false,
 }: {
   onPick: (symbol: string) => void;
   disabled?: boolean;
   placeholder?: string;
   disabledPlaceholder?: string;
+  /** When true, include ETFs, indices, FX, crypto, futures and funds (not just stocks). */
+  allTypes?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -53,8 +67,8 @@ export default function StockSearch({
         });
         const js = await res.json();
         const list: SearchResult[] = (js?.data || [])
-          .filter((r: SearchResult) => r.type === 'EQUITY')
-          .slice(0, 8);
+          .filter((r: SearchResult) => (allTypes ? r.type in TYPE_LABELS : r.type === 'EQUITY'))
+          .slice(0, 10);
         setResults(list);
         setOpen(true);
         setHover(-1);
@@ -65,7 +79,7 @@ export default function StockSearch({
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [query]);
+  }, [query, allTypes]);
 
   const pick = (symbol: string) => {
     onPick(symbol);
@@ -115,6 +129,11 @@ export default function StockSearch({
               >
                 <span className="font-bold text-blue-300">{r.symbol}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-white/60">{r.name}</span>
+                {allTypes && (
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold text-white/60">
+                    {TYPE_LABELS[r.type] || r.type}
+                  </span>
+                )}
                 <span className="text-[10px] text-white/30">{r.exchange}</span>
               </li>
             ))}

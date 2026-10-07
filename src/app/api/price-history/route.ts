@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
     .split(',')
     .map((s) => s.trim().toUpperCase())
     .filter((s) => /^[A-Z0-9.^=-]{1,12}$/.test(s))
-    .slice(0, 4);
+    .slice(0, 13);
   if (!symbols.length) {
     return NextResponse.json({ ok: false, error: 'missing_symbols' }, { status: 400, headers: rateLimitHeaders(rl) });
   }

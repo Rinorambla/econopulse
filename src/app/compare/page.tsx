@@ -1,8 +1,7 @@
 'use client';
 
-// Fundamental Chart page — stockanalysis.com-style fundamental charts with 65
-// indicators, saved charts and multi-ticker comparison (up to 3 symbols).
-// Deep-linkable: /fundamentals?symbol=NVDA or /fundamentals?symbol=NVDA,AAPL
+// Compare Stocks page — total-return (%) comparison with stock search, popular
+// pre-sets and branded PNG export. Deep-linkable: /compare?symbols=NVDA,AAPL
 import React, { Suspense, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -10,21 +9,21 @@ import TerminalShell from '@/components/TerminalShell';
 import RequirePlan from '@/components/RequirePlan';
 import StockSearch, { sanitizeSymbols } from '@/components/StockSearch';
 
-const FundamentalChart = dynamic(() => import('@/components/charts/FundamentalChart'), { ssr: false });
+const ComparePerformance = dynamic(() => import('@/components/charts/ComparePerformance'), { ssr: false });
 
-const POPULAR = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'AMD', 'NFLX'];
-const MAX_SYMBOLS = 3;
+const MAX_SYMBOLS = 4;
+const SERIES_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ec4899'];
 
-function FundamentalsInner() {
+function CompareInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initial = sanitizeSymbols(searchParams?.get('symbol') || 'NVDA', MAX_SYMBOLS);
-  const [symbols, setSymbols] = useState<string[]>(initial.length ? initial : ['NVDA']);
+  const initial = sanitizeSymbols(searchParams?.get('symbols') || searchParams?.get('symbol') || 'NVDA,AAPL', MAX_SYMBOLS);
+  const [symbols, setSymbols] = useState<string[]>(initial.length ? initial : ['NVDA', 'AAPL']);
 
   const sync = (next: string[]) => {
     if (!next.length) return;
-    setSymbols(next.slice(0, MAX_SYMBOLS));
-    router.replace(`/fundamentals?symbol=${encodeURIComponent(next.slice(0, MAX_SYMBOLS).join(','))}`, { scroll: false });
+    setSymbols(next);
+    router.replace(`/compare?symbols=${encodeURIComponent(next.join(','))}`, { scroll: false });
   };
 
   const addSymbol = (raw: string) => {
@@ -38,18 +37,13 @@ function FundamentalsInner() {
     if (next.length) sync(next);
   };
 
-  const toggleSymbol = (sym: string) => {
-    if (symbols.includes(sym)) removeSymbol(sym);
-    else addSymbol(sym);
-  };
-
   // Let the terminal topbar search open symbols on this page instead of navigating away.
   useEffect(() => {
     const onOpenQuote = (ev: Event) => {
       const detail = (ev as CustomEvent<{ symbol?: string }>).detail;
       if (!detail?.symbol) return;
       ev.preventDefault();
-      sync(sanitizeSymbols(detail.symbol, MAX_SYMBOLS));
+      addSymbol(detail.symbol);
     };
     window.addEventListener('terminal:openQuote', onOpenQuote);
     return () => window.removeEventListener('terminal:openQuote', onOpenQuote);
@@ -60,11 +54,12 @@ function FundamentalsInner() {
     <div className="p-3 sm:p-4 space-y-3">
       {/* Header + stock search */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-bold text-white">Fundamental Chart</h1>
+        <h1 className="text-lg font-bold text-white">Compare Stocks</h1>
         <div className="ml-auto">
           <StockSearch
             onPick={addSymbol}
             disabled={symbols.length >= MAX_SYMBOLS}
+            placeholder="Add stock to compare…"
             disabledPlaceholder={`Max ${MAX_SYMBOLS} tickers`}
           />
         </div>
@@ -72,17 +67,22 @@ function FundamentalsInner() {
 
       {/* Active symbols */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {symbols.map((s) => (
+        {symbols.map((s, i) => (
           <span
             key={s}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600/20 border border-blue-500/40 px-2.5 py-1 text-[12px] font-bold text-blue-200"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-bold"
+            style={{
+              color: SERIES_COLORS[i % SERIES_COLORS.length],
+              borderColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}55`,
+              backgroundColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}1a`,
+            }}
           >
             {s}
             {symbols.length > 1 && (
               <button
                 type="button"
                 onClick={() => removeSymbol(s)}
-                className="text-blue-300/70 hover:text-white"
+                className="opacity-60 hover:opacity-100"
                 aria-label={`Remove ${s}`}
               >
                 ×
@@ -90,34 +90,20 @@ function FundamentalsInner() {
             )}
           </span>
         ))}
-        <span className="mx-1 h-4 w-px bg-white/10" />
-        {POPULAR.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => toggleSymbol(s)}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-              symbols.includes(s)
-                ? 'bg-blue-600 text-white'
-                : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+        <span className="text-[11px] text-white/30">up to {MAX_SYMBOLS} tickers</span>
       </div>
 
-      <FundamentalChart symbols={symbols} onSymbolsChange={sync} />
+      <ComparePerformance symbols={symbols} onSymbolsChange={sync} />
     </div>
   );
 }
 
-export default function FundamentalsPage() {
+export default function ComparePage() {
   return (
     <RequirePlan min="free">
-      <TerminalShell title="Fundamentals">
+      <TerminalShell title="Compare">
         <Suspense fallback={<div className="p-6 text-sm text-white/50">Loading…</div>}>
-          <FundamentalsInner />
+          <CompareInner />
         </Suspense>
       </TerminalShell>
     </RequirePlan>

@@ -1,12 +1,13 @@
 'use client';
 
-// Compare Stocks — stockanalysis.com-style total-return (%) comparison chart with
-// popular pre-set comparisons. Shares the symbol selection with the page.
-import React, { useEffect, useMemo, useState } from 'react';
+// Compare Stocks — total-return (%) comparison chart with gradient areas, popular
+// pre-set comparisons and branded PNG export (save to phone/PC).
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toPng } from 'html-to-image';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  ComposedChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,7 +29,7 @@ interface SymbolSeries {
 }
 
 const RANGES: RangeKey[] = ['1M', '6M', 'YTD', '1Y', '5Y', '10Y', 'MAX'];
-const SERIES_COLORS = ['#3b82f6', '#f59e0b', '#10b981'];
+const SERIES_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ec4899'];
 
 const POPULAR_COMPARISONS: Array<[string, string]> = [
   ['AAPL', 'NVDA'],
@@ -70,15 +71,18 @@ function PerfTooltip({
   return (
     <div className="rounded-lg border border-white/15 bg-slate-900/95 px-3 py-2 text-xs shadow-xl">
       <div className="mb-1 font-semibold text-white">{d.toISOString().slice(0, 10)}</div>
-      {items.map((it) => (
-        <div key={String(it.dataKey)} style={{ color: it.color }}>
-          {String(it.dataKey)}:{' '}
-          <span className="font-semibold">
-            {(it.value as number) >= 0 ? '+' : ''}
-            {(it.value as number).toFixed(1)}%
-          </span>
-        </div>
-      ))}
+      {items
+        .slice()
+        .sort((a, b) => (b.value as number) - (a.value as number))
+        .map((it) => (
+          <div key={String(it.dataKey)} style={{ color: it.color }}>
+            {String(it.dataKey)}:{' '}
+            <span className="font-semibold">
+              {(it.value as number) >= 0 ? '+' : ''}
+              {(it.value as number).toFixed(1)}%
+            </span>
+          </div>
+        ))}
     </div>
   );
 }
@@ -94,6 +98,9 @@ export default function ComparePerformance({
   const [series, setSeries] = useState<SymbolSeries[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const gradientId = useRef(`cmp-${Math.random().toString(36).slice(2, 8)}`).current;
 
   useEffect(() => {
     if (!symbols.length) return;
@@ -151,24 +158,74 @@ export default function ComparePerformance({
     [series]
   );
 
+  // Download the chart card as a branded PNG (works on desktop and mobile).
+  const exportImage = async () => {
+    const node = cardRef.current;
+    if (!node || exporting) return;
+    setExporting(true);
+    try {
+      // Let the export-only header render and the chart redraw without animation.
+      await new Promise((r) => setTimeout(r, 300));
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#0b1220',
+        filter: (el) => !(el instanceof HTMLElement && el.dataset && 'exportHide' in el.dataset),
+      });
+      const a = document.createElement('a');
+      a.download = `econopulse-compare-${symbols.join('-')}-${range}.png`;
+      a.href = dataUrl;
+      a.click();
+    } catch {
+      /* canvas capture unavailable */
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const btn = (active: boolean) =>
     `px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
       active ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
     }`;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
-      {/* Header + range */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div ref={cardRef} className="rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
+      {/* Export-only branded header */}
+      {exporting && (
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <div className="text-lg font-black tracking-tight text-white">
+              ECONOPULSE<span className="text-blue-400">.AI</span>
+            </div>
+            <div className="text-xs font-semibold text-white/70">
+              {symbols.join(' vs ')} · Total Return · {range}
+            </div>
+          </div>
+          <div className="text-[11px] font-bold text-blue-300">econopulse.ai/compare</div>
+        </div>
+      )}
+
+      {/* Header + range + export */}
+      <div className="mb-3 flex flex-wrap items-center gap-2" data-export-hide="1">
         <h2 className="text-sm font-bold text-white">
-          Compare Stocks <span className="font-semibold text-white/50">· Total Return (%)</span>
+          Total Return <span className="font-semibold text-white/50">(%)</span>
         </h2>
-        <div className="ml-auto flex items-center gap-1 rounded-lg bg-white/5 p-1">
-          {RANGES.map((r) => (
-            <button key={r} type="button" className={btn(range === r)} onClick={() => setRange(r)}>
-              {r}
-            </button>
-          ))}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1">
+            {RANGES.map((r) => (
+              <button key={r} type="button" className={btn(range === r)} onClick={() => setRange(r)}>
+                {r}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`${btn(false)} border border-blue-500/40 bg-blue-600/20 text-blue-200`}
+            onClick={exportImage}
+            disabled={exporting}
+            title="Download this chart as a PNG image (save to phone or PC)"
+          >
+            {exporting ? 'Saving…' : '⬇ Save Image'}
+          </button>
         </div>
       </div>
 
@@ -176,7 +233,11 @@ export default function ComparePerformance({
       {!loading && latest.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
           {latest.map((l, i) => (
-            <div key={l.symbol} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs">
+            <div
+              key={l.symbol}
+              className="rounded-lg border border-white/5 bg-white/5 px-3 py-1.5 text-xs"
+              style={{ borderColor: `${SERIES_COLORS[i % SERIES_COLORS.length]}40` }}
+            >
               <span className="font-bold" style={{ color: SERIES_COLORS[i % SERIES_COLORS.length] }}>
                 {l.symbol}
               </span>{' '}
@@ -189,7 +250,7 @@ export default function ComparePerformance({
       )}
 
       {/* Chart */}
-      <div className="h-[300px] sm:h-[340px]">
+      <div className="h-[360px] sm:h-[420px]">
         {loading ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-white/50">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
@@ -203,7 +264,15 @@ export default function ComparePerformance({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 10, right: 8, bottom: 0, left: 8 }}>
+            <ComposedChart data={rows} margin={{ top: 10, right: 8, bottom: 0, left: 8 }}>
+              <defs>
+                {series.map((s, i) => (
+                  <linearGradient key={s.symbol} id={`${gradientId}-${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={SERIES_COLORS[i % SERIES_COLORS.length]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
               <XAxis
                 dataKey="ts"
@@ -230,24 +299,27 @@ export default function ComparePerformance({
               />
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               {series.map((s, i) => (
-                <Line
+                <Area
                   key={s.symbol}
                   type="monotone"
                   dataKey={s.symbol}
                   name={s.symbol}
                   stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
+                  fill={`url(#${gradientId}-${i})`}
                   dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
                   connectNulls
+                  isAnimationActive={!exporting}
                 />
               ))}
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
 
       {/* Popular comparisons */}
-      <div className="mt-3 border-t border-white/5 pt-3">
+      <div className="mt-3 border-t border-white/5 pt-3" data-export-hide="1">
         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
           Popular Stock Comparisons
         </div>

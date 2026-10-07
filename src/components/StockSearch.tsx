@@ -51,7 +51,33 @@ export default function StockSearch({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(-1);
+  const [quotes, setQuotes] = useState<Record<string, { price: number; changePercent: number }>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quoteSeq = useRef(0);
+
+  // Live daily % change for the visible results (same data as /market-data).
+  const loadQuotes = async (list: SearchResult[]) => {
+    const symbols = list.map((r) => r.symbol);
+    if (!symbols.length) return;
+    const seq = ++quoteSeq.current;
+    try {
+      const res = await fetch(`/api/yahoo-quotes?symbols=${encodeURIComponent(symbols.join(','))}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      const js = await res.json();
+      if (seq !== quoteSeq.current || !js?.ok || !Array.isArray(js.data)) return;
+      const map: Record<string, { price: number; changePercent: number }> = {};
+      for (const q of js.data) {
+        const sym = q?.ticker ?? q?.symbol;
+        if (sym != null && typeof q.changePercent === 'number') {
+          map[String(sym).toUpperCase()] = { price: q.price, changePercent: q.changePercent };
+        }
+      }
+      setQuotes((prev) => ({ ...prev, ...map }));
+    } catch {
+      /* quotes are decorative; ignore failures */
+    }
+  };
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -72,6 +98,7 @@ export default function StockSearch({
         setResults(list);
         setOpen(true);
         setHover(-1);
+        loadQuotes(list);
       } catch {
         /* keep previous results */
       }
@@ -129,12 +156,26 @@ export default function StockSearch({
               >
                 <span className="font-bold text-blue-300">{r.symbol}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-white/60">{r.name}</span>
+                {(() => {
+                  const q = quotes[r.symbol.toUpperCase()];
+                  if (!q) return null;
+                  return (
+                    <span
+                      className={`whitespace-nowrap text-[11px] font-bold ${
+                        q.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {q.changePercent >= 0 ? '+' : ''}
+                      {q.changePercent.toFixed(2)}%
+                    </span>
+                  );
+                })()}
                 {allTypes && (
                   <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold text-white/60">
                     {TYPE_LABELS[r.type] || r.type}
                   </span>
                 )}
-                <span className="text-[10px] text-white/30">{r.exchange}</span>
+                <span className="hidden text-[10px] text-white/30 sm:inline">{r.exchange}</span>
               </li>
             ))}
           </ul>

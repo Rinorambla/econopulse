@@ -10,6 +10,7 @@ import TerminalShell from '@/components/TerminalShell';
 import RequirePlan from '@/components/RequirePlan';
 
 const FundamentalChart = dynamic(() => import('@/components/charts/FundamentalChart'), { ssr: false });
+const ComparePerformance = dynamic(() => import('@/components/charts/ComparePerformance'), { ssr: false });
 
 const POPULAR = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'AMD', 'NFLX'];
 const MAX_SYMBOLS = 3;
@@ -215,6 +216,8 @@ function FundamentalsInner() {
       </div>
 
       <FundamentalChart symbols={symbols} onSymbolsChange={sync} />
+
+      <ComparePerformance symbols={symbols} onSymbolsChange={sync} />
     </div>
   );
 }

@@ -10,7 +10,10 @@
    ───────────────────────────────────────────── */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import PlanGate from '@/components/PlanGate';
+
+const FxsCalendarWidget = dynamic(() => import('@/components/FxsCalendarWidget'), { ssr: false });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type EconEvent = {
@@ -418,6 +421,7 @@ function EconomicsInner() {
   const [loadingRel, setLoadingRel] = useState(true);
   const [loadingCty, setLoadingCty] = useState(true);
   const [minImp, setMinImp] = useState<'All' | 'Medium' | 'High'>('Medium');
+  const [calSource, setCalSource] = useState<'econopulse' | 'fxstreet'>('econopulse');
   const [regionQuery, setRegionQuery] = useState('');
   const [sortKey, setSortKey] = useState<'gdp' | 'growth' | 'inflation' | 'unemployment' | 'rate'>('gdp');
   const [sortDesc, setSortDesc] = useState(true);
@@ -624,7 +628,20 @@ function EconomicsInner() {
               </button>
             ))}
           </div>
-          {(tab === 'calendar' || tab === 'releases') && (
+          {tab === 'calendar' && (
+            <div className="inline-flex rounded-lg bg-slate-900/60 border border-slate-800 p-0.5 gap-0.5">
+              {([['econopulse', 'EconoPulse'], ['fxstreet', 'FXStreet Live']] as const).map(([src, label]) => (
+                <button
+                  key={src}
+                  onClick={() => setCalSource(src)}
+                  className={`text-[11px] px-2.5 py-1 rounded font-semibold transition-colors ${calSource === src ? 'bg-slate-700 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {((tab === 'calendar' && calSource === 'econopulse') || tab === 'releases') && (
             <>
               <div className="inline-flex rounded-lg bg-slate-900/60 border border-slate-800 p-0.5 gap-0.5">
                 {(['High', 'Medium', 'All'] as const).map(m => (
@@ -648,7 +665,8 @@ function EconomicsInner() {
         </div>
 
         {/* ── Calendar tab ── */}
-        {tab === 'calendar' && (
+        {tab === 'calendar' && calSource === 'fxstreet' && <FxsCalendarWidget />}
+        {tab === 'calendar' && calSource === 'econopulse' && (
           <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
             {loadingCal && <div className="p-6 text-center text-gray-500 text-sm">Loading calendar…</div>}
             {!loadingCal && groupedCalendar.length === 0 && (

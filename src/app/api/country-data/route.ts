@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import { getEconomicsApiLatest, type EconApiSnapshot } from '@/lib/economicsapi';
 
 /**
- * Dynamic country macro data — World Bank (batched, most-recent non-null value per country)
- * with FRED overrides for monthly CPI YoY, harmonised unemployment and central-bank policy
- * rates where available. All sources self-update when agencies publish.
+ * Dynamic country macro data — EconomicsAPI (IMF/BIS; daily policy rates, monthly CPI,
+ * quarterly GDP growth) overlaid on World Bank batches, with FRED overrides as further
+ * fallback. All sources self-update when agencies publish.
  */
 
 interface CountryMacroConfig { code:string; name:string; currency:string; creditRating:string; fallbackPolicyRate?:number }
@@ -74,6 +75,30 @@ const COUNTRIES:CountryMacroConfig[] = [
 
 // Euro-area members use the ECB deposit facility rate.
 const EURO_AREA = new Set(['DE','FR','IT','ES','NL','BE','IE','AT','FI','PT','GR']);
+// ISO2 → ISO3 for EconomicsAPI lookups.
+const ISO3: Record<string,string> = {
+  US:'USA', CN:'CHN', DE:'DEU', JP:'JPN', IN:'IND', GB:'GBR', FR:'FRA', CA:'CAN', IT:'ITA', BR:'BRA',
+  RU:'RUS', KR:'KOR', AU:'AUS', MX:'MEX', ES:'ESP', ID:'IDN', NL:'NLD', SA:'SAU', TR:'TUR', CH:'CHE',
+  PL:'POL', AR:'ARG', BE:'BEL', SE:'SWE', IE:'IRL', AT:'AUT', NO:'NOR', IL:'ISR', TH:'THA', AE:'ARE',
+  SG:'SGP', MY:'MYS', VN:'VNM', PH:'PHL', DK:'DNK', HK:'HKG', FI:'FIN', PT:'PRT', GR:'GRC', NZ:'NZL',
+  CL:'CHL', CO:'COL', ZA:'ZAF', EG:'EGY', CZ:'CZE', RO:'ROU', HU:'HUN',
+};
+// EconomicsAPI kpi_ids used for the table.
+const EA_KPI = {
+  gdp: 'NA.GDP.CUR.USD',
+  growth: 'NA.GDP.Yoy',
+  inflation: 'PR.CPI.Yoy',
+  unemployment: 'LB.UR',
+  policyRate: 'IR.POL',
+  population: 'DM.POP',
+} as const;
+
+function eaValue(snapshot: EconApiSnapshot | null, iso2: string, kpi: string): { value:number; date:string } | null {
+  const row = snapshot?.get(ISO3[iso2] || '')?.get(kpi);
+  if (!row || !Number.isFinite(row.latest_value)) return null;
+  return { value: row.latest_value, date: row.latest_value_date || '' };
+}
+
 // Central-bank policy/overnight rate series on FRED.
 const POLICY_SERIES: Record<string,string> = {
   US:'FEDFUNDS', GB:'IUDSOIA', JP:'IRSTCI01JPM156N', CA:'IRSTCI01CAM156N', AU:'IRSTCI01AUM156N', CH:'IR3TIB01CHM156N',
@@ -168,7 +193,8 @@ export async function GET(request:Request) {
     const fredKeys = Object.keys(POLICY_SERIES) as (keyof typeof POLICY_SERIES)[];
     const cpiKeys = Object.keys(CPI_SERIES);
     const unempKeys = Object.keys(UNEMP_SERIES);
-    const [gdpMap, growthMap, inflMap, unempMap, popMap, mcapMap, lendMap, fx, ecbRate, ...fredResults] = await Promise.all([
+    const [eaSnapshot, gdpMap, growthMap, inflMap, unempMap, popMap, mcapMap, lendMap, fx, ecbRate, ...fredResults] = await Promise.all([
+      getEconomicsApiLatest(),                   // EconomicsAPI full snapshot (24h disk cache)
       fetchWbAll('NY.GDP.MKTP.CD', codes),       // GDP current USD
       fetchWbAll('NY.GDP.MKTP.KD.ZG', codes),    // GDP growth %
       fetchWbAll('FP.CPI.TOTL.ZG', codes),       // Inflation CPI % (annual)
@@ -190,22 +216,24 @@ export async function GET(request:Request) {
     unempKeys.forEach((c, i) => { const v = fredResults[fredKeys.length + cpiKeys.length + i]; if (v) unempByCountry.set(c, v); });
 
     const countries: CountryIndicators[] = COUNTRIES.map(cfg => {
-      const gdp = gdpMap.get(cfg.code);
-      const growth = growthMap.get(cfg.code);
+      const gdp = eaValue(eaSnapshot, cfg.code, EA_KPI.gdp) || gdpMap.get(cfg.code);
+      const growth = eaValue(eaSnapshot, cfg.code, EA_KPI.growth) || growthMap.get(cfg.code);
       const inflWb = inflMap.get(cfg.code);
       const unempWb = unempMap.get(cfg.code);
-      const pop = popMap.get(cfg.code);
+      const pop = eaValue(eaSnapshot, cfg.code, EA_KPI.population) || popMap.get(cfg.code);
       const mcap = mcapMap.get(cfg.code);
 
-      // Inflation / unemployment: prefer monthly FRED series, else World Bank annual.
-      const infl = cpiByCountry.get(cfg.code) || inflWb;
-      const unemp = unempByCountry.get(cfg.code) || unempWb;
+      // Inflation / unemployment: EconomicsAPI (monthly, all countries) → FRED → World Bank annual.
+      const infl = eaValue(eaSnapshot, cfg.code, EA_KPI.inflation) || cpiByCountry.get(cfg.code) || inflWb;
+      const unemp = eaValue(eaSnapshot, cfg.code, EA_KPI.unemployment) || unempByCountry.get(cfg.code) || unempWb;
 
-      // Policy rate cascade: FRED country series → ECB (euro area) → WB lending rate → static reference.
+      // Policy rate cascade: EconomicsAPI (daily, BIS) → FRED country series → ECB (euro area) → WB lending rate → static reference.
       let interestRate: CountryIndicators['interestRate'];
+      const eaRate = eaValue(eaSnapshot, cfg.code, EA_KPI.policyRate);
       const fredRate = policyByCountry.get(cfg.code);
       const lend = lendMap.get(cfg.code);
-      if (fredRate) interestRate = { value: fredRate.value, date: fredRate.date, source: 'FRED' };
+      if (eaRate) interestRate = { value: eaRate.value, date: eaRate.date, source: 'BIS/EconomicsAPI' };
+      else if (fredRate) interestRate = { value: fredRate.value, date: fredRate.date, source: 'FRED' };
       else if (EURO_AREA.has(cfg.code) && ecbRate) interestRate = { value: ecbRate.value, date: ecbRate.date, source: 'ECB (FRED)' };
       else if (lend && Number.isFinite(lend.value)) interestRate = { value: lend.value, date: lend.date, source: 'WorldBank:LendRate' };
       else if (cfg.fallbackPolicyRate != null) interestRate = { value: cfg.fallbackPolicyRate, date: new Date().toISOString().slice(0,10), source: 'Reference' };
@@ -264,7 +292,7 @@ export async function GET(request:Request) {
       },
       realtime:true,
       validation: validationSummary,
-      sources:[ 'World Bank API', 'FRED (monthly CPI, unemployment, policy rates)' ]
+      sources:[ 'EconomicsAPI (IMF/BIS: policy rates, CPI, GDP growth)', 'World Bank API', 'FRED (fallback CPI, unemployment, policy rates)' ]
     }, { headers: rateLimitHeaders(rl) });
     return res;
   } catch (error) {

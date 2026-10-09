@@ -24,6 +24,7 @@ export const env = {
   get FINNHUB_API_KEY(): string | undefined { return process.env.FINNHUB_API_KEY },
   get ALPHAVANTAGE_API_KEY(): string | undefined { return process.env.ALPHAVANTAGE_API_KEY },
   get EODHD_API_KEY(): string | undefined { return process.env.EODHD_API_KEY },
+  get ECONOMICSAPI_KEY(): string | undefined { return process.env.ECONOMICSAPI_KEY },
 
   // Stripe price ids (CSV) configurabili lato server
   get STRIPE_PRO_PRICE_IDS(): string[] { return (process.env.STRIPE_PRO_PRICE_IDS||'').split(',').map(s=>s.trim()).filter(Boolean) },

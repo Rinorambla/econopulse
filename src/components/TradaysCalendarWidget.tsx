@@ -50,10 +50,12 @@ export default function TradaysCalendarWidget({
   }, [mode, theme]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`w-full overflow-hidden bg-[#0c1222] rounded-md ${className}`}
-      style={{ height }}
-    />
+    <div className={`relative w-full overflow-hidden bg-[#0c1222] rounded-md ${className}`} style={{ height }}>
+      <div ref={containerRef} className="h-full w-full" />
+      {/* Bottom cover: hides the widget's MQL5 footer link with the site's own footer bar. */}
+      <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-10 flex h-7 items-center justify-end bg-[#0c1222] px-3">
+        <span className="text-[10px] text-white/30">Powered by EconoPulse.ai</span>
+      </div>
+    </div>
   );
 }

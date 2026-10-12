@@ -6,6 +6,7 @@
 // stocks that stop qualifying are flagged to the user instead of silently vanishing.
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 export interface ScreenedStock {
@@ -73,9 +74,47 @@ const FINVIZ_FILTERS = [
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+// Finviz blocks datacenter IPs (e.g. Vercel), so fall back to public HTML proxies.
+// Only public screener URLs are fetched — no user data is involved.
+type Transport = (url: string) => Promise<string | null>;
+
+async function fetchText(url: string, headers: Record<string, string>, timeoutMs: number): Promise<string | null> {
+  try {
+    const res = await fetch(url, { headers, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+const TRANSPORTS: Transport[] = [
+  (url) => fetchText(url, { 'User-Agent': UA, Accept: 'text/html' }, 15000),
+  (url) => fetchText(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { 'User-Agent': UA }, 25000),
+  (url) => fetchText(`https://r.jina.ai/${url}`, { 'User-Agent': UA, 'X-Return-Format': 'html' }, 30000),
+];
+
+// Remember which transport worked so subsequent pages skip the blocked ones.
+let transportIdx = 0;
+
+async function fetchFinvizHtml(url: string): Promise<string | null> {
+  for (let i = 0; i < TRANSPORTS.length; i++) {
+    const idx = (transportIdx + i) % TRANSPORTS.length;
+    const html = await TRANSPORTS[idx](url);
+    // A valid screener page always contains the result rows or the total counter.
+    if (html && (html.includes('styled-row') || /#\d+\s*\/\s*\d+\s*Total/.test(html))) {
+      transportIdx = idx;
+      return html;
+    }
+  }
+  return null;
+}
+
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const DROPPED_RETENTION_DAYS = 90;
-const CACHE_FILE = path.join(process.cwd(), 'data-snapshots', 'value-screener.json');
+// Vercel's filesystem is read-only except /tmp; prefer the repo folder locally.
+const CACHE_DIRS = [path.join(process.cwd(), 'data-snapshots'), path.join(os.tmpdir(), 'econopulse')];
+const CACHE_NAME = 'value-screener.json';
 
 let memCache: ScreenerResult | null = null;
 
@@ -123,31 +162,18 @@ function parsePage(html: string): Array<{ ticker: string; cells: string[] }> {
 async function fetchView(view: string): Promise<Map<string, string[]> | null> {
   try {
     const byTicker = new Map<string, string[]>();
-    const first = await fetch(`https://finviz.com/screener.ashx?v=${view}&f=${FINVIZ_FILTERS}&r=1`, {
-      headers: { 'User-Agent': UA, Accept: 'text/html' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!first.ok) return null;
-    const html = await first.text();
+    const html = await fetchFinvizHtml(`https://finviz.com/screener.ashx?v=${view}&f=${FINVIZ_FILTERS}&r=1`);
+    if (!html) return null;
     const totalM = html.match(/#\d+\s*\/\s*(\d+)\s*Total/);
     const total = totalM ? Number(totalM[1]) : 0;
     for (const r of parsePage(html)) byTicker.set(r.ticker, r.cells);
     if (!byTicker.size) return null;
 
     for (let offset = 21; offset <= Math.min(total, 200); offset += 20) {
-      try {
-        const res = await fetch(`https://finviz.com/screener.ashx?v=${view}&f=${FINVIZ_FILTERS}&r=${offset}`, {
-          headers: { 'User-Agent': UA, Accept: 'text/html' },
-          cache: 'no-store',
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!res.ok) break;
-        for (const r of parsePage(await res.text())) byTicker.set(r.ticker, r.cells);
-        await new Promise((r) => setTimeout(r, 400)); // be polite
-      } catch {
-        break;
-      }
+      const pageHtml = await fetchFinvizHtml(`https://finviz.com/screener.ashx?v=${view}&f=${FINVIZ_FILTERS}&r=${offset}`);
+      if (!pageHtml) break;
+      for (const r of parsePage(pageHtml)) byTicker.set(r.ticker, r.cells);
+      await new Promise((r) => setTimeout(r, 400)); // be polite
     }
     return byTicker;
   } catch {
@@ -193,20 +219,26 @@ async function fetchScreen(): Promise<ScreenRow[] | null> {
 // ── Snapshot persistence & dropped tracking ───────────────────────────────────
 
 function readCache(): ScreenerResult | null {
-  try {
-    if (!fs.existsSync(CACHE_FILE)) return null;
-    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as ScreenerResult;
-  } catch {
-    return null;
+  for (const dir of CACHE_DIRS) {
+    try {
+      const file = path.join(dir, CACHE_NAME);
+      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')) as ScreenerResult;
+    } catch {
+      /* try next location */
+    }
   }
+  return null;
 }
 
 function writeCache(data: ScreenerResult): void {
-  try {
-    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data));
-  } catch {
-    /* non-fatal */
+  for (const dir of CACHE_DIRS) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, CACHE_NAME), JSON.stringify(data));
+      return;
+    } catch {
+      /* read-only location (e.g. Vercel cwd) — try next */
+    }
   }
 }
 

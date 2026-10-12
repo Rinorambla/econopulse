@@ -9,7 +9,6 @@ import dynamic from 'next/dynamic';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, LabelList } from 'recharts';
 
 const EconomicCycleDetector = dynamic(() => import('@/components/EconomicCycleDetector'), { ssr: false });
-const ValuePortfolioScreener = dynamic(() => import('@/components/ValuePortfolioScreener'), { ssr: false });
 
 interface PortfolioData {
   [key: string]: {
@@ -1895,9 +1894,6 @@ export default function AIPortfolioPage() {
           </div>
         </div>
       )}
-
-      {/* Top Stocks — Medium/Long Term (12-criteria value & quality screen) */}
-      <ValuePortfolioScreener />
     </div>
   </RequirePlan>
   );

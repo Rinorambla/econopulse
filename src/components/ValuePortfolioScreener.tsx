@@ -70,7 +70,7 @@ export default function ValuePortfolioScreener() {
   const dropped = data?.dropped || [];
 
   return (
-    <div className="mt-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-white/[0.06] bg-gradient-to-r from-emerald-500/10 to-transparent">
         <div className="flex flex-wrap items-center gap-2">
@@ -87,8 +87,7 @@ export default function ValuePortfolioScreener() {
           </button>
         </div>
         <p className="mt-1 text-[11px] text-gray-500">
-          Mid-cap dividend payers trading below 15× earnings with strong margins, low debt and growing EPS —
-          refreshed daily. Stocks that stop meeting the criteria are flagged below.
+          Stocks that stop meeting the criteria are flagged below.
         </p>
         {showCriteria && data?.criteria && (
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">

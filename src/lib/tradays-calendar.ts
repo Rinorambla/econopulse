@@ -15,6 +15,8 @@ export interface TradaysEvent {
   countryNum: number; // ISO-3166 numeric
   /** 1 = released (Processed), 0 = upcoming */
   processed: number;
+  /** Event path for history lookups, e.g. "united-states/unemployment-rate" */
+  url: string;
 }
 
 // ISO-3166 alpha-2 → numeric, for the countries tracked on /economics.
@@ -59,6 +61,9 @@ function parseEvents(html: string): TradaysEvent[] {
         releaseAt: new Date(raw.ReleaseDate).toISOString(),
         countryNum: Number(raw.Country || 0),
         processed: Number(raw.Processed || 0),
+        url: String(raw.Url || '')
+          .replace(/^\/en\/economic-calendar\/(widget\/)?/, '')
+          .replace(/^\/+|\/+$/g, ''),
       });
     } catch {
       /* skip malformed entry */
@@ -94,4 +99,93 @@ export async function getTradaysCalendar(): Promise<TradaysEvent[]> {
     /* fall through */
   }
   return cache?.events || [];
+}
+
+// ── Per-event history (full archive straight from the Tradays event page) ─────
+
+export interface EventHistoryRow {
+  date: string; // ISO datetime of the release
+  period: string; // reference period, e.g. "Sep 2026"
+  actual: string;
+  forecast: string;
+  previous: string;
+  /** Tradays' own good/bad coloring vs forecast ('' when neutral/unknown) */
+  tone: 'green' | 'red' | '';
+}
+
+export interface EventHistory {
+  /** Full chart series (ms epoch + numeric value), oldest → newest */
+  series: Array<{ t: number; v: number }>;
+  /** Release-by-release table rows, newest first */
+  rows: EventHistoryRow[];
+}
+
+const HISTORY_TTL_MS = 60 * 60 * 1000;
+const historyCache = new Map<string, { at: number; data: EventHistory | null }>();
+
+export function isValidEventPath(p: string): boolean {
+  return /^[a-z0-9-]+\/[a-z0-9-]+$/.test(p);
+}
+
+function parseHistory(html: string): EventHistory | null {
+  // Chart series: var data=["idx,timestampMs,value", ...]
+  const series: Array<{ t: number; v: number }> = [];
+  const dm = html.match(/var data\s*=\s*\[([\s\S]*?)\]/);
+  if (dm) {
+    for (const part of dm[1].split('","')) {
+      const bits = part.replace(/"/g, '').split(',');
+      const t = Number(bits[1]);
+      const v = Number(bits[2]);
+      if (Number.isFinite(t) && Number.isFinite(v)) series.push({ t, v });
+    }
+  }
+
+  // History table: one block per release with period/actual/forecast/previous.
+  const rows: EventHistoryRow[] = [];
+  for (const block of html.split('event-table-history__item').slice(1)) {
+    const chunk = block.slice(0, 1600);
+    const date = chunk.match(/data-date="(\d+)"/);
+    const period = chunk.match(/__period">([^<]*)</);
+    const tone = chunk.match(/__actual\s+(red|green)/);
+    const actual = chunk.match(/__actual[^>]*>\s*<span[^>]*>\s*([^<]*?)\s*</);
+    const forecast = chunk.match(/__forecast">([^<]*)</);
+    const previous = chunk.match(/__previous[^>]*>\s*(?:<span[^>]*>)?\s*([^<]*?)\s*</);
+    if (!date || !period) continue;
+    rows.push({
+      date: new Date(Number(date[1])).toISOString(),
+      period: cleanVal(period[1]),
+      actual: cleanVal(actual?.[1]),
+      forecast: cleanVal(forecast?.[1]),
+      previous: cleanVal(previous?.[1]),
+      tone: (tone?.[1] as 'red' | 'green') || '',
+    });
+  }
+
+  if (!series.length && !rows.length) return null;
+  return { series, rows };
+}
+
+/** Full history for one event (chart series + monthly release table). */
+export async function getTradaysEventHistory(eventPath: string): Promise<EventHistory | null> {
+  if (!isValidEventPath(eventPath)) return null;
+  const hit = historyCache.get(eventPath);
+  if (hit && Date.now() - hit.at < HISTORY_TTL_MS) return hit.data;
+  let data: EventHistory | null = null;
+  try {
+    const res = await fetch(`https://www.tradays.com/en/economic-calendar/${eventPath}`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: 'text/html',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) data = parseHistory(await res.text());
+  } catch {
+    /* data stays null */
+  }
+  if (historyCache.size > 300) historyCache.clear(); // simple bound
+  historyCache.set(eventPath, { at: Date.now(), data });
+  return data;
 }

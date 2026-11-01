@@ -47,7 +47,7 @@ type CountryIndicatorRow = {
 type CalendarRelease = {
   id: number; name: string; importance: 'High' | 'Medium' | 'Low';
   currency: string; actual: string; forecast: string; previous: string;
-  releaseAt: string;
+  releaseAt: string; url: string;
 };
 
 type CountryDetailData = {
@@ -103,6 +103,111 @@ const fmtTrn = (v: number) => (Number.isFinite(v) && v > 0 ? `$${v.toFixed(2)}T`
 const fmtPop = (v: number) =>
   !Number.isFinite(v) || v <= 0 ? '—' : v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : `${(v / 1e6).toFixed(1)}M`;
 
+// ── Per-event history: chart + month-by-month comparison table ───────────────
+type EventHistoryData = {
+  series: Array<{ t: number; v: number }>;
+  rows: Array<{ date: string; period: string; actual: string; forecast: string; previous: string; tone: 'green' | 'red' | '' }>;
+};
+const eventHistoryCache = new Map<string, EventHistoryData | 'error'>();
+
+function EventHistoryPanel({ eventPath }: { eventPath: string }) {
+  const [data, setData] = useState<EventHistoryData | 'error' | null>(eventHistoryCache.get(eventPath) || null);
+
+  useEffect(() => {
+    if (eventHistoryCache.has(eventPath)) { setData(eventHistoryCache.get(eventPath)!); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/event-history?event=${encodeURIComponent(eventPath)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        const j = await r.json();
+        const d: EventHistoryData | 'error' = j?.ok ? { series: j.series || [], rows: j.rows || [] } : 'error';
+        eventHistoryCache.set(eventPath, d);
+        if (alive) setData(d);
+      } catch {
+        eventHistoryCache.set(eventPath, 'error');
+        if (alive) setData('error');
+      }
+    })();
+    return () => { alive = false; };
+  }, [eventPath]);
+
+  if (data === null) return <div className="py-3 text-center text-[11px] text-gray-500">Loading history…</div>;
+  if (data === 'error') return <div className="py-3 text-center text-[11px] text-gray-500">History unavailable for this indicator.</div>;
+
+  const pts = data.series.slice(-48);
+  const rows = data.rows.slice(0, 13);
+  const vals = pts.map(p => p.v);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = max - min || 1;
+  const W = 680, H = 120, PAD = 6;
+  const x = (i: number) => PAD + (i / Math.max(pts.length - 1, 1)) * (W - PAD * 2);
+  const y = (v: number) => H - PAD - ((v - min) / span) * (H - PAD * 2);
+  const up = pts.length > 1 && pts[pts.length - 1].v >= pts[0].v;
+  const fmtD = (t: number) => new Date(t).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {/* Performance chart */}
+      {pts.length > 1 && (
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-[10px] text-gray-500">
+            <span className="font-bold uppercase tracking-wider">Performance</span>
+            <span className={`font-bold ${up ? 'text-emerald-400' : 'text-red-400'}`}>Last: {pts[pts.length - 1].v}</span>
+            <span>min {min} · max {max}</span>
+          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-28 rounded border border-slate-800 bg-slate-950" preserveAspectRatio="none">
+            {[0.25, 0.5, 0.75].map(f => (
+              <line key={f} x1={0} x2={W} y1={PAD + f * (H - PAD * 2)} y2={PAD + f * (H - PAD * 2)} stroke="#1e293b" strokeWidth={1} />
+            ))}
+            <polyline
+              fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth={1.8}
+              points={pts.map((p, i) => `${x(i)},${y(p.v)}`).join(' ')}
+            />
+            {pts.map((p, i) => (
+              <rect key={i} x={i * (W / pts.length)} y={0} width={W / pts.length} height={H} fill="transparent">
+                <title>{`${fmtD(p.t)} — ${p.v}`}</title>
+              </rect>
+            ))}
+          </svg>
+          <div className="mt-0.5 flex justify-between px-0.5 text-[9px] text-gray-600">
+            <span>{fmtD(pts[0].t)}</span>
+            <span>{fmtD(pts[Math.floor(pts.length / 2)].t)}</span>
+            <span>{fmtD(pts[pts.length - 1].t)}</span>
+          </div>
+        </div>
+      )}
+      {/* Month-by-month table */}
+      {rows.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Month by month</div>
+          <div className="overflow-auto max-h-44 rounded border border-slate-800">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-[9px] uppercase tracking-wider text-gray-500 bg-slate-950 sticky top-0">
+                  <th className="pl-2 pr-2 py-1 font-semibold">Period</th>
+                  <th className="px-2 py-1 text-right font-semibold">Actual</th>
+                  <th className="px-2 py-1 text-right font-semibold">Forecast</th>
+                  <th className="px-2 pr-2 py-1 text-right font-semibold">Previous</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={`${r.date}-${i}`} className="border-t border-slate-800/50">
+                    <td className="pl-2 pr-2 py-1 text-gray-400 whitespace-nowrap">{r.period || new Date(r.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</td>
+                    <td className={`px-2 py-1 text-right font-bold whitespace-nowrap ${r.tone === 'green' ? 'text-emerald-400' : r.tone === 'red' ? 'text-red-400' : 'text-gray-100'}`}>{r.actual || '—'}</td>
+                    <td className="px-2 py-1 text-right text-gray-400 whitespace-nowrap">{r.forecast || '—'}</td>
+                    <td className="px-2 pr-2 py-1 text-right text-gray-500 whitespace-nowrap">{r.previous || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 type Tab = 'calendar' | 'countries';
 
@@ -125,6 +230,7 @@ function EconomicsInner() {
   const [sortDesc, setSortDesc] = useState(true);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
   const [countryDetail, setCountryDetail] = useState<Record<string, CountryDetailData | 'loading' | 'error'>>({});
+  const [expandedRelease, setExpandedRelease] = useState<string | null>(null);
 
   // Full indicator set (EconomicsAPI) + live-calendar releases (Tradays widget data)
   // for an expanded country, cached per code.
@@ -334,19 +440,35 @@ function EconomicsInner() {
                                               const f = parseFloat((ev.forecast || ev.previous).replace(/[%,KMBT\s]/gi, ''));
                                               const tone = Number.isFinite(a) && Number.isFinite(f) && a !== f ? (a > f ? 'text-emerald-400' : 'text-red-400') : 'text-gray-100';
                                               const d = new Date(ev.releaseAt);
+                                              const evKey = `${c.countryCode}:${ev.id}`;
+                                              const isEvOpen = expandedRelease === evKey;
                                               return (
-                                                <tr key={ev.id} className="border-b border-slate-800/50 last:border-0">
-                                                  <td className="pl-3 pr-2 py-1.5 text-gray-500 whitespace-nowrap">
-                                                    {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                                  </td>
-                                                  <td className="px-2 py-1.5 text-gray-200">
-                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${ev.importance === 'High' ? 'bg-red-400' : ev.importance === 'Medium' ? 'bg-amber-400' : 'bg-slate-600'}`} />
-                                                    {ev.name}
-                                                  </td>
-                                                  <td className={`px-2 py-1.5 text-right font-bold whitespace-nowrap ${tone}`}>{ev.actual || '—'}</td>
-                                                  <td className="px-2 py-1.5 text-right text-gray-400 whitespace-nowrap">{ev.forecast || '—'}</td>
-                                                  <td className="px-2 pr-3 py-1.5 text-right text-gray-500 whitespace-nowrap">{ev.previous || '—'}</td>
-                                                </tr>
+                                                <React.Fragment key={ev.id}>
+                                                  <tr
+                                                    className={`border-b border-slate-800/50 last:border-0 ${ev.url ? 'cursor-pointer hover:bg-slate-800/40' : ''} ${isEvOpen ? 'bg-slate-800/30' : ''}`}
+                                                    onClick={(e) => { e.stopPropagation(); if (ev.url) setExpandedRelease(isEvOpen ? null : evKey); }}
+                                                    title={ev.url ? 'Click for full history (chart + month by month)' : undefined}
+                                                  >
+                                                    <td className="pl-3 pr-2 py-1.5 text-gray-500 whitespace-nowrap">
+                                                      {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                                    </td>
+                                                    <td className="px-2 py-1.5 text-gray-200">
+                                                      <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${ev.importance === 'High' ? 'bg-red-400' : ev.importance === 'Medium' ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                                                      {ev.name}
+                                                      {ev.url && <span className={`ml-1.5 text-[9px] ${isEvOpen ? 'text-sky-300' : 'text-sky-500/60'}`}>{isEvOpen ? '▾' : '▸'} history</span>}
+                                                    </td>
+                                                    <td className={`px-2 py-1.5 text-right font-bold whitespace-nowrap ${tone}`}>{ev.actual || '—'}</td>
+                                                    <td className="px-2 py-1.5 text-right text-gray-400 whitespace-nowrap">{ev.forecast || '—'}</td>
+                                                    <td className="px-2 pr-3 py-1.5 text-right text-gray-500 whitespace-nowrap">{ev.previous || '—'}</td>
+                                                  </tr>
+                                                  {isEvOpen && ev.url && (
+                                                    <tr className="border-b border-slate-800/50 bg-slate-950/50" onClick={(e) => e.stopPropagation()}>
+                                                      <td colSpan={5} className="px-3 py-2">
+                                                        <EventHistoryPanel eventPath={ev.url} />
+                                                      </td>
+                                                    </tr>
+                                                  )}
+                                                </React.Fragment>
                                               );
                                             })}
                                           </tbody>

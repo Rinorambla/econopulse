@@ -44,6 +44,18 @@ type CountryIndicatorRow = {
   unit: string; frequency: string; source: string;
 };
 
+type CalendarRelease = {
+  id: number; name: string; importance: 'High' | 'Medium' | 'Low';
+  currency: string; actual: string; forecast: string; previous: string;
+  releaseAt: string;
+};
+
+type CountryDetailData = {
+  indicators: CountryIndicatorRow[];
+  released: CalendarRelease[];
+  upcoming: CalendarRelease[];
+};
+
 // Compact human format for an indicator value given its unit.
 function fmtIndicator(v: number | null, unit: string): string {
   if (v == null || !Number.isFinite(v)) return '—';
@@ -112,22 +124,29 @@ function EconomicsInner() {
   const [sortKey, setSortKey] = useState<'gdp' | 'growth' | 'inflation' | 'unemployment' | 'rate'>('gdp');
   const [sortDesc, setSortDesc] = useState(true);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
-  const [countryDetail, setCountryDetail] = useState<Record<string, CountryIndicatorRow[] | 'loading' | 'error'>>({});
+  const [countryDetail, setCountryDetail] = useState<Record<string, CountryDetailData | 'loading' | 'error'>>({});
 
-  // Full indicator set (EconomicsAPI) for an expanded country, cached per code.
+  // Full indicator set (EconomicsAPI) + live-calendar releases (Tradays widget data)
+  // for an expanded country, cached per code.
   const toggleCountry = (code: string) => {
     const next = expandedCountry === code ? null : code;
     setExpandedCountry(next);
     if (!next || countryDetail[next]) return;
     setCountryDetail((m) => ({ ...m, [next]: 'loading' }));
     (async () => {
-      try {
-        const r = await fetch(`/api/country-indicators?country=${encodeURIComponent(next)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
-        const j = await r.json();
-        setCountryDetail((m) => ({ ...m, [next]: j?.ok && Array.isArray(j.indicators) ? j.indicators : 'error' }));
-      } catch {
-        setCountryDetail((m) => ({ ...m, [next]: 'error' }));
-      }
+      const [indRes, calRes] = await Promise.all([
+        fetch(`/api/country-indicators?country=${encodeURIComponent(next)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+          .then((r) => r.json()).catch(() => null),
+        fetch(`/api/calendar-releases?country=${encodeURIComponent(next)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+          .then((r) => r.json()).catch(() => null),
+      ]);
+      const indicators: CountryIndicatorRow[] = indRes?.ok && Array.isArray(indRes.indicators) ? indRes.indicators : [];
+      const released: CalendarRelease[] = calRes?.ok && Array.isArray(calRes.released) ? calRes.released : [];
+      const upcoming: CalendarRelease[] = calRes?.ok && Array.isArray(calRes.upcoming) ? calRes.upcoming : [];
+      setCountryDetail((m) => ({
+        ...m,
+        [next]: indicators.length || released.length || upcoming.length ? { indicators, released, upcoming } : 'error',
+      }));
     })();
   };
 
@@ -287,35 +306,93 @@ function EconomicsInner() {
                           <tr className="border-b border-slate-800/60 bg-slate-900/70">
                             <td colSpan={8} className="px-4 py-3">
                               {detail === 'loading' || detail === undefined ? (
-                                <div className="py-3 text-center text-[12px] text-gray-500">Loading all indicators…</div>
+                                <div className="py-3 text-center text-[12px] text-gray-500">Loading country data…</div>
                               ) : detail === 'error' ? (
-                                <div className="py-3 text-center text-[12px] text-gray-500">Detailed indicators unavailable for {c.country}.</div>
+                                <div className="py-3 text-center text-[12px] text-gray-500">Detailed data unavailable for {c.country}.</div>
                               ) : (
                                 <>
-                                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-sky-300">
-                                    {flagFor(c.countryCode)} {c.country} — all indicators
-                                  </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                                    {detail.map((ind) => {
-                                      const delta = ind.previous != null ? ind.value - ind.previous : null;
-                                      return (
-                                        <div key={ind.kpi} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-                                          <div className="text-[10px] text-gray-500 leading-tight">{ind.name}</div>
-                                          <div className="mt-0.5 flex items-baseline gap-2">
-                                            <span className="text-[14px] font-bold text-white">{fmtIndicator(ind.value, ind.unit)}</span>
-                                            {delta != null && Math.abs(delta) > 1e-9 && (
-                                              <span className={`text-[10px] font-semibold ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                {delta > 0 ? '▲' : '▼'} vs {fmtIndicator(ind.previous, ind.unit)}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="mt-0.5 text-[9px] text-gray-600">
-                                            {ind.date}{ind.frequency ? ` · ${ind.frequency}` : ''}{ind.source ? ` · ${ind.source}` : ''}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                  {/* Live calendar releases (same data as the Live Calendar widget) */}
+                                  {detail.released.length > 0 && (
+                                    <div className="mb-3">
+                                      <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                                        📅 Latest releases — live calendar
+                                      </div>
+                                      <div className="overflow-x-auto rounded-lg border border-slate-800">
+                                        <table className="w-full text-[11px] min-w-[520px]">
+                                          <thead>
+                                            <tr className="text-left text-[9px] uppercase tracking-wider text-gray-500 bg-slate-950/70 border-b border-slate-800">
+                                              <th className="pl-3 pr-2 py-1.5 font-semibold">When</th>
+                                              <th className="px-2 py-1.5 font-semibold">Event</th>
+                                              <th className="px-2 py-1.5 text-right font-semibold">Actual</th>
+                                              <th className="px-2 py-1.5 text-right font-semibold">Forecast</th>
+                                              <th className="px-2 pr-3 py-1.5 text-right font-semibold">Previous</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {detail.released.map((ev) => {
+                                              const a = parseFloat(ev.actual.replace(/[%,KMBT\s]/gi, ''));
+                                              const f = parseFloat((ev.forecast || ev.previous).replace(/[%,KMBT\s]/gi, ''));
+                                              const tone = Number.isFinite(a) && Number.isFinite(f) && a !== f ? (a > f ? 'text-emerald-400' : 'text-red-400') : 'text-gray-100';
+                                              const d = new Date(ev.releaseAt);
+                                              return (
+                                                <tr key={ev.id} className="border-b border-slate-800/50 last:border-0">
+                                                  <td className="pl-3 pr-2 py-1.5 text-gray-500 whitespace-nowrap">
+                                                    {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                                  </td>
+                                                  <td className="px-2 py-1.5 text-gray-200">
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${ev.importance === 'High' ? 'bg-red-400' : ev.importance === 'Medium' ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                                                    {ev.name}
+                                                  </td>
+                                                  <td className={`px-2 py-1.5 text-right font-bold whitespace-nowrap ${tone}`}>{ev.actual || '—'}</td>
+                                                  <td className="px-2 py-1.5 text-right text-gray-400 whitespace-nowrap">{ev.forecast || '—'}</td>
+                                                  <td className="px-2 pr-3 py-1.5 text-right text-gray-500 whitespace-nowrap">{ev.previous || '—'}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {detail.upcoming.length > 0 && (
+                                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Upcoming:</span>
+                                      {detail.upcoming.map((ev) => (
+                                        <span key={ev.id} className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] text-gray-400">
+                                          {new Date(ev.releaseAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {ev.name}
+                                          {ev.forecast ? <span className="text-gray-500"> (f: {ev.forecast})</span> : null}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {detail.indicators.length > 0 && (
+                                    <>
+                                      <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                                        {flagFor(c.countryCode)} {c.country} — all indicators
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                        {detail.indicators.map((ind) => {
+                                          const delta = ind.previous != null ? ind.value - ind.previous : null;
+                                          return (
+                                            <div key={ind.kpi} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+                                              <div className="text-[10px] text-gray-500 leading-tight">{ind.name}</div>
+                                              <div className="mt-0.5 flex items-baseline gap-2">
+                                                <span className="text-[14px] font-bold text-white">{fmtIndicator(ind.value, ind.unit)}</span>
+                                                {delta != null && Math.abs(delta) > 1e-9 && (
+                                                  <span className={`text-[10px] font-semibold ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {delta > 0 ? '▲' : '▼'} vs {fmtIndicator(ind.previous, ind.unit)}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="mt-0.5 text-[9px] text-gray-600">
+                                                {ind.date}{ind.frequency ? ` · ${ind.frequency}` : ''}{ind.source ? ` · ${ind.source}` : ''}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </td>

@@ -36,6 +36,31 @@ type CountryRow = {
 
 type GlobalStats = { totalGdp: number; averageGrowth: number; averageInflation: number; averageUnemployment: number; totalCountries: number };
 
+type CountryIndicatorRow = {
+  kpi: string; name: string; group: string;
+  value: number; date: string;
+  previous: number | null; previousDate: string | null;
+  high: number | null; low: number | null;
+  unit: string; frequency: string; source: string;
+};
+
+// Compact human format for an indicator value given its unit.
+function fmtIndicator(v: number | null, unit: string): string {
+  if (v == null || !Number.isFinite(v)) return '—';
+  const u = (unit || '').toLowerCase();
+  if (u.includes('%')) return `${v.toFixed(2)}%`;
+  const abs = Math.abs(v);
+  let scaled = `${v.toFixed(2)}`;
+  if (abs >= 1e12) scaled = `${(v / 1e12).toFixed(2)}T`;
+  else if (abs >= 1e9) scaled = `${(v / 1e9).toFixed(2)}B`;
+  else if (abs >= 1e6) scaled = `${(v / 1e6).toFixed(2)}M`;
+  else if (abs >= 1e3) scaled = `${(v / 1e3).toFixed(1)}K`;
+  else if (abs < 100) scaled = `${v.toFixed(abs < 2 ? 4 : 2)}`;
+  if (u.startsWith('usd')) return `$${scaled}`;
+  if (u.includes('lcu')) return scaled;
+  return scaled;
+}
+
 // ── Flags ────────────────────────────────────────────────────────────────────
 const NAME_FLAGS: Record<string, string> = {
   'united states': '🇺🇸', 'usa': '🇺🇸', 'euro area': '🇪🇺', 'eurozone': '🇪🇺', 'european union': '🇪🇺',
@@ -86,6 +111,25 @@ function EconomicsInner() {
   const [loadingCty, setLoadingCty] = useState(true);
   const [sortKey, setSortKey] = useState<'gdp' | 'growth' | 'inflation' | 'unemployment' | 'rate'>('gdp');
   const [sortDesc, setSortDesc] = useState(true);
+  const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
+  const [countryDetail, setCountryDetail] = useState<Record<string, CountryIndicatorRow[] | 'loading' | 'error'>>({});
+
+  // Full indicator set (EconomicsAPI) for an expanded country, cached per code.
+  const toggleCountry = (code: string) => {
+    const next = expandedCountry === code ? null : code;
+    setExpandedCountry(next);
+    if (!next || countryDetail[next]) return;
+    setCountryDetail((m) => ({ ...m, [next]: 'loading' }));
+    (async () => {
+      try {
+        const r = await fetch(`/api/country-indicators?country=${encodeURIComponent(next)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        const j = await r.json();
+        setCountryDetail((m) => ({ ...m, [next]: j?.ok && Array.isArray(j.indicators) ? j.indicators : 'error' }));
+      } catch {
+        setCountryDetail((m) => ({ ...m, [next]: 'error' }));
+      }
+    })();
+  };
 
   // Calendar (next 14 days) — feeds the "high-impact events today" stat card.
   useEffect(() => {
@@ -213,29 +257,78 @@ function EconomicsInner() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedCountries.map((c) => (
-                    <tr key={c.countryCode} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
-                      <td className="pl-4 pr-2 py-2.5 whitespace-nowrap">
-                        <span className="mr-2">{flagFor(c.countryCode)}</span>
-                        <span className="text-white font-medium">{c.country}</span>
-                        <span className="ml-2 text-[10px] text-gray-600">{c.currency.code}</span>
-                      </td>
-                      <td className="px-2 py-2.5 text-right text-gray-200 font-semibold whitespace-nowrap">{fmtTrn(c.gdp.value)}</td>
-                      <td className={`px-2 py-2.5 text-right font-semibold whitespace-nowrap ${c.gdp.growth > 0 ? 'text-emerald-400' : c.gdp.growth < 0 ? 'text-red-400' : 'text-gray-400'}`}>{fmtPct(c.gdp.growth)}</td>
-                      <td className={`px-2 py-2.5 text-right whitespace-nowrap ${c.inflation.value > 4 ? 'text-red-400' : c.inflation.value > 2.5 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmtPct(c.inflation.value)}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-300 whitespace-nowrap">{fmtPct(c.unemployment.value)}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-300 whitespace-nowrap">{Number.isFinite(c.interestRate.value) ? fmtPct(c.interestRate.value, 2) : '—'}</td>
-                      <td className="px-2 py-2.5 text-right text-gray-400 whitespace-nowrap">{fmtPop(c.population.value)}</td>
-                      <td className="px-2 pr-4 py-2.5 text-right whitespace-nowrap">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${/^AA/.test(c.creditRating) ? 'bg-emerald-500/15 text-emerald-300' : /^(A|BBB)/.test(c.creditRating) ? 'bg-sky-500/15 text-sky-300' : 'bg-amber-500/15 text-amber-300'}`}>{c.creditRating}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {sortedCountries.map((c) => {
+                    const isOpen = expandedCountry === c.countryCode;
+                    const detail = countryDetail[c.countryCode];
+                    return (
+                      <React.Fragment key={c.countryCode}>
+                        <tr
+                          className={`border-b border-slate-800/60 cursor-pointer transition-colors ${isOpen ? 'bg-slate-800/40' : 'hover:bg-slate-800/30'}`}
+                          onClick={() => toggleCountry(c.countryCode)}
+                          title="Click for all indicators"
+                        >
+                          <td className="pl-4 pr-2 py-2.5 whitespace-nowrap">
+                            <span className={`mr-2 inline-block text-[10px] transition-transform ${isOpen ? 'rotate-90 text-sky-300' : 'text-gray-600'}`}>▶</span>
+                            <span className="mr-2">{flagFor(c.countryCode)}</span>
+                            <span className="text-white font-medium">{c.country}</span>
+                            <span className="ml-2 text-[10px] text-gray-600">{c.currency.code}</span>
+                          </td>
+                          <td className="px-2 py-2.5 text-right text-gray-200 font-semibold whitespace-nowrap">{fmtTrn(c.gdp.value)}</td>
+                          <td className={`px-2 py-2.5 text-right font-semibold whitespace-nowrap ${c.gdp.growth > 0 ? 'text-emerald-400' : c.gdp.growth < 0 ? 'text-red-400' : 'text-gray-400'}`}>{fmtPct(c.gdp.growth)}</td>
+                          <td className={`px-2 py-2.5 text-right whitespace-nowrap ${c.inflation.value > 4 ? 'text-red-400' : c.inflation.value > 2.5 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmtPct(c.inflation.value)}</td>
+                          <td className="px-2 py-2.5 text-right text-gray-300 whitespace-nowrap">{fmtPct(c.unemployment.value)}</td>
+                          <td className="px-2 py-2.5 text-right text-gray-300 whitespace-nowrap">{Number.isFinite(c.interestRate.value) ? fmtPct(c.interestRate.value, 2) : '—'}</td>
+                          <td className="px-2 py-2.5 text-right text-gray-400 whitespace-nowrap">{fmtPop(c.population.value)}</td>
+                          <td className="px-2 pr-4 py-2.5 text-right whitespace-nowrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${/^AA/.test(c.creditRating) ? 'bg-emerald-500/15 text-emerald-300' : /^(A|BBB)/.test(c.creditRating) ? 'bg-sky-500/15 text-sky-300' : 'bg-amber-500/15 text-amber-300'}`}>{c.creditRating}</span>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="border-b border-slate-800/60 bg-slate-900/70">
+                            <td colSpan={8} className="px-4 py-3">
+                              {detail === 'loading' || detail === undefined ? (
+                                <div className="py-3 text-center text-[12px] text-gray-500">Loading all indicators…</div>
+                              ) : detail === 'error' ? (
+                                <div className="py-3 text-center text-[12px] text-gray-500">Detailed indicators unavailable for {c.country}.</div>
+                              ) : (
+                                <>
+                                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                                    {flagFor(c.countryCode)} {c.country} — all indicators
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                    {detail.map((ind) => {
+                                      const delta = ind.previous != null ? ind.value - ind.previous : null;
+                                      return (
+                                        <div key={ind.kpi} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+                                          <div className="text-[10px] text-gray-500 leading-tight">{ind.name}</div>
+                                          <div className="mt-0.5 flex items-baseline gap-2">
+                                            <span className="text-[14px] font-bold text-white">{fmtIndicator(ind.value, ind.unit)}</span>
+                                            {delta != null && Math.abs(delta) > 1e-9 && (
+                                              <span className={`text-[10px] font-semibold ${delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {delta > 0 ? '▲' : '▼'} vs {fmtIndicator(ind.previous, ind.unit)}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="mt-0.5 text-[9px] text-gray-600">
+                                            {ind.date}{ind.frequency ? ` · ${ind.frequency}` : ''}{ind.source ? ` · ${ind.source}` : ''}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
             <div className="px-4 py-2 text-[10px] text-gray-600 bg-slate-900/60">
-              {sortedCountries.length} countries · sorted by {sortKey}
+              {sortedCountries.length} countries · sorted by {sortKey} · click a country for all its indicators
             </div>
           </div>
         )}

@@ -101,8 +101,8 @@ async function fetchFinvizHtml(url: string): Promise<string | null> {
   for (let i = 0; i < TRANSPORTS.length; i++) {
     const idx = (transportIdx + i) % TRANSPORTS.length;
     const html = await TRANSPORTS[idx](url);
-    // A valid screener page always contains the result rows or the total counter.
-    if (html && (html.includes('styled-row') || /#\d+\s*\/\s*\d+\s*Total/.test(html))) {
+    // A valid screener page contains result rows (legacy or div-grid) or the total counter.
+    if (html && (html.includes('styled-row') || html.includes('data-column-id=') || /#\d+\s*\/\s*\d+\s*Total/.test(html))) {
       transportIdx = idx;
       return html;
     }
@@ -143,25 +143,55 @@ function cellNum(s: string | undefined): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
-/** Rows of [ticker, cells[]] for one screener page. */
-function parsePage(html: string): Array<{ ticker: string; cells: string[] }> {
-  const out: Array<{ ticker: string; cells: string[] }> = [];
+/** Rows of ticker → named cells for one screener page (works with both the
+ * legacy <table> markup and the 2026 div-grid markup with data-column-id). */
+function parsePage(html: string): Array<{ ticker: string; cells: Record<string, string> }> {
+  const out: Array<{ ticker: string; cells: Record<string, string> }> = [];
+
+  // New div-grid markup: cells carry data-column-id + role="gridcell".
+  const cellRe = /data-column-id="([A-Za-z0-9]+)"[^>]*role="gridcell"[^>]*>([\s\S]*?)<\/div>/g;
+  let row: { ticker: string; cells: Record<string, string> } | null = null;
+  for (const m of html.matchAll(cellRe)) {
+    const col = m[1];
+    const rawInner = m[2];
+    if (col === 'ticker') {
+      // Plain <span>TICKER</span> (the logo-letter span carries a class attribute).
+      const t = [...rawInner.matchAll(/<span>([A-Z][A-Z0-9.-]*)<\/span>/g)].map((x) => x[1]).pop();
+      row = t ? { ticker: t, cells: {} } : null;
+      if (row) out.push(row);
+    } else if (row) {
+      row.cells[col] = rawInner.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim();
+    }
+  }
+  if (out.length) return out;
+
+  // Legacy <table> markup fallback.
+  const LEGACY_COLS: Record<string, string[]> = {
+    // v=111 / v=121 / v=161 positional headers (index 0 = row number)
+    '11': ['row', 'ticker', 'company', 'sector', 'industry', 'country', 'marketCap', 'PE', 'price', 'change', 'volume'],
+    '18v': ['row', 'ticker', 'marketCap', 'PE', 'forwardPE', 'PEG', 'PS', 'PB', 'PC', 'PFCF', 'epsYoY', 'epsYoY1', 'eps5Years', 'estLTGrowth', 'sales5Years', 'price', 'change', 'volume'],
+    '18f': ['row', 'ticker', 'marketCap', 'dividendYield', 'roa', 'roe', 'roi', 'curRatio', 'quickRatio', 'ltdebtEq', 'debtEq', 'grossMargin', 'operMargin', 'netMargin', 'earningsDate', 'price', 'change', 'volume'],
+  };
   for (const block of html.split('<tr class="styled-row').slice(1)) {
     const rowHtml = block.split('</tr>')[0];
     const tm = rowHtml.match(/stock\?t=([A-Z][A-Z0-9.-]*)/);
     if (!tm) continue;
-    const cells = rowHtml
+    const values = rowHtml
       .split(/<td[^>]*>/)
       .slice(1)
       .map((c) => c.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim());
+    const names =
+      values.length === 11 ? LEGACY_COLS['11'] : /%$/.test(values[3] || '') ? LEGACY_COLS['18f'] : LEGACY_COLS['18v'];
+    const cells: Record<string, string> = {};
+    values.forEach((v, i) => { if (names[i]) cells[names[i]] = v; });
     out.push({ ticker: tm[1], cells });
   }
   return out;
 }
 
-async function fetchView(view: string): Promise<Map<string, string[]> | null> {
+async function fetchView(view: string): Promise<Map<string, Record<string, string>> | null> {
   try {
-    const byTicker = new Map<string, string[]>();
+    const byTicker = new Map<string, Record<string, string>>();
     const html = await fetchFinvizHtml(`https://finviz.com/screener.ashx?v=${view}&f=${FINVIZ_FILTERS}&r=1`);
     if (!html) return null;
     const totalM = html.match(/#\d+\s*\/\s*(\d+)\s*Total/);
@@ -193,24 +223,23 @@ async function fetchScreen(): Promise<ScreenRow[] | null> {
 
   const rows: ScreenRow[] = [];
   for (const [ticker, c] of overview.entries()) {
-    // v=111 cells: [No, Ticker, Company, Sector, Industry, Country, MktCap, P/E, Price, Change, Volume]
-    const v = valuation?.get(ticker); // v=121: [No, Ticker, MktCap, P/E, FwdP/E, PEG, P/S, P/B, P/C, P/FCF, ...]
-    const f = financial?.get(ticker); // v=161: [No, Ticker, MktCap, Dividend, ROA, ROE, ROIC, CurrR, QuickR, LTDebt/Eq, Debt/Eq, GrossM, OperM, ProfitM, ...]
+    const v = valuation?.get(ticker);
+    const f = financial?.get(ticker);
     rows.push({
       symbol: ticker,
-      company: c[2] || ticker,
-      sector: c[3] || '',
-      industry: c[4] || '',
-      country: c[5] || '',
-      marketCap: c[6] || '',
-      trailingPE: cellNum(c[7]),
-      price: cellNum(c[8]),
-      forwardPE: cellNum(v?.[4]),
-      dividendYieldPct: cellNum(f?.[3]),
-      roePct: cellNum(f?.[5]),
-      ltDebtToEquity: cellNum(f?.[9]),
-      operatingMarginPct: cellNum(f?.[12]),
-      netMarginPct: cellNum(f?.[13]),
+      company: c.company || ticker,
+      sector: c.sector || '',
+      industry: c.industry || '',
+      country: c.country || '',
+      marketCap: c.marketCap || '',
+      trailingPE: cellNum(c.PE),
+      price: cellNum(c.price),
+      forwardPE: cellNum(v?.forwardPE),
+      dividendYieldPct: cellNum(f?.dividendYield),
+      roePct: cellNum(f?.roe),
+      ltDebtToEquity: cellNum(f?.ltdebtEq),
+      operatingMarginPct: cellNum(f?.operMargin),
+      netMarginPct: cellNum(f?.netMargin),
     });
   }
   return rows.length ? rows : null;
@@ -230,6 +259,18 @@ function readCache(): ScreenerResult | null {
   return null;
 }
 
+// Committed seed snapshot — bundled with the build so production always has data
+// even when Finviz blocks every transport from datacenter IPs.
+function readSeed(): ScreenerResult | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const seed = require('@/data/value-screener-seed.json') as ScreenerResult;
+    return seed?.current?.length ? seed : null;
+  } catch {
+    return null;
+  }
+}
+
 function writeCache(data: ScreenerResult): void {
   for (const dir of CACHE_DIRS) {
     try {
@@ -244,7 +285,8 @@ function writeCache(data: ScreenerResult): void {
 
 /**
  * Current screen + dropped history. Refreshes at most once per 24h; serves the
- * cached snapshot otherwise (and stale data when the live refresh fails).
+ * cached snapshot otherwise, stale data when the live refresh fails, and the
+ * committed seed snapshot as last resort (so production never shows an error).
  */
 export async function getValueScreener(): Promise<ScreenerResult | null> {
   const now = Date.now();
@@ -259,8 +301,9 @@ export async function getValueScreener(): Promise<ScreenerResult | null> {
   const rows = await fetchScreen();
   if (!rows) {
     // Keep serving stale results; don't mark anything as dropped on a failed fetch.
-    if (disk) {
-      const stale = { ...disk, live: false };
+    const fallback = disk || readSeed();
+    if (fallback) {
+      const stale = { ...fallback, live: false };
       memCache = stale;
       return stale;
     }
@@ -268,7 +311,9 @@ export async function getValueScreener(): Promise<ScreenerResult | null> {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const prevBySymbol = new Map((disk?.current || []).map((s) => [s.symbol, s]));
+  // Baseline for firstSeen/dropped tracking: disk cache, else the committed seed.
+  const baseline = disk || readSeed();
+  const prevBySymbol = new Map((baseline?.current || []).map((s) => [s.symbol, s]));
   const currentSymbols = new Set(rows.map((r) => r.symbol));
 
   const current: ScreenedStock[] = rows.map((r) => {
@@ -294,11 +339,11 @@ export async function getValueScreener(): Promise<ScreenerResult | null> {
   // Stocks that were in the list but no longer pass the screen → flag as dropped.
   const cutoff = new Date(now - DROPPED_RETENTION_DAYS * 86400000).toISOString().slice(0, 10);
   const dropped: DroppedStock[] = [
-    ...(disk?.current || [])
+    ...(baseline?.current || [])
       .filter((s) => !currentSymbols.has(s.symbol))
       .map((s) => ({ symbol: s.symbol, name: s.name, sector: s.sector, droppedAt: today, firstSeen: s.firstSeen })),
     // Keep previous drops (unless the stock re-qualified) within the retention window.
-    ...(disk?.dropped || []).filter((d) => !currentSymbols.has(d.symbol) && d.droppedAt >= cutoff),
+    ...(baseline?.dropped || []).filter((d) => !currentSymbols.has(d.symbol) && d.droppedAt >= cutoff),
   ];
   // De-dupe by symbol keeping the earliest drop date.
   const dropMap = new Map<string, DroppedStock>();

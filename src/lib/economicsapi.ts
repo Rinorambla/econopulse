@@ -14,12 +14,18 @@ export interface EconApiRow {
   country: string;
   kpi_id: string; // e.g. 'PR.CPI.Yoy'
   indicator: string;
+  group?: string;
   latest_value: number;
   latest_value_date: string;
   previous_value: number | null;
   previous_value_date: string | null;
+  highest_value?: number | null;
+  highest_value_date?: string | null;
+  lowest_value?: number | null;
+  lowest_value_date?: string | null;
   unit: string;
   frequency: string;
+  source_name?: string;
 }
 
 /** ISO3 → (kpi_id → row) */

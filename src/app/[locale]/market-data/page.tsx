@@ -207,11 +207,11 @@ function detectSector(sym: string): string {
 }
 
 const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
-  { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX'] },
-  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', 'FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE', '^SSMI', '^OMX', '^BSESN', '^NSEI', '^KS11', '^TWII', '^AXJO', '^STI', '^JKSE', '^KLSE', '^TA125.TA'] },
+  { label: 'US Indices', symbols: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^NDX', '^SOX', '^DJT', '^MID', '^NYA'] },
+  { label: 'World Indices', symbols: ['^FTSE', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', 'FTSEMIB.MI', '^IBEX', '^AEX', '^BVSP', '^MXX', '^GSPTSE', '^SSMI', '^OMX', '^BSESN', '^NSEI', '^KS11', '^TWII', '^AXJO', '^STI', '^JKSE', '^KLSE', '^TA125.TA', '^ATX', '^BFX', '^NZ50'] },
   { label: 'Index ETFs', symbols: ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'VOO', 'IVV', 'EFA', 'EEM', 'VEA', 'VWO', 'ACWI'] },
   { label: 'Sector ETFs', symbols: ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC', 'SMH', 'SOXX', 'KRE', 'XBI', 'ITA'] },
-  { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK-B', 'LLY', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'COST'] },
+  { label: 'Mega Caps', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'BRK-B', 'LLY', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'COST', 'WMT', 'JNJ', 'PG', 'HD', 'ORCL', 'NFLX', 'BAC', 'KO', 'CVX', 'ABBV'] },
   { label: 'Tech', symbols: ['AAPL', 'MSFT', 'NVDA', 'AMD', 'INTC', 'GOOGL', 'META', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'AVGO', 'CSCO', 'QCOM', 'TXN', 'NOW', 'IBM', 'PLTR', 'SHOP', 'UBER'] },
   { label: 'Finance', symbols: ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL', 'COIN', 'XYZ'] },
   { label: 'Energy', symbols: ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'OXY', 'HES', 'PSX'] },
@@ -222,9 +222,9 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   { label: 'EM ADRs', symbols: ['BABA', 'PDD', 'JD', 'NIO', 'BIDU', 'TCEHY', 'TSM', 'INFY', 'WIT', 'HDB', 'IBN', 'VALE', 'PBR', 'ITUB', 'BBD', 'NU', 'MELI', 'SE', 'GRAB', 'SHOP'] },
   { label: 'India', symbols: ['INFY', 'WIT', 'HDB', 'IBN', 'RDY', 'TTM', 'SIFY', 'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 'TATAMOTORS.NS', 'SBIN.NS'] },
   { label: 'LatAm & Canada', symbols: ['VALE', 'PBR', 'ITUB', 'BBD', 'NU', 'MELI', 'AMX', 'BAP', 'SHOP', 'RY', 'TD', 'BNS', 'ENB', 'CNQ', 'SU'] },
-  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'XLM-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD'] },
-  { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'DX-Y.NYB'] },
-  { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZC=F', 'ZW=F', 'ZS=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'LE=F'] },
+  { label: 'Crypto', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'AVAX-USD', 'DOT-USD', 'XLM-USD', 'LINK-USD', 'LTC-USD', 'TRX-USD', 'SHIB-USD', 'ATOM-USD', 'UNI-USD', 'BCH-USD', 'ETC-USD', 'NEAR-USD', 'FIL-USD', 'HBAR-USD', 'XMR-USD'] },
+  { label: 'Forex', symbols: ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X', 'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'EURCHF=X', 'AUDJPY=X', 'CADJPY=X', 'CHFJPY=X', 'EURAUD=X', 'EURCAD=X', 'GBPCHF=X', 'USDCNY=X', 'USDMXN=X', 'USDBRL=X', 'USDSEK=X', 'USDNOK=X', 'USDZAR=X', 'USDINR=X', 'USDKRW=X', 'USDTRY=X', 'USDPLN=X', 'USDSGD=X', 'USDHKD=X', 'DX-Y.NYB'] },
+  { label: 'Commodities', symbols: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'HO=F', 'RB=F', 'ZC=F', 'ZW=F', 'ZS=F', 'ZM=F', 'ZL=F', 'KC=F', 'CC=F', 'SB=F', 'CT=F', 'OJ=F', 'LE=F', 'HE=F', 'GF=F'] },
   { label: 'Bonds & Rates', symbols: ['^TNX', '^TYX', '^FVX', '^IRX', 'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'HYG', 'LQD', 'TIP', 'MBB', 'EMB', 'BNDX'] },
   // Government bonds — full US Treasury curve (FRED daily), world 10Y yields (FRED/OECD monthly), sovereign ETFs.
   { label: 'Govt Bonds · US Treasuries', symbols: ['FRED:DGS1MO', 'FRED:DGS3MO', 'FRED:DGS6MO', 'FRED:DGS1', 'FRED:DGS2', 'FRED:DGS3', 'FRED:DGS5', 'FRED:DGS7', 'FRED:DGS10', 'FRED:DGS20', 'FRED:DGS30'] },
@@ -660,6 +660,10 @@ export default function MarketDataPage() {
   const [searchTab, setSearchTab] = useState<SearchTab>('All')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  // Live quotes for the current search results (price + daily %), merged over the
+  // watchlist quotes so every row in the dropdown shows performance.
+  const [searchQuotes, setSearchQuotes] = useState<Record<string, Quote>>({})
+  const searchQuoteSeq = useRef(0)
   // Anchor the search dropdown to the input's real screen position so the
   // ticker list never overlaps/covers the search bar on any breakpoint.
   const searchWrapRef = useRef<HTMLDivElement>(null)
@@ -845,12 +849,31 @@ export default function MarketDataPage() {
     let aborted = false
     setSearchLoading(true)
     const fredMatches = searchFred(q)
+    // Fetch live quotes (price + daily %) for the visible results.
+    const loadQuotes = async (list: SearchResult[]) => {
+      const syms = [...new Set(list.map((r) => r.symbol.toUpperCase()).filter((s) => !/^(FRED|DBN):/i.test(s)))].slice(0, 18)
+      if (!syms.length) return
+      const seq = ++searchQuoteSeq.current
+      try {
+        const res = await fetch(`/api/yahoo-quotes?symbols=${encodeURIComponent(syms.join(','))}`, { cache: 'no-store', signal: AbortSignal.timeout(10000) })
+        const json = await res.json()
+        if (seq !== searchQuoteSeq.current || !Array.isArray(json?.data)) return
+        setSearchQuotes((prev) => {
+          const next = { ...prev }
+          for (const qd of json.data) if (qd?.ticker) next[String(qd.ticker).toUpperCase()] = qd
+          return next
+        })
+      } catch { /* quotes are decorative */ }
+    }
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/yahoo-search?q=${encodeURIComponent(q)}`, { cache: 'no-store', signal: AbortSignal.timeout(9000) })
         const json = await res.json()
         const yahoo = Array.isArray(json?.data) ? json.data : []
-        if (!aborted) setSearchResults([...fredMatches, ...yahoo])
+        if (!aborted) {
+          setSearchResults([...fredMatches, ...yahoo])
+          loadQuotes(yahoo)
+        }
       } catch {
         if (!aborted) setSearchResults(fredMatches)
       } finally {
@@ -1363,10 +1386,11 @@ export default function MarketDataPage() {
                           </span>
                         </button>
                       )}
-                      <div className="px-3 py-1.5 grid grid-cols-[1fr_auto] sm:grid-cols-[180px_1fr_110px_70px] gap-2 text-[10px] uppercase tracking-wider text-gray-500 items-center">
+                      <div className="px-3 py-1.5 grid grid-cols-[1fr_auto] sm:grid-cols-[170px_1fr_90px_100px_64px] gap-2 text-[10px] uppercase tracking-wider text-gray-500 items-center">
                         <span className="flex items-center gap-2">Symbol {searchLoading && <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />}</span>
                         <span className="hidden sm:block">Description</span>
                         <span className="hidden sm:block text-right">Exchange</span>
+                        <span className="hidden sm:block text-right">Last / Chg</span>
                         <span className="text-right">Type</span>
                       </div>
                       {(() => {
@@ -1375,14 +1399,14 @@ export default function MarketDataPage() {
                           return <div className="px-3 py-3 text-xs text-gray-500">No matches{searchTab !== 'All' ? ` in ${searchTab}` : ''}. Press Go to use “{searchVal}” directly.</div>
                         }
                         return visible.map((r) => {
-                          const q = quotes[r.symbol.toUpperCase()]
+                          const q = quotes[r.symbol.toUpperCase()] || searchQuotes[r.symbol.toUpperCase()]
                           const cat = searchCategory(r)
                           const isMacro = /^(FRED|DBN):/i.test(r.symbol)
                           return (
                             <button
                               key={`${r.symbol}-${r.exchange}`}
                               onMouseDown={(e) => { e.preventDefault(); submitSearch(r.symbol) }}
-                              className="w-full text-left px-3 py-2 hover:bg-white/5 grid grid-cols-[1fr_auto] sm:grid-cols-[180px_1fr_110px_70px] gap-2 items-center"
+                              className="w-full text-left px-3 py-2 hover:bg-white/5 grid grid-cols-[1fr_auto] sm:grid-cols-[170px_1fr_90px_100px_64px] gap-2 items-center"
                             >
                               <span className="min-w-0 flex items-center gap-2">
                                 {!isMacro && (
@@ -1397,17 +1421,29 @@ export default function MarketDataPage() {
                                 <span className="min-w-0">
                                   <span className="text-xs font-bold text-white block truncate">{r.symbol.replace(/^(FRED|DBN):/i, '')}</span>
                                   {r.name && <span className="sm:hidden block text-[10px] text-gray-400 truncate">{r.name}</span>}
+                                  {q && (
+                                    <span className={`sm:hidden block text-[10px] font-semibold ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {fmtPrice(q.price)} · {fmtPct(q.changePercent)}
+                                    </span>
+                                  )}
                                 </span>
                               </span>
                               <span className="hidden sm:block text-[11px] text-gray-400 truncate">{r.name || '—'}</span>
                               <span className="hidden sm:block text-right text-[10px] uppercase tracking-wide text-gray-500 truncate">{r.exchange || '—'}</span>
+                              <span className="hidden sm:block text-right whitespace-nowrap">
+                                {q ? (
+                                  <>
+                                    <span className="text-[11px] font-semibold text-gray-200 tabular-nums">{fmtPrice(q.price)}</span>
+                                    <span className={`block text-[10px] font-semibold tabular-nums ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {fmtPct(q.changePercent)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-gray-600">{isMacro ? 'macro' : '…'}</span>
+                                )}
+                              </span>
                               <span className="text-right">
                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 uppercase tracking-wide">{TAB_BADGE[cat] || r.type || '—'}</span>
-                                {q && (
-                                  <span className={`block text-[10px] ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {fmtPct(q.changePercent)}
-                                  </span>
-                                )}
                               </span>
                             </button>
                           )

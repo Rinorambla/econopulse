@@ -74,10 +74,7 @@ export default function ValuePortfolioScreener() {
       {/* Header */}
       <div className="p-4 border-b border-white/[0.06] bg-gradient-to-r from-emerald-500/10 to-transparent">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-bold text-white">🏛️ Top Stocks — Medium/Long Term</h2>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-semibold">
-            Value & Quality screen
-          </span>
+          <h2 className="text-base font-bold text-white">Top Stocks</h2>
           <button
             type="button"
             onClick={() => setShowCriteria((v) => !v)}
@@ -86,9 +83,6 @@ export default function ValuePortfolioScreener() {
             {showCriteria ? 'Hide criteria' : `12 criteria ${showCriteria ? '▴' : '▾'}`}
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-gray-500">
-          Stocks that stop meeting the criteria are flagged below.
-        </p>
         {showCriteria && data?.criteria && (
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {data.criteria.map((c) => (

@@ -116,5 +116,19 @@ export async function getEconomicsApiLatest(): Promise<EconApiSnapshot | null> {
     memCache = { at: Date.now(), snapshot }; // avoid refetch storms
     return snapshot;
   }
+
+  // Last resort: committed seed snapshot bundled with the build (e.g. production
+  // deployments where ECONOMICSAPI_KEY is not configured).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const seed = require('@/data/economicsapi-seed.json') as CacheShape;
+    if (seed?.rows?.length) {
+      const snapshot = buildSnapshot(seed.rows);
+      memCache = { at: Date.now(), snapshot };
+      return snapshot;
+    }
+  } catch {
+    /* no seed bundled */
+  }
   return null;
 }

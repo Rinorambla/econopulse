@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const LOADER_SRC = 'https://widgets.tradingeconomics.com/widget.js';
 
-export type TeWidgetKind = 'mt-pro' | 'ns-pro' | 'ec-pro';
+export type TeWidgetKind = 'mt-pro' | 'ns-pro' | 'ec-pro' | 'cl-pro';
 
 export const TE_MATRIX_COLUMNS = [
   'GDP', 'GDP Growth', 'GDP Growth YoY', 'Interest Rate', 'Inflation Rate', 'Unemployment Rate',
@@ -42,6 +42,7 @@ const FRAME_TITLE: Record<TeWidgetKind, string> = {
   'mt-pro': 'World economic matrix',
   'ns-pro': 'Economic news',
   'ec-pro': 'Indicator chart',
+  'cl-pro': 'Economic calendar',
 };
 
 interface Props {
@@ -72,6 +73,12 @@ const BASE_ATTRS: Record<TeWidgetKind, Record<string, Attr>> = {
   'ec-pro': {
     colorTheme: 'Dark',
     useContainerSize: true,
+    border: { width: 0, radius: 0 },
+    darkThemeColors: TE_DARK_COLORS,
+  },
+  'cl-pro': {
+    colorTheme: 'Dark',
+    transparentBackground: true,
     border: { width: 0, radius: 0 },
     darkThemeColors: TE_DARK_COLORS,
   },
@@ -144,18 +151,28 @@ export default function TradingEconomicsEmbed({
 
   // The chart boots at its default 700px and only reflows on a window resize
   // inside its frame; nudging the host width by 1px propagates that event
-  // without touching the cross-origin document.
+  // without touching the cross-origin document. Re-nudged after the host
+  // itself is resized (panel expand/collapse, viewport changes).
   useEffect(() => {
     if (status !== 'ready') return;
     const host = hostRef.current;
     if (!host) return;
-    const timers = [1500, 4000, 8000].map((ms) =>
-      setTimeout(() => {
-        host.style.paddingRight = '1px';
-        requestAnimationFrame(() => { host.style.paddingRight = ''; });
-      }, ms)
-    );
-    return () => timers.forEach(clearTimeout);
+    const nudge = () => {
+      host.style.paddingRight = '1px';
+      requestAnimationFrame(() => { host.style.paddingRight = ''; });
+    };
+    const timers = [1500, 4000, 8000].map((ms) => setTimeout(nudge, ms));
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(settle);
+      settle = setTimeout(nudge, 350);
+    });
+    ro.observe(host);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(settle);
+      ro.disconnect();
+    };
   }, [status, attrsKey]);
 
   return (

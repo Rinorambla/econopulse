@@ -15,7 +15,6 @@ const NewsWidget = dynamic(() => import('@/components/NewsWidget'), { ssr: false
 const CrossAssetTiles = dynamic(() => import('@/components/CrossAssetTiles'), { ssr: false });
 const IndicesPanel = dynamic(() => import('@/components/IndicesPanel'), { ssr: false });
 const EconomicCalendarPanel = dynamic(() => import('@/components/EconomicCalendarPanel'), { ssr: false });
-const WorldEconomicCycleMap = dynamic(() => import('@/components/WorldEconomicCycleMap'), { ssr: false });
 const TopAssetsPanel = dynamic(() => import('@/components/TopAssetsPanel'), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -795,16 +794,6 @@ export default function AIPulsePage({ params }: { params: Promise<{ locale: stri
                   <span key={label} className="px-2.5 py-1 rounded-sm text-[10px] font-bold text-white tabular-nums" style={{ background: color }}>{label}</span>
                 ))}
               </div>
-            </Panel>
-
-            {/* ─── WORLD ECONOMIC CYCLE MAP ─── */}
-            <Panel
-              title="World Economic Cycles"
-              badge="Macro"
-              className="min-h-[640px]"
-              actions={<span className="text-[9px] text-gray-500">Reflation • Inflation • Stagflation • Recession</span>}
-            >
-              <WorldEconomicCycleMap />
             </Panel>
 
             {/* ─── ROW 0.5: Top Assets by Market Cap (companies + gold/silver/crypto) ─── */}

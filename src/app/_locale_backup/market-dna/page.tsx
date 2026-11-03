@@ -211,8 +211,16 @@ export default function MarketDNAPage() {
       setIsFetching(true);
       setRefreshing(true);
       
-        // Allow CDN/browser caching for faster page load; user can refresh manually if needed
-        const response = await fetchT(`/api/market-dna`, 25000);
+        // Allow CDN/browser caching for faster page load; user can refresh manually if needed.
+        // The analysis takes ~10-15s warm and longer on a cold start, so give it
+        // headroom and retry once before falling back to illustrative data.
+        let response: Response;
+        try {
+          response = await fetchT(`/api/market-dna`, 45000);
+        } catch (firstErr) {
+          console.warn('Market DNA: first attempt failed, retrying…', firstErr);
+          response = await fetchT(`/api/market-dna`, 45000);
+        }
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

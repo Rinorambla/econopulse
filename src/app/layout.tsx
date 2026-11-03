@@ -10,6 +10,7 @@ import SafeBoundary from '@/components/SafeBoundary';
 import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
 import NativeFeaturesInit from '@/components/NativeFeaturesInit';
 import PWAUpdateAndInstall from '@/components/PWAUpdateAndInstall';
+import BrandWatermark from '@/components/BrandWatermark';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://econopulse.ai'),
@@ -146,6 +147,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SafeBoundary>
             <PWAUpdateAndInstall />
           </SafeBoundary>
+          {/* Brand watermark: logo always in frame, on every page and screenshot */}
+          <BrandWatermark />
         </AuthProvider>
       </body>
     </html>

@@ -2,84 +2,41 @@
 
 /* ─────────────────────────────────────────────
    Economics — EconoPulse macro terminal.
-   Status bar (UTC / local clock, market sessions) + four live panels:
-     ECAL  Economic calendar (EconoPulse feed)   CHRT  Indicator chart
-     NEWS  Economic news stream                  WECO  World economic matrix
-   Every panel expands to full screen; keys 1–4 jump to a panel, Esc closes.
+   Status bar (UTC / local clock, market sessions) + five live panels:
+     ECAL  Economic calendar (EconoPulse feed)   CHRT  Indicator chart (any country × indicator, free search)
+     HEAT  Macro heat map (EconoPulse data)      NEWS  Economic news stream
+     WECO  World economic matrix
+   Every panel expands to full screen; keys 1–5 jump to a panel, Esc closes.
    ───────────────────────────────────────────── */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import PlanGate from '@/components/PlanGate';
 import Logo from '@/components/Logo';
 import MacroCalendarPanel from '@/components/MacroCalendarPanel';
+import MacroHeatmapPanel from '@/components/MacroHeatmapPanel';
+import SearchSelect from '@/components/SearchSelect';
+import {
+  TE_COUNTRIES, TE_INDICATORS, DEFAULT_COUNTRY, DEFAULT_INDICATOR, HEADLINE_SLUGS, searchIndicators,
+  type TeCountry, type TeIndicator,
+} from '@/lib/te-catalog';
+import type { HeatKpi } from '@/lib/macro-heatmap';
 
 const TradingEconomicsEmbed = dynamic(() => import('@/components/TradingEconomicsEmbed'), { ssr: false });
 
-// ── Chart universe: country → indicator presets ─────────────────────────────
-type Series = { label: string; url: string };
-type Group = { code: string; name: string; items: Series[] };
+// ── Chart universe: any country × any indicator (searchable catalogue) ──────
+const INDICATOR_BY_SLUG = new Map(TE_INDICATORS.map((i) => [i.slug, i]));
+const COUNTRY_BY_CODE = new Map(TE_COUNTRIES.map((c) => [c.code, c]));
+const HEADLINE = HEADLINE_SLUGS.map((s) => INDICATOR_BY_SLUG.get(s)!).filter(Boolean);
 
-const CHART_GROUPS: Group[] = [
-  { code: 'US', name: 'United States', items: [
-    { label: 'Inflation (CPI)', url: '/united-states/inflation-cpi' },
-    { label: 'Core Inflation', url: '/united-states/core-inflation-rate' },
-    { label: 'Fed Funds Rate', url: '/united-states/interest-rate' },
-    { label: 'GDP Growth', url: '/united-states/gdp-growth' },
-    { label: 'Unemployment', url: '/united-states/unemployment-rate' },
-    { label: 'Non Farm Payrolls', url: '/united-states/non-farm-payrolls' },
-    { label: '10Y Yield', url: '/united-states/government-bond-yield' },
-    { label: 'Retail Sales', url: '/united-states/retail-sales' },
-    { label: 'ISM Manufacturing', url: '/united-states/business-confidence' },
-    { label: 'Consumer Confidence', url: '/united-states/consumer-confidence' },
-  ]},
-  { code: 'EU', name: 'Euro Area', items: [
-    { label: 'Inflation (HICP)', url: '/euro-area/inflation-cpi' },
-    { label: 'Core Inflation', url: '/euro-area/core-inflation-rate' },
-    { label: 'ECB Rate', url: '/euro-area/interest-rate' },
-    { label: 'GDP Growth', url: '/euro-area/gdp-growth' },
-    { label: 'Unemployment', url: '/euro-area/unemployment-rate' },
-    { label: 'Consumer Confidence', url: '/euro-area/consumer-confidence' },
-  ]},
-  { code: 'IT', name: 'Italy', items: [
-    { label: 'Inflation', url: '/italy/inflation-cpi' },
-    { label: 'GDP Growth', url: '/italy/gdp-growth' },
-    { label: 'Unemployment', url: '/italy/unemployment-rate' },
-    { label: 'BTP 10Y Yield', url: '/italy/government-bond-yield' },
-    { label: 'Industrial Production', url: '/italy/industrial-production' },
-    { label: 'Business Confidence', url: '/italy/business-confidence' },
-    { label: 'Consumer Confidence', url: '/italy/consumer-confidence' },
-  ]},
-  { code: 'DE', name: 'Germany', items: [
-    { label: 'Inflation', url: '/germany/inflation-cpi' },
-    { label: 'GDP Growth', url: '/germany/gdp-growth' },
-    { label: 'Unemployment', url: '/germany/unemployment-rate' },
-    { label: 'Bund 10Y Yield', url: '/germany/government-bond-yield' },
-    { label: 'Ifo Business Climate', url: '/germany/business-confidence' },
-    { label: 'ZEW Sentiment', url: '/germany/zew-economic-sentiment-index' },
-  ]},
-  { code: 'GB', name: 'United Kingdom', items: [
-    { label: 'Inflation', url: '/united-kingdom/inflation-cpi' },
-    { label: 'BoE Rate', url: '/united-kingdom/interest-rate' },
-    { label: 'GDP Growth', url: '/united-kingdom/gdp-growth' },
-    { label: 'Unemployment', url: '/united-kingdom/unemployment-rate' },
-    { label: 'Gilt 10Y Yield', url: '/united-kingdom/government-bond-yield' },
-  ]},
-  { code: 'JP', name: 'Japan', items: [
-    { label: 'Inflation', url: '/japan/inflation-cpi' },
-    { label: 'BoJ Rate', url: '/japan/interest-rate' },
-    { label: 'GDP Growth', url: '/japan/gdp-growth' },
-    { label: 'Unemployment', url: '/japan/unemployment-rate' },
-    { label: 'JGB 10Y Yield', url: '/japan/government-bond-yield' },
-  ]},
-  { code: 'CN', name: 'China', items: [
-    { label: 'GDP Growth YoY', url: '/china/gdp-growth-annual' },
-    { label: 'Inflation', url: '/china/inflation-cpi' },
-    { label: 'Loan Prime Rate', url: '/china/interest-rate' },
-    { label: 'Manufacturing PMI', url: '/china/manufacturing-pmi' },
-    { label: 'Exports', url: '/china/exports' },
-  ]},
-];
+// Heat-map KPI → Trading Economics indicator slug, so a heat-map cell can open
+// the matching series in the chart panel.
+const HEAT_TO_TE: Record<string, string> = {
+  'NA.GDP.Yoy': 'gdp-growth-annual', 'PR.CPI.Yoy': 'inflation-cpi', 'IR.POL': 'interest-rate', 'LB.UR': 'unemployment-rate',
+  'ST.IP.Yoy': 'industrial-production', 'HS.HPI.Yoy': 'housing-index', 'GF.DEBT.GDP': 'government-debt-to-gdp',
+  'GF.BAL.GDP': 'government-budget', 'EA.CA.GDP': 'current-account-to-gdp', 'NA.GDP.PC.USD': 'gdp-per-capita',
+  'NA.GDP.CUR.USD': 'gdp', 'MN.FXRES': 'foreign-exchange-reserves',
+};
 
 // Masks for the chart frame's vendor affordances (measured on the rendered
 // widget): the "Copy Embed" button, the linked title and the credits line.
@@ -151,12 +108,13 @@ function StatusBar() {
 }
 
 // ── Panel chrome: terminal header, expand-to-fullscreen, keyboard anchors ────
-type PanelId = 'ECAL' | 'NEWS' | 'CHRT' | 'WECO';
+type PanelId = 'ECAL' | 'NEWS' | 'CHRT' | 'HEAT' | 'WECO';
 const PANELS: Array<{ id: PanelId; key: string; title: string }> = [
   { id: 'ECAL', key: '1', title: 'Economic Calendar' },
   { id: 'CHRT', key: '2', title: 'Indicator Chart' },
   { id: 'NEWS', key: '3', title: 'Economic News' },
-  { id: 'WECO', key: '4', title: 'World Economic Matrix' },
+  { id: 'HEAT', key: '4', title: 'Macro Heat Map' },
+  { id: 'WECO', key: '5', title: 'World Economic Matrix' },
 ];
 
 function Panel({
@@ -197,9 +155,33 @@ function Panel({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function EconomicsPage() {
-  const [group, setGroup] = useState<Group>(CHART_GROUPS[0]);
-  const [series, setSeries] = useState<Series>(CHART_GROUPS[0].items[0]);
+  const [country, setCountry] = useState<TeCountry>(DEFAULT_COUNTRY);
+  const [indicator, setIndicator] = useState<TeIndicator>(DEFAULT_INDICATOR);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchActive, setSearchActive] = useState(0);
   const [expanded, setExpanded] = useState<PanelId | null>(null);
+
+  const seriesUrl = `/${country.slug}/${indicator.slug}`;
+  const hits = useMemo(() => searchIndicators(search), [search]);
+  useEffect(() => setSearchActive(0), [search]);
+
+  const openSeries = useCallback((c: TeCountry, i: TeIndicator) => {
+    setCountry(c);
+    setIndicator(i);
+    setSearch('');
+    setSearchOpen(false);
+  }, []);
+
+  // Heat-map cell → chart panel with that country/indicator.
+  const chartFromHeat = useCallback((iso2: string, kpi: HeatKpi) => {
+    const c = COUNTRY_BY_CODE.get(iso2);
+    const i = INDICATOR_BY_SLUG.get(HEAT_TO_TE[kpi.id] || '');
+    if (!c || !i) return;
+    openSeries(c, i);
+    setExpanded(null);
+    document.getElementById('CHRT')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [openSeries]);
 
   const toggle = useCallback((id: PanelId) => setExpanded((cur) => (cur === id ? null : id)), []);
 
@@ -219,8 +201,6 @@ export default function EconomicsPage() {
     document.body.style.overflow = expanded ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [expanded]);
-
-  const pickGroup = (g: Group) => { setGroup(g); setSeries(g.items[0]); };
 
   return (
     <PlanGate requiredPlan="free">
@@ -270,35 +250,68 @@ export default function EconomicsPage() {
             className="xl:col-span-3"
             controls={
               <span className="hidden font-mono text-[10px] text-gray-500 md:inline">
-                <span className="text-amber-400/80">{group.code}</span> {group.name} · <span className="text-gray-300">{series.label}</span>
+                <span className="text-amber-400/80">{country.code}</span> {country.name} · <span className="text-gray-300">{indicator.name}</span>
               </span>
             }
           >
             {(fill) => (
               <>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-800 bg-slate-950/60 px-3 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    {CHART_GROUPS.map((g) => (
-                      <button
-                        key={g.code}
-                        onClick={() => pickGroup(g)}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] transition-colors ${group.code === g.code ? 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40' : 'text-gray-500 hover:bg-slate-800 hover:text-gray-200'}`}
-                        title={g.name}
-                      >
-                        <span className={`font-mono text-[10px] font-bold ${group.code === g.code ? 'text-amber-300' : 'text-gray-600'}`}>{g.code}</span>
-                        <span className="hidden lg:inline">{g.name}</span>
-                      </button>
-                    ))}
+                <div className="space-y-2 border-b border-slate-800 bg-slate-950/60 px-3 py-2">
+                  {/* Free search + pickers */}
+                  <div className="flex flex-wrap items-stretch gap-2">
+                    <div className="relative min-w-[260px] flex-1">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[11px] text-amber-400">›</span>
+                      <input
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
+                        onFocus={() => setSearchOpen(true)}
+                        onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setSearchActive((a) => Math.min(a + 1, hits.length - 1)); }
+                          else if (e.key === 'ArrowUp') { e.preventDefault(); setSearchActive((a) => Math.max(a - 1, 0)); }
+                          else if (e.key === 'Enter' && hits[searchActive]) { e.preventDefault(); openSeries(hits[searchActive].country, hits[searchActive].indicator); (e.target as HTMLInputElement).blur(); }
+                          else if (e.key === 'Escape') { setSearchOpen(false); (e.target as HTMLInputElement).blur(); }
+                        }}
+                        placeholder="Search any indicator, any country — e.g. “italy debt”, “japan cpi”, “boe rate”, “pmi”…"
+                        className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pl-6 pr-16 text-[12px] text-gray-100 outline-none placeholder:text-gray-600 focus:border-amber-500/60"
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] text-gray-600">
+                        {TE_COUNTRIES.length}×{TE_INDICATORS.length}
+                      </span>
+                      {searchOpen && search.trim().length >= 2 && (
+                        <ul className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-auto rounded-md border border-slate-700 bg-slate-950 py-1 shadow-2xl">
+                          {hits.length === 0 && <li className="px-3 py-2 text-[11px] text-gray-500">No match — try a country name, an indicator (cpi, pmi, debt…) or both.</li>}
+                          {hits.map((h, i) => (
+                            <li
+                              key={h.url}
+                              onMouseDown={(e) => { e.preventDefault(); openSeries(h.country, h.indicator); }}
+                              onMouseEnter={() => setSearchActive(i)}
+                              className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] ${i === searchActive ? 'bg-amber-500/15 text-amber-100' : 'text-gray-300'}`}
+                            >
+                              <span className="w-7 shrink-0 font-mono text-[10px] font-bold text-amber-400/80">{h.country.code}</span>
+                              <span className="shrink-0 text-gray-400">{h.country.name}</span>
+                              <span className="text-gray-600">·</span>
+                              <span className="truncate font-semibold">{h.indicator.name}</span>
+                              <span className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider text-gray-600">{h.indicator.group}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <SearchSelect items={TE_COUNTRIES} value={country} onChange={setCountry} label="Country" placeholder="Type a country…" className="w-48" />
+                    <SearchSelect items={TE_INDICATORS} value={indicator} onChange={setIndicator} label="Indicator" placeholder="Type an indicator…" className="w-60" />
                   </div>
-                  <span className="hidden h-4 w-px bg-slate-700 sm:block" />
+                  {/* Headline chips for the selected country */}
                   <div className="flex flex-wrap gap-1">
-                    {group.items.map((s) => (
+                    {HEADLINE.map((i) => (
                       <button
-                        key={s.url}
-                        onClick={() => setSeries(s)}
-                        className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${series.url === s.url ? 'border-sky-500/50 bg-sky-500/15 text-sky-200' : 'border-slate-800 bg-slate-900 text-gray-400 hover:border-slate-600 hover:text-gray-200'}`}
+                        key={i.slug}
+                        onClick={() => setIndicator(i)}
+                        className={`rounded-md border px-2 py-0.5 text-[11px] transition-colors ${indicator.slug === i.slug ? 'border-sky-500/50 bg-sky-500/15 text-sky-200' : 'border-slate-800 bg-slate-900 text-gray-400 hover:border-slate-600 hover:text-gray-200'}`}
                       >
-                        {s.label}
+                        {i.name}
                       </button>
                     ))}
                   </div>
@@ -306,11 +319,11 @@ export default function EconomicsPage() {
                 <TradingEconomicsEmbed
                   key={fill ? 'chart-full' : 'chart-inline'}
                   widget="ec-pro"
-                  attrs={{ url: series.url, chartSettings: { type: 'line', span: 'MAX' } }}
+                  attrs={{ url: seriesUrl, chartSettings: { type: 'line', span: 'MAX' } }}
                   height={fill ? '100%' : 560}
                   className={fill ? 'flex-1' : ''}
                   covers={CHART_COVERS}
-                  loadingLabel={`Loading ${group.name} — ${series.label}…`}
+                  loadingLabel={`Loading ${country.name} — ${indicator.name}…`}
                 />
               </>
             )}
@@ -320,14 +333,26 @@ export default function EconomicsPage() {
           </Panel>
           </div>
 
-          {/* Row 3 — world matrix */}
-          <Panel id="WECO" title="World Economic Matrix" hotkey="4" expanded={expanded === 'WECO'} onToggle={() => toggle('WECO')}>
+          {/* Row 3 — macro heat map (EconoPulse data) */}
+          <Panel
+            id="HEAT"
+            title="Macro Heat Map"
+            hotkey="4"
+            expanded={expanded === 'HEAT'}
+            onToggle={() => toggle('HEAT')}
+            controls={<span className="hidden font-mono text-[10px] text-gray-500 md:inline">countries × indicators · rank vs peers · click a cell to chart it</span>}
+          >
+            {(fill) => <MacroHeatmapPanel fill={fill} onPick={chartFromHeat} />}
+          </Panel>
+
+          {/* Row 4 — world matrix */}
+          <Panel id="WECO" title="World Economic Matrix" hotkey="5" expanded={expanded === 'WECO'} onToggle={() => toggle('WECO')}>
             {(fill) => <TradingEconomicsEmbed widget="mt-pro" height={fill ? '100%' : 'calc(100vh - 300px)'} className={fill ? 'flex-1' : 'min-h-[520px]'} loadingLabel="Loading world economic data…" />}
           </Panel>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 font-mono text-[10px] text-gray-600">
             <span>ECONOPULSE MACRO TERMINAL · data refreshes automatically</span>
-            <span>keys <kbd className="rounded border border-slate-800 px-1">1</kbd>–<kbd className="rounded border border-slate-800 px-1">4</kbd> jump to panel · <kbd className="rounded border border-slate-800 px-1">Esc</kbd> close · Powered by EconoPulse.ai</span>
+            <span>keys <kbd className="rounded border border-slate-800 px-1">1</kbd>–<kbd className="rounded border border-slate-800 px-1">5</kbd> jump to panel · <kbd className="rounded border border-slate-800 px-1">Esc</kbd> close · Powered by EconoPulse.ai</span>
           </footer>
         </div>
       </div>

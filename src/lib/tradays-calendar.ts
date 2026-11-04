@@ -450,7 +450,7 @@ export async function buildCountryMatrixFull(iso2: string, concurrency = 3, paus
 }
 
 const MATRIX_TTL_MS = 10 * 60 * 1000;
-const FIRST_BUILD_ROWS = 36;
+const FIRST_BUILD_ROWS = 56;
 const TOPUP_ROWS = 10;
 const matrixCache = new Map<string, { at: number; data: CountryMatrix }>();
 

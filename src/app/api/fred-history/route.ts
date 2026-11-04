@@ -49,6 +49,12 @@ const DBN_MIRROR: Record<string, string> = {
 }
 // BEA level series are published in millions on DBnomics vs billions on FRED.
 const DBN_SCALE: Record<string, number> = { GDPC1: 1e-3, GDP: 1e-3, PCE: 1e-3, PI: 1e-3 }
+// Some cloud egress ranges can't reach fred.stlouisfed.org at all (requests
+// hang until timeout). Remember that for a while so the fallback chain stays
+// fast instead of paying the timeout on every chart load.
+let csvBlockedUntil = 0
+const CSV_BLOCK_MS = 15 * 60 * 1000
+
 const toIsoDate = (p: string): string => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return p
   if (/^\d{4}-\d{2}$/.test(p)) return `${p}-01`
@@ -128,6 +134,7 @@ export async function GET(request: Request) {
   // Fallback 1: FRED's key-less CSV export (works from most networks; some
   // cloud egress ranges are blocked, hence the DBnomics fallback below).
   const viaCsv = async (): Promise<Obs[] | null> => {
+    if (Date.now() < csvBlockedUntil) return null
     try {
       const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}&cosd=${rawStart}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconoPulse/1.0)', Accept: 'text/csv,*/*' },
@@ -139,7 +146,10 @@ export async function GET(request: Request) {
       if (lines.length < 2 || !/^(observation_date|DATE)/i.test(lines[0])) return null
       const obs: Obs[] = lines.slice(1).map((l) => { const [date, value] = l.split(','); return { date: (date || '').trim(), value: (value || '').trim() } }).filter((o) => o.date)
       return transform(obs)
-    } catch { return null }
+    } catch (e: unknown) {
+      if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) csvBlockedUntil = Date.now() + CSV_BLOCK_MS
+      return null
+    }
   }
 
   // Fallback 2: DBnomics mirrors of the official sources that stay current

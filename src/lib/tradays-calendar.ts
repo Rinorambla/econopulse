@@ -357,6 +357,10 @@ export async function getTradaysCountryEvents(iso2: string): Promise<CountryEven
   return events.length ? events : hit?.data || [];
 }
 
+// The provider prints "N/D" / "—" for not-yet-released figures; only cells
+// with an actual number count as a print.
+const hasFigure = (s: string | undefined | null): boolean => /\d/.test(String(s || ''));
+
 const num = (s: string): number | null => {
   const m = String(s || '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
@@ -420,7 +424,7 @@ async function rowValues(path: string, monthSet: Set<string>): Promise<Record<st
   const values: Record<string, MatrixCell> = {};
   for (const r of hist.rows) {
     const key = r.date.slice(0, 7);
-    if (!monthSet.has(key) || values[key] || !r.actual) continue;
+    if (!monthSet.has(key) || values[key] || !hasFigure(r.actual)) continue;
     values[key] = { a: r.actual, v: num(r.actual), f: r.forecast, p: r.previous, period: r.period, tone: r.tone };
   }
   return values;
@@ -491,7 +495,7 @@ export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatr
     const live = (await getTradaysCalendar()).filter((e) => e.url.startsWith(`${slug}/`));
     // 1) Overlay live prints right away (no extra requests).
     for (const e of live) {
-      if (!e.actual) continue;
+      if (!hasFigure(e.actual)) continue;
       const row = byPath.get(e.url);
       const key = e.releaseAt.slice(0, 7);
       if (!row || !monthSet.has(key)) continue;
@@ -502,7 +506,7 @@ export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatr
     }
     // 2) Re-read history only for rows that had a release in the window (they
     //    may carry revisions / the provider's beat-miss tone) — capped.
-    const refresh = Array.from(new Set(live.filter((e) => e.actual).map((e) => e.url))).filter((p) => byPath.has(p)).slice(0, 24);
+    const refresh = Array.from(new Set(live.filter((e) => hasFigure(e.actual)).map((e) => e.url))).filter((p) => byPath.has(p)).slice(0, 24);
     // 3) Top up rows the sheet doesn't have yet (partial first build / newly
     //    listed indicators) — a few per refresh so the sheet completes over time.
     const catalogue = await getTradaysCountryEvents(iso2).catch(() => [] as CountryEventMeta[]);

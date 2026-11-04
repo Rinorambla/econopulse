@@ -11,8 +11,14 @@ let seed = { builtAt: '', countries: {} };
 try { seed = JSON.parse(fs.readFileSync(SEED, 'utf8')); } catch { /* fresh */ }
 
 for (const file of process.argv.slice(2)) {
-  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const src = j.seed || j;
+  const j = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+  // Accept a build-macro-seed response, a bare seed, or a single
+  // /api/country-history payload (country code taken from the file name).
+  let src = j.seed || j;
+  if (!src.countries && Array.isArray(j.rows) && Array.isArray(j.months)) {
+    const code = path.basename(file, '.json').toUpperCase();
+    src = { builtAt: j.updatedAt || '', countries: { [code]: { months: j.months, rows: j.rows } } };
+  }
   for (const [code, payload] of Object.entries(src.countries || {})) {
     if (!payload || !Array.isArray(payload.rows) || !payload.rows.length) continue;
     seed.countries[code] = payload;

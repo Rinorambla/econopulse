@@ -1,7 +1,11 @@
-// Catalogue for the indicator search on /economics: Trading Economics country
-// slugs × indicator slugs → chart path "/{country}/{indicator}". Client-safe.
-// Not every pair exists upstream (the chart shows an empty frame for unknown
-// series), so the catalogue sticks to broadly published indicators.
+// Catalogue for the indicator search on /economics. Countries carry the chart
+// provider's slugs; the per-country indicator lists come from a committed seed
+// (src/data/te-indicators-seed.json — every indicator page the provider
+// publishes per country, ~8k series), so each (country, indicator) pair is a
+// real chart. The curated TE_INDICATORS list below only adds metadata on top:
+// English/Italian aliases and groups for ranking and display. Client-safe.
+
+import seed from '@/data/te-indicators-seed.json';
 
 export type TeCountry = { slug: string; name: string; code: string; aliases?: string[] };
 export type TeIndicator = { slug: string; name: string; group: string; aliases?: string[] };
@@ -94,7 +98,7 @@ export const TE_INDICATORS: TeIndicator[] = [
   { slug: 'producer-prices-change', name: 'Producer Prices (PPI YoY)', group: 'Prices', aliases: ['ppi', 'prezzi produzione'] },
   { slug: 'inflation-expectations', name: 'Inflation Expectations', group: 'Prices', aliases: ['aspettative'] },
   // Money & rates
-  { slug: 'interest-rate', name: 'Policy Interest Rate', group: 'Money', aliases: ['rate', 'rates', 'policy rate', 'tassi', 'tasso', 'central bank', 'fed funds', 'refi', 'banca centrale'] },
+  { slug: 'interest-rate', name: 'Policy Interest Rate', group: 'Money', aliases: ['rate', 'rates', 'policy rate', 'tassi', 'tasso', 'central bank', 'refi', 'banca centrale'] },
   { slug: 'government-bond-yield', name: '10Y Government Bond Yield', group: 'Money', aliases: ['10y', 'yield', 'rendimento', 'btp', 'bund', 'treasury', 'gilt', 'jgb', 'oat', 'bond'] },
   { slug: 'interbank-rate', name: 'Interbank Rate', group: 'Money', aliases: ['euribor', 'sofr', 'libor'] },
   { slug: 'money-supply-m2', name: 'Money Supply M2', group: 'Money', aliases: ['m2'] },
@@ -109,13 +113,13 @@ export const TE_INDICATORS: TeIndicator[] = [
   { slug: 'non-farm-payrolls', name: 'Non Farm Payrolls', group: 'Labour', aliases: ['nfp', 'payrolls', 'buste paga'] },
   { slug: 'wage-growth', name: 'Wage Growth', group: 'Labour', aliases: ['salari', 'wages'] },
   { slug: 'wages', name: 'Wages', group: 'Labour', aliases: ['stipendi'] },
-  { slug: 'job-vacancies', name: 'Job Vacancies', group: 'Labour', aliases: ['jolts', 'posti vacanti'] },
+  { slug: 'job-vacancies', name: 'Job Vacancies', group: 'Labour', aliases: ['posti vacanti', 'vacancies'] },
   { slug: 'initial-jobless-claims', name: 'Initial Jobless Claims', group: 'Labour', aliases: ['claims', 'sussidi'] },
   // Business
   { slug: 'manufacturing-pmi', name: 'Manufacturing PMI', group: 'Business', aliases: ['pmi manifatturiero'] },
   { slug: 'services-pmi', name: 'Services PMI', group: 'Business', aliases: ['pmi servizi'] },
   { slug: 'composite-pmi', name: 'Composite PMI', group: 'Business' },
-  { slug: 'business-confidence', name: 'Business Confidence', group: 'Business', aliases: ['ism', 'ifo', 'fiducia imprese'] },
+  { slug: 'business-confidence', name: 'Business Confidence', group: 'Business', aliases: ['fiducia imprese', 'business climate'] },
   { slug: 'industrial-production', name: 'Industrial Production (YoY)', group: 'Business', aliases: ['produzione industriale'] },
   { slug: 'industrial-production-mom', name: 'Industrial Production MoM', group: 'Business' },
   { slug: 'manufacturing-production', name: 'Manufacturing Production', group: 'Business' },
@@ -126,7 +130,7 @@ export const TE_INDICATORS: TeIndicator[] = [
   { slug: 'zew-economic-sentiment-index', name: 'ZEW Economic Sentiment', group: 'Business', aliases: ['zew'] },
   { slug: 'bankruptcies', name: 'Bankruptcies', group: 'Business', aliases: ['fallimenti'] },
   // Consumer
-  { slug: 'consumer-confidence', name: 'Consumer Confidence', group: 'Consumer', aliases: ['michigan', 'fiducia consumatori', 'sentiment'] },
+  { slug: 'consumer-confidence', name: 'Consumer Confidence', group: 'Consumer', aliases: ['fiducia consumatori', 'sentiment'] },
   { slug: 'retail-sales', name: 'Retail Sales MoM', group: 'Consumer', aliases: ['vendite al dettaglio'] },
   { slug: 'retail-sales-annual', name: 'Retail Sales YoY', group: 'Consumer' },
   { slug: 'consumer-spending', name: 'Consumer Spending', group: 'Consumer', aliases: ['consumi'] },
@@ -169,13 +173,100 @@ export const TE_INDICATORS: TeIndicator[] = [
   { slug: 'population', name: 'Population', group: 'Demographics', aliases: ['popolazione'] },
 ];
 
-export const DEFAULT_COUNTRY = TE_COUNTRIES[0];
-export const DEFAULT_INDICATOR = TE_INDICATORS.find((i) => i.slug === 'inflation-cpi')!;
 
-/** Headline indicator chips shown under the pickers for the selected country. */
+// ── Real per-country catalogue (from the seed) ──────────────────────────────
+type SeedShape = { fetchedAt: string; countries: Record<string, Record<string, string>> };
+const SEED = seed as SeedShape;
+
+const CURATED = new Map(TE_INDICATORS.map((i) => [i.slug, i]));
+const NON_INDICATOR = /^(indicators|calendar|forecast|news|rating|holidays?|stock-market|currency)$/;
+
+// Provider slugs that mean something more specific for a given country than
+// their generic name suggests (what the chart actually draws).
+const NAME_OVERRIDES: Record<string, Record<string, { name: string; aliases?: string[] }>> = {
+  'united-states': {
+    'business-confidence': { name: 'ISM Manufacturing PMI', aliases: ['ism', 'ism manufacturing'] },
+    'non-manufacturing-pmi': { name: 'ISM Services PMI (Non-Manufacturing)', aliases: ['ism services', 'ism non manufacturing', 'smi'] },
+    'manufacturing-pmi': { name: 'S&P Global Manufacturing PMI', aliases: ['pmi manifatturiero'] },
+    'services-pmi': { name: 'S&P Global Services PMI', aliases: ['pmi servizi', 'smi'] },
+    'consumer-confidence': { name: 'Michigan Consumer Sentiment', aliases: ['michigan', 'uom', 'fiducia consumatori'] },
+    'job-offers': { name: 'JOLTS Job Openings', aliases: ['jolts', 'job openings', 'posti vacanti'] },
+    'interest-rate': { name: 'Fed Funds Rate', aliases: ['fed funds', 'fomc', 'tassi', 'rate'] },
+    'government-bond-yield': { name: 'US 10Y Treasury Yield', aliases: ['treasury', '10y', 'yield', 'rendimento'] },
+    'gdpnow': { name: 'GDPNow (Atlanta Fed)', aliases: ['gdp now', 'atlanta fed'] },
+  },
+  'euro-area': {
+    'interest-rate': { name: 'ECB Deposit / Refi Rate', aliases: ['ecb', 'bce', 'tassi', 'rate'] },
+    'inflation-cpi': { name: 'HICP Inflation Rate', aliases: ['hicp', 'cpi', 'inflazione'] },
+  },
+  italy: { 'government-bond-yield': { name: 'BTP 10Y Yield', aliases: ['btp', 'spread', 'rendimento'] } },
+  germany: {
+    'government-bond-yield': { name: 'Bund 10Y Yield', aliases: ['bund', 'rendimento'] },
+    'business-confidence': { name: 'Ifo Business Climate', aliases: ['ifo'] },
+  },
+  'united-kingdom': {
+    'interest-rate': { name: 'Bank of England Bank Rate', aliases: ['boe', 'bank rate'] },
+    'government-bond-yield': { name: 'Gilt 10Y Yield', aliases: ['gilt'] },
+  },
+  japan: {
+    'interest-rate': { name: 'Bank of Japan Policy Rate', aliases: ['boj'] },
+    'government-bond-yield': { name: 'JGB 10Y Yield', aliases: ['jgb'] },
+    'business-confidence': { name: 'Tankan Large Manufacturers Index', aliases: ['tankan'] },
+  },
+  china: { 'interest-rate': { name: 'Loan Prime Rate (1Y)', aliases: ['lpr', 'pboc'] } },
+};
+
+function inferGroup(slug: string): string {
+  if (/gdp|growth|output|gross|gdpnow/.test(slug)) return 'Growth';
+  if (/inflation|cpi|ppi|price|pce|deflator|expectations/.test(slug)) return 'Prices';
+  if (/rate|yield|bond|money|m1|m2|m3|loan|credit|reserves|lending|interbank|libor|sofr|euribor/.test(slug)) return 'Money';
+  if (/employ|payroll|jobless|claims|wage|earning|labor|labour|job|participation|unemployment|challenger|adp|jolts/.test(slug)) return 'Labour';
+  if (/pmi|ism|business|confidence|climate|sentiment|fed-|production|orders|factory|capacity|inventor|bankrupt|manufactur|zew|ifo|tankan|nfib|optimism/.test(slug)) return 'Business';
+  if (/consumer|retail|spending|personal|disposable|household|gasoline|car-|vehicle|credit-card/.test(slug)) return 'Consumer';
+  if (/hous|home|building|permit|mortgage|construction|rent|property/.test(slug)) return 'Housing';
+  if (/trade|export|import|current-account|tourist|tourism|fdi|investment|terms-of-trade|gold/.test(slug)) return 'Trade';
+  if (/government|budget|debt|tax|spending|revenue|fiscal|military|corruption|rating/.test(slug)) return 'Government';
+  if (/population|birth|death|fertility|age|migration|life-expectancy/.test(slug)) return 'Demographics';
+  return 'Other';
+}
+
+/** Build the indicator list for one country from the seed (+ curated metadata). */
+function buildCountryIndicators(countrySlug: string): TeIndicator[] {
+  const raw = SEED.countries[countrySlug] || {};
+  const over = NAME_OVERRIDES[countrySlug] || {};
+  const out: TeIndicator[] = [];
+  for (const [slug, name] of Object.entries(raw)) {
+    if (NON_INDICATOR.test(slug) && !CURATED.has(slug)) continue;
+    const cur = CURATED.get(slug);
+    const o = over[slug];
+    // Country overrides replace the generic aliases (so "ism" means the US
+    // series, not every country's business confidence).
+    const aliases = o ? o.aliases : cur?.aliases;
+    out.push({ slug, name: o?.name || name, group: cur?.group || inferGroup(slug), aliases });
+  }
+  // Countries missing from the seed fall back to the curated list.
+  return out.length ? out : TE_INDICATORS;
+}
+
+const COUNTRY_INDICATORS = new Map<string, TeIndicator[]>(TE_COUNTRIES.map((c) => [c.slug, buildCountryIndicators(c.slug)]));
+
+/** Indicators that actually exist for a country (what the chart can draw). */
+export function indicatorsFor(country: TeCountry): TeIndicator[] {
+  return COUNTRY_INDICATORS.get(country.slug) || TE_INDICATORS;
+}
+
+/** Total number of real (country, indicator) series in the catalogue. */
+export const TOTAL_SERIES = Array.from(COUNTRY_INDICATORS.values()).reduce((n, l) => n + l.length, 0);
+
+export const DEFAULT_COUNTRY = TE_COUNTRIES[0];
+export const DEFAULT_INDICATOR: TeIndicator =
+  indicatorsFor(DEFAULT_COUNTRY).find((i) => i.slug === 'inflation-cpi') || indicatorsFor(DEFAULT_COUNTRY)[0];
+
+/** Headline indicator chips shown under the pickers (filtered to what the country has). */
 export const HEADLINE_SLUGS = [
   'inflation-cpi', 'core-inflation-rate', 'interest-rate', 'gdp-growth', 'gdp-growth-annual', 'unemployment-rate',
-  'government-bond-yield', 'manufacturing-pmi', 'retail-sales', 'consumer-confidence', 'balance-of-trade', 'government-debt-to-gdp',
+  'non-farm-payrolls', 'government-bond-yield', 'manufacturing-pmi', 'services-pmi', 'business-confidence', 'consumer-confidence',
+  'retail-sales', 'balance-of-trade', 'government-debt-to-gdp',
 ];
 
 export type SearchHit = { country: TeCountry; indicator: TeIndicator; url: string; score: number };
@@ -184,13 +275,21 @@ const norm = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 const cText = new Map(TE_COUNTRIES.map((c) => [c.slug, norm([c.name, c.code, c.slug.replace(/-/g, ' '), ...(c.aliases || [])].join(' '))]));
-const iText = new Map(TE_INDICATORS.map((i) => [i.slug, norm([i.name, i.slug.replace(/-/g, ' '), i.group, ...(i.aliases || [])].join(' '))]));
-const iAlias = new Map(TE_INDICATORS.map((i) => [i.slug, new Set(norm((i.aliases || []).join(' ')).split(' ').filter(Boolean))]));
+// Per-series search text / alias sets, keyed by "country/indicator" (names and
+// aliases can differ per country).
+const iText = new Map<string, string>();
+const iAlias = new Map<string, Set<string>>();
+for (const [cslug, list] of COUNTRY_INDICATORS) {
+  for (const i of list) {
+    const k = `${cslug}/${i.slug}`;
+    iText.set(k, norm([i.name, i.slug.replace(/-/g, ' '), i.group, ...(i.aliases || [])].join(' ')));
+    iAlias.set(k, new Set(norm((i.aliases || []).join(' ')).split(' ').filter(Boolean)));
+  }
+}
 const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function matchScore(tokens: string[], c: TeCountry, i: TeIndicator): number {
-  const ct = cText.get(c.slug)!;
-  const it = iText.get(i.slug)!;
+function matchScore(tokens: string[], ct: string, key: string, i: TeIndicator): number {
+  const it = iText.get(key) || norm(i.name);
   let score = 0;
   let countryHit = false;
   let indicatorHit = false;
@@ -200,34 +299,46 @@ function matchScore(tokens: string[], c: TeCountry, i: TeIndicator): number {
     if (!inC && !inI) return 0; // every token must match somewhere
     if (inC) countryHit = true;
     if (inI) indicatorHit = true;
-    // Word-start matches rank above substrings; indicator matches above country.
     const re = new RegExp(`(^| )${esc(t)}`);
     score += (re.test(inI ? it : ct) ? 3 : 1) + (inI ? 1 : 0);
   }
   if (countryHit && indicatorHit) score += 6;
   // Tokens hitting an indicator's explicit keywords (aliases) outrank name
-  // coincidences, so "boe rate" → Policy Interest Rate rather than CPI.
-  const aliases = iAlias.get(i.slug)!;
-  if (tokens.some((t) => aliases.has(t))) score += 5;
+  // coincidences, so "boe rate" → Bank Rate rather than CPI.
+  const aliases = iAlias.get(key);
+  if (aliases && tokens.some((t) => aliases.has(t))) score += 5;
+  // Shorter names are the headline series ("Manufacturing PMI" over
+  // "ISM Manufacturing New Orders"), rank them first on ties.
+  score -= Math.min(2, Math.floor(i.name.length / 30));
   return score;
 }
 
-// Ranked free-text search over the whole catalogue ("italy debt", "cpi", "boj").
-// Country-only queries return that country's headline indicators; indicator-only
-// queries fan out across economies in catalogue order (majors first).
-export function searchIndicators(query: string, limit = 30): SearchHit[] {
+// Ranked free-text search over every real series ("italy debt", "ism", "gdpnow",
+// "boj"). Country-only queries return that country's headline indicators;
+// indicator-only queries fan out across economies in catalogue order.
+export function searchIndicators(query: string, limit = 40): SearchHit[] {
   const tokens = norm(query).split(' ').filter((t) => t.length >= 2);
   if (!tokens.length) return [];
   const hits: SearchHit[] = [];
-  for (const c of TE_COUNTRIES) {
-    for (const i of TE_INDICATORS) {
-      const score = matchScore(tokens, c, i);
-      if (score > 0) {
-        const headline = HEADLINE_SLUGS.indexOf(i.slug);
-        hits.push({ country: c, indicator: i, url: `/${c.slug}/${i.slug}`, score: score * 10 + (headline >= 0 ? HEADLINE_SLUGS.length - headline : 0) });
-      }
-    }
-  }
-  hits.sort((a, b) => b.score - a.score || TE_COUNTRIES.indexOf(a.country) - TE_COUNTRIES.indexOf(b.country) || TE_INDICATORS.indexOf(a.indicator) - TE_INDICATORS.indexOf(b.indicator));
+  TE_COUNTRIES.forEach((c, ci) => {
+    const ct = cText.get(c.slug)!;
+    const countryOnlyHit = tokens.every((t) => ct.includes(t));
+    const list = COUNTRY_INDICATORS.get(c.slug) || [];
+    list.forEach((i, ii) => {
+      const key = `${c.slug}/${i.slug}`;
+      // Country-only queries: only headline indicators, not all ~150.
+      if (countryOnlyHit && !tokens.some((t) => (iText.get(key) || '').includes(t)) && !HEADLINE_SLUGS.includes(i.slug)) return;
+      const score = matchScore(tokens, ct, key, i);
+      if (score <= 0) return;
+      const headline = HEADLINE_SLUGS.indexOf(i.slug);
+      hits.push({
+        country: c,
+        indicator: i,
+        url: `/${c.slug}/${i.slug}`,
+        score: score * 10 + (headline >= 0 ? HEADLINE_SLUGS.length - headline : 0) - ci * 0.01 - ii * 0.0001,
+      });
+    });
+  });
+  hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, limit);
 }

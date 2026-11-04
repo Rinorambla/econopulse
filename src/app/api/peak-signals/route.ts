@@ -39,25 +39,55 @@ interface CacheEntry { ts:number; data: ApiResponse }
 let _cache: CacheEntry | null = null;
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-async function fetchFREDSeries(seriesId: string, observationStart?: string) {
-  const key = process.env.FRED_API_KEY;
-  if (!key) return null;
-  const params = new URLSearchParams({
-    series_id: seriesId,
-    api_key: key,
-    file_type: 'json'
-  });
-  if (observationStart) params.set('observation_start', observationStart);
-  const url = `https://api.stlouisfed.org/fred/series/observations?${params.toString()}`;
+type Obs = { date: string; value: string };
+
+// Key-less fallback: FRED's public CSV export (same series, same dates). Used
+// when FRED_API_KEY is missing/invalid in the deployment or the JSON API fails,
+// so the signals never silently collapse to "nothing triggered".
+async function fetchFREDCsv(seriesId: string, observationStart?: string): Promise<Obs[] | null> {
+  const params = new URLSearchParams({ id: seriesId });
+  if (observationStart) params.set('cosd', observationStart);
   try {
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?${params.toString()}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconoPulse/1.0)', Accept: 'text/csv,*/*' },
+      signal: AbortSignal.timeout(20000),
+      next: { revalidate: 3600 },
+    });
     if (!res.ok) return null;
-    const json = await res.json();
-    return json.observations as Array<{ date: string; value: string }>;
+    const text = await res.text();
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2 || !/^(observation_date|DATE)/i.test(lines[0])) return null;
+    const out: Obs[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const [date, value] = lines[i].split(',');
+      if (date && value !== undefined) out.push({ date: date.trim(), value: value.trim() === '.' ? '.' : value.trim() });
+    }
+    return out.length ? out : null;
   } catch (e) {
-    console.error('FRED fetch error', seriesId, e);
+    console.error('FRED csv fetch error', seriesId, e);
     return null;
   }
+}
+
+async function fetchFREDSeries(seriesId: string, observationStart?: string): Promise<Obs[] | null> {
+  const key = process.env.FRED_API_KEY;
+  if (key) {
+    const params = new URLSearchParams({ series_id: seriesId, api_key: key, file_type: 'json' });
+    if (observationStart) params.set('observation_start', observationStart);
+    const url = `https://api.stlouisfed.org/fred/series/observations?${params.toString()}`;
+    try {
+      const res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(20000) });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.observations) && json.observations.length) return json.observations as Obs[];
+      } else {
+        console.warn('FRED API non-OK', seriesId, res.status);
+      }
+    } catch (e) {
+      console.error('FRED fetch error', seriesId, e);
+    }
+  }
+  return fetchFREDCsv(seriesId, observationStart);
 }
 
 function latestNumeric(observations: Array<{date:string; value:string}> | null): number | null {

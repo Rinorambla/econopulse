@@ -2,11 +2,12 @@
 
 /* ─────────────────────────────────────────────
    Economics — EconoPulse macro terminal.
-   Status bar (UTC / local clock, market sessions) + five live panels:
-     ECAL  Economic calendar (EconoPulse feed)   CHRT  Indicator chart (any country × indicator, free search)
-     HEAT  Macro heat map (EconoPulse data)      NEWS  Economic news stream
-     WECO  World economic matrix
-   Every panel expands to full screen; keys 1–5 jump to a panel, Esc closes.
+   Status bar (UTC / local clock, market sessions) + four live panels:
+     ECAL  Economic calendar (live actuals, all countries, click → history)
+     CHRT  Indicator chart (any country × any indicator, free search)
+     NEWS  Economic news stream
+     WECO  World Economic Matrix — data-sheet heat map (indicators × months per country)
+   Every panel expands to full screen; keys 1–4 jump to a panel, Esc closes.
    ───────────────────────────────────────────── */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -14,29 +15,14 @@ import dynamic from 'next/dynamic';
 import PlanGate from '@/components/PlanGate';
 import Logo from '@/components/Logo';
 import MacroCalendarPanel from '@/components/MacroCalendarPanel';
-import MacroHeatmapPanel from '@/components/MacroHeatmapPanel';
+import MacroSheetHeatmap from '@/components/MacroSheetHeatmap';
 import SearchSelect from '@/components/SearchSelect';
 import {
-  TE_COUNTRIES, TE_INDICATORS, DEFAULT_COUNTRY, DEFAULT_INDICATOR, HEADLINE_SLUGS, searchIndicators,
+  TE_COUNTRIES, DEFAULT_COUNTRY, DEFAULT_INDICATOR, HEADLINE_SLUGS, TOTAL_SERIES, indicatorsFor, searchIndicators,
   type TeCountry, type TeIndicator,
 } from '@/lib/te-catalog';
-import type { HeatKpi } from '@/lib/macro-heatmap';
 
 const TradingEconomicsEmbed = dynamic(() => import('@/components/TradingEconomicsEmbed'), { ssr: false });
-
-// ── Chart universe: any country × any indicator (searchable catalogue) ──────
-const INDICATOR_BY_SLUG = new Map(TE_INDICATORS.map((i) => [i.slug, i]));
-const COUNTRY_BY_CODE = new Map(TE_COUNTRIES.map((c) => [c.code, c]));
-const HEADLINE = HEADLINE_SLUGS.map((s) => INDICATOR_BY_SLUG.get(s)!).filter(Boolean);
-
-// Heat-map KPI → Trading Economics indicator slug, so a heat-map cell can open
-// the matching series in the chart panel.
-const HEAT_TO_TE: Record<string, string> = {
-  'NA.GDP.Yoy': 'gdp-growth-annual', 'PR.CPI.Yoy': 'inflation-cpi', 'IR.POL': 'interest-rate', 'LB.UR': 'unemployment-rate',
-  'ST.IP.Yoy': 'industrial-production', 'HS.HPI.Yoy': 'housing-index', 'GF.DEBT.GDP': 'government-debt-to-gdp',
-  'GF.BAL.GDP': 'government-budget', 'EA.CA.GDP': 'current-account-to-gdp', 'NA.GDP.PC.USD': 'gdp-per-capita',
-  'NA.GDP.CUR.USD': 'gdp', 'MN.FXRES': 'foreign-exchange-reserves',
-};
 
 // Masks for the chart frame's vendor affordances (measured on the rendered
 // widget): the "Copy Embed" button, the linked title and the credits line.
@@ -108,13 +94,12 @@ function StatusBar() {
 }
 
 // ── Panel chrome: terminal header, expand-to-fullscreen, keyboard anchors ────
-type PanelId = 'ECAL' | 'NEWS' | 'CHRT' | 'HEAT' | 'WECO';
+type PanelId = 'ECAL' | 'NEWS' | 'CHRT' | 'WECO';
 const PANELS: Array<{ id: PanelId; key: string; title: string }> = [
   { id: 'ECAL', key: '1', title: 'Economic Calendar' },
   { id: 'CHRT', key: '2', title: 'Indicator Chart' },
   { id: 'NEWS', key: '3', title: 'Economic News' },
-  { id: 'HEAT', key: '4', title: 'Macro Heat Map' },
-  { id: 'WECO', key: '5', title: 'World Economic Matrix' },
+  { id: 'WECO', key: '4', title: 'World Economic Matrix' },
 ];
 
 function Panel({
@@ -166,6 +151,14 @@ export default function EconomicsPage() {
   const hits = useMemo(() => searchIndicators(search), [search]);
   useEffect(() => setSearchActive(0), [search]);
 
+  // Indicators the chart can actually draw for the selected country, and the
+  // headline chips among them.
+  const countryIndicators = useMemo(() => indicatorsFor(country), [country]);
+  const headline = useMemo(() => {
+    const by = new Map(countryIndicators.map((i) => [i.slug, i]));
+    return HEADLINE_SLUGS.map((s) => by.get(s)).filter((i): i is TeIndicator => !!i);
+  }, [countryIndicators]);
+
   const openSeries = useCallback((c: TeCountry, i: TeIndicator) => {
     setCountry(c);
     setIndicator(i);
@@ -173,15 +166,13 @@ export default function EconomicsPage() {
     setSearchOpen(false);
   }, []);
 
-  // Heat-map cell → chart panel with that country/indicator.
-  const chartFromHeat = useCallback((iso2: string, kpi: HeatKpi) => {
-    const c = COUNTRY_BY_CODE.get(iso2);
-    const i = INDICATOR_BY_SLUG.get(HEAT_TO_TE[kpi.id] || '');
-    if (!c || !i) return;
-    openSeries(c, i);
-    setExpanded(null);
-    document.getElementById('CHRT')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [openSeries]);
+  // Changing country keeps the same indicator when that country publishes it,
+  // otherwise falls back to its first headline series.
+  const pickCountry = useCallback((c: TeCountry) => {
+    setCountry(c);
+    const list = indicatorsFor(c);
+    setIndicator((cur) => list.find((i) => i.slug === cur.slug) || list.find((i) => HEADLINE_SLUGS.includes(i.slug)) || list[0]);
+  }, []);
 
   const toggle = useCallback((id: PanelId) => setExpanded((cur) => (cur === id ? null : id)), []);
 
@@ -278,7 +269,7 @@ export default function EconomicsPage() {
                         autoComplete="off"
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] text-gray-600">
-                        {TE_COUNTRIES.length}×{TE_INDICATORS.length}
+                        {TOTAL_SERIES.toLocaleString('en-US')} series
                       </span>
                       {searchOpen && search.trim().length >= 2 && (
                         <ul className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-auto rounded-md border border-slate-700 bg-slate-950 py-1 shadow-2xl">
@@ -300,12 +291,12 @@ export default function EconomicsPage() {
                         </ul>
                       )}
                     </div>
-                    <SearchSelect items={TE_COUNTRIES} value={country} onChange={setCountry} label="Country" placeholder="Type a country…" className="w-48" />
-                    <SearchSelect items={TE_INDICATORS} value={indicator} onChange={setIndicator} label="Indicator" placeholder="Type an indicator…" className="w-60" />
+                    <SearchSelect items={TE_COUNTRIES} value={country} onChange={pickCountry} label="Country" placeholder="Type a country…" className="w-48" />
+                    <SearchSelect items={countryIndicators} value={indicator} onChange={setIndicator} label={`Indicator (${countryIndicators.length})`} placeholder="Type an indicator…" className="w-64" />
                   </div>
                   {/* Headline chips for the selected country */}
                   <div className="flex flex-wrap gap-1">
-                    {HEADLINE.map((i) => (
+                    {headline.map((i) => (
                       <button
                         key={i.slug}
                         onClick={() => setIndicator(i)}
@@ -333,26 +324,21 @@ export default function EconomicsPage() {
           </Panel>
           </div>
 
-          {/* Row 3 — macro heat map (EconoPulse data) */}
+          {/* Row 3 — World Economic Matrix as a data-sheet heat map */}
           <Panel
-            id="HEAT"
-            title="Macro Heat Map"
+            id="WECO"
+            title="World Economic Matrix"
             hotkey="4"
-            expanded={expanded === 'HEAT'}
-            onToggle={() => toggle('HEAT')}
-            controls={<span className="hidden font-mono text-[10px] text-gray-500 md:inline">countries × indicators · rank vs peers · click a cell to chart it</span>}
+            expanded={expanded === 'WECO'}
+            onToggle={() => toggle('WECO')}
+            controls={<span className="hidden font-mono text-[10px] text-gray-500 md:inline">indicators × months · heat map · click a row for history</span>}
           >
-            {(fill) => <MacroHeatmapPanel fill={fill} onPick={chartFromHeat} />}
-          </Panel>
-
-          {/* Row 4 — world matrix */}
-          <Panel id="WECO" title="World Economic Matrix" hotkey="5" expanded={expanded === 'WECO'} onToggle={() => toggle('WECO')}>
-            {(fill) => <TradingEconomicsEmbed widget="mt-pro" height={fill ? '100%' : 'calc(100vh - 300px)'} className={fill ? 'flex-1' : 'min-h-[520px]'} loadingLabel="Loading world economic data…" />}
+            {(fill) => <MacroSheetHeatmap fill={fill} />}
           </Panel>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 font-mono text-[10px] text-gray-600">
             <span>ECONOPULSE MACRO TERMINAL · data refreshes automatically</span>
-            <span>keys <kbd className="rounded border border-slate-800 px-1">1</kbd>–<kbd className="rounded border border-slate-800 px-1">5</kbd> jump to panel · <kbd className="rounded border border-slate-800 px-1">Esc</kbd> close · Powered by EconoPulse.ai</span>
+            <span>keys <kbd className="rounded border border-slate-800 px-1">1</kbd>–<kbd className="rounded border border-slate-800 px-1">4</kbd> jump to panel · <kbd className="rounded border border-slate-800 px-1">Esc</kbd> close · Powered by EconoPulse.ai</span>
           </footer>
         </div>
       </div>

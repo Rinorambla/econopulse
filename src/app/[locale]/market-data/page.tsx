@@ -32,6 +32,7 @@ import {
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import { normalizeSymbol } from '@/lib/symbol-resolver'
 import type { ChartThemeKey } from '@/components/analytics/AdvancedChart'
+import { ECON_ALL, ECON_BY_SYMBOL, searchEcon, econCountryName } from '@/lib/econ-catalog'
 
 const MarketCopilot = dynamic(() => import('@/components/MarketCopilot'), { ssr: false })
 
@@ -240,17 +241,16 @@ const POPULAR_GROUPS: { label: string; symbols: string[] }[] = [
   // TradingView-style ECONOMICS symbols (USINTR, USIRYY, USM2…) mapped to FRED/DBnomics.
   // Ordered per country — every series verified live and fresh.
   { label: 'Economy', symbols: [
-    'FRED:FEDFUNDS', 'FRED:CPIAUCSL@PC1', 'FRED:CPILFESL@PC1', 'FRED:UNRATE', 'FRED:PAYEMS', 'FRED:ICSA', 'FRED:RSAFS@PC1', 'FRED:GDPC1', 'FRED:M1SL', 'FRED:M2SL', 'FRED:WALCL', 'DBN:ISM/pmi/pm', 'DBN:ISM/nm-pmi/pm', 'FRED:MICH',
-    'FRED:ECBDFR', 'FRED:CP0000EZ19M086NEST@PC1', 'FRED:CLVMNACSCAB1GQEA19',
-    'FRED:CP0000DEM086NEST@PC1', 'FRED:LRHUTTTTDEM156S', 'FRED:CLVMNACSCAB1GQDE', 'FRED:IRLTLT01DEM156N',
-    'FRED:CP0000ITM086NEST@PC1', 'FRED:LRHUTTTTITM156S', 'FRED:CLVMNACSCAB1GQIT', 'FRED:IRLTLT01ITM156N',
-    'FRED:CP0000FRM086NEST@PC1', 'FRED:LRHUTTTTFRM156S', 'FRED:CLVMNACSCAB1GQFR', 'FRED:IRLTLT01FRM156N',
-    'FRED:CP0000ESM086NEST@PC1', 'FRED:LRHUTTTTESM156S', 'FRED:CLVMNACSCAB1GQES', 'FRED:IRLTLT01ESM156N',
-    'FRED:IUDSOIA', 'FRED:LRHUTTTTGBM156S', 'FRED:IRLTLT01GBM156N',
-    'FRED:IRSTCI01JPM156N', 'FRED:LRHUTTTTJPM156S', 'FRED:IRLTLT01JPM156N',
-    'FRED:IRSTCI01CAM156N', 'FRED:LRUNTTTTCAM156S', 'FRED:IRLTLT01CAM156N',
-    'FRED:IRSTCI01AUM156N', 'FRED:LRHUTTTTAUM156S', 'FRED:IRLTLT01AUM156N',
-    'FRED:IR3TIB01CHM156N', 'FRED:IRLTLT01CHM156N',
+    // TradingView-style economics tickers: headline series across agencies (BEA, BLS,
+    // FRB, Treasury, Freddie Mac, ICE BofA, Census, UMich, ISM) and major economies.
+    'FRED:A191RL1Q225SBEA', 'FRED:GDPNOW', 'FRED:CPIAUCSL@PC1', 'FRED:CPILFESL@PC1', 'FRED:PCEPILFE@PC1', 'FRED:PPIFIS@PC1',
+    'FRED:FEDFUNDS', 'FRED:DGS2', 'FRED:DGS10', 'FRED:T10Y2Y', 'FRED:DFII10', 'FRED:T10YIE',
+    'FRED:UNRATE', 'FRED:PAYEMS@CHG', 'FRED:ICSA', 'FRED:JTSJOL', 'FRED:CES0500000003@PC1', 'FRED:CIVPART',
+    'DBN:ISM/pmi/pm', 'DBN:ISM/nm-pmi/pm', 'FRED:UMCSENT', 'FRED:INDPRO@PC1', 'FRED:RSAFS@PC1', 'FRED:DGORDER@PCH',
+    'FRED:MORTGAGE30US', 'FRED:HOUST', 'FRED:PERMIT', 'FRED:HSN1F', 'FRED:EXHOSLUSM495S', 'FRED:CSUSHPINSA@PC1',
+    'FRED:BAMLH0A0HYM2', 'FRED:BAMLC0A0CM', 'FRED:WALCL', 'FRED:M2SL', 'FRED:TOTALSL@CHG', 'FRED:BOPGSTB',
+    'FRED:ECBDFR', 'FRED:CP0000EZ19M086NEST@PC1', 'FRED:CLVMNACSCAB1GQEA19', 'FRED:IRLTLT01DEM156N', 'FRED:IRLTLT01ITM156N',
+    'FRED:CP0000DEM086NEST@PC1', 'FRED:CP0000ITM086NEST@PC1', 'FRED:LRHUTTTTITM156S', 'FRED:IUDSOIA', 'FRED:IRLTLT01GBM156N', 'FRED:IRLTLT01JPM156N',
   ] },
 ]
 
@@ -395,71 +395,29 @@ const SYMBOL_LABELS: Record<string, string> = {
 }
 
 function labelForSymbol(s: string): string {
+  const econ = ECON_BY_SYMBOL.get(s.toUpperCase())
+  if (econ) return econ.country === 'US' ? econ.name : `${econCountryName(econ.country)} ${econ.name.replace(new RegExp(`^${econCountryName(econ.country)} `), '')}`
   return SYMBOL_LABELS[s] || SYMBOL_LABELS[s.toUpperCase()] || s.replace(/^(FRED|DBN):/i, '')
 }
 
-// TradingView-style ECONOMICS codes (USINTR, USM2…) → FRED series, so users can
-// search/type the familiar economics tickers and get the underlying macro chart.
-const ECONOMICS_ALIASES: { code: string; symbol: string; name: string }[] = [
-  { code: 'USINTR', symbol: 'FRED:FEDFUNDS', name: 'United States Interest Rate' },
-  { code: 'USIRYY', symbol: 'FRED:CPIAUCSL@PC1', name: 'United States Inflation Rate YoY' },
-  { code: 'USCPI', symbol: 'FRED:CPIAUCSL', name: 'United States CPI' },
-  { code: 'USM1', symbol: 'FRED:M1SL', name: 'United States Money Supply M1' },
-  { code: 'USM2', symbol: 'FRED:M2SL', name: 'United States Money Supply M2' },
-  { code: 'USNFP', symbol: 'FRED:PAYEMS', name: 'United States Nonfarm Payrolls' },
-  { code: 'USUR', symbol: 'FRED:UNRATE', name: 'United States Unemployment Rate' },
-  { code: 'USBCOI', symbol: 'DBN:ISM/pmi/pm', name: 'United States ISM Manufacturing PMI' },
-  { code: 'USNMI', symbol: 'DBN:ISM/nm-pmi/pm', name: 'United States ISM Services PMI' },
-  { code: 'USCBBS', symbol: 'FRED:WALCL', name: 'United States Central Bank Balance Sheet' },
-  { code: 'USIJC', symbol: 'FRED:ICSA', name: 'United States Initial Jobless Claims' },
-  { code: 'USRSYY', symbol: 'FRED:RSAFS@PC1', name: 'United States Retail Sales YoY' },
-  { code: 'USGDP', symbol: 'FRED:GDPC1', name: 'United States Real GDP' },
-  { code: 'EUINTR', symbol: 'FRED:ECBDFR', name: 'Euro Area Interest Rate' },
-  { code: 'EUIRYY', symbol: 'FRED:CP0000EZ19M086NEST@PC1', name: 'Euro Area Inflation Rate YoY' },
-  { code: 'DEIRYY', symbol: 'FRED:CP0000DEM086NEST@PC1', name: 'Germany Inflation Rate YoY' },
-  { code: 'DEUR', symbol: 'FRED:LRHUTTTTDEM156S', name: 'Germany Unemployment Rate' },
-  { code: 'ITIRYY', symbol: 'FRED:CP0000ITM086NEST@PC1', name: 'Italy Inflation Rate YoY' },
-  { code: 'ITUR', symbol: 'FRED:LRHUTTTTITM156S', name: 'Italy Unemployment Rate' },
-  { code: 'FRIRYY', symbol: 'FRED:CP0000FRM086NEST@PC1', name: 'France Inflation Rate YoY' },
-  { code: 'ESIRYY', symbol: 'FRED:CP0000ESM086NEST@PC1', name: 'Spain Inflation Rate YoY' },
-  { code: 'GBINTR', symbol: 'FRED:IUDSOIA', name: 'United Kingdom Interest Rate' },
-  { code: 'GBUR', symbol: 'FRED:LRHUTTTTGBM156S', name: 'United Kingdom Unemployment Rate' },
-  { code: 'JPINTR', symbol: 'FRED:IRSTCI01JPM156N', name: 'Japan Interest Rate' },
-  { code: 'JPUR', symbol: 'FRED:LRHUTTTTJPM156S', name: 'Japan Unemployment Rate' },
-  { code: 'CAINTR', symbol: 'FRED:IRSTCI01CAM156N', name: 'Canada Interest Rate' },
-  { code: 'CAUR', symbol: 'FRED:LRUNTTTTCAM156S', name: 'Canada Unemployment Rate' },
-  { code: 'AUINTR', symbol: 'FRED:IRSTCI01AUM156N', name: 'Australia Interest Rate' },
-  { code: 'AUUR', symbol: 'FRED:LRHUTTTTAUM156S', name: 'Australia Unemployment Rate' },
-  { code: 'CHINTR', symbol: 'FRED:IR3TIB01CHM156N', name: 'Switzerland Interest Rate' },
-]
+// TradingView-style ECONOMICS codes (USINTR, USM2…) → series, so users can
+// type the familiar economics tickers and get the underlying macro chart.
 const ECONOMICS_BY_CODE: Record<string, string> = Object.fromEntries(
-  ECONOMICS_ALIASES.map((a) => [a.code, a.symbol])
+  ECON_ALL.map((a) => [a.code, a.symbol])
 )
 
-// Full catalog of FRED macro series so they are discoverable directly from the
-// autocomplete search (Yahoo search never returns FRED series). Built from the
-// popular macro groups + friendly labels above.
-const FRED_CATALOG: { symbol: string; name: string }[] = Array.from(
-  new Set(
-    POPULAR_GROUPS.flatMap((g) => g.symbols)
-      .filter((s) => /^(FRED|DBN):/i.test(s))
-  )
-).map((symbol) => ({ symbol, name: SYMBOL_LABELS[symbol] || symbol.replace(/^(FRED|DBN):/i, '') }))
-
-// Return FRED series matching a free-text query (matches series id or label).
+// Economic series matching a free-text query: TradingView-style codes, names,
+// publishing agency (bea, bls, frb, ice, freddie mac, treasury, census…),
+// country and FRED id — all charted through /api/fred-history.
 function searchFred(query: string): SearchResult[] {
-  const q = query.trim().toLowerCase()
+  const q = query.trim()
   if (!q) return []
-  // TradingView-style ECONOMICS codes first (USINTR, USM2, USIRYY…).
-  const econ = ECONOMICS_ALIASES.filter(
-    (a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
-  ).map((a) => ({ symbol: a.symbol, name: `${a.code} · ${a.name}`, exchange: 'ECONOMICS', type: 'economic' }))
-  const fred = FRED_CATALOG.filter((f) => {
-    const id = f.symbol.replace(/^(FRED|DBN):/i, '').toLowerCase()
-    return id.includes(q) || f.name.toLowerCase().includes(q) || `fred:${id}`.includes(q)
-  }).map((f) => ({ symbol: f.symbol, name: f.name, exchange: 'FRED', type: 'macro' }))
-  const seen = new Set<string>()
-  return [...econ, ...fred].filter((r) => { if (seen.has(r.symbol)) return false; seen.add(r.symbol); return true })
+  return searchEcon(q, 40).map((e) => ({
+    symbol: e.symbol,
+    name: `${e.country === 'US' ? '' : econCountryName(e.country) + ' · '}${e.name}`,
+    exchange: e.source,
+    type: 'economic',
+  }))
 }
 
 // ── Symbol news (Yahoo headlines for the chart's active symbol) ───────────────
@@ -1336,14 +1294,14 @@ export default function MarketDataPage() {
             <div className="flex items-center bg-white/5 border border-white/10 rounded-md px-3 py-1.5 focus-within:border-blue-500">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
               <input
-                value={searchOpen ? searchVal : symbol}
+                value={searchOpen ? searchVal : (ECON_BY_SYMBOL.get(symbol.toUpperCase())?.code || symbol)}
                 onFocus={() => { setSearchOpen(true); setSearchVal('') }}
                 onChange={(e) => { setSearchOpen(true); setSearchVal(e.target.value.toUpperCase()) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') submitSearch()
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchVal('') }
                 }}
-                placeholder="Search any symbol (AAPL, Tesla, BTC-USD, SPY/QQQ)…"
+                placeholder="Search any symbol (AAPL, BTC-USD, SPY/QQQ, USIRYY, BLS, Freddie Mac…)"
                 className="bg-transparent text-[16px] sm:text-sm font-semibold flex-1 ml-2 outline-none placeholder-gray-500 min-w-0"
               />
               {searchOpen && searchVal && (
@@ -1394,7 +1352,15 @@ export default function MarketDataPage() {
                         <span className="text-right">Type</span>
                       </div>
                       {(() => {
-                        const visible = searchResults.filter((r) => searchTab === 'All' || searchCategory(r) === searchTab)
+                        // "All" keeps economy results to a handful so tickers stay visible;
+                        // the Economy tab lists every matching macro series.
+                        let econShown = 0
+                        const visible = searchResults.filter((r) => {
+                          const cat = searchCategory(r)
+                          if (searchTab !== 'All') return cat === searchTab
+                          if (cat === 'Economy' || cat === 'Bonds' && /^(FRED|DBN):/i.test(r.symbol)) return econShown++ < 6
+                          return true
+                        })
                         if (!searchLoading && visible.length === 0) {
                           return <div className="px-3 py-3 text-xs text-gray-500">No matches{searchTab !== 'All' ? ` in ${searchTab}` : ''}. Press Go to use “{searchVal}” directly.</div>
                         }
@@ -1419,7 +1385,7 @@ export default function MarketDataPage() {
                                   />
                                 )}
                                 <span className="min-w-0">
-                                  <span className="text-xs font-bold text-white block truncate">{r.symbol.replace(/^(FRED|DBN):/i, '')}</span>
+                                  <span className="text-xs font-bold text-white block truncate">{isMacro ? (ECON_BY_SYMBOL.get(r.symbol.toUpperCase())?.code || r.symbol.replace(/^(FRED|DBN):/i, '')) : r.symbol.replace(/^(FRED|DBN):/i, '')}</span>
                                   {r.name && <span className="sm:hidden block text-[10px] text-gray-400 truncate">{r.name}</span>}
                                   {q && (
                                     <span className={`sm:hidden block text-[10px] font-semibold ${q.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

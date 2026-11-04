@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import { useAuth } from '@/hooks/useAuth'
 import { normalizeSymbol } from '@/lib/symbol-resolver'
+import { ECON_BY_SYMBOL } from '@/lib/econ-catalog'
 import {
   createChart,
   CandlestickSeries,
@@ -24,6 +25,7 @@ import {
   type Time,
   type SeriesType,
   type IPriceLine,
+  type Logical,
 } from 'lightweight-charts'
 
 // ========== Types ==========
@@ -144,6 +146,9 @@ const PREMIUM_INDICATORS: ReadonlySet<IndicatorKey> = new Set<IndicatorKey>(['vo
 
 // Macro series without intraday ticks: FRED:<id> and DBnomics DBN:<prov>/<ds>/<series>.
 const isMacroSymbol = (s: string) => /^(fred|dbn):/i.test(s)
+
+// US Eastern wall-clock parts, for regular vs extended-hours session detection.
+const ET_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 const RANGE_OPTS: { key: RangeKey; label: string; range: string; interval: string }[] = [
   // Intraday (TradingView-style) — range picked to respect Yahoo's per-interval limits.
@@ -1677,6 +1682,14 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   const selectedDrawingIdRef = useRef(selectedDrawingId); useEffect(() => { selectedDrawingIdRef.current = selectedDrawingId }, [selectedDrawingId])
   // Bars + active indicators exposed to the canvas overlay renderer (volume profiles).
   const barsRef = useRef(bars); useEffect(() => { barsRef.current = bars }, [bars])
+  // Extended-hours shading applies to plain US-listed equities/ETFs (the only
+  // instruments Yahoo returns pre/post bars for). Futures, FX, crypto, ratios,
+  // macro series and foreign listings (dotted suffix) are excluded.
+  const extHoursRef = useRef(false)
+  useEffect(() => {
+    const v = symbol.trim().toUpperCase()
+    extHoursRef.current = !!v && !/^(FRED|DBN):/.test(v) && !/[/^=.]/.test(v) && !/-USD$/.test(v)
+  }, [symbol])
   const earningsRef = useRef(earningsMarks); useEffect(() => { earningsRef.current = earningsMarks }, [earningsMarks])
   const dividendsRef = useRef(dividendMarks); useEffect(() => { dividendsRef.current = dividendMarks }, [dividendMarks])
   const indicatorsRef = useRef(indicators); useEffect(() => { indicatorsRef.current = indicators }, [indicators])
@@ -3079,6 +3092,82 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
     // right edge, with the POC (point of control) and the 70% value area highlighted.
     const inds = indicatorsRef.current
     const allBars = barsRef.current
+
+    // ===== Extended-hours shading (TradingView-style) =====
+    // On intraday US-equity charts, tint the pre-market (04:00–09:30 ET) and
+    // after-hours (16:00–20:00 ET) bars and draw a dashed line at the previous
+    // regular-session close, so the overnight move reads at a glance.
+    if (allBars.length > 3 && extHoursRef.current) {
+      const step = allBars[allBars.length - 1].time - allBars[allBars.length - 2].time
+      if (step <= 3600) {
+        const etMinutes = (t: number): number => {
+          const d = new Date(t * 1000)
+          const p = ET_FMT.formatToParts(d)
+          const h = Number(p.find((x) => x.type === 'hour')?.value || 0)
+          const m = Number(p.find((x) => x.type === 'minute')?.value || 0)
+          return (h % 24) * 60 + m
+        }
+        const etDay = (t: number): string => {
+          const p = ET_FMT.formatToParts(new Date(t * 1000))
+          return `${p.find((x) => x.type === 'year')?.value}-${p.find((x) => x.type === 'month')?.value}-${p.find((x) => x.type === 'day')?.value}`
+        }
+        const isExt = (t: number) => { const mm = etMinutes(t); return mm < 9 * 60 + 30 || mm >= 16 * 60 }
+        const bw = (() => {
+          const x0 = chart.timeScale().logicalToCoordinate(0 as Logical)
+          const x1 = chart.timeScale().logicalToCoordinate(1 as Logical)
+          return x0 != null && x1 != null ? Math.abs((x1 as number) - (x0 as number)) : 6
+        })()
+        ctx.save()
+        // Shaded runs of consecutive extended-hours bars.
+        let runStart = -1
+        for (let i = 0; i <= allBars.length; i++) {
+          const ext = i < allBars.length && isExt(allBars[i].time)
+          if (ext && runStart < 0) runStart = i
+          if (!ext && runStart >= 0) {
+            const xa = chart.timeScale().logicalToCoordinate(runStart as Logical)
+            const xb = chart.timeScale().logicalToCoordinate((i - 1) as Logical)
+            if (xa != null && xb != null && (xb as number) >= -bw && (xa as number) <= W + bw) {
+              const pre = etMinutes(allBars[runStart].time) < 9 * 60 + 30
+              ctx.fillStyle = pre ? 'rgba(245,158,11,0.07)' : 'rgba(96,165,250,0.07)'
+              ctx.fillRect((xa as number) - bw / 2, 0, (xb as number) - (xa as number) + bw, H)
+            }
+            runStart = -1
+          }
+        }
+        // Previous regular close: last bar at/before 16:00 ET of the latest prior session.
+        const lastDay = etDay(allBars[allBars.length - 1].time)
+        let prevClose: number | null = null
+        for (let i = allBars.length - 1; i >= 0; i--) {
+          const t = allBars[i].time
+          if (etDay(t) === lastDay) continue
+          if (etMinutes(t) < 16 * 60) { prevClose = allBars[i].close; break }
+          // bars inside after-hours of the prior day → keep walking back to the 16:00 close
+          if (etMinutes(t) >= 16 * 60) {
+            // find the last regular bar of that day
+            const day = etDay(t)
+            for (let j = i; j >= 0 && etDay(allBars[j].time) === day; j--) {
+              if (etMinutes(allBars[j].time) < 16 * 60) { prevClose = allBars[j].close; break }
+            }
+            break
+          }
+        }
+        if (prevClose != null) {
+          const y = main.priceToCoordinate(prevClose)
+          if (y != null) {
+            ctx.strokeStyle = 'rgba(148,163,184,0.75)'
+            ctx.lineWidth = 1
+            ctx.setLineDash([4, 4])
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+            ctx.setLineDash([])
+            ctx.font = '10px ui-monospace, monospace'
+            ctx.fillStyle = 'rgba(148,163,184,0.9)'
+            ctx.textAlign = 'left'
+            ctx.fillText(`prev close ${prevClose.toFixed(prevClose >= 100 ? 2 : 3)}`, 6, y - 4)
+          }
+        }
+        ctx.restore()
+      }
+    }
     const drawVolumeProfile = (profileBars: Bar[], accent: string, label: string) => {
       const vp = computeVolumeProfile(profileBars, 30)
       if (!vp) return
@@ -3769,6 +3858,17 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
   }, [grabHandleAt, hitTestDrawings, ptToXY, xyToPt, redrawOverlay, setDrawings])
 
   const pctColor = lastPrice ? (lastPrice.changePct >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-400'
+  // Macro series: TradingView-style code + name + source in the legend, no "$".
+  const isMacro = isMacroSymbol(symbol)
+  const macroMeta = isMacro ? ECON_BY_SYMBOL.get(symbol.toUpperCase()) || null : null
+  const fmtMacro = (v: number) => {
+    const a = Math.abs(v)
+    if (a >= 1e12) return `${(v / 1e12).toFixed(2)}T`
+    if (a >= 1e9) return `${(v / 1e9).toFixed(2)}B`
+    if (a >= 1e6) return `${(v / 1e6).toFixed(2)}M`
+    if (a >= 1e4) return v.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    return v.toFixed(a < 10 ? 2 : 1)
+  }
 
   return (
     <div className={`flex flex-col h-full bg-slate-900/60 border border-white/10 rounded-lg overflow-hidden ${className}`}>
@@ -3778,8 +3878,8 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {leftSlot}
 
         {/* Active symbol pill (read-only — price now lives in the in-chart legend). */}
-        <div className="hidden sm:flex items-center gap-2 text-sm">
-          <span className="text-white font-bold tracking-wide">{symbol}</span>
+        <div className="hidden sm:flex items-center gap-2 text-sm" title={macroMeta ? `${macroMeta.name} · ${macroMeta.source} · ${symbol}` : undefined}>
+          <span className="text-white font-bold tracking-wide">{macroMeta ? macroMeta.code : symbol}</span>
         </div>
 
         {/* Separator */}
@@ -4254,14 +4354,16 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         {!loading && !error && (
           <div className="absolute top-1.5 left-2 z-10 pointer-events-none select-none">
             <div className="flex items-center gap-1.5 text-[11px] sm:text-xs leading-tight">
-              <span className="font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{symbol}</span>
+              <span className="font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{macroMeta ? macroMeta.code : symbol}</span>
+              {macroMeta && <span className="text-gray-300 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{macroMeta.name}</span>}
+              {macroMeta && <span className="px-1 rounded bg-white/10 text-[9px] uppercase tracking-wide text-gray-300">{macroMeta.source}</span>}
               <span className="text-gray-400 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">· {rangeKey}</span>
             </div>
             {lastPrice && (
               <div className="flex items-center gap-1.5 leading-tight">
-                <span className="text-sm sm:text-base font-bold text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">${lastPrice.price.toFixed(2)}</span>
+                <span className="text-sm sm:text-base font-bold text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{isMacro ? fmtMacro(lastPrice.price) : `$${lastPrice.price.toFixed(2)}`}</span>
                 <span className={`text-[11px] sm:text-xs font-semibold tabular-nums ${pctColor} [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]`}>
-                  {lastPrice.change >= 0 ? '+' : ''}{lastPrice.change.toFixed(2)} ({lastPrice.changePct >= 0 ? '+' : ''}{lastPrice.changePct.toFixed(2)}%)
+                  {lastPrice.change >= 0 ? '+' : ''}{isMacro ? fmtMacro(lastPrice.change) : lastPrice.change.toFixed(2)}{isMacro ? ' vs prev' : ` (${lastPrice.changePct >= 0 ? '+' : ''}${lastPrice.changePct.toFixed(2)}%)`}
                 </span>
               </div>
             )}
@@ -4467,7 +4569,7 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
 
       {/* ===== BOTTOM STATUS BAR ===== */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/30 border-t border-white/10 text-[10px] text-gray-500">
-        <span>{symbol} · {currentRange.interval}</span>
+        <span>{macroMeta ? `${macroMeta.code} · ${macroMeta.source} · ${isMacro ? 'macro' : currentRange.interval}` : `${symbol} · ${currentRange.interval}`}</span>
         <span className="flex items-center gap-1.5 select-none">
           <img src="/logo-econopulse-wave.svg" alt="" width={14} height={14} className="shrink-0" />
           <span className="font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-500 to-blue-600 bg-clip-text text-transparent">ECONOPULSE.AI</span>

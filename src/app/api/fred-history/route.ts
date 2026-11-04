@@ -35,6 +35,29 @@ function startForRange(range: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+// FRED id -> DBnomics series (provider/dataset/series) for sources that are
+// current on DBnomics. Daily H.15 series use the "_N.B" business-day codes.
+const DBN_MIRROR: Record<string, string> = {
+  FEDFUNDS: 'FED/H15/RIFSPFF_N.M', DFF: 'FED/H15/RIFSPFF_N.D',
+  DGS1MO: 'FED/H15/RIFLGFCM01_N.B', DGS3MO: 'FED/H15/RIFLGFCM03_N.B', DGS6MO: 'FED/H15/RIFLGFCM06_N.B',
+  DGS1: 'FED/H15/RIFLGFCY01_N.B', DGS2: 'FED/H15/RIFLGFCY02_N.B', DGS3: 'FED/H15/RIFLGFCY03_N.B', DGS5: 'FED/H15/RIFLGFCY05_N.B',
+  DGS7: 'FED/H15/RIFLGFCY07_N.B', DGS10: 'FED/H15/RIFLGFCY10_N.B', DGS20: 'FED/H15/RIFLGFCY20_N.B', DGS30: 'FED/H15/RIFLGFCY30_N.B',
+  DFII5: 'FED/H15/RIFLGFCY05_XII_N.B', DFII10: 'FED/H15/RIFLGFCY10_XII_N.B', DFII30: 'FED/H15/RIFLGFCY30_XII_N.B',
+  A191RL1Q225SBEA: 'BEA/NIPA-T10101/A191RL-Q', GDPC1: 'BEA/NIPA-T10106/A191RX-Q', GDP: 'BEA/NIPA-T10105/A191RC-Q',
+  PCEPI: 'BEA/NIPA-T20804/DPCERG-M', PCEPILFE: 'BEA/NIPA-T20804/DPCCRG-M',
+  PCE: 'BEA/NIPA-T20600/DPCERC-M', PI: 'BEA/NIPA-T20600/A065RC-M', PSAVERT: 'BEA/NIPA-T20600/A072RC-M',
+}
+// BEA level series are published in millions on DBnomics vs billions on FRED.
+const DBN_SCALE: Record<string, number> = { GDPC1: 1e-3, GDP: 1e-3, PCE: 1e-3, PI: 1e-3 }
+const toIsoDate = (p: string): string => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return p
+  if (/^\d{4}-\d{2}$/.test(p)) return `${p}-01`
+  const q = p.match(/^(\d{4})-Q([1-4])$/)
+  if (q) return `${q[1]}-${String((Number(q[2]) - 1) * 3 + 1).padStart(2, '0')}-01`
+  if (/^\d{4}$/.test(p)) return `${p}-01-01`
+  return p
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   // Accept either ?series=ID or ?symbol=FRED:ID
@@ -72,51 +95,79 @@ export async function GET(request: Request) {
       return Array.isArray(json?.observations) ? json.observations : null
     } catch { return null }
   }
+  // Apply FRED-style unit transforms to raw observations when the source
+  // couldn't do it server-side: pc1 = % change from a year ago; pch / chg =
+  // % / absolute change from the previous observation.
+  const transform = (obs: Obs[]): Obs[] => {
+    if (!units) return obs
+    const vals = obs.map((o) => parseFloat(o.value))
+    const dates = obs.map((o) => new Date(o.date + 'T00:00:00Z').getTime())
+    const year = 365.25 * 86400000
+    const out: Obs[] = []
+    for (let i = 0; i < obs.length; i++) {
+      const v = vals[i]
+      if (!Number.isFinite(v)) continue
+      let base: number | null = null
+      if (units === 'pc1' || units === 'ch1') {
+        const target = dates[i] - year
+        let best = -1, bestD = Infinity
+        for (let j = i - 1; j >= 0; j--) { const d = Math.abs(dates[j] - target); if (d < bestD) { bestD = d; best = j } if (dates[j] < target - 60 * 86400000) break }
+        if (best >= 0 && bestD <= 45 * 86400000 && Number.isFinite(vals[best])) base = vals[best]
+      } else {
+        for (let j = i - 1; j >= 0; j--) if (Number.isFinite(vals[j])) { base = vals[j]; break }
+      }
+      if (base == null) continue
+      const r = units === 'pc1' || units === 'pch' ? (base !== 0 ? ((v - base) / Math.abs(base)) * 100 : NaN) : v - base
+      if (Number.isFinite(r)) out.push({ date: obs[i].date, value: String(Math.round(r * 1000) / 1000) })
+    }
+    return out.filter((o) => o.date >= start)
+  }
+  // Extra lookback so a YoY transform has its 12-month base.
+  const rawStart = units ? new Date(new Date(start).getTime() - 400 * 86400000).toISOString().slice(0, 10) : start
+
+  // Fallback 1: FRED's key-less CSV export (works from most networks; some
+  // cloud egress ranges are blocked, hence the DBnomics fallback below).
   const viaCsv = async (): Promise<Obs[] | null> => {
-    // Pull extra history so the YoY transform has its 12-month lookback.
-    const cosd = units ? new Date(new Date(start).getTime() - 400 * 86400000).toISOString().slice(0, 10) : start
     try {
-      const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}&cosd=${cosd}`, {
+      const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}&cosd=${rawStart}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EconoPulse/1.0)', Accept: 'text/csv,*/*' },
         next: { revalidate: 3600 },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(8000),
       })
       if (!res.ok) return null
       const lines = (await res.text()).trim().split(/\r?\n/)
       if (lines.length < 2 || !/^(observation_date|DATE)/i.test(lines[0])) return null
-      let obs: Obs[] = lines.slice(1).map((l) => { const [date, value] = l.split(','); return { date: (date || '').trim(), value: (value || '').trim() } }).filter((o) => o.date)
-      if (units) {
-        // pc1 = % change from a year ago; pch/chg = % / absolute change from the previous observation.
-        const vals = obs.map((o) => parseFloat(o.value))
-        const dates = obs.map((o) => new Date(o.date + 'T00:00:00Z').getTime())
-        const year = 365.25 * 86400000
-        const out: Obs[] = []
-        for (let i = 0; i < obs.length; i++) {
-          const v = vals[i]
-          if (!Number.isFinite(v)) continue
-          let base: number | null = null
-          if (units === 'pc1' || units === 'ch1') {
-            // nearest observation ~1y earlier (±45 days tolerance)
-            const target = dates[i] - year
-            let best = -1, bestD = Infinity
-            for (let j = i - 1; j >= 0; j--) { const d = Math.abs(dates[j] - target); if (d < bestD) { bestD = d; best = j } if (dates[j] < target - 60 * 86400000) break }
-            if (best >= 0 && bestD <= 45 * 86400000 && Number.isFinite(vals[best])) base = vals[best]
-          } else {
-            for (let j = i - 1; j >= 0; j--) if (Number.isFinite(vals[j])) { base = vals[j]; break }
-          }
-          if (base == null) continue
-          const r = units === 'pc1' || units === 'pch' ? (base !== 0 ? ((v - base) / Math.abs(base)) * 100 : NaN) : v - base
-          if (Number.isFinite(r)) out.push({ date: obs[i].date, value: String(Math.round(r * 1000) / 1000) })
-        }
-        obs = out.filter((o) => o.date >= start)
-      }
-      return obs
+      const obs: Obs[] = lines.slice(1).map((l) => { const [date, value] = l.split(','); return { date: (date || '').trim(), value: (value || '').trim() } }).filter((o) => o.date)
+      return transform(obs)
+    } catch { return null }
+  }
+
+  // Fallback 2: DBnomics mirrors of the official sources that stay current
+  // there (Fed H.15 rates/yields, BEA NIPA). BLS on DBnomics lags months, so
+  // CPI/payrolls stay on FRED only.
+  const viaDbnomics = async (): Promise<Obs[] | null> => {
+    const code = DBN_MIRROR[series]
+    if (!code) return null
+    try {
+      const res = await fetch(`https://api.db.nomics.world/v22/series/${code}?observations=1&format=json`, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(12000) })
+      if (!res.ok) return null
+      const j = await res.json()
+      const d = j?.series?.docs?.[0]
+      const periods: string[] = Array.isArray(d?.period_start_day) ? d.period_start_day : Array.isArray(d?.period) ? d.period : []
+      const values: unknown[] = Array.isArray(d?.value) ? d.value : []
+      if (!periods.length) return null
+      const scale = DBN_SCALE[series] ?? 1
+      const obs: Obs[] = periods.map((p, i) => {
+        const n = typeof values[i] === 'number' ? (values[i] as number) * scale : NaN
+        return { date: toIsoDate(p), value: Number.isFinite(n) ? String(n) : '.' }
+      }).filter((o) => o.date >= rawStart)
+      return transform(obs)
     } catch { return null }
   }
 
   try {
-    const obs = (await viaApi()) || (await viaCsv())
-    if (!obs) return NextResponse.json({ ok: false, error: 'FRED unavailable' }, { status: 502 })
+    const obs = (await viaApi()) || (await viaCsv()) || (await viaDbnomics())
+    if (!obs) return NextResponse.json({ ok: false, error: 'FRED unavailable (set a valid FRED_API_KEY)' }, { status: 502 })
     const bars = obs
       .map((o) => {
         const v = parseFloat(o.value)

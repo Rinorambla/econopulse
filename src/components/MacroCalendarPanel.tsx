@@ -1,6 +1,8 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { matchIndicator } from '@/components/ReleaseTape';
+import type { TeCountry, TeIndicator } from '@/lib/te-catalog';
 
 // Economic calendar panel on /api/live-calendar: this week's releases with live
 // actual / forecast / previous for every country (same provider as the event
@@ -112,7 +114,7 @@ export function EventHistory({ eventPath }: { eventPath: string }) {
 }
 
 // ── Panel ───────────────────────────────────────────────────────────────────
-export default function MacroCalendarPanel({ fill }: { fill: boolean }) {
+export default function MacroCalendarPanel({ fill, onChart }: { fill: boolean; onChart?: (c: TeCountry, i: TeIndicator) => void }) {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -265,6 +267,13 @@ export default function MacroCalendarPanel({ fill }: { fill: boolean }) {
                             {e.event}
                             {isNext && <span className="ml-2 rounded bg-red-500/15 px-1 font-mono text-[9px] font-bold uppercase tracking-wider text-red-300">next</span>}
                             {canOpen && <span className={`ml-1.5 font-mono text-[9px] ${isOpen ? 'text-sky-300' : 'text-sky-500/50'}`}>{isOpen ? '▾' : '▸'}</span>}
+                            {onChart && (() => { const m = matchIndicator(e.code, e.event); return m ? (
+                              <button
+                                onClick={(ev) => { ev.stopPropagation(); onChart(m.country, m.indicator); }}
+                                className="ml-2 rounded border border-slate-700 px-1.5 py-px font-mono text-[9px] uppercase tracking-wider text-gray-500 transition-colors hover:border-amber-500/50 hover:text-amber-300"
+                                title={`Open ${m.indicator.name} chart`}
+                              >chart</button>
+                            ) : null; })()}
                           </td>
                           <td className={`whitespace-nowrap px-2 py-1.5 text-right font-bold ${tone}`}>{has ? e.actual : <span className="font-normal text-gray-600">—</span>}</td>
                           <td className="whitespace-nowrap px-2 py-1.5 text-right text-gray-400">{e.forecast || '—'}</td>

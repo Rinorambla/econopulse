@@ -3,6 +3,10 @@
 // events with ActualValue/ForecastValue/PreviousValue and an ISO-3166 numeric
 // country code — released figures flow in as they come out (10-min cache).
 
+import fs from 'fs';
+import path from 'path';
+import seedJson from '@/data/macro-matrix-seed.json';
+
 export interface TradaysEvent {
   id: number;
   name: string;
@@ -364,81 +368,189 @@ const num = (s: string): number | null => {
   return Number.isFinite(v) ? v : null;
 };
 
-// Matrix cache: 10 min fresh; a failed rebuild re-serves the last good matrix
-// (flagged stale) so the sheet never blanks out on provider hiccups.
-const MATRIX_TTL_MS = 10 * 60 * 1000;
-const matrixCache = new Map<string, { at: number; data: CountryMatrix }>();
+// ── Matrix build strategy ────────────────────────────────────────────────────
+// Reading every indicator's history page costs ~80 requests per country, and
+// the provider rate-limits aggressively. So:
+//   1. A committed seed (src/data/macro-matrix-seed.json, built offline by
+//      scripts/build-macro-matrix-seed.cjs) gives every country a full sheet.
+//   2. At runtime the sheet is refreshed INCREMENTALLY: only rows whose event
+//      had a release in the live calendar window are re-read (a handful), and
+//      this week's live prints are overlaid immediately.
+//   3. The merged result is cached 10 min in memory and persisted to
+//      data-snapshots/ when the filesystem is writable.
 
-/**
- * Spreadsheet-style history for one country: rows = indicators, columns = the
- * last N months, cells = the figure released in that month (latest release of
- * the month wins), with this week's live releases overlaid so new prints land
- * the moment they come out.
- */
-export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatrix | null> {
-  const hit = matrixCache.get(iso2);
-  if (hit && Date.now() - hit.at < MATRIX_TTL_MS) return hit.data;
+type SeedShape = { builtAt: string; countries: Record<string, { months: string[]; rows: MatrixRow[] }> };
+const SEED = seedJson as unknown as SeedShape;
+const SNAP_DIR = path.join(process.cwd(), 'data-snapshots');
+const snapFile = (iso2: string) => path.join(SNAP_DIR, `macro-matrix-${iso2}.json`);
 
+function readSnapshot(iso2: string): CountryMatrix | null {
+  try {
+    const f = snapFile(iso2);
+    if (fs.existsSync(f)) {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8')) as CountryMatrix;
+      if (Array.isArray(j?.rows) && Array.isArray(j?.months)) return j;
+    }
+  } catch { /* fall through to seed */ }
+  const c = SEED.countries?.[iso2];
+  return c ? { months: c.months, rows: c.rows, updatedAt: SEED.builtAt } : null;
+}
+function writeSnapshot(iso2: string, m: CountryMatrix): void {
+  try {
+    if (!fs.existsSync(SNAP_DIR)) fs.mkdirSync(SNAP_DIR, { recursive: true });
+    const { stale: _s, ...rest } = m;
+    fs.writeFileSync(snapFile(iso2), JSON.stringify(rest), 'utf8');
+  } catch { /* read-only FS (serverless) — memory cache still applies */ }
+}
+
+export function monthAxis(): string[] {
   const months: string[] = [];
   const now = new Date();
   for (let i = MATRIX_MONTHS - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
   }
+  return months;
+}
+
+/** Read one event's history into month → cell. */
+async function rowValues(path: string, monthSet: Set<string>): Promise<Record<string, MatrixCell> | null> {
+  const hist = await getTradaysEventHistory(path).catch(() => null);
+  if (!hist) return null;
+  const values: Record<string, MatrixCell> = {};
+  for (const r of hist.rows) {
+    const key = r.date.slice(0, 7);
+    if (!monthSet.has(key) || values[key] || !r.actual) continue;
+    values[key] = { a: r.actual, v: num(r.actual), f: r.forecast, p: r.previous, period: r.period, tone: r.tone };
+  }
+  return values;
+}
+
+/** Full build (offline seed script / first run without a seed). `limit` keeps
+ *  only the top-priority rows (events are already priority-ordered). */
+export async function buildCountryMatrixFull(iso2: string, concurrency = 3, pauseMs = 250, limit = Infinity): Promise<CountryMatrix | null> {
+  const months = monthAxis();
   const monthSet = new Set(months);
-  const stale = (): CountryMatrix | null => {
-    if (!hit) return null;
-    const d = { ...hit.data, stale: true };
-    matrixCache.set(iso2, { at: Date.now() - MATRIX_TTL_MS + 2 * 60 * 1000, data: d }); // retry in 2 min
-    return d;
-  };
-
-  const events = await getTradaysCountryEvents(iso2);
-  if (!events.length) return stale();
-
+  const events = (await getTradaysCountryEvents(iso2)).slice(0, limit);
+  if (!events.length) return null;
   const rows: MatrixRow[] = new Array(events.length);
-  const CONCURRENCY = 6;
   let next = 0;
   const worker = async () => {
     while (next < events.length) {
       const idx = next++;
       const ev = events[idx];
-      const values: Record<string, MatrixCell> = {};
-      const hist = await getTradaysEventHistory(ev.path).catch(() => null);
-      if (hist) {
-        for (const r of hist.rows) {
-          const key = r.date.slice(0, 7);
-          if (!monthSet.has(key) || values[key] || !r.actual) continue;
-          values[key] = { a: r.actual, v: num(r.actual), f: r.forecast, p: r.previous, period: r.period, tone: r.tone };
-        }
-      }
+      const values = (await rowValues(ev.path, monthSet)) || {};
       rows[idx] = { ...ev, values };
+      if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs));
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, events.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concurrency, events.length) }, worker));
+  const filled = rows.filter((r) => r && Object.keys(r.values).length > 0);
+  return filled.length ? { months, rows: filled, updatedAt: new Date().toISOString() } : null;
+}
 
-  // Live overlay from this week's calendar (same provider), keyed by event path.
+const MATRIX_TTL_MS = 10 * 60 * 1000;
+const FIRST_BUILD_ROWS = 36;
+const TOPUP_ROWS = 10;
+const matrixCache = new Map<string, { at: number; data: CountryMatrix }>();
+
+/**
+ * Spreadsheet-style history for one country: rows = indicators, columns = the
+ * last N months, cells = the figure released in that month. Served from the
+ * seed/snapshot and refreshed incrementally with this week's releases.
+ */
+export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatrix | null> {
+  const hit = matrixCache.get(iso2);
+  if (hit && Date.now() - hit.at < MATRIX_TTL_MS) return hit.data;
+
+  const months = monthAxis();
+  const monthSet = new Set(months);
+  const base = hit?.data || readSnapshot(iso2);
+
+  // No seed for this country → bounded first build (top-priority rows only,
+  // gentle pace); the remaining rows are topped up on later refreshes.
+  if (!base) {
+    const full = await buildCountryMatrixFull(iso2, 2, 150, FIRST_BUILD_ROWS).catch(() => null);
+    if (!full) return null;
+    matrixCache.set(iso2, { at: Date.now(), data: full });
+    writeSnapshot(iso2, full);
+    return full;
+  }
+
+  // Re-align the base to the current month axis (drop months that aged out).
+  const rows: MatrixRow[] = base.rows.map((r) => ({
+    ...r,
+    values: Object.fromEntries(Object.entries(r.values).filter(([k]) => monthSet.has(k))),
+  }));
+  const byPath = new Map(rows.map((r) => [r.path, r]));
+
+  let touched = 0;
+  let providerOk = true;
   try {
     const slug = ISO2_TO_SLUG[iso2];
-    const live = (await getTradaysCalendar()).filter((e) => e.actual !== '' && e.url.startsWith(`${slug}/`));
-    const byPath = new Map(rows.filter(Boolean).map((r) => [r.path, r]));
+    const live = (await getTradaysCalendar()).filter((e) => e.url.startsWith(`${slug}/`));
+    // 1) Overlay live prints right away (no extra requests).
     for (const e of live) {
+      if (!e.actual) continue;
       const row = byPath.get(e.url);
-      if (!row) continue;
       const key = e.releaseAt.slice(0, 7);
-      if (!monthSet.has(key)) continue;
+      if (!row || !monthSet.has(key)) continue;
       const cur = row.values[key];
       if (cur && cur.a === e.actual) continue;
       row.values[key] = { a: e.actual, v: num(e.actual), f: e.forecast, p: e.previous, period: '', tone: '' };
+      touched++;
+    }
+    // 2) Re-read history only for rows that had a release in the window (they
+    //    may carry revisions / the provider's beat-miss tone) — capped.
+    const refresh = Array.from(new Set(live.filter((e) => e.actual).map((e) => e.url))).filter((p) => byPath.has(p)).slice(0, 24);
+    // 3) Top up rows the sheet doesn't have yet (partial first build / newly
+    //    listed indicators) — a few per refresh so the sheet completes over time.
+    const catalogue = await getTradaysCountryEvents(iso2).catch(() => [] as CountryEventMeta[]);
+    const missing = catalogue.filter((e) => !byPath.has(e.path)).slice(0, TOPUP_ROWS);
+    let i = 0;
+    const worker = async () => {
+      while (i < refresh.length) {
+        const p = refresh[i++];
+        const values = await rowValues(p, monthSet);
+        if (values === null) { providerOk = false; continue; }
+        const row = byPath.get(p)!;
+        row.values = { ...row.values, ...values };
+        touched++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, refresh.length) }, worker));
+    let k = 0;
+    const topup = async () => {
+      while (k < missing.length) {
+        const ev = missing[k++];
+        const values = await rowValues(ev.path, monthSet);
+        if (values === null) { providerOk = false; continue; }
+        if (!Object.keys(values).length) continue;
+        const row: MatrixRow = { ...ev, values };
+        rows.push(row);
+        byPath.set(ev.path, row);
+        touched++;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, missing.length) }, topup));
+    if (missing.length) {
+      // Keep catalogue order (priority) so the sheet reads like the seed.
+      const order = new Map(catalogue.map((e, idx) => [e.path, idx]));
+      rows.sort((a, b) => (order.get(a.path) ?? 1e9) - (order.get(b.path) ?? 1e9));
     }
   } catch {
-    /* best-effort */
+    providerOk = false;
   }
 
-  const filled = rows.filter((r) => r && Object.keys(r.values).length > 0);
-  if (!filled.length) return stale();
-  const data: CountryMatrix = { months, rows: filled, updatedAt: new Date().toISOString() };
+  const data: CountryMatrix = {
+    months,
+    rows,
+    updatedAt: touched ? new Date().toISOString() : base.updatedAt,
+    stale: !providerOk && !touched ? true : undefined,
+  };
   if (matrixCache.size > 60) matrixCache.clear();
   matrixCache.set(iso2, { at: Date.now(), data });
+  if (touched) writeSnapshot(iso2, data);
   return data;
 }

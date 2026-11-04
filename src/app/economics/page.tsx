@@ -16,6 +16,7 @@ import PlanGate from '@/components/PlanGate';
 import Logo from '@/components/Logo';
 import MacroCalendarPanel from '@/components/MacroCalendarPanel';
 import MacroSheetHeatmap from '@/components/MacroSheetHeatmap';
+import ReleaseTape from '@/components/ReleaseTape';
 import SearchSelect from '@/components/SearchSelect';
 import {
   TE_COUNTRIES, DEFAULT_COUNTRY, DEFAULT_INDICATOR, HEADLINE_SLUGS, TOTAL_SERIES, indicatorsFor, searchIndicators,
@@ -166,6 +167,14 @@ export default function EconomicsPage() {
     setSearchOpen(false);
   }, []);
 
+  // From a release chip / calendar row / sheet row: load the series and bring
+  // the chart into view (closing any expanded panel first).
+  const chartSeries = useCallback((c: TeCountry, i: TeIndicator) => {
+    openSeries(c, i);
+    setExpanded(null);
+    requestAnimationFrame(() => document.getElementById('CHRT')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [openSeries]);
+
   // Changing country keeps the same indicator when that country publishes it,
   // otherwise falls back to its first headline series.
   const pickCountry = useCallback((c: TeCountry) => {
@@ -227,7 +236,7 @@ export default function EconomicsPage() {
               own feed: the vendor's cl-pro widget currently mis-sizes its event
               column at every width (fixed table layout + colspan header). */}
           <Panel id="ECAL" title="Economic Calendar" hotkey="1" expanded={expanded === 'ECAL'} onToggle={() => toggle('ECAL')}>
-            {(fill) => <MacroCalendarPanel fill={fill} />}
+            {(fill) => <MacroCalendarPanel fill={fill} onChart={chartSeries} />}
           </Panel>
 
           {/* Row 2 — indicator chart + news */}
@@ -247,6 +256,7 @@ export default function EconomicsPage() {
           >
             {(fill) => (
               <>
+                <ReleaseTape onPick={openSeries} />
                 <div className="space-y-2 border-b border-slate-800 bg-slate-950/60 px-3 py-2">
                   {/* Free search + pickers */}
                   <div className="flex flex-wrap items-stretch gap-2">
@@ -320,7 +330,12 @@ export default function EconomicsPage() {
             )}
           </Panel>
           <Panel id="NEWS" title="Economic News" hotkey="3" expanded={expanded === 'NEWS'} onToggle={() => toggle('NEWS')} className="xl:col-span-2">
-            {(fill) => <TradingEconomicsEmbed widget="ns-pro" height={fill ? '100%' : 620} className={fill ? 'flex-1' : 'xl:h-full'} loadingLabel="Loading news…" />}
+            {(fill) => (
+              <div className={`flex flex-col ${fill ? 'min-h-0 flex-1' : ''}`}>
+                <ReleaseTape onPick={chartSeries} />
+                <TradingEconomicsEmbed widget="ns-pro" height={fill ? '100%' : 580} className={fill ? 'min-h-0 flex-1' : 'xl:flex-1'} loadingLabel="Loading news…" />
+              </div>
+            )}
           </Panel>
           </div>
 
@@ -333,7 +348,7 @@ export default function EconomicsPage() {
             onToggle={() => toggle('WECO')}
             controls={<span className="hidden font-mono text-[10px] text-gray-500 md:inline">indicators × months · heat map · click a row for history</span>}
           >
-            {(fill) => <MacroSheetHeatmap fill={fill} />}
+            {(fill) => <MacroSheetHeatmap fill={fill} onChart={chartSeries} />}
           </Panel>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3 font-mono text-[10px] text-gray-600">

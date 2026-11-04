@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EventHistory } from '@/components/MacroCalendarPanel';
+import { matchIndicator } from '@/components/ReleaseTape';
+import type { TeCountry, TeIndicator } from '@/lib/te-catalog';
 
 // WECO — World Economic Matrix as a data-sheet heat map: pick a country, rows
 // are its macro indicators (GDP, rates, payrolls, CPI, PMIs, housing, …),
@@ -39,7 +41,7 @@ function heat(pos: number, strength = 1): string {
   return t >= 0 ? `rgba(245,158,11,${a})` : `rgba(56,189,248,${a})`;
 }
 
-export default function MacroSheetHeatmap({ fill }: { fill: boolean }) {
+export default function MacroSheetHeatmap({ fill, onChart }: { fill: boolean; onChart?: (c: TeCountry, i: TeIndicator) => void }) {
   const [country, setCountry] = useState('US');
   const [data, setData] = useState<Record<string, Matrix | 'loading' | 'error'>>({});
   const [mode, setMode] = useState<Mode>('range');
@@ -184,6 +186,13 @@ export default function MacroSheetHeatmap({ fill }: { fill: boolean }) {
                         <span className={`mr-1.5 inline-block font-mono text-[9px] transition-transform ${isOpen ? 'rotate-90 text-sky-300' : 'text-gray-600'}`}>▶</span>
                         <span className="text-gray-200">{r.name}</span>
                         <span className="ml-1.5 font-mono text-[9px] text-gray-600">{r.frequency.slice(0, 1)}</span>
+                        {onChart && (() => { const m = matchIndicator(country, r.name); return m ? (
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); onChart(m.country, m.indicator); }}
+                            className="ml-2 rounded border border-slate-700 px-1 py-px font-mono text-[8px] uppercase tracking-wider text-gray-600 transition-colors hover:border-amber-500/50 hover:text-amber-300"
+                            title={`Open ${m.indicator.name} chart`}
+                          >chart</button>
+                        ) : null; })()}
                       </td>
                       {matrix.months.map((mo, i) => {
                         const c = r.values[mo];

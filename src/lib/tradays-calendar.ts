@@ -62,16 +62,29 @@ function mapImportance(s: string): TradaysEvent['importance'] {
   return v === 'high' ? 'High' : v === 'medium' ? 'Medium' : 'Low';
 }
 
+// The provider serves some strings double-encoded (UTF-8 bytes read as
+// Latin-1: "€" → "â¬", "¥" → "Â¥") and pads figures with zero-width / narrow
+// spaces. Undo both so values read and parse cleanly.
+export function fixText(s: string): string {
+  let t = s;
+  if (/[\u00c2\u00c3\u00e2][\u0080-\u00bf]/.test(t) && !/[^\u0000-\u00ff]/.test(t)) {
+    try { t = Buffer.from(t, 'latin1').toString('utf8'); } catch { /* keep as is */ }
+  }
+  return t
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, '')
+    .replace(/[\u00a0\u2009\u202f\u2007]/g, ' ')
+    .replace(/[\u2212\u2012\u2013]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function cleanVal(v: unknown): string {
   // The widget embeds non-breaking spaces (e.g. "48.3 K") that can double-encode,
   // and the history pages ship them as numeric entities ("130&#xA0;K").
-  return String(v ?? '')
+  return fixText(String(v ?? '')
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
-    .replace(/\u00c2?\u00a0/g, ' ')
-    .replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' '));
 }
 
 function parseEvents(html: string): TradaysEvent[] {
@@ -417,7 +430,11 @@ const addMonths = (key: string, n: number): string => {
 function normalizeRow(row: MatrixRow): MatrixRow {
   const entries = Object.entries(row.values).sort(([a], [b]) => a.localeCompare(b));
   const values: Record<string, MatrixCell> = {};
-  for (const [k, cell] of entries) values[refMonthKey(cell.period, k)] = cell;
+  for (const [k, cell] of entries) {
+    const a = fixText(cell.a);
+    const c: MatrixCell = { ...cell, a, v: a === cell.a ? cell.v : num(a), f: fixText(cell.f), p: fixText(cell.p) };
+    values[refMonthKey(c.period, k)] = c;
+  }
   return { ...row, values };
 }
 

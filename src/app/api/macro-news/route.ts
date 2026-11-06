@@ -21,18 +21,29 @@ export interface MacroNewsItem {
   summary?: string;
 }
 
-const FEEDS: Array<{ url: string; source: string; kind: NewsKind; region: string }> = [
+const FEEDS: Array<{ url: string; source: string; kind: NewsKind; region: string; cap?: number }> = [
+  // Central banks
   { url: 'https://www.federalreserve.gov/feeds/press_all.xml', source: 'Federal Reserve', kind: 'central-bank', region: 'US' },
   { url: 'https://www.ecb.europa.eu/rss/press.html', source: 'ECB', kind: 'central-bank', region: 'EU' },
   { url: 'https://www.bankofengland.co.uk/rss/news', source: 'Bank of England', kind: 'central-bank', region: 'GB' },
   { url: 'https://www.boj.or.jp/en/rss/whatsnew.xml', source: 'Bank of Japan', kind: 'central-bank', region: 'JP' },
+  { url: 'https://www.bundesbank.de/service/rss/en/633306/feed.rss', source: 'Bundesbank', kind: 'central-bank', region: 'DE' },
+  { url: 'https://www.snb.ch/public/rss/en/pressrel', source: 'SNB', kind: 'central-bank', region: 'CH' },
+  { url: 'https://www.bankofcanada.ca/content_type/press-releases/feed/', source: 'Bank of Canada', kind: 'central-bank', region: 'CA' },
+  { url: 'https://www.bis.org/doclist/cbspeeches.rss', source: 'BIS', kind: 'central-bank', region: 'WORLD', cap: 8 },
+  // Statistical agencies
   { url: 'https://apps.bea.gov/rss/rss.xml', source: 'BEA', kind: 'data', region: 'US' },
   { url: 'https://www.census.gov/economic-indicators/indicator.xml', source: 'Census Bureau', kind: 'data', region: 'US' },
   { url: 'https://www.bls.gov/feed/bls_latest.rss', source: 'BLS', kind: 'data', region: 'US' },
+  { url: 'https://www.istat.it/en/feed/', source: 'Istat', kind: 'data', region: 'IT' },
+  { url: 'https://www.ons.gov.uk/releasecalendar?rss&view=published', source: 'ONS', kind: 'data', region: 'GB' },
+  { url: 'https://www.investing.com/rss/news_14.rss', source: 'Investing.com', kind: 'data', region: 'WORLD' },
+  // News desks (English + Italian)
   { url: 'https://www.cnbc.com/id/20910258/device/rss/rss.html', source: 'CNBC Economy', kind: 'markets', region: 'WORLD' },
   { url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories', source: 'MarketWatch', kind: 'markets', region: 'WORLD' },
-  { url: 'https://www.fxstreet.com/rss/news', source: 'FXStreet', kind: 'markets', region: 'WORLD' },
-  { url: 'https://www.investing.com/rss/news_14.rss', source: 'Investing.com', kind: 'data', region: 'WORLD' },
+  { url: 'https://www.fxstreet.com/rss/news', source: 'FXStreet', kind: 'markets', region: 'WORLD', cap: 8 },
+  { url: 'https://www.ilsole24ore.com/rss/economia.xml', source: 'Il Sole 24 Ore', kind: 'markets', region: 'IT' },
+  { url: 'https://www.ansa.it/sito/notizie/economia/economia_rss.xml', source: 'ANSA Economia', kind: 'markets', region: 'IT' },
 ];
 
 const UA = 'Mozilla/5.0 (compatible; EconoPulse/1.0; +https://www.econopulse.ai)';
@@ -85,7 +96,7 @@ async function collect(): Promise<MacroNewsItem[]> {
         if (!res.ok) { feedErrors.set(f.source, `http ${res.status}`); return []; }
         feedErrors.delete(f.source);
         // Keep the stream balanced: primary sources in full, news desks capped.
-        return parseFeed(await res.text(), f).slice(0, f.source === 'FXStreet' ? 8 : f.kind === 'markets' ? 12 : 25);
+        return parseFeed(await res.text(), f).slice(0, f.cap ?? (f.kind === 'markets' ? 12 : 25));
       } catch (e: unknown) { feedErrors.set(f.source, e instanceof Error ? e.name : 'error'); return []; }
     })
   );
@@ -99,7 +110,7 @@ async function collect(): Promise<MacroNewsItem[]> {
     items.push(it);
   }
   items.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
-  return items.slice(0, 120);
+  return items.slice(0, 160);
 }
 
 export async function GET(req: NextRequest) {

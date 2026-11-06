@@ -1786,10 +1786,11 @@ export default function AdvancedChart({ symbol: propSymbol = 'SPY', onSymbolChan
         const endpoint = /^dbn:/i.test(symbol)
           ? `/api/dbnomics-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
           : `/api/fred-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(currentRange.range)}`
-        const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
+        const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(isFred ? 25000 : 12000) })
         if (!res.ok) {
           if (res.status === 503) throw new Error('Macro data unavailable (FRED API key not configured)')
-          throw new Error(`API ${res.status}`)
+          const detail = await res.json().then((j) => (typeof j?.error === 'string' ? j.error : '')).catch(() => '')
+          throw new Error(detail ? `Source unavailable: ${detail}` : `API ${res.status}`)
         }
         const json = await res.json()
         raw = json?.bars || json?.data?.bars || json?.data || []

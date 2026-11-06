@@ -176,6 +176,9 @@ export async function GET(request: Request) {
   // Fallback 1: FRED's key-less CSV export (works from most networks; some
   // cloud egress ranges are blocked, hence the DBnomics fallback below).
   const viaCsv = async (): Promise<Obs[] | null> => {
+    // Vercel egress can't reach fred.stlouisfed.org (hangs) — skip straight to
+    // the mirrors there unless explicitly re-enabled.
+    if (process.env.VERCEL && process.env.FRED_CSV !== '1') return null
     if (Date.now() < csvBlockedUntil) return null
     try {
       const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}&cosd=${rawStart}`, {

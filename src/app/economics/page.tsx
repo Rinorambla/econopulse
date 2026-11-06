@@ -17,6 +17,7 @@ import Logo from '@/components/Logo';
 import MacroCalendarPanel from '@/components/MacroCalendarPanel';
 import MacroSheetHeatmap from '@/components/MacroSheetHeatmap';
 import ReleaseTape from '@/components/ReleaseTape';
+import MacroNewsPanel from '@/components/MacroNewsPanel';
 import SearchSelect from '@/components/SearchSelect';
 import {
   TE_COUNTRIES, DEFAULT_COUNTRY, DEFAULT_INDICATOR, HEADLINE_SLUGS, TOTAL_SERIES, indicatorsFor, searchIndicators,
@@ -147,6 +148,7 @@ export default function EconomicsPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchActive, setSearchActive] = useState(0);
   const [expanded, setExpanded] = useState<PanelId | null>(null);
+  const [newsView, setNewsView] = useState<'feed' | 'widget'>('feed');
 
   const seriesUrl = `/${country.slug}/${indicator.slug}`;
   const hits = useMemo(() => searchIndicators(search), [search]);
@@ -333,7 +335,24 @@ export default function EconomicsPage() {
             {(fill) => (
               <div className={`flex flex-col ${fill ? 'min-h-0 flex-1' : ''}`}>
                 <ReleaseTape onPick={chartSeries} />
-                <TradingEconomicsEmbed widget="ns-pro" height={fill ? '100%' : 580} className={fill ? 'min-h-0 flex-1' : 'xl:flex-1'} loadingLabel="Loading news…" />
+                <div className="flex items-center gap-1 px-2 pt-1.5 pb-1 bg-[#0b1220] border-b border-[#1e293b]">
+                  {(['feed', 'widget'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setNewsView(v)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide border transition-colors ${newsView === v ? 'bg-blue-600/30 border-blue-500/60 text-white' : 'border-[#1e293b] text-gray-400 hover:text-gray-200'}`}
+                    >
+                      {v === 'feed' ? 'LIVE FEED' : 'STREAM'}
+                    </button>
+                  ))}
+                  <span className="ml-auto text-[9px] text-gray-500">{newsView === 'feed' ? 'central banks · data · markets' : 'embedded stream'}</span>
+                </div>
+                {newsView === 'feed' ? (
+                  <MacroNewsPanel onChart={chartSeries} className={fill ? 'min-h-0 flex-1' : 'h-[580px]'} />
+                ) : (
+                  <TradingEconomicsEmbed widget="ns-pro" height={fill ? '100%' : 580} className={fill ? 'min-h-0 flex-1' : 'xl:flex-1'} loadingLabel="Loading news…" />
+                )}
               </div>
             )}
           </Panel>

@@ -53,7 +53,7 @@ export const ISO2_NAME: Record<string, string> = {
 };
 
 const WIDGET_URL = 'https://www.tradays.com/en/economic-calendar/widget?mode=2&theme=1&fw=html';
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 3 * 60 * 1000;
 
 let cache: { at: number; events: TradaysEvent[] } | null = null;
 
@@ -230,7 +230,7 @@ export interface CountryEventMeta {
   frequency: string;
 }
 
-/** One released figure placed in its release month. */
+/** One released figure placed in the month of its reference period. */
 export interface MatrixCell {
   a: string; // actual (display)
   v: number | null; // numeric actual
@@ -238,10 +238,13 @@ export interface MatrixCell {
   p: string; // previous
   period: string;
   tone: 'green' | 'red' | '';
+  /** Set when the cell came from the live calendar (period inferred); cleared
+   *  once the provider's history confirms the release. */
+  live?: boolean;
 }
 
 export interface MatrixRow extends CountryEventMeta {
-  /** Month key "YYYY-MM" (release month) → released figure */
+  /** Month key "YYYY-MM" (reference period) → released figure */
   values: Record<string, MatrixCell>;
 }
 
@@ -388,16 +391,46 @@ const SEED = seedJson as unknown as SeedShape;
 const SNAP_DIR = path.join(process.cwd(), 'data-snapshots');
 const snapFile = (iso2: string) => path.join(SNAP_DIR, `macro-matrix-${iso2}.json`);
 
+// ── Reference-period bucketing ───────────────────────────────────────────────
+// A macro data sheet is organised by the period the figure describes, not the
+// day it was published: October CPI (released mid-November) sits in the
+// October column, Q3 GDP in September. Provider period strings look like
+// "Sep 2026", "Oct 2026 prelim.", "2 Q 2026" or "16 Oct 2026" (weekly).
+const MON: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+export function refMonthKey(period: string, fallbackKey: string): string {
+  const p = (period || '').trim();
+  let m = p.match(/^(?:\d{1,2}\s+)?([A-Za-z]{3})[a-z]*\.?\s+(\d{4})/);
+  if (m && MON[m[1].toLowerCase()]) return `${m[2]}-${MON[m[1].toLowerCase()]}`;
+  m = p.match(/^([1-4])\s*Q\s+(\d{4})/i) || p.match(/^Q([1-4])\s+(\d{4})/i);
+  if (m) return `${m[2]}-${String(Number(m[1]) * 3).padStart(2, '0')}`;
+  m = p.match(/^(\d{4})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}`;
+  return fallbackKey;
+}
+const addMonths = (key: string, n: number): string => {
+  const [y, mo] = key.split('-').map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+/** Re-bucket a row's cells by reference period (idempotent). On collisions
+ *  the later release wins (final print over flash/prelim). */
+function normalizeRow(row: MatrixRow): MatrixRow {
+  const entries = Object.entries(row.values).sort(([a], [b]) => a.localeCompare(b));
+  const values: Record<string, MatrixCell> = {};
+  for (const [k, cell] of entries) values[refMonthKey(cell.period, k)] = cell;
+  return { ...row, values };
+}
+
 function readSnapshot(iso2: string): CountryMatrix | null {
   try {
     const f = snapFile(iso2);
     if (fs.existsSync(f)) {
       const j = JSON.parse(fs.readFileSync(f, 'utf8')) as CountryMatrix;
-      if (Array.isArray(j?.rows) && Array.isArray(j?.months)) return j;
+      if (Array.isArray(j?.rows) && Array.isArray(j?.months)) return { ...j, rows: j.rows.map(normalizeRow) };
     }
   } catch { /* fall through to seed */ }
   const c = SEED.countries?.[iso2];
-  return c ? { months: c.months, rows: c.rows, updatedAt: SEED.builtAt } : null;
+  return c ? { months: c.months, rows: c.rows.map(normalizeRow), updatedAt: SEED.builtAt } : null;
 }
 function writeSnapshot(iso2: string, m: CountryMatrix): void {
   try {
@@ -417,17 +450,31 @@ export function monthAxis(): string[] {
   return months;
 }
 
-/** Read one event's history into month → cell. */
+/** Read one event's history into reference-month → cell. Rows arrive newest
+ *  first, so the latest release for a period (final over prelim) wins. */
 async function rowValues(path: string, monthSet: Set<string>): Promise<Record<string, MatrixCell> | null> {
   const hist = await getTradaysEventHistory(path).catch(() => null);
   if (!hist) return null;
   const values: Record<string, MatrixCell> = {};
   for (const r of hist.rows) {
-    const key = r.date.slice(0, 7);
-    if (!monthSet.has(key) || values[key] || !hasFigure(r.actual)) continue;
+    if (!hasFigure(r.actual)) continue;
+    const key = refMonthKey(r.period, r.date.slice(0, 7));
+    if (!monthSet.has(key) || values[key]) continue;
     values[key] = { a: r.actual, v: num(r.actual), f: r.forecast, p: r.previous, period: r.period, tone: r.tone };
   }
   return values;
+}
+
+/** Reference month for a live print without a period string: the next period
+ *  after the row's latest confirmed cell (weekly → release month). */
+function inferLiveKey(row: MatrixRow, releaseKey: string): string {
+  if (/^weekly/i.test(row.frequency)) return releaseKey;
+  const step = /^quarterly/i.test(row.frequency) ? 3 : 1;
+  const confirmed = Object.entries(row.values).filter(([, c]) => !c.live).map(([k]) => k).sort();
+  if (!confirmed.length) return addMonths(releaseKey, -step);
+  const next = addMonths(confirmed[confirmed.length - 1], step);
+  // Never place a figure after its own release month.
+  return next > releaseKey ? releaseKey : next;
 }
 
 /** Full build (offline seed script / first run without a seed). `limit` keeps
@@ -453,7 +500,7 @@ export async function buildCountryMatrixFull(iso2: string, concurrency = 3, paus
   return filled.length ? { months, rows: filled, updatedAt: new Date().toISOString() } : null;
 }
 
-const MATRIX_TTL_MS = 10 * 60 * 1000;
+const MATRIX_TTL_MS = 5 * 60 * 1000;
 const FIRST_BUILD_ROWS = 56;
 const TOPUP_ROWS = 10;
 const matrixCache = new Map<string, { at: number; data: CountryMatrix }>();
@@ -493,15 +540,19 @@ export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatr
   try {
     const slug = ISO2_TO_SLUG[iso2];
     const live = (await getTradaysCalendar()).filter((e) => e.url.startsWith(`${slug}/`));
-    // 1) Overlay live prints right away (no extra requests).
+    // 1) Overlay live prints right away (no extra requests). The calendar has
+    //    no period string, so the reference month is inferred and the cell is
+    //    flagged `live` until the history read below confirms it.
     for (const e of live) {
       if (!hasFigure(e.actual)) continue;
       const row = byPath.get(e.url);
-      const key = e.releaseAt.slice(0, 7);
-      if (!row || !monthSet.has(key)) continue;
-      const cur = row.values[key];
-      if (cur && cur.a === e.actual) continue;
-      row.values[key] = { a: e.actual, v: num(e.actual), f: e.forecast, p: e.previous, period: '', tone: '' };
+      if (!row) continue;
+      const releaseKey = e.releaseAt.slice(0, 7);
+      const already = Object.entries(row.values).some(([k, c]) => c.a === e.actual && k >= addMonths(releaseKey, -4) && k <= releaseKey);
+      if (already) continue;
+      const key = inferLiveKey(row, releaseKey);
+      if (!monthSet.has(key)) continue;
+      row.values[key] = { a: e.actual, v: num(e.actual), f: e.forecast, p: e.previous, period: '', tone: '', live: true };
       touched++;
     }
     // 2) Re-read history only for rows that had a release in the window (they
@@ -518,7 +569,9 @@ export async function getCountryHistoryMatrix(iso2: string): Promise<CountryMatr
         const values = await rowValues(p, monthSet);
         if (values === null) { providerOk = false; continue; }
         const row = byPath.get(p)!;
-        row.values = { ...row.values, ...values };
+        // History is authoritative: drop inferred live cells it doesn't confirm.
+        const kept = Object.fromEntries(Object.entries(row.values).filter(([k, c]) => !c.live || values[k]));
+        row.values = { ...kept, ...values };
         touched++;
       }
     };

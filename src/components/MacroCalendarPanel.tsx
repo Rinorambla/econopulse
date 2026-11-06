@@ -137,7 +137,7 @@ export default function MacroCalendarPanel({ fill, onChart }: { fill: boolean; o
     };
     load();
     // Live figures land within minutes of release.
-    const poll = setInterval(() => { if (!document.hidden) load(); }, 3 * 60 * 1000);
+    const poll = setInterval(() => { if (!document.hidden) load(); }, 2 * 60 * 1000);
     const tick = setInterval(() => setNow(Date.now()), 30 * 1000);
     return () => { alive = false; clearInterval(poll); clearInterval(tick); };
   }, []);

@@ -107,6 +107,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(
     { ok: true, events: out, liveCount: live.length, updatedAt: new Date().toISOString() },
-    { headers: { ...rateLimitHeaders(rl), 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=900' } }
+    { headers: { ...rateLimitHeaders(rl), 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=600' } }
   );
 }

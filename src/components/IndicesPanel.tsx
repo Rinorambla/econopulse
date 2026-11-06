@@ -139,52 +139,48 @@ function fmtPrice(p: number) {
   return p.toFixed(2);
 }
 
-// ── Government bonds · world 10Y yields (FRED: US daily, others OECD monthly) ─
+// ── Government bonds · world 10Y yields (intraday via /api/world-bonds) ──────
 const BOND_SERIES: { id: string; short: string; name: string; flag: string }[] = [
-  { id: 'DGS10', short: 'US 10Y', name: 'US Treasury', flag: '🇺🇸' },
-  { id: 'IRLTLT01DEM156N', short: 'DE 10Y', name: 'Bund', flag: '🇩🇪' },
-  { id: 'IRLTLT01ITM156N', short: 'IT 10Y', name: 'BTP', flag: '🇮🇹' },
-  { id: 'IRLTLT01FRM156N', short: 'FR 10Y', name: 'OAT', flag: '🇫🇷' },
-  { id: 'IRLTLT01GBM156N', short: 'UK 10Y', name: 'Gilt', flag: '🇬🇧' },
-  { id: 'IRLTLT01JPM156N', short: 'JP 10Y', name: 'JGB', flag: '🇯🇵' },
-  { id: 'IRLTLT01CAM156N', short: 'CA 10Y', name: 'Canada', flag: '🇨🇦' },
-  { id: 'IRLTLT01AUM156N', short: 'AU 10Y', name: 'Australia', flag: '🇦🇺' },
+  { id: 'US2Y', short: 'US 2Y', name: 'US Treasury', flag: '🇺🇸' },
+  { id: 'US10Y', short: 'US 10Y', name: 'US Treasury', flag: '🇺🇸' },
+  { id: 'US30Y', short: 'US 30Y', name: 'US Treasury', flag: '🇺🇸' },
+  { id: 'DE10Y', short: 'DE 10Y', name: 'Bund', flag: '🇩🇪' },
+  { id: 'IT10Y', short: 'IT 10Y', name: 'BTP', flag: '🇮🇹' },
+  { id: 'FR10Y', short: 'FR 10Y', name: 'OAT', flag: '🇫🇷' },
+  { id: 'ES10Y', short: 'ES 10Y', name: 'Bonos', flag: '🇪🇸' },
+  { id: 'GB10Y', short: 'UK 10Y', name: 'Gilt', flag: '🇬🇧' },
+  { id: 'CH10Y', short: 'CH 10Y', name: 'Confederation', flag: '🇨🇭' },
+  { id: 'JP10Y', short: 'JP 10Y', name: 'JGB', flag: '🇯🇵' },
+  { id: 'CA10Y', short: 'CA 10Y', name: 'Canada', flag: '🇨🇦' },
+  { id: 'AU10Y', short: 'AU 10Y', name: 'Australia', flag: '🇦🇺' },
 ];
 
 function GovBondsCard() {
   const [rows, setRows] = useState<Record<string, { yield: number; deltaBp: number | null }>>({});
+  const [spread, setSpread] = useState<{ btpBund: number | null; us2s10s: number | null }>({ btpBund: null, us2s10s: null });
   useEffect(() => {
     let alive = true;
-    const fetchOne = async (b: { id: string }) => {
-      try {
-        const r = await fetch(`/api/fred-history?series=${b.id}&range=1y`, { cache: 'no-store', signal: AbortSignal.timeout(9000) });
-        if (!r.ok) return null;
-        const j = await r.json();
-        const bars = j?.data?.bars;
-        if (!Array.isArray(bars) || !bars.length) return null;
-        const last = bars[bars.length - 1].close;
-        const prev = bars.length > 1 ? bars[bars.length - 2].close : null;
-        return { id: b.id, yield: last, deltaBp: prev != null ? (last - prev) * 100 : null };
-      } catch { return null; }
-    };
     const load = async () => {
-      let results = await Promise.all(BOND_SERIES.map(fetchOne));
-      // retry once for rows that raced/rate-limited on first load
-      const missing = BOND_SERIES.filter((_, i) => !results[i]);
-      if (missing.length && alive) {
-        await new Promise(r => setTimeout(r, 1500));
-        const retry = await Promise.all(missing.map(fetchOne));
-        results = results.map(r => r ?? retry.shift() ?? null);
-      }
-      if (!alive) return;
-      setRows(prevRows => {
-        const map = { ...prevRows };
-        for (const r of results) if (r) map[r.id] = { yield: r.yield, deltaBp: r.deltaBp };
-        return map;
-      });
+      try {
+        const r = await fetch('/api/world-bonds', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        if (!r.ok) return;
+        const j = await r.json();
+        const list: Array<{ id: string; yield: number; deltaBp: number | null }> = Array.isArray(j?.quotes) ? j.quotes : [];
+        if (!alive || !list.length) return;
+        setRows(prevRows => {
+          const map = { ...prevRows };
+          for (const q of list) map[q.id] = { yield: q.yield, deltaBp: q.deltaBp };
+          return map;
+        });
+        const by = Object.fromEntries(list.map(q => [q.id, q.yield]));
+        setSpread({
+          btpBund: by.IT10Y != null && by.DE10Y != null ? (by.IT10Y - by.DE10Y) * 100 : null,
+          us2s10s: by.US10Y != null && by.US2Y != null ? (by.US10Y - by.US2Y) * 100 : null,
+        });
+      } catch { /* keep previous values */ }
     };
     load();
-    const id = setInterval(() => { if (!document.hidden) load(); }, 10 * 60 * 1000);
+    const id = setInterval(() => { if (!document.hidden) load(); }, 2 * 60 * 1000);
     return () => { alive = false; clearInterval(id); };
   }, []);
   return (
@@ -192,7 +188,7 @@ function GovBondsCard() {
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#1e293b]">
         <div className="flex items-center gap-1.5">
           <span className="text-base">🏛️</span>
-          <h4 className="text-xs font-bold text-white uppercase tracking-wide">Govt Bonds · 10Y</h4>
+          <h4 className="text-xs font-bold text-white uppercase tracking-wide">Govt Bonds · Yields</h4>
         </div>
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
@@ -218,6 +214,16 @@ function GovBondsCard() {
             </div>
           );
         })}
+      </div>
+      <div className="mt-1.5 pt-1 border-t border-[#1e293b] grid grid-cols-2 gap-2 text-[9px]">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 uppercase tracking-wide">BTP–Bund</span>
+          <span className="text-gray-200 tabular-nums font-semibold">{spread.btpBund == null ? '—' : `${spread.btpBund.toFixed(0)} bp`}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-500 uppercase tracking-wide">US 2s10s</span>
+          <span className={`tabular-nums font-semibold ${spread.us2s10s == null ? 'text-gray-200' : spread.us2s10s < 0 ? 'text-red-400' : 'text-gray-200'}`}>{spread.us2s10s == null ? '—' : `${spread.us2s10s > 0 ? '+' : ''}${spread.us2s10s.toFixed(0)} bp`}</span>
+        </div>
       </div>
     </div>
   );

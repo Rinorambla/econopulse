@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json(
       { ok: true, country: iso2, ...data },
-      { headers: { ...rateLimitHeaders(rl), 'Cache-Control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=3600' } }
+      { headers: { ...rateLimitHeaders(rl), 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800' } }
     );
   } catch {
     return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500, headers: rateLimitHeaders(rl) });

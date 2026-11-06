@@ -7,7 +7,7 @@ import type { TeCountry, TeIndicator } from '@/lib/te-catalog';
 
 // WECO — World Economic Matrix as a data-sheet heat map: pick a country, rows
 // are its macro indicators (GDP, rates, payrolls, CPI, PMIs, housing, …),
-// columns the last 26 months, cells the figure released that month. Colour =
+// columns the last 26 months, cells the figure for that reference period. Colour =
 // where the print sits within that indicator's own range (cold → hot), so
 // turning points jump out row by row. Built on /api/country-history and
 // refilled automatically as releases come out; click a row for its history.
@@ -238,7 +238,7 @@ export default function MacroSheetHeatmap({ fill, onChart }: { fill: boolean; on
           </>
         ) : (
           <>
-            <span>{rows.length} indicators × {typeof matrix === 'object' ? matrix.months.length : 0} months · each figure lands in the month it was released</span>
+            <span>{rows.length} indicators × {typeof matrix === 'object' ? matrix.months.length : 0} months · each figure sits in the month it refers to (Q = last month of the quarter)</span>
             <span>· M/Q/W = monthly / quarterly / weekly · click a row for chart + history</span>
             {typeof matrix === 'object' && <span className="ml-auto">updated {new Date(matrix.updatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · auto-refresh 10 min</span>}
           </>

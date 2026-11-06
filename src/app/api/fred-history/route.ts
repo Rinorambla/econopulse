@@ -49,6 +49,48 @@ const DBN_MIRROR: Record<string, string> = {
 }
 // BEA level series are published in millions on DBnomics vs billions on FRED.
 const DBN_SCALE: Record<string, number> = { GDPC1: 1e-3, GDP: 1e-3, PCE: 1e-3, PI: 1e-3 }
+
+// FRED id -> BLS series id for the public BLS API (v1, key-less). Fetched in
+// fixed batches of up to 25 series and cached 6h, so the key-less daily quota
+// is spent on ~4 calls instead of one per chart. Covers the last 10 years.
+const BLS_MIRROR: Record<string, string> = {
+  UNRATE: 'LNS14000000', U6RATE: 'LNS13327709', CIVPART: 'LNS11300000', EMRATIO: 'LNS12300000', LNS12032194: 'LNS12032194',
+  UNEMPLOY: 'LNS13000000', PAYEMS: 'CES0000000001', USPRIV: 'CES0500000001', MANEMP: 'CES3000000001', USGOVT: 'CES9000000001',
+  CES0500000003: 'CES0500000003', AWHAETP: 'CES0500000002', CPIAUCSL: 'CUSR0000SA0', CPIAUCNS: 'CUUR0000SA0',
+  CPILFESL: 'CUSR0000SA0L1E', CPIUFDSL: 'CUSR0000SAF1', CPIENGSL: 'CUSR0000SA0E', CUSR0000SAH1: 'CUSR0000SAH1',
+  PPIFIS: 'WPSFD4', PPIFES: 'WPSFD49104', PPIACO: 'WPU00000000', IR: 'EIUIR', IQ: 'EIUIQ',
+  JTSJOL: 'JTS000000000000000JOL', JTSQUR: 'JTS000000000000000QUR', JTSHIR: 'JTS000000000000000HIR', JTSLDR: 'JTS000000000000000LDR',
+  ULCNFB: 'PRS85006113', OPHNFB: 'PRS85006093', ECIALLCIV: 'CIS1010000000000I', LES1252881600Q: 'LES1252881600',
+}
+const BLS_BATCHES: string[][] = (() => {
+  const ids = Array.from(new Set(Object.values(BLS_MIRROR)))
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += 25) out.push(ids.slice(i, i + 25))
+  return out
+})()
+const BLS_MONTH: Record<string, string> = { M01: '01', M02: '02', M03: '03', M04: '04', M05: '05', M06: '06', M07: '07', M08: '08', M09: '09', M10: '10', M11: '11', M12: '12', Q01: '01', Q02: '04', Q03: '07', Q04: '10', A01: '01' }
+async function blsBatch(ids: string[], startyear: number, endyear: number): Promise<Record<string, Array<{ date: string; value: string }>>> {
+  const res = await fetch('https://api.bls.gov/publicAPI/v1/timeseries/data/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seriesid: ids, startyear: String(startyear), endyear: String(endyear) }),
+    next: { revalidate: 6 * 3600 },
+    signal: AbortSignal.timeout(12000),
+  })
+  if (!res.ok) return {}
+  const j = await res.json()
+  const out: Record<string, Array<{ date: string; value: string }>> = {}
+  for (const s of j?.Results?.series || []) {
+    const rows: Array<{ date: string; value: string }> = []
+    for (const d of s.data || []) {
+      const mm = BLS_MONTH[d.period]
+      if (!mm) continue // skip annual averages (M13) etc.
+      rows.push({ date: `${d.year}-${mm}-01`, value: String(d.value) })
+    }
+    out[s.seriesID] = rows.sort((a, b) => a.date.localeCompare(b.date))
+  }
+  return out
+}
 // Some cloud egress ranges can't reach fred.stlouisfed.org at all (requests
 // hang until timeout). Remember that for a while so the fallback chain stays
 // fast instead of paying the timeout on every chart load.
@@ -175,8 +217,27 @@ export async function GET(request: Request) {
     } catch { return null }
   }
 
+  // Fallback 3: the BLS public API for labour/price series (batched, 10y max).
+  const viaBls = async (): Promise<Obs[] | null> => {
+    const id = BLS_MIRROR[series]
+    if (!id) return null
+    const batch = BLS_BATCHES.find((b) => b.includes(id))
+    if (!batch) return null
+    try {
+      const endyear = new Date().getUTCFullYear()
+      const data = await blsBatch(batch, endyear - 9, endyear)
+      const rows = data[id]
+      if (!rows || !rows.length) return null
+      return transform(rows.filter((o) => o.date >= rawStart))
+    } catch { return null }
+  }
+
   try {
-    const obs = (await viaApi()) || (await viaCsv()) || (await viaDbnomics())
+    // ?src=dbnomics|bls forces a fallback tier (diagnostics only).
+    const force = searchParams.get('src') || ''
+    const obs = force === 'bls' ? await viaBls()
+      : force === 'dbnomics' ? await viaDbnomics()
+      : (await viaApi()) || (await viaCsv()) || (await viaDbnomics()) || (await viaBls())
     if (!obs) return NextResponse.json({ ok: false, error: 'FRED unavailable (set a valid FRED_API_KEY)' }, { status: 502 })
     const bars = obs
       .map((o) => {
